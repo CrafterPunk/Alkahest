@@ -108,3 +108,8 @@ InitTestScene*.unity*
 
 # Steam: App ID de desarrollo (se regenera solo; no publicar en la tienda)
 /steam_appid.txt
+
+# Utilidades locales de la sesion de desarrollo
+/launch.cmd
+/commit_log.txt
+/*_log.txt

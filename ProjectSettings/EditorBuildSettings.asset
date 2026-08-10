@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Alkahest/Scenes/AlkahestLab.unity
+    guid: cd7aeaaeb7f941b43a891a0e0b4ede4d
+  - enabled: 1
     path: Assets/FriendsLoop/DemoTest/FL_DemoScene.unity
     guid: 7e75ca2f38b67c644b30a068cc207848
   m_configObjects:
