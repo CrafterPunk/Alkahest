@@ -1,0 +1,33 @@
+{
+    "name": "FriendsLoop.Runtime",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Components",
+        "com.rlabrecque.steamworks.net",
+        "SteamNetworkingSockets Transport for Netcode for GameObjects",
+        "Unity.InputSystem",
+        "Unity.Collections",
+        "Unity.Networking.Transport"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.rlabrecque.steamworks.net",
+            "expression": "",
+            "define": "STEAMWORKSNET"
+        },
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "NETCODEGAMEOBJECTS"
+        }
+    ],
+    "noEngineReferences": false
+}

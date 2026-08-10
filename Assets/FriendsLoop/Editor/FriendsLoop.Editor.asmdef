@@ -1,0 +1,33 @@
+{
+    "name": "FriendsLoop.Editor",
+    "rootNamespace": "",
+    "references": [
+        "FriendsLoop.Runtime",
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Components",
+        "SteamNetworkingSockets Transport for Netcode for GameObjects",
+        "Unity.Netcode.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.rlabrecque.steamworks.net",
+            "expression": "",
+            "define": "STEAMWORKSNET"
+        },
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "NETCODEGAMEOBJECTS"
+        }
+    ],
+    "noEngineReferences": false
+}
