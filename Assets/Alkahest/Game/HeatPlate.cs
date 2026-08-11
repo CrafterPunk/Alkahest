@@ -70,6 +70,7 @@ namespace Alkahest.Game
         private void Update()
         {
             if (_sim == null || _sim.Grid == null) return;
+            if (DayCycle.InputLocked) return; // M4: título/intro/fin de día/pantalla final congelan la placa.
 
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame && IsPlayerNear())
             {

@@ -156,6 +156,21 @@ namespace Alkahest.Sim
             var def = _universe.Get(matId);
             Color32 baseColor = def.baseColor;
 
+            // FUEGO: color de llama dedicado (no pasa por jitter ni tinte de temperatura,
+            // que lo lavaban hacia beige). Llama joven = amarillo brillante; al agotarse
+            // su vida (aux) baja hacia rojo profundo, con parpadeo estable por celda.
+            if (matId == MaterialId.Fire)
+            {
+                float life = def.gasLifetime > 0
+                    ? Mathf.Clamp01(_grid.aux[idx] / (float)def.gasLifetime)
+                    : 1f;
+                int fl = (int)(Hash3D(x, y, tick / 2) % 70);
+                byte fr = ClampByte(205 + (int)(50f * life));
+                byte fg = ClampByte(55 + (int)(150f * life) + fl / 2);
+                byte fb = ClampByte(8 + (int)(55f * life));
+                return new Color32(fr, fg, fb, 255);
+            }
+
             byte r = baseColor.r, g = baseColor.g, b = baseColor.b;
 
             if (def.colorJitter > 0)
@@ -172,6 +187,32 @@ namespace Alkahest.Sim
                 int flicker = (int)(Hash3D(x, y, tick / 3) % 60);
                 r = ClampByte(r + flicker);
                 g = ClampByte(g + flicker / 2);
+            }
+
+            // Vivium "dormido" (fuera de su banda de crecimiento, ver SimStepper.GrowthTick):
+            // ligera desaturación hacia gris para leerse como "en pausa" sin un shader aparte.
+            if (def.archetype == MaterialArchetype.Organic && (_grid.aux[idx] & CellGrid.OrganicDormantAux) != 0)
+            {
+                int gray = (r + g + b) / 3;
+                r = LerpByte(r, (byte)gray, 0.55f);
+                g = LerpByte(g, (byte)gray, 0.55f);
+                b = LerpByte(b, (byte)gray, 0.55f);
+            }
+
+            // LÍQUIDOS: sensación de "mojado" barata — shimmer lento por celda y una
+            // línea de superficie más clara donde el líquido toca aire (celda vacía encima).
+            if (def.archetype == MaterialArchetype.Liquid)
+            {
+                int s = (int)(Hash3D(x, y, tick / 8) % 15) - 7;
+                r = ClampByte(r + s);
+                g = ClampByte(g + s);
+                b = ClampByte(b + s + 4);
+                if (y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty)
+                {
+                    r = ClampByte(r + 30);
+                    g = ClampByte(g + 34);
+                    b = ClampByte(b + 40);
+                }
             }
 
             // Tinte de temperatura: por encima de raw 150 (~180°C) se calienta hacia

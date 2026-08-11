@@ -113,3 +113,5 @@ InitTestScene*.unity*
 /launch.cmd
 /commit_log.txt
 /*_log.txt
+/ca_commit.cmd
+/alk_commit.cmd

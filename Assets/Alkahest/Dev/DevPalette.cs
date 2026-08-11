@@ -116,7 +116,7 @@ namespace Alkahest.Dev
         private void OnGUI()
         {
             if (!IsDevBuild() || !_visible || _sim == null || _sim.Universe == null) return;
-            _windowRect = GUILayout.Window(WindowId, _windowRect, DrawWindow, "Alkahest — Dev Palette (F3)");
+            _windowRect = GUILayout.Window(WindowId, _windowRect, DrawWindow, "ChaosAlchemy — Dev (F3)");
         }
 
         private void DrawWindow(int id)

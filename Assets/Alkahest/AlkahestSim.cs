@@ -18,6 +18,17 @@ namespace Alkahest
         [Tooltip("0 = elegir una seed aleatoria al arrancar.")]
         [SerializeField] private int seed = 0;
 
+        /// <summary>
+        /// Seed a usar en el PRÓXIMO Start() de este componente, fijada por
+        /// Game/DayCycle.cs justo antes de recargar la escena (Título ->
+        /// "Entrar al taller", o "Reintentar mismo universo"/"Nuevo
+        /// universo" desde la pantalla final). Se consume una sola vez
+        /// (vuelve a null tras leerse) para no afectar futuras recargas que
+        /// no la fijen explícitamente. null = usar el campo `seed` del
+        /// inspector (0 en ese caso = aleatoria, comportamiento de siempre).
+        /// </summary>
+        public static int? NextRunSeed;
+
         private const float FixedDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
 
@@ -33,6 +44,17 @@ namespace Alkahest
         public SimStepper Stepper => _stepper;
         public SimRenderer Renderer => _renderer;
 
+        /// <summary>
+        /// Pausa la simulación (deja de consumir el acumulador de tiempo /
+        /// dar pasos de <see cref="SimStepper"/>) sin tocar Time.timeScale.
+        /// Usado por Game/DayCycle.cs durante los overlays de jornada
+        /// (Título, intro de día, fin de día, pantalla final) para congelar
+        /// el mundo mientras se muestra un menú. El renderizado (RenderFrame)
+        /// también se salta mientras está en pausa: la textura simplemente
+        /// deja de refrescarse, congelando el último frame visible.
+        /// </summary>
+        public bool Paused { get; set; }
+
         private void Awake()
         {
             _renderer = GetComponent<SimRenderer>();
@@ -40,7 +62,13 @@ namespace Alkahest
 
         private void Start()
         {
-            if (seed == 0)
+            if (NextRunSeed.HasValue)
+            {
+                seed = NextRunSeed.Value;
+                NextRunSeed = null;
+                Debug.Log($"[ChaosAlchemy] Seed fijada por DayCycle para esta run: {seed}");
+            }
+            else if (seed == 0)
             {
                 seed = Environment.TickCount;
                 Debug.Log($"[Alkahest] Seed no especificada, usando seed aleatoria: {seed}");
@@ -61,11 +89,12 @@ namespace Alkahest
             _renderer.Init(_universe, _grid);
 
             Debug.Log($"[Alkahest] Universo creado con seed {seed}. Grid {CellGrid.W}x{CellGrid.H}, chunks {CellGrid.ChunksX}x{CellGrid.ChunksY}.");
+            Debug.Log($"[Alkahest] Edicto de este universo ({_universe.ActiveEdicto}): {_universe.EdictoDescripcion}");
         }
 
         private void Update()
         {
-            if (_stepper == null) return;
+            if (_stepper == null || Paused) return;
 
             _accumulator += Time.deltaTime;
             int steps = 0;

@@ -37,10 +37,36 @@ namespace Alkahest.Sim
         public int ActiveChunks { get; private set; }
         public double LastStepMs { get; private set; }
 
+        // ---------------------------------------------------------------------------------
+        // Ring buffer de eventos notables (M4: SubstanceKnowledge lee esto cada frame para
+        // los "auto-observaciones" del diario -- vistoArder, vistoCristalizar, etc).
+        // Array fijo, sin asignaciones por evento; al llenarse, sobrescribe los más
+        // antiguos (si un lector externo se queda más de 256 eventos por detrás pierde
+        // los más viejos, aceptable para este uso: solo alimenta notas de diario).
+        // ---------------------------------------------------------------------------------
+        public const int EventBufferSize = 256;
+        private readonly SimNotableEvent[] _events = new SimNotableEvent[EventBufferSize];
+        private int _eventHead;
+
+        /// <summary>Array fijo (no crece) de eventos notables; leer entre un "lastSeenHead" propio y <see cref="EventHead"/>, ambos módulo EventBufferSize.</summary>
+        public SimNotableEvent[] Events => _events;
+        public int EventHead => _eventHead;
+
         public SimStepper(Universe universe, CellGrid grid)
         {
             _universe = universe;
             _grid = grid;
+        }
+
+        private void PushEvent(SimEventType type, byte matId, int x, int y)
+        {
+            ref var e = ref _events[_eventHead];
+            e.type = type;
+            e.matId = matId;
+            e.x = (short)x;
+            e.y = (short)y;
+            e.tick = _tick;
+            _eventHead = (_eventHead + 1) & (EventBufferSize - 1);
         }
 
         public void Step()
@@ -89,6 +115,12 @@ namespace Alkahest.Sim
             LastStepMs = _sw.Elapsed.TotalMilliseconds;
         }
 
+        // Posición final de la celda tras Process*/Move este tick, actualizada por Move()
+        // y consultada tras el switch para saber dónde chequear reacciones de contacto
+        // (M3: ReactionEngine). Reiniciada al comienzo de cada ProcessIfNeeded.
+        private bool _cellMoved;
+        private int _cellFinalX, _cellFinalY, _cellFinalIdx;
+
         private int ProcessIfNeeded(int x, int y, int cy)
         {
             int cx = x / CellGrid.CHUNK;
@@ -105,13 +137,20 @@ namespace Alkahest.Sim
             m = _grid.mat[idx];
             var def = _universe.Get(m);
 
+            _cellMoved = false;
+            _cellFinalX = x;
+            _cellFinalY = y;
+            _cellFinalIdx = idx;
+
             switch (def.archetype)
             {
                 case MaterialArchetype.Powder:
                     ProcessPowder(x, y, idx, def);
+                    MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
                     break;
                 case MaterialArchetype.Liquid:
                     ProcessLiquid(x, y, idx, def);
+                    MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
                     break;
                 case MaterialArchetype.Gas:
                     ProcessGas(x, y, idx, def);
@@ -121,6 +160,7 @@ namespace Alkahest.Sim
                     break;
                 case MaterialArchetype.Organic:
                     ProcessOrganic(x, y, idx, def);
+                    MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
                     break;
                 case MaterialArchetype.StaticSolid:
                     if (m == MaterialId.Ice) InjectCold(x, y, 2);
@@ -128,6 +168,87 @@ namespace Alkahest.Sim
             }
 
             return 1;
+        }
+
+        // ---------------------------------------------------------------------------------
+        // Reacciones de contacto (M3: ReactionEngine, tabla horneada por Universe.Create).
+        // Coste acotado: solo se comprueba si la celda se movió este tick, o (para celdas
+        // asentadas) con un muestreo de 1/8 por tick -- igual que la difusión de calor.
+        // ---------------------------------------------------------------------------------
+        private void MaybeReact(int x, int y, int idx, bool moved)
+        {
+            if (!moved && ((x + y + (int)_tick) & 7) != 0) return;
+            ProcessReactions(x, y, idx);
+        }
+
+        private void ProcessReactions(int x, int y, int idx)
+        {
+            byte matSelf = _grid.mat[idx];
+            if (matSelf == MaterialId.Empty) return;
+
+            if (TryReactNeighbor(x, y, idx, ref matSelf, x - 1, y)) return;
+            if (TryReactNeighbor(x, y, idx, ref matSelf, x + 1, y)) return;
+            if (TryReactNeighbor(x, y, idx, ref matSelf, x, y - 1)) return;
+            TryReactNeighbor(x, y, idx, ref matSelf, x, y + 1);
+        }
+
+        /// <summary>Consulta y, si procede, aplica la reacción entre la celda (x,y)/idx y su vecino (nx,ny). Devuelve true si algo reaccionó (para dejar de comprobar más vecinos: matSelf pudo cambiar).</summary>
+        private bool TryReactNeighbor(int x, int y, int idx, ref byte matSelf, int nx, int ny)
+        {
+            if (!CellGrid.InBounds(nx, ny)) return false;
+            int nidx = CellGrid.Idx(nx, ny);
+            byte matNeighbor = _grid.mat[nidx];
+            if (matNeighbor == MaterialId.Empty) return false;
+
+            if (!_universe.Reactions.TryGet(matSelf, matNeighbor, out var reaction)) return false;
+
+            byte t = _grid.temp[idx];
+            if (t < reaction.minTempRaw || t > reaction.maxTempRaw) return false;
+
+            var rng = XorShift.FromCell(_tick, x, y, 77);
+            if (!rng.ChancePercent(reaction.chancePct)) return false;
+
+            byte productSelf, productNeighbor;
+            if (reaction.a == matSelf)
+            {
+                productSelf = reaction.productA;
+                productNeighbor = reaction.productB;
+            }
+            else
+            {
+                productSelf = reaction.productB;
+                productNeighbor = reaction.productA;
+            }
+
+            byte origSelf = matSelf;
+            byte origNeighbor = matNeighbor;
+
+            if (productNeighbor != origNeighbor)
+            {
+                NotifyReactionEvent(origNeighbor, productNeighbor, nx, ny);
+                Transform(nidx, productNeighbor);
+            }
+            if (productSelf != origSelf)
+            {
+                NotifyReactionEvent(origSelf, productSelf, x, y);
+                Transform(idx, productSelf);
+                matSelf = productSelf;
+            }
+
+            return true;
+        }
+
+        /// <summary>Traduce un cambio de material producido por una reacción en un evento notable (Crystallize/Dissolve) si corresponde. No todos los cambios de reacción son "notables" (p.ej. Acid+Water->Slime,Slime no se registra hoy).</summary>
+        private void NotifyReactionEvent(byte from, byte to, int x, int y)
+        {
+            if (to == MaterialId.Smoke)
+            {
+                PushEvent(SimEventType.Dissolve, from, x, y);
+            }
+            else if (from == MaterialId.Azoth && to == MaterialId.Crystal)
+            {
+                PushEvent(SimEventType.Crystallize, MaterialId.Azoth, x, y);
+            }
         }
 
         // ---------------------------------------------------------------------------------
@@ -145,10 +266,12 @@ namespace Alkahest.Sim
             }
             else if (def.freezesAt != short.MinValue && t <= def.freezesAt)
             {
+                PushEvent(SimEventType.Freeze, m, idx % W, idx / W);
                 Transform(idx, def.freezesInto);
             }
             else if (def.boilsAt != short.MaxValue && t >= def.boilsAt)
             {
+                PushEvent(SimEventType.Boil, m, idx % W, idx / W);
                 Transform(idx, def.boilsInto);
             }
             else if (def.condensesAt != short.MinValue && t <= def.condensesAt)
@@ -195,6 +318,14 @@ namespace Alkahest.Sim
             _grid.touchedTick[idx2] = _tick;
             _grid.WakeChunk(x1, y1, _tick);
             _grid.WakeChunk(x2, y2, _tick);
+
+            // La celda que estaba en (x1,y1) ahora vive en (x2,y2): lo recordamos para
+            // que el chequeo de reacciones (tras el switch de ProcessIfNeeded) mire al
+            // vecindario correcto, no al de la posición ya abandonada.
+            _cellMoved = true;
+            _cellFinalX = x2;
+            _cellFinalY = y2;
+            _cellFinalIdx = idx2;
         }
 
         // ---------------------------------------------------------------------------------
@@ -519,6 +650,7 @@ namespace Alkahest.Sim
             var rng = XorShift.FromCell(_tick, nx, ny, 17);
             if (hotEnough || rng.ChancePercent(30))
             {
+                PushEvent(SimEventType.Ignite, nm, nx, ny);
                 Transform(nidx, MaterialId.Fire);
             }
         }
@@ -527,37 +659,90 @@ namespace Alkahest.Sim
         // Organic (Vivium)
         // ---------------------------------------------------------------------------------
         private const byte SettledFlag = 0x80;
+        private static readonly int[] DirX = { -1, 1, 0, 0 };
+        private static readonly int[] DirY = { 0, 0, -1, 1 };
 
         private void ProcessOrganic(int x, int y, int idx, MaterialDef def)
         {
-            if ((_grid.aux[idx] & SettledFlag) != 0) return; // ya asentado: nunca más se mueve.
+            bool settled = (_grid.aux[idx] & SettledFlag) != 0;
 
-            if (y > 0)
+            if (!settled)
             {
-                int belowIdx = idx - W;
-                var belowDef = _universe.Get(_grid.mat[belowIdx]);
-                if (belowDef.archetype == MaterialArchetype.Empty || belowDef.archetype == MaterialArchetype.Gas)
+                if (y > 0)
                 {
-                    // Cae recto (sin difundirse en diagonal: es "pegajoso", no se abanica como la arena).
-                    Move(x, y, idx, x, y - 1, belowIdx);
-                    return;
+                    int belowIdx = idx - W;
+                    var belowDef = _universe.Get(_grid.mat[belowIdx]);
+                    if (belowDef.archetype == MaterialArchetype.Empty || belowDef.archetype == MaterialArchetype.Gas)
+                    {
+                        // Cae recto (sin difundirse en diagonal: es "pegajoso", no se abanica como la arena).
+                        Move(x, y, idx, x, y - 1, belowIdx);
+                        return;
+                    }
                 }
+
+                _grid.aux[idx] |= SettledFlag;
+                _grid.WakeChunk(x, y, _tick);
             }
 
-            _grid.aux[idx] |= SettledFlag;
-            _grid.WakeChunk(x, y, _tick);
+            // Nota: a diferencia de otros arquetipos, una célula asentada de Vivium
+            // sigue necesitando ser revisada TODOS los ticks (mientras su chunk esté
+            // despierto) para poder crecer -- por eso GrowthTick se llama tanto la
+            // primera vez que se asienta como en cada tick posterior.
             GrowthTick(x, y, idx);
         }
 
         /// <summary>
-        /// TODO(Alkahest): lógica de crecimiento de Vivium (expansión sobre Nutrient
-        /// cercano, generación de recursos, reacción a luz/calor...). Se implementará
-        /// en una fase posterior del roadmap; de momento es un hook vacío para que
-        /// el resto del sistema (aux flag "settled", arquetipo Organic) ya esté listo.
+        /// Crecimiento de Vivium (M3, arco de domesticación): una célula asentada
+        /// con un vecino ortogonal de Nutrient Y su propia temperatura dentro de
+        /// [Universe.VivGrowMinRaw, VivGrowMaxRaw] consume ESE Nutrient (-&gt; Empty)
+        /// y, con Universe.VivGrowChancePct de probabilidad, crea una nueva célula
+        /// de Vivium en su lugar (si falla, el Nutrient se pierde igualmente: la
+        /// célula "gastó" el intento). Como mucho un Nutrient por célula y por tick
+        /// (evita un relleno instantáneo; el throttle de abajo lo ralentiza más aún
+        /// para que se LEA como un coral creciendo, no como un flood-fill).
+        /// Fuera de banda: la célula queda "dormida" (bit CellGrid.OrganicDormantAux,
+        /// leído por SimRenderer para una ligera desaturación) -- no crece, pero
+        /// tampoco muere (solo se quema por encima de ~120°C vía ApplyPhase/boilsAt,
+        /// que reutiliza el mecanismo genérico de transición de fase).
         /// </summary>
         private void GrowthTick(int x, int y, int idx)
         {
-            // TODO: crecimiento de Vivium.
+            byte t = _grid.temp[idx];
+            bool inBand = t >= _universe.VivGrowMinRaw && t <= _universe.VivGrowMaxRaw;
+
+            if (!inBand)
+            {
+                _grid.aux[idx] |= CellGrid.OrganicDormantAux;
+                return;
+            }
+            if ((_grid.aux[idx] & CellGrid.OrganicDormantAux) != 0)
+            {
+                _grid.aux[idx] &= unchecked((byte)~CellGrid.OrganicDormantAux);
+            }
+
+            // Throttle de ritmo visual: cada célula solo intenta crecer 1 de cada 4 ticks.
+            if (((x * 13 + y * 7 + (int)_tick) & 3) != 0) return;
+
+            var rng = XorShift.FromCell(_tick, x, y, 88);
+            int start = rng.Next(4);
+
+            for (int i = 0; i < 4; i++)
+            {
+                int dir = (start + i) & 3;
+                int nx = x + DirX[dir], ny = y + DirY[dir];
+                if (!CellGrid.InBounds(nx, ny)) continue;
+                int nidx = CellGrid.Idx(nx, ny);
+                if (_grid.mat[nidx] != MaterialId.Nutrient) continue;
+
+                bool grows = rng.ChancePercent(_universe.VivGrowChancePct);
+                Transform(nidx, MaterialId.Empty);
+                if (grows)
+                {
+                    Transform(nidx, MaterialId.Vivium);
+                    PushEvent(SimEventType.Grow, MaterialId.Vivium, nx, ny);
+                }
+                return; // un Nutrient por célula y por tick.
+            }
         }
 
         // ---------------------------------------------------------------------------------

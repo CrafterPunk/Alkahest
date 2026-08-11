@@ -177,3 +177,97 @@ muestreo de 1/8), para que enciendan/enfríen con la reactividad esperada.
   simplicidad (su temperatura no se re-consulta hasta que se ocupa con
   otro material, momento en el que ya arrancó en el ambiente por defecto
   del array `temp`, que se inicializa entero a 20°C).
+
+## M4 — Bucle de partida ("CHAOS ALCHEMY")
+
+M4 añade una capa de juego (`Assets/Alkahest/Game/`) por encima de Sim/ sin
+tocar el hot-path de simulación (aparte de dos cambios mínimos en
+`AlkahestSim.cs`: `Paused` -- ya existía desde M3/M4 temprano -- y el nuevo
+`static int? NextRunSeed`). Nombre visible del juego: **CHAOS ALCHEMY**
+(los namespaces de código siguen siendo `Alkahest.*`; no se ha tocado
+`ProjectSettings`).
+
+### Archivos nuevos (Game/)
+
+```
+SubstanceKnowledge.cs -> qué sabe el aprendiz de cada material: descubierto,
+                          nombre puesto por el jugador, transformaciones
+                          presenciadas (lee el ring buffer de eventos de
+                          SimStepper.Events/EventHead)
+NamingUi.cs            -> ventana IMGUI (T) para "bautizar" un material
+JournalHud.cs          -> ventana IMGUI (J) con la lista de descubiertos
+Order.cs / OrderSystem.cs -> Favor + generación/seguimiento de encargos
+DeliveryChute.cs        -> "Tolva del Maestro": consume material y lo
+                            evalúa contra los encargos activos
+OrdersHud.cs             -> HUD de Favor + encargos activos (arriba-dcha.)
+DayCycle.cs               -> máquina de estados de la partida + overlays
+```
+
+### Máquina de estados de partida (DayCycle.cs)
+
+```
+Título -> DayIntro(día) -> Playing (cuenta atrás 6:00) -> DayEnd
+            ^                                                |
+            +----------- (si día < 3 y sin derrota) ---------+
+                                     |
+                              (día 3 o derrota)
+                                     v
+                                EndScreen
+```
+
+- Mientras la fase activa NO es `Playing`, `DayCycle` fuerza
+  `AlkahestSim.Paused = true` y expone `DayCycle.InputLocked` (estático),
+  consultado por Flask/Dispenser/HeatPlate/ChillStone/NamingUi para
+  ignorar por completo el input del jugador durante los overlays.
+- **Victoria**: `Favor >= OrderSystem.WinFavorTarget` (120) tras completar
+  la jornada 3, sin derrota anticipada.
+- **Derrota anticipada**: dos jornadas SEGUIDAS sin un solo encargo
+  completado.
+- **Cambiar de seed**: Título (campo de seed) y los botones de la pantalla
+  final ("Reintentar mismo universo" / "Nuevo universo") fijan
+  `AlkahestSim.NextRunSeed` y recargan la escena
+  (`SceneManager.LoadScene(sceneActual)`); `AlkahestSim.Start()` consume esa
+  seed una única vez. Un flag estático interno de `DayCycle`
+  (`_skipTitleOnLoad`) hace que, tras ese reload, la partida entre
+  directamente en `DayIntro(1)` en vez de volver a mostrar el Título.
+
+### Encargos (Order/OrderSystem)
+
+Favor inicial: 20. Tipos de encargo (`OrderType`), evaluados por
+`OrderSystem.MatchesOrder` contra cada celda que cae en la Tolva:
+
+| Tipo | Condición |
+|---|---|
+| `Flammable` | `MaterialDef.flammable` de la celda |
+| `Grows` | `archetype == MaterialArchetype.Organic` (familia Vivium) |
+| `CrystalSolid` | `matId == MaterialId.Crystal` |
+| `Hot` | `RawToC(temp) >= MinTempC` |
+| `Cold` | `RawToC(temp) <= MinTempC` (mismo campo que Hot, reinterpretado como techo) |
+| `NamedMaterial` | `matId == TargetMat` (solo se genera si hay algo bautizado y descubierto) |
+
+Encargos por jornada (deterministas: tipo/umbral/recompensa fijos; solo la
+frase de sabor y, en el día 3, QUÉ material bautizado concreto pide
+`NamedMaterial` dependen de `System.Random(seed*31+día)`, uso de capa de
+juego, nunca en Sim/):
+
+- **Día 1**: Flammable 60 (+25), Hot 80°C 80 celdas (+25).
+- **Día 2**: Grows 120 (+35), Cold -5°C 60 celdas (+30), CrystalSolid 80 (+40).
+- **Día 3**: CrystalSolid 200 (+50), NamedMaterial 100 (+45, o Flammable 150
+  +45 si nadie ha bautizado nada todavía), Grows 250 (+55).
+
+### Tolva del Maestro (DeliveryChute.cs)
+
+Bolsillo de piedra fijo en celdas x∈[W-8,W-4], y∈[60,80] (pintado una única
+vez con `AlkahestSim.Paint`, techo abierto como abertura de vertido).
+Cada tick a 30Hz consume (`Paint Empty`) toda celda no-Empty/no-StaticSolid
+del interior y la evalúa contra `OrderSystem.ActiveOrders` EN ORDEN (primer
+encargo incompleto que matchea gana progreso); lo que no matchea ningún
+encargo se acumula como "chatarra" y da +1 Favor cada 10 celdas
+desperdiciadas.
+
+### Coste de Favor en los grifos (Dispenser.cs)
+
+`favorCostPerActivation` (fijado desde `AlkahestGameBootstrap`): Water/Sand
+0, Oil 2, Nutrient 5. Se cobra una única vez al pasar de OFF a ON (no por
+tick); si no hay Favor suficiente el grifo no se enciende y el label
+muestra "(sin Favor)" un momento.

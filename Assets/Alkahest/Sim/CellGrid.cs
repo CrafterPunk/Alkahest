@@ -40,6 +40,16 @@ namespace Alkahest.Sim
         /// <summary>Temperatura ambiente "raw" (20°C).</summary>
         public const byte AmbientRaw = 70;
 
+        /// <summary>
+        /// Bit de <see cref="aux"/> para celdas Organic (Vivium) fuera de su
+        /// banda de temperatura de crecimiento: "dormido", sin crecimiento,
+        /// leído por SimRenderer para una ligera desaturación visual. No se
+        /// usa para ningún otro arquetipo (no colisiona con el bit 0x80 de
+        /// "asentado" que usa SimStepper para Organic, ni con el uso de aux
+        /// como vida de gas/fuego o memoria de flujo de líquidos).
+        /// </summary>
+        public const byte OrganicDormantAux = 0x40;
+
         public CellGrid()
         {
             mat = new byte[W * H];
