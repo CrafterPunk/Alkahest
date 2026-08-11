@@ -67,3 +67,16 @@ en el proyecto pero no integrado con la sim.
 - **Sonnet** (implementación): ~90% del C# — M1 sim core, M2 interacción, M3 leyes/reacciones
   (parcial, interrumpido), M4 loop completo; investigación del stack Steam (sesión template).
 - **Opus**: no participó aún (la revisión visual M5 era su tarea natural — sigue siéndolo).
+
+## Playtest 1 del usuario (post-M4) y fixes aplicados
+Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no
+prendía nada (solo Oil era inflamable); (2) la piedra fría seguía enfriando tras apagarse y con
+radio enorme (causa real: el HIELO inyectaba frío a sus vecinos → zona fría autosostenida);
+(3) onboarding confuso — no logró completar pedidos en su primera ronda (esperado: no hay
+tutorial; pendiente M5/M6).
+Fixes en commit siguiente: hielo ya no inyecta frío; retorno a temperatura ambiente 4x más
+rápido; ignición por contacto 30%→50%; la llama se mantiene viva mientras toque combustible;
+vida del fuego 45→80 ticks; Nutrient y Vivium ahora son inflamables (arden bonito, y el cultivo
+puede incendiarse — riesgo/recompensa). PENDIENTE de validar visualmente por el usuario.
+Siguiente en el backlog tras validar: onboarding suave (pistas contextuales en la Jornada 1,
+p.ej. "prueba a verter aceite en la tolva" cuando el pedido inflamable lleva 2 min sin progreso).

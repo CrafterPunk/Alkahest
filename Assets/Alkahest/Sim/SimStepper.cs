@@ -163,7 +163,8 @@ namespace Alkahest.Sim
                     MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
                     break;
                 case MaterialArchetype.StaticSolid:
-                    if (m == MaterialId.Ice) InjectCold(x, y, 2);
+                    // (fix playtest) El hielo YA NO inyecta frío a vecinos: creaba una zona fría
+                    // autosostenida que seguía congelando tras apagar la piedra fría.
                     break;
             }
 
@@ -566,6 +567,9 @@ namespace Alkahest.Sim
             }
 
             byte life = _grid.aux[idx];
+            // (fix playtest) La llama con combustible al lado se mantiene viva:
+            // sin esto el fuego moría a humo en ~1.5 s y "no parecía fuego".
+            if (life < 30 && HasFlammableOrthogonalNeighbor(x, y)) life = 30;
             if (life > 0) life--;
             _grid.aux[idx] = life;
             if (life == 0)
@@ -648,7 +652,7 @@ namespace Alkahest.Sim
 
             bool hotEnough = ndef.ignitionTemp != short.MaxValue && _grid.temp[nidx] > ndef.ignitionTemp;
             var rng = XorShift.FromCell(_tick, nx, ny, 17);
-            if (hotEnough || rng.ChancePercent(30))
+            if (hotEnough || rng.ChancePercent(50))
             {
                 PushEvent(SimEventType.Ignite, nm, nx, ny);
                 Transform(nidx, MaterialId.Fire);
@@ -800,7 +804,7 @@ namespace Alkahest.Sim
                 int next = cur + step;
 
                 // Atracción suave hacia la temperatura ambiente, poco frecuente.
-                if (((_tick >> 3) & 3u) == 0u)
+                if ((_tick & 7u) == 0u)
                 {
                     int ad = CellGrid.AmbientRaw - next;
                     if (ad != 0) next += ad > 0 ? 1 : -1;

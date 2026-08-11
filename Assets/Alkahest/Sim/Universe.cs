@@ -165,8 +165,8 @@ namespace Alkahest.Sim
             int altIgnitionC = Mathf.RoundToInt(240f * (1f + altIgnitionFrac)); // Slime/Azoth arden algo más fácil que el aceite si les toca ser inflamables.
 
             byte fireLifetime = edicto == Edicto.MateriaIrascible
-                ? (byte)Mathf.Clamp(Mathf.RoundToInt(45f * 1.5f), 1, 255)
-                : (byte)45;
+                ? (byte)Mathf.Clamp(Mathf.RoundToInt(80f * 1.5f), 1, 255)
+                : (byte)80;
 
             float freezeShiftC = RandRange(rng, -15f, 15f);
             float boilShiftC = RandRange(rng, -15f, 15f);
@@ -338,6 +338,9 @@ namespace Alkahest.Sim
                 colorJitter = 20,
                 density = 140,
                 fluidity = 1,
+                flammable = true, // (fix playtest) materia orgánica: arde de forma satisfactoria
+                ignitionTemp = CellGrid.CToRaw(180),
+                burnsInto = MaterialId.Fire,
             };
 
             mats[MaterialId.Vivium] = new MaterialDef
@@ -349,6 +352,9 @@ namespace Alkahest.Sim
                 colorJitter = 12,
                 density = 170,
                 fluidity = 0, // No se mueve una vez asentado.
+                flammable = true, // (fix playtest) el coral vivo arde — cuida tu cultivo
+                ignitionTemp = CellGrid.CToRaw(150),
+                burnsInto = MaterialId.Fire,
                 emitsGlow = true,
                 // Reutiliza el mecanismo genérico de fase (boilsAt) como "muere quemado":
                 // por encima de ~120°C se convierte en Ash. Umbral fijo (no varía por seed).
