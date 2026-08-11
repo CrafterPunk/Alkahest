@@ -77,6 +77,20 @@ tutorial; pendiente M5/M6).
 Fixes en commit siguiente: hielo ya no inyecta frío; retorno a temperatura ambiente 4x más
 rápido; ignición por contacto 30%→50%; la llama se mantiene viva mientras toque combustible;
 vida del fuego 45→80 ticks; Nutrient y Vivium ahora son inflamables (arden bonito, y el cultivo
-puede incendiarse — riesgo/recompensa). PENDIENTE de validar visualmente por el usuario.
+puede incendiarse — riesgo/recompensa). VALIDADO por el usuario: "el fuego funciona bien, también se arregló lo del frío" (commit del playtest pusheado).
 Siguiente en el backlog tras validar: onboarding suave (pistas contextuales en la Jornada 1,
 p.ej. "prueba a verter aceite en la tolva" cuando el pedido inflamable lleva 2 min sin progreso).
+
+
+## Stint M5-parcial (onboarding + fondo + build) — último trabajo de Fable
+Añadido en este commit: `Game/HintSystem.cs` (7 pistas rotatorias abajo-centro durante los
+primeros ~2.5 min de juego real — responde al "no entendí cómo jugar"), `Game/WorkshopBackdrop.cs`
+(fondo del taller: gradiente ciruela + viñeta + grano, quad opaco detrás de la sim, cero assets),
+`Editor/AlkahestBuildTools.cs` (menú "Alkahest/2. Build demo Windows" → Builds/ChaosAlchemyDemo/
+ChaosAlchemy.exe, y "3. Abrir carpeta de builds"). Wiring en AlkahestGameBootstrap.
+SIN VERIFICAR en editor (escrito a ciegas por economía de créditos): riesgo bajo, pero el primer
+Play puede revelar detalles (z-orden del fondo vs sim, estilo de las pistas). Si el fondo tapara
+la sim: bajar su z de 0.5 a 2 o comprobar que el quad de la sim es transparente-sobre-opaco.
+M5 restante para Opus: glow aditivo fuego/Vivium, agua con metaballs/post-blur, sprite del
+aprendiz expresivo, SFX, y la revisión visual de conjunto (su especialidad). Después: balance de
+la partida completa y el plan multiplayer (sección Backlog).

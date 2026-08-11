@@ -78,6 +78,10 @@ namespace Alkahest.Game
             SpawnOrdersHud(orderSystem);
             SpawnDayCycle(orderSystem, knowledge);
 
+            // M5: presentación y onboarding (fondo del taller + pistas de la primera partida).
+            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            new GameObject("HintSystem").AddComponent<HintSystem>();
+
             _spawned = true;
             Debug.Log("[ChaosAlchemy] Capa de interacción (M2-M4) inicializada.");
         }
