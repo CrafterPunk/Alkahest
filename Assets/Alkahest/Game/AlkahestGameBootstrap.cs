@@ -1,5 +1,6 @@
 using UnityEngine;
 using Alkahest.Sim;
+using Alkahest.Audio;
 
 namespace Alkahest.Game
 {
@@ -31,6 +32,14 @@ namespace Alkahest.Game
     {
         private AlkahestSim _sim;
         private bool _spawned;
+
+        // (M5 audio) Los cinco grifos, guardados aquí al crearlos en
+        // SpawnDispensers: Audio/DirectorDeAudio.cs necesita sus referencias
+        // (posición + material) para poner una voz de bucle por grifo, y el
+        // patrón de todo este archivo es inyección de dependencias explícita
+        // -- nunca un Find* -- así que se le pasan directamente en vez de
+        // que el director tenga que buscarlos por su cuenta.
+        private Dispenser[] _dispensers;
 
         private void Start()
         {
@@ -84,6 +93,11 @@ namespace Alkahest.Game
             supplies.Init(_sim, grifoAzoth);
 
             SpawnDayCycle(orderSystem, knowledge, supplies, hints);
+
+            // (M5 audio) EL TALLER SUENA: se instancia AL FINAL, cuando ya
+            // existen todas las dependencias que necesita (frasco, grifos,
+            // conocimiento, encargos, jugador). Ver Audio/DirectorDeAudio.cs.
+            SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
             Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (taller 256x144).");
@@ -156,11 +170,13 @@ namespace Alkahest.Game
         /// </summary>
         private Dispenser SpawnDispensers(Transform player, OrderSystem orderSystem)
         {
-            SpawnOneDispenser(player, "Water", MaterialId.Water, 0, orderSystem, 0, false);
-            SpawnOneDispenser(player, "Sand", MaterialId.Sand, 1, orderSystem, 0, false);
-            SpawnOneDispenser(player, "Oil", MaterialId.Oil, 2, orderSystem, 2, false);
-            SpawnOneDispenser(player, "Nutrient", MaterialId.Nutrient, 3, orderSystem, 5, false);
-            return SpawnOneDispenser(player, "Azoth", MaterialId.Azoth, 4, orderSystem, 4, true);
+            var agua = SpawnOneDispenser(player, "Water", MaterialId.Water, 0, orderSystem, 0, false);
+            var arena = SpawnOneDispenser(player, "Sand", MaterialId.Sand, 1, orderSystem, 0, false);
+            var aceite = SpawnOneDispenser(player, "Oil", MaterialId.Oil, 2, orderSystem, 2, false);
+            var nutriente = SpawnOneDispenser(player, "Nutrient", MaterialId.Nutrient, 3, orderSystem, 5, false);
+            var azoth = SpawnOneDispenser(player, "Azoth", MaterialId.Azoth, 4, orderSystem, 4, true);
+            _dispensers = new[] { agua, arena, aceite, nutriente, azoth };
+            return azoth;
         }
 
         private Dispenser SpawnOneDispenser(Transform player, string label, byte matId, int fila,
@@ -217,6 +233,14 @@ namespace Alkahest.Game
             var go = new GameObject("OrdersHud");
             var hud = go.AddComponent<OrdersHud>();
             hud.Init(orderSystem);
+        }
+
+        /// <summary>(M5 audio) Ver Audio/DirectorDeAudio.cs -- el interruptor SistemaActivo de ese archivo apaga esto entero de un solo sitio si hiciera falta.</summary>
+        private void SpawnDirectorDeAudio(OrderSystem orderSystem, SubstanceKnowledge knowledge, Flask flask, Transform player)
+        {
+            var go = new GameObject("DirectorDeAudio");
+            var director = go.AddComponent<DirectorDeAudio>();
+            director.Init(_sim, orderSystem, knowledge, flask, player, _dispensers);
         }
 
         private void SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,

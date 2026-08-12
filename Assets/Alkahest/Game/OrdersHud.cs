@@ -4,8 +4,10 @@ namespace Alkahest.Game
 {
     /// <summary>
     /// HUD de encargos activos (arriba-derecha): Favor actual y su progreso
-    /// hacia la meta de victoria, más la lista de encargos de la jornada con
-    /// barra de progreso. Solo se dibuja durante Playing.
+    /// hacia el PRÓXIMO escalón de desenlace todavía no alcanzado (ver
+    /// OrderSystem.TryGetNextTier -- balance playtest 8: ya no hay una única
+    /// meta de victoria), más la lista de encargos de la jornada con barra
+    /// de progreso. Solo se dibuja durante Playing.
     ///
     /// REESCRITO tras el playtest 3 ("se corrieron los textos, no se pueden
     /// apreciar"): antes cada encargo se recortaba a 34 caracteres y se dibujaba
@@ -67,13 +69,26 @@ namespace Alkahest.Game
             GUI.Label(new Rect(x, y, interior, altoLinea), "ENCARGOS DEL MAESTRO", UiStyles.Titulo);
             y += altoLinea + UiStyles.S(2f);
 
+            // Balance playtest 8: la meta mostrada ya no es fija (WinFavorTarget
+            // se eliminó) -- mientras el jugador no llega al primer escalón
+            // (Aprendiz) se enseña ESE; en cuanto lo cruza se enseña el
+            // SIGUIENTE todavía no alcanzado ("180 ★ · oficial"), para que
+            // quede claro que seguir entregando sirve. Si ya se llegó a
+            // Maestro (el máximo) no hay meta que mostrar: la barra se queda
+            // llena y el rótulo lo dice.
+            int favor = _orderSystem.Favor;
+            bool hayEscalon = OrderSystem.TryGetNextTier(favor, out int metaVigente, out string nombreEscalon);
+
             GUI.Label(new Rect(x, y, interior, altoLinea), "Favor", UiStyles.CuerpoTenue);
-            GUI.Label(new Rect(x, y, interior, altoLinea),
-                _orderSystem.Favor + " ★  (meta " + OrderSystem.WinFavorTarget + ")", UiStyles.Numero);
+            string etiquetaMeta = hayEscalon ? favor + " ★  (" + metaVigente + " ★ · " + nombreEscalon + ")" : favor + " ★  (máximo · maestro)";
+            GUI.Label(new Rect(x, y, interior, altoLinea), etiquetaMeta, UiStyles.Numero);
             y += altoLinea + UiStyles.S(3f);
 
-            UiStyles.Barra(new Rect(x, y, interior, altoBarraFavor),
-                (float)_orderSystem.Favor / OrderSystem.WinFavorTarget, UiStyles.Oro);
+            // La barra se reescala al escalón vigente (nunca clavada al 100% al
+            // llegar a la antigua meta única): con Maestro ya alcanzado se deja
+            // llena a propósito, es el único caso sin un próximo umbral.
+            float fracFavor = hayEscalon ? (float)favor / metaVigente : 1f;
+            UiStyles.Barra(new Rect(x, y, interior, altoBarraFavor), fracFavor, UiStyles.Oro);
             y += altoBarraFavor + UiStyles.S(8f);
 
             // ---- 3) Encargos ----

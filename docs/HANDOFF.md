@@ -30,30 +30,21 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado
-0. **Playtest 7 (abajo)**: los 8 puntos reportados por Cesar están HECHOS en código, PENDIENTES
-   de verificación en Unity por Cesar (chapas laterales de grifos, resalte dorado como sustituto
-   del prompt E, rótulos de la piedra gélida, embudo de la tolva invertido + contenido que
-   desaparecía, avisos repetitivos del frasco, navegación manual de pistas, retextura del fondo,
-   causa raíz del etiquetado de redomas).
-1. **BALANCE de la partida completa** — máxima prioridad ahora que la interacción y la
-   legibilidad están arregladas. En la captura del playtest 7 Cesar iba con 149★ sobre una meta
-   de 120 y la jornada SEGUÍA activa, con encargos de 150/100/220 celdas y 1:35 en el reloj: los
-   tamaños de encargo son inalcanzables en ese tiempo y la condición de victoria por Favor no
-   cierra la partida sola. Hay que jugar las 3 jornadas enteras y balancear tamaños de encargo,
-   tiempos, ritmo de Favor y la propia meta (¿120 sigue siendo el número correcto si ya se llega
-   a 149 sin que el juego termine?).
-2. **Replantear las redomas** — DESPUÉS del balance. Cesar sugirió que quizás deberían estar
-   abajo (más a mano) y que eso podría usarse para levantar el gameplay de reacciones; de momento
-   se dejaron donde están ("las botellas tienen un lugar protagónico para su poco uso... tampoco
-   está mal para esta parte del desarrollo, solo hagamos que funcione" — petición explícita de
-   Cesar de NO rediseñar su ubicación todavía, solo arreglar el bug del playtest 7).
-3. **Resto de M5**: glow aditivo para fuego/Vivium, agua con más cuerpo (metaballs/post-blur),
-   sprite del aprendiz más expresivo, SFX simples.
-4. **Verificar una build limpia de Windows** (menú "Alkahest/2. Build demo Windows" ya existe).
-5. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` en GitHub Settings + `git remote set-url`
-   (el productName ya es ChaosAlchemy; los namespaces `Alkahest.*` se quedan — decisión registrada).
-6. **Integración multiplayer** (riesgo técnico nº1), plan diseñado, NO implementado:
+## Backlog priorizado (actualizado tras playtest 8)
+1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con el balance del
+   día 3 y los cuatro desenlaces del playtest 8 (ver esa sección) — nada de esto se ha probado en
+   editor todavía.
+2. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
+   `DirectorDeAudio`? Depende de feedback de Cesar.
+3. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
+   (playtest 4) ni con M5 (audio + aprendiz) encima. Menú ya existe (`AlkahestBuildTools`, ver
+   stint M5-parcial) — falta EJECUTARLO y probar el .exe.
+4. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
+   es ChaosAlchemy; los namespaces `Alkahest.*` se quedan — decisión registrada).
+5. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
+   accesibles, para levantar el gameplay de reacciones/experimentación.
+6. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
+7. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
    - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
    - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
      tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
@@ -61,7 +52,7 @@ en el proyecto pero no integrado con la sim.
      por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
    - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
      habla con él. NO rediseñar el template.
-7. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+8. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
    NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
@@ -80,14 +71,10 @@ en el proyecto pero no integrado con la sim.
 - **Sonnet** (implementación): ~90% del C# — M1 sim core, M2 interacción, M3 leyes/reacciones
   (parcial, interrumpido), M4 loop completo; investigación del stack Steam (sesión template).
 - **Opus**: no participó aún (la revisión visual M5 era su tarea natural — sigue siéndolo).
-- **Playtest 6**: Opus 5 dirigió (diagnóstico de los seis reportes de Cesar, decisiones de diseño
-  y de arte, especificación de cada fix y revisión); Sonnet 5 escribió TODO el código, en cuatro
-  encargos paralelos con propiedad de archivos disjunta, más dos pases de revisión de compilación
-  también con Sonnet 5.
-- **Playtest 7**: Opus 5 dirigió (diagnóstico de los ocho reportes de Cesar, decisiones de diseño
-  y de arte, especificación de cada encargo y revisión); Sonnet 5 escribió TODO el código, en seis
-  encargos paralelos con propiedad de archivos disjunta, más dos pases de revisión de compilación
-  también con Sonnet 5.
+- **Playtest 8**: **Opus 5 dirigió** (diagnóstico de la regresión de los sólidos, decisiones de
+  balance y de dirección de sonido y de arte, especificación de los 4 encargos y revisión);
+  **Sonnet 5 escribió todo el código** en 4 encargos paralelos con propiedad de archivos disjunta,
+  más 1 pase de revisión de compilación.
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no
@@ -212,255 +199,135 @@ compra); `WorkshopBackdrop` reescrito con mampostería, vigas, zócalo y luz de 
 PENDIENTE: verificarlo TODO en el editor (checklist en el mensaje de Opus), y después SFX, agua
 con cuerpo (metaballs) y el plan de multiplayer.
 
-## Playtest 6 → ronda de arreglos dirigida por Opus 5, código de Sonnet 5 — PENDIENTE DE VERIFICACIÓN EN UNITY POR CESAR
-Seis hallazgos de Cesar, uno por uno con diagnóstico y fix:
 
-1. **Warning CS0162 en `SimRenderer.cs`**. La guardia "CHUNK divide W y H" es una comparación
-   entre constantes, así que el compilador la evalúa en tiempo de compilación y marca el bloque
-   como inalcanzable. No se borró (sigue protegiendo a quien cambie `CellGrid.W/H` en el futuro):
-   se envolvió en `#pragma warning disable 0162` / `#pragma warning restore 0162`.
+## Playtest 8 → REGRESIÓN DE LOS SÓLIDOS, balance medido desde código, y M5 audio + aprendiz — SIN VERIFICAR EN EDITOR
+Ronda dirigida por Opus 5 (diagnóstico, decisiones de balance/dirección de sonido/dirección de
+arte, especificación de 4 encargos con propiedad de archivos disjunta, revisión de compilación);
+Sonnet 5 escribió TODO el código.
 
-2. **"Al acabar las metas no termino el nivel"**. `DayCycle` ahora detecta con
-   `OrderSystem.AllOrdersCompleted()` que todos los encargos de la jornada están entregados,
-   muestra el aviso "TODOS LOS ENCARGOS ENTREGADOS · pulsa ENTER para cerrar la jornada (Ns)" y
-   cierra la jornada por `EnterDayEnd()` al pulsar ENTER o al agotarse una cuenta atrás de 12 s —
-   es el MISMO camino que el cierre por temporizador, no se duplicó la transición. La cuenta
-   atrás se acota cada frame a `_timeRemaining`, así que nunca alarga la jornada más allá de lo
-   que ya tocaba.
+**BUG CRÍTICO — los sólidos no se entregaban en la Tolva ("los que resultan de combinaciones
+raras", Cesar dixit) — REGRESIÓN NUESTRA del playtest 7.** Al restringir el consumo de la Tolva a
+las 3 filas del fondo del pozo (`ChuteSillRows = 3` en `DeliveryChute.cs`) para que lo vertido se
+viera CAER, se rompió el caso `StaticSolid`: en `SimStepper.ProcessIfNeeded`, `case
+MaterialArchetype.StaticSolid:` está VACÍO — nunca llama a `Move()`, así que Cristal y Hielo no
+caen por gravedad (por diseño: son estáticos). Y `Flask.PourMaterial`/`TickPour` pintan la celda
+en la posición EXACTA del cursor, a cualquier altura del pozo. Resultado: un sólido vertido a
+media altura se quedaba flotando ahí para siempre y el encargo nunca avanzaba. Los "sólidos raros"
+de Cesar son justo los productos de reacción — Cristal (cristalización de Azoth) y Hielo
+(congelación de Agua) — que es donde más se nota porque nadie los vierte a ras de sillar a propósito.
+LECCIÓN GENERAL: cualquier mecánica que asuma que la materia "cae sola" debe comprobar antes el
+arquetipo — `StaticSolid` NO tiene gravedad, por diseño de la sim, y va a seguir sin tenerla.
+FIX: `ArrastreTick()` nuevo en `DeliveryChute`, a 30 Hz junto al consumo. Recorre
+`ChuteMouthX0..ChuteMouthX1` y las filas de `ZoneFloorY1+1` hasta `ZoneY1` **de abajo hacia
+arriba** (para que una misma celda no caiga varias filas en un tick — se vería como un salto), y
+si la celda de debajo está vacía usa `CellGrid.SwapCells` + `WakeChunk` en origen y destino —
+los mismos helpers que `SimStepper.Move`, así no se pierde temperatura ni aux y los chunks se
+despiertan. Sin distinguir arquetipo, sin asignaciones, determinista (puramente posicional); la
+zona son 22x26 celdas, barato. Justificación de diseño: la Tolva es un aparato del taller y
+"engullir" es su verbo — que arrastre hacia su garganta lo que le eches, incluida la piedra, es
+coherente con la ficción y conserva la caída visible que motivó el playtest 7. Añadido de paso: un
+aviso educativo, una sola vez por material (`_scrapWarned[]`), cuando lo entregado no cuenta para
+ningún encargo, con el nombre legible vía el método público nuevo
+`OrderSystem.NombreParaMensaje(byte matId)` — antes se tragaba el material en silencio y parecía
+roto.
 
-3. **Cámara recortando la izquierda (los grifos quedaban fuera de cuadro)**. `FitMainCamera()`
-   solo encajaba la altura del mundo; ahora encaja la dimensión LIMITANTE con
-   `Mathf.Max(sizeForHeight, (worldW*0.5f)/aspect)`: si el viewport es más estrecho que el
-   aspecto del mundo, sobra espacio arriba/abajo en vez de recortar los lados. Además
-   `RenderFrame` guarda `_lastAspect` y vuelve a llamar a `FitMainCamera()` cuando el aspecto
-   cambia (pantalla completa, redimensionado de ventana).
+**BALANCE, medido desde el código (no a ojo) — tabla de referencia para rebalancear sin volver a medir:**
+| Sistema | Tasa medida | Fuente |
+|---|---|---|
+| Grifo | rombo de 5 celdas (radio 1) por tick a 30 Hz → techo 150 cel/s; los encargos piden 0,17-0,7 cel/s de media — el grifo nunca es cuello de botella | `Dispenser.cs`: `SpoutRadius`, `TickDt`, `EmitRatePerTick` |
+| Cristalización | 12%/comprobación (27% bajo Edicto de Frío Fértil); se comprueba cada tick si la celda se movió, si no 1 de cada 8 ticks (~0,267 s) → ~2,2 s/celda (~0,99 s con el Edicto) | `Universe.Create` + `SimStepper.MaybeReact` |
+| Bandeja fría | 46x6 = 276 celdas útiles | `SimLevelBuilder.ChillTray*` |
+| Vivium | 60% de éxito, un intento cada 4 ticks por celda asentada en banda con Nutriente; el cuello de botella real es el ARRANQUE (retoño r=5, 81 celdas, nace dormido), no la tasa — una vez alimentado es exponencial | `SimStepper.GrowthTick`, `Universe.VivGrowChancePct`, `MasterSupplies.cs` |
+| Cuba B | interior ~52x37 = 1924 celdas, nunca limita | `SimLevelBuilder.cs` |
+| Frasco + aprendiz | capacidad 900, alcance 60 celdas sin moverse; aprendiz 11,2 u/s = 112 celdas/s → cualquier viaje cuesta 1-2 s, la logística nunca es cuello de botella | `Flask.cs`, `ApprenticeController.cs` |
+| Jornada | 360 s, sin cambios | `DayCycle.DayDurationSeconds` |
 
-4. **Rótulos de mundo que se encendían de lejos y no se apagaban nunca**. Sistema de TRES
-   ANILLOS compartido por `ChillStone`, `HeatPlate` y `Dispenser`, con las mismas constantes en
-   los tres: `RangoEstadoPleno=5.0f` / `RangoEstadoDesvanece=6.5f` (solo el ESTADO del aparato —
-   grados, "abierto" — y solo si está trabajando), `RangoNombrePleno=2.6f` /
-   `RangoNombreDesvanece=3.6f` (el nombre del aparato), `ProximityRange`/`RangoFoco=2.8f` (el
-   prompt `E — ...`, condicionado además a `MachineFocus.EsFoco` y `!UiStyles.RatonOcupado`).
-   Infraestructura nueva en `UiStyles`: sobrecarga `PlacaMundo(pos, texto, color, desplazarPx,
-   float alfa)` y `Cercania(puntoMundo, jugador, rangoPleno, rangoDesvanece)` con SmoothStep.
-   APRENDIZAJE: cada aparato tiene un campo de instancia `_yaConocida`; en cuanto la cercanía al
-   anillo de NOMBRE llega a >=0.98 se marca, y el nombre no se vuelve a dibujar en esa partida (el
-   estado y el prompt siguen apareciendo con normalidad). Sin PlayerPrefs ni estáticos: se
-   resetea cada partida, deliberadamente. Se ELIMINÓ `Dispenser.RangoVisible = 7f` (existía desde
-   el playtest 5, "no pude acceder a los grifos") porque ya no hace falta: el estado se ve desde
-   5 u con el grifo abierto y los grifos están en columna, así que acercarse a uno revela los
-   vecinos. Los textos de los grifos ya no dicen "grifo": ahora `AGUA`, `ACEITE`, `AZOTH`,
-   `AGUA · abierto`, `AGUA · rebosa`, `sellado por el Maestro`. Los `Debug.Log` internos sí
-   conservan "grifo".
+Cambios de encargo (**días 1 y 2 SIN TOCAR** — Cesar los completó, son buena referencia): el día 3
+pedía 150 Crystal + 100 Named/Flammable + 220 Grows (470 celdas en 6 min, inalcanzable con cristal
+a 2,2 s/celda). Rebalanceado a **90 CrystalSolid (+45), 70 NamedMaterial (+35, con fallback
+Flammable 100) y 130 Grows (+50)** — unas 290 celdas, el 60-70% de la jornada, dejando margen para
+experimentar (experimentar es el corazón del juego, no un extra).
+Segundo fallo, aritmético: 20 de inicio + 50 (día 1) + 105 (día 2) = **175★ SIN tocar el día 3**,
+contra `WinFavorTarget = 120` — la meta no significaba nada, se superaba sola. Diseño nuevo: la
+partida SIEMPRE dura las tres jornadas (el arco de tres días es la forma del juego) y el final se
+GRADÚA en cuatro desenlaces (`OrderSystem.Desenlace`): **despedido** <120, **aprendiz** ≥120,
+**oficial** ≥180 (justo por encima del máximo pre-día-3 de 175: exige entregar algo del día 3),
+**maestro** ≥260 (máximo teórico ≈305 menos el colchón de lo que se gasta en grifos de Favor).
+`OrdersHud` muestra el escalón vigente y reescala la barra a ese escalón en vez de quedarse
+clavada al 100%; la pantalla final nombra el desenlace y dice cuánto faltaba para el siguiente.
+`DayCycle` ya no corta la partida por meta alcanzada ni por "dos jornadas sin entregar" (ese aviso
+queda como texto de sabor, `_avisoDesatencion`).
+Favor como recurso: `favorCostPerActivation` NO estaba a 0 (Agua/Arena 0, Aceite 2, Nutriente 5,
+Azoth 4) — era irrelevante porque 120 se superaba solo. Con los cuatro escalones, cada Favor
+gastado compite con llegar a oficial/maestro. RECOMENDACIÓN NO IMPLEMENTADA: el coste solo se
+cobra al pasar OFF→ON, así que se puede dejar un grifo abierto indefinidamente gratis; considerar
+coste por volumen o goteo por tick si se quiere más fricción.
 
-5. **La tolva no parecía una tolva**. Se sustituyeron jambas+labio+flecha por un EMBUDO DE
-   LATÓN generado por código en `DeliveryChute.SpriteEmbudoMetal` (trapecio invertido con ala de
-   recogida, labio iluminado, dos filas de remaches, banda de refuerzo, cara interior degradada a
-   negro, sombra proyectada), a 8 téxeles por celda y `FilterMode.Point`. Paleta latón
-   RGB(168,126,58)/(214,176,96)/(86,62,28) — regla nueva: el oro de `UiStyles` es color de UI, no
-   de mundo. El rótulo "TOLVA DEL MAESTRO" solo aparece cerca (3.0/4.2) y solo hasta la primera
-   visita (`_yaConocida`); "vierte AQUÍ" desapareció como texto permanente, y la flecha solo sale
-   si el jugador está cerca Y `Flask.Total > 0`. ANIMACIÓN DE VOLCADO de 0.55 s: sacudida
-   ease-out de 0.06 u (una sola por entrega, reiniciable), garganta que se enciende de negro hacia
-   `UiStyles.Exito` (verde, encajó) o `UiStyles.Aviso` (ámbar, chatarra), y un anillo de onda que
-   se expande perdiendo opacidad. Fuera de la animación el embudo está QUIETO — se eliminaron los
-   pulsos permanentes de alfa, que era justo la queja de Cesar. Los mensajes de resultado subieron
-   de 0.5 s a 1.1 s de duración. `DeliveryChute.AsegurarJugador()` localiza al aprendiz con
-   `FindAnyObjectByType<ApprenticeController>()` y cachea su `Flask`, porque
-   `AlkahestGameBootstrap.Init(sim, orderSystem)` no le pasa el jugador.
+**M5 AUDIO — el taller suena (antes el juego era completamente mudo).** Dos archivos nuevos en
+`Assets/Alkahest/Audio/`: `SintetizadorSfx.cs` (fábrica estática que sintetiza y cachea 13
+`AudioClip` por código: primitivas de ruido, paso-bajo de un polo, paso-bajo barrido, seno/
+triángulo, desafinado, trémolo, granos, envolventes AD/campana y crossfade de bucle) y
+`DirectorDeAudio.cs` (MonoBehaviour con pool fijo de voces: one-shot + bucles + una voz por
+grifo; cero asignaciones por frame). CERO ASSETS, como todo el proyecto.
+Los 10 sonidos y su timbre: lecho ambiental (ruido marrón doble-filtrado + zumbido de fragua a
+42/84 Hz), grifo por arquetipo (líquido = medio con burbujeo por trémolo, polvo = agudo granular,
+gas = siseo tenue), fuego (ruido con granos de amplitud, volumen y `AudioLowPassFilter` modulados
+por cuánto fuego hay), aspirar/verter (barrido de paso-bajo ascendente/descendente), ignición
+(seno grave descendente + soplo), cristalizar/congelar (campanilla de 4 parciales inarmónicos
+desafinados con caída independiente), tolva (chirrido grave + granos), bautizar (dos notas de
+triángulo G4→C5), encargo completado (acorde do-mi-sol de latón), fin de jornada (campana de 5
+parciales + gong, ~1,4 s).
+Reglas de dirección de sonido a respetar en el futuro: nada de senos pelados ni ruido blanco crudo
+(todo pasa por paso-bajo — el taller es piedra, latón, fuego y líquido), todo clip empieza y acaba
+en silencio (un clic al inicio se oye como defecto), volumen maestro 0,5 y mezcla por debajo del
+umbral de molestia (es un juego de observar), variación de pitch ±6% / volumen ±10% en cada
+one-shot.
+LIMITADOR DE RITMO (lo crítico): la sim dispara cientos de eventos por tick. Máximo 6/s para
+cristalizar+congelar (comparten limitador) y 4/s para el resto; los eventos suprimidos SUBEN el
+volumen del siguiente disparo (hasta +100%) en vez de sonar más veces, así una avalancha de
+cristalización suena a avalancha y no a metralleta.
+Cómo se entera de lo que pasa: `SimStepper.Events` (`SimNotableEvent[]` público) + `EventHead`;
+`SubstanceKnowledge` ya lo leía de forma NO destructiva con su propio índice, y `DirectorDeAudio`
+hace lo mismo con `_ultimoEventoLeido` y un `while (i != head && pasos < EventBufferSize)`, así
+que ambos conviven sin robarse eventos y no hizo falta tocar `Sim/`. Lo que no tiene evento
+dedicado se observa por estado: delta de `Flask.Total`, muestreo de la boquilla del grifo,
+muestreo del sillar de la Tolva, `SubstanceKnowledge.CountNamed()` y `OrderSystem.CompletedCount()`
+al subir, y flanco de subida de `DayCycle.InputLocked` para el fin de jornada.
+Control: tecla **M** silencia (comprobado que no pisa F3/H/T/E/Q/flechas/WASD), persiste en
+`PlayerPrefs`, funciona incluso con `DayCycle.InputLocked` porque es una preferencia y no una
+acción de juego. **Interruptor general: `private const bool SistemaActivo = true;` en
+`DirectorDeAudio` — a `false` desactiva el componente entero en `Awake`. Es el plan B si el audio
+no convence.**
 
-6. **"Los materiales, el bedrock y los bordes de la placa parecen en baja resolución"**.
-   Diagnóstico: la textura de la sim es 1 téxel por celda (256x144) estirada a pantalla completa
-   (~7.5 px de pantalla por celda a 1080p), y la PIEDRA era casi un color plano, así que grandes
-   áreas se leían como mancha borrosa; encima se muestreaba con `FilterMode.Bilinear`. Arreglos en
-   `SimRenderer.ComputeCellColor`: para `StaticSolid`, (a) aparejo de sillería de 8x4 celdas con
-   hiladas impares desplazadas medio bloque, tono ±6% estable por `Hash2D(blockX, hilada)` y
-   juntas -22%; (b) iluminación de canto (la que más rinde): celda de arriba vacía +28%, celda de
-   abajo vacía -20%, izquierda vacía +10% — hace que labios de cubas, bedrock y el contrafuerte de
-   la tolva se lean como arquitectura tallada; (c) grano fino ±4 con `Hash3D(x,y,97)`. Para
-   `Powder`, aclarado de canto superior +15%. NO se tocó la ruta de color del FUEGO ni el
-   shimmer/superficie de líquidos (ambos ya validados por el jugador en playtests anteriores).
-   `filterMode` cambiado a `FilterMode.Point` — decisión de arte: coherencia con los sprites de
-   maquinaria, que ya eran Point; queda comentado en el código cómo revertirlo. En
-   `MaquinariaSprites` se añadió `Escala=3` + helper `S(v)`: las texturas pasan de ~2-4 téxeles/
-   celda a ~8-14, sin cambiar ningún tamaño de mundo (`CrearCapa` calcula `localScale` a partir de
-   anchoMundo/altoMundo, así que es autocorrectivo) ni ninguna firma pública. Excepción
-   documentada: `ListonEstante(int anchoPx)` recibe su ancho ya en téxeles desde `StorageRack.cs`,
-   así que sigue a ~2 téxeles/celda de ancho; subirlo exige tocar `StorageRack`.
+**M5 APRENDIZ — de cuadrado morado a imp.** `ApprenticeController.cs` reescrito, pase puramente
+VISUAL (física, velocidad y alcance sin tocar). Silueta: cabeza grande / cuerpo pequeño (elipses
+solapadas), dos cuernecillos con punta de latón, dos alas de polilla (barrido Bézier con vena de
+latón), cola fina con cuenta en la punta, collar y gema en la frente, ojos grandes con pupila y
+punto de luz. Paleta: cuerpo morado claro desaturado (0xA8,0x96,0xC4), luz (0xD2,0xC4,0xEC),
+sombra (0x6E,0x5E,0x8E) — más luminoso que el ciruela del fondo — y contorno casi negro
+(0x16,0x10,0x1E) de 1 téxel en toda la silueta vía una pasada genérica `AplicarContorno`, para que
+no se pierda ni contra el ladrillo ni contra materia saturada. Latón según la regla del repo:
+(168,126,58)/(214,176,96)/(86,62,28), nunca `UiStyles.Oro`.
+Resolución: de 24x28 téxeles a 33 ppu, ahora 72x84 a 99 ppu — mismo tamaño de mundo exacto
+(72/99 = 24/33), x3 de detalle, coherente con `MaquinariaSprites`.
+Animación sin Animator ni clips: bobbing en reposo (valores del playtest 4 intactos); aleteo con
+dos capas rotando sobre su gozne, frecuencia 1,1 Hz en reposo → 5,4 Hz a velocidad máxima con
+suavizado exponencial y el ala trasera desfasada 0,5 rad para dar profundidad; inclinación del
+cuerpo hasta 16° proporcional a la velocidad horizontal (lo que más "peso" da a un personaje
+volador); parpadeo alternando dos sprites de cuerpo pre-generados a intervalos irregulares de
+2,2-6,5 s; y el frasco persiguiendo con `SmoothDamp` el mismo punto que usa `Flask.cs`, para que se
+retrase un pelín al arrancar y frenar.
+`CarryAnchor` conserva su fórmula (único consumidor externo: `Flask.cs`). `sortingOrder` base 50,
+capas derivadas -2/-1/+1/+2, todas por debajo del indicador de `Flask.cs` (60).
 
-**Preguntas abiertas para el próximo playtest**: ¿el `FilterMode.Point` gusta o se vuelve a pedir
-`Bilinear`? ¿el anillo de nombre de 2.6 u se queda corto o largo?
-
-**Reparto de modelos de esta ronda**: Opus 5 dirigió (diagnóstico de los seis reportes, decisiones
-de diseño y de arte, especificación de cada fix y revisión); Sonnet 5 escribió TODO el código, en
-cuatro encargos paralelos con propiedad de archivos disjunta, más dos pases de revisión de
-compilación también con Sonnet 5.
-
-## Playtest 7 → ronda de arreglos dirigida por Opus 5, código de Sonnet 5 — PENDIENTE DE VERIFICACIÓN EN UNITY POR CESAR
-Ocho hallazgos de Cesar, uno por uno con diagnóstico y fix:
-
-1. **"Las etiquetas E-abrir + el coste no están en el lugar correcto: 'cerrar' del agua está
-   escrito sobre el grifo de arena"**. Los cinco grifos están en columna a 10 celdas (1 unidad de
-   mundo) unos de otros, así que cualquier rótulo con desplazamiento VERTICAL desde el ancla de un
-   grifo cae sobre el vecino de arriba o abajo. Infraestructura nueva en `UiStyles`:
-   `PlacaMundoLateral(pos, texto, color, separacionPx, desplazarYPx, alfa, bool aLaIzquierda)`, que
-   ancla la chapa a un LADO del punto en vez de encima. Cada grifo tiene ahora una chapa
-   PERMANENTE en su propia fila, a la DERECHA del caño (`desplazarYPx = 0`), así que dos chapas de
-   grifos vecinos son geométricamente incapaces de solaparse. Queda documentado por qué a la
-   derecha y no a la izquierda como sugería Cesar: el pilar de piedra al que se atornillan los
-   grifos ocupa las columnas x=1..8 del mundo (`SimLevelBuilder.TapPillarX0/X1`) y está pegado al
-   borde izquierdo de la pantalla — no cabe una chapa ahí; a la derecha hay pared vacía de sobra.
-   Contenido de la chapa, por prioridad: `SELLADO` / nombre en MAYÚSCULAS + coste de encender
-   (`ACEITE  3★`) / `AGUA · abierto` / `AGUA · rebosa`, con alfa `0.45 + 0.55*Cercania(2.6, 5.5)`
-   en reposo salvo abierto/rebosando/avisos puntuales, que van siempre a alfa 1 (información
-   urgente a cualquier distancia).
-
-2. **"Indicarle al jugador todo el tiempo que necesita presionar la E es cansado y estorba;
-   quizás solo la primera vez, y luego una señal, un contorno de resalte"**. El contador de usos
-   vive ahora en `MachineFocus` (`MostrarPromptE`, `RegistrarUsoE()`, `UsosParaAprender = 2`,
-   reiniciado en `Limpiar()` con cada partida nueva) y NO duplicado en cada MonoBehaviour: "pulsa
-   E junto a un aparato" es UNA regla del juego, no una propiedad de cada máquina — en cuanto la
-   usas dos veces la sabes para siempre, da igual en qué aparato fue. En su lugar, RESALTE del
-   aparato enfocado en los tres aparatos con E (`Dispenser`, `ChillStone`, `HeatPlate`): una capa
-   extra creada UNA vez en `BuildVisual`, DETRÁS del sprite principal (sortingOrder menor: caño 15
-   < cuerpo 19/gota 20; chasis/bloque de ChillStone y HeatPlate 16 < 18/19), copia del sprite
-   principal escalada (1.22x el caño; 1.15x ancho / 1.35x alto en placa y piedra) y teñida de
-   `UiStyles.Oro`. Alfa 0 sin foco; con foco, late entre 0.40 y 0.85 (`0.60/0.65 + 0.20 *
-   Mathf.Sin(...)` según el aparato), interpolado con `Mathf.MoveTowards` a ~6/s para que la
-   entrada y salida del foco sea un fundido y no un parpadeo. La capa se anima SIEMPRE, esté la
-   máquina encendida o apagada — en `ChillStone` hubo que sacar la llamada de animación de la
-   rama `if (_state != State.Off)` (si no, acercarse a una piedra apagada no mostraría ninguna
-   señal de que se puede interactuar con ella); en `HeatPlate` ya se llamaba en todos los frames.
-
-3. **"'Encender el frío' quedó muy lejos de la plataforma de frío"**. `ChillStone` anclaba sus
-   rótulos a `_centroBloque`, el bloque de piedra gélida EMPOTRADO BAJO EL SUELO de la bandeja, no
-   a la bandeja en sí. Ahora cuelgan de `_anclaRotulo`, calculado UNA vez en `BuildVisual` a partir
-   de las constantes de `SimLevelBuilder` (única fuente de verdad del plano del taller): X medio
-   de `ChillTrayInteriorX0..X1`, Y en `ChillTrayY0 + ChillTrayHeight` (el labio superior de la
-   bandeja). Los desplazamientos de los rótulos de estado/nombre/prompt son ahora HACIA ARRIBA
-   (antes hacia abajo, con signo negativo) — hacia abajo caían DENTRO de la bandeja, que solo tiene
-   0.6 unidades de mundo de profundidad interior y es justo donde el jugador aspira/vierte.
-   `PuntoFoco` (el que usa `MachineFocus` para decidir si la piedra responde a E) se deja a
-   propósito en `_centroBloque`: está a menos de 1 unidad del labio, muy por debajo de
-   `RangoFoco=2.8`, así que acercarse a trabajar la bandeja activa la máquina igual — el bug era
-   puramente visual, del rótulo, no del área de interacción. En `HeatPlate` se verificó
-   explícitamente que `_centroChasis` ya estaba bien situado (el chasis se apoya en el suelo, al
-   pie de la cuba, justo donde el aprendiz se planta para pulsar E) y no se tocó. La lectura de
-   grados en las chapas de estado (p.ej. `HELANDO -80°`) NO se tocó: Cesar la validó explícitamente
-   ("lo de las temperaturas está muy bien").
-
-4. **"La tolva es confusa: no sé si está de cabeza, y debajo hay un hueco que no se llena,
-   simplemente el contenido de mi frasco desaparece"**. DOS bugs distintos en `DeliveryChute`.
-   (a) El embudo (`SpriteEmbudoMetal`) estaba literalmente invertido: en un `Texture2D` de Unity
-   la fila `y=0` es la de ABAJO del sprite renderizado, pero el bucle de generación usaba
-   `t = y/(h-1)` y pintaba el ancho de las ALAS en `y=0`; con el pivote del sprite en la base
-   anclado al labio del pozo, el resultado era boca ancha apoyada en el pozo y garganta estrecha
-   flotando por encima — un embudo al revés. Fix: `t = 1f - y/(h-1)`, y el labio iluminado +
-   la fila de remaches se movieron al borde ancho (la fila alta de la textura, que ahora es
-   arriba de verdad). (b) `FactorGarganta` pasó de 0.58 a 1.00 para que la garganta dibujada mida
-   exactamente el ancho real del pozo excavado en `SimLevelBuilder` (22 celdas,
-   `ChuteMouthX0..X1` = 216..237), sin tocar ninguna coordenada del plano; el ala de recogida
-   (`FactorAlas=1.32`) sigue sobresaliendo un 32% a los lados. (c) "El contenido desaparece":
-   `ConsumeTick` barría las 29 filas del pozo entero (`ChuteMouthY0..ChuteMouthY1`) y consumía la
-   celda en el MISMO tick en que entraba, así que lo vertido se evaporaba pegado al labio sin
-   caer nunca visiblemente. Ahora solo consume en el FONDO,
-   `ZoneY0..ZoneFloorY1` donde `ZoneFloorY1 = ChuteMouthY0 + SimLevelBuilder.ChuteSillRows - 1`
-   (constante nueva `ChuteSillRows = 3` en `SimLevelBuilder`, así que se traga en las filas 44..46
-   dentro del pozo 44..72): lo que se vierte ahora CAE por gravedad a través del aire del resto
-   del pozo antes de tragarse, y se ve caer. (d) Se añadió `SpriteConductoInterior` (degradado
-   vertical gris oscuro→negro + dos costillas metálicas tenues, `FilterMode.Point`,
-   `sortingOrder = -7`, entre el sprite de la sim en -5 y el fondo del taller en -10) para que el
-   pozo se lea como el interior de un conducto y no como un boquete transparente sobre el fondo.
-
-5. **"El mensaje de que no tengo algo en el frasco también estorba; a veces solo clickeas y te
-   sale ese mensaje por todo el mapa"**. `Flask` lleva ahora un `Dictionary<string,int>
-   _vecesMostrado` (campo de instancia, se reinicia solo con cada partida nueva): cada TEXTO de
-   aviso concreto ("frasco vacío...", "demasiado lejos...", etc.) se muestra sus
-   `VecesAntesDeCallar = 3` primeras veces con normalidad, y a partir de ahí se sustituye por un
-   destello silencioso de `DestelloDuracion = 0.15` s (propiedad pública `DestelloIntensidad`,
-   0..1, decayendo linealmente) pintado por `FlaskHud` tiñendo el borde del panel del frasco hacia
-   `UiStyles.Aviso` con `Color.Lerp`. Queda razonada la decisión de diseño: una acción fallida
-   DEBE tener alguna respuesta o el juego se siente roto ("hice clic y no pasó nada" dejaría de
-   ser falso), pero esa respuesta no tiene por qué ser texto una vez que el jugador ya conoce el
-   motivo. `SetFeedback`/el nuevo método público `Avisar` ganaron el parámetro `bool repetitivo =
-   true`: por defecto los regaños de acción fallida cuentan para el silencio; `repetitivo = false`
-   queda reservado para información real que sí debe mostrarse siempre (no usado aún, pero deja
-   la distinción lista). El valor por defecto también es lo que mantiene compilando sin cambios
-   las llamadas existentes de `StorageRack.cs` a `_frasco.Avisar(...)`.
-
-6. **"Las pistas están bien, pero debería salir una flechita de leer siguiente para poder leer
-   todas antes de ocultarlas"**. `HintSystem` navega ahora con las flechas IZQUIERDA/DERECHA
-   (Input System nuevo, `Keyboard.current.leftArrowKey`/`rightArrowKey`), moviendo una pista por
-   pulsación con tope en los extremos — `Mathf.Clamp`, NO cíclico: llegar al final debe sentirse
-   como el final. Al primer toque de una flecha se activa `_modoManual`: la rotación automática
-   por tiempo se detiene y ADEMÁS la tanda deja de caducar por tiempo (antes una tanda entera se
-   ocultaba sola pasados `DuracionJornada1`/`DuracionOtrasJornadas` segundos), así que las pistas
-   se quedan en pantalla hasta que el jugador las oculte a mano con H. `ReiniciarParaJornada`
-   (llamado por `DayCycle` al empezar cada día) vuelve a poner el modo automático para la nueva
-   tanda. Pie del panel con indicador de posición y flechas activas
-   (`"◀ ▶  3/8   ·   H — ocultar consejos"`, omitiendo la flecha que no se puede usar en cada
-   extremo), cacheado y reconstruido solo cuando cambia el índice mostrado o el tamaño de la
-   tanda, nunca por frame.
-
-7. **"El fondo de ladrillos púrpura es buena idea y la iluminación también, pero la textura es
-   horrible y está como descuadrada"**. Diagnóstico en `WorkshopBackdrop`: la textura vivía a 1
-   téxel por celda (256x144, ~7.5 px de pantalla por celda a 1080p) estirada a pantalla completa,
-   con piezas de mampostería de 16x7 celdas ENORMES y planas (sin ningún detalle interior), una
-   junta de 1 celda que en pantalla se veía como una banda gorda, y `FilterMode.Bilinear` mientras
-   el sim y la maquinaria ya habían pasado a `Point` en rondas anteriores — fondo borroso contra
-   primer plano nítido, de ahí la sensación de "sucio"/"descuadrado". Fix: `Escala = 3` (textura
-   768x432, 9 téxeles por celda), `FilterMode.Point` en toda la textura, pieza de mampostería
-   bajada a 10x5 celdas (30x15 téxeles) con BISEL de canto (+18% en el canto superior de cada
-   pieza / -15% en el inferior) usando el MISMO lenguaje de iluminación que
-   `SimRenderer.ComputeCellColor` ya aplica a `StaticSolid` en la simulación — esa rima entre
-   fondo y primer plano es la clave del arreglo, no solo la resolución. Además: grano ±5%
-   calculado POR TÉXEL (antes por celda, con `Hash(x,y)`), 1 de cada 8 piezas con una esquina
-   desconchada (hash estable por pieza), y junta reducida a 1 TÉXEL al -55% de opacidad (antes 1
-   celda entera al -75%, "rejilla dura"). Se conservan sin tocar la paleta ciruela, el degradado
-   vertical, la luz de fragua, la viñeta, las vigas con ménsulas y el zócalo — todo eso ya lo
-   había validado Cesar. Queda documentada la lista de constantes que había que multiplicar por
-   `Escala` para que no quedaran comprimidas en la esquina superior-izquierda de la textura:
-   `PiezaAncho`/`PiezaAlto`, `vigaBajaY`, `vigaAltaY`, `vigaGrosor`, `mensulaPeriodo`,
-   `mensulaAncho`, `zocaloTop`. `pixelsPerUnit` del sprite pasó de 10 a 30 (proporcional a
-   `TexW/worldW`) para que el sprite siga midiendo exactamente 25.6 x 14.4 unidades de mundo, solo
-   cambia la densidad de téxeles por unidad.
-
-8. **"El etiquetado parece útil pero lo etiquetado no se muestra; al colocar otra etiqueta parece
-   que se sobrescribió la anterior; nombré un compuesto y apareció en el índice del frasco pero no
-   sobre la botella"**. CAUSA RAÍZ ÚNICA para los tres síntomas, en `NamingUi.ResolveTarget()`.
-   Las redomas del estante (`StorageRack.Redoma`) NO ocupan celdas de la simulación — son un
-   mueble puramente visual que guarda `Mat`/`Cantidad` por su cuenta — pero debajo de ellas hay
-   una losa de `MaterialId.Stone` que sí está simulada (`SimLevelBuilder.RackX0..RackX1`).
-   `ResolveTarget` muestreaba el grid de la simulación bajo el cursor, obtenía `Stone`, lo
-   descartaba por ser piedra, y se replegaba a "el material dominante del frasco" — casi siempre
-   una sustancia distinta a la que de verdad guarda la redoma señalada. De ahí los tres síntomas
-   exactos del reporte: la redoma se quedaba en `???` porque su material nunca se bautizaba; el
-   nombre sí aparecía en el panel del frasco (que consulta el mismo diccionario `NombreDe` por
-   `materialId`, pero para el material del frasco, no de la redoma); y "se sobrescribió la
-   anterior" era en realidad rebautizar sin querer un material del frasco que ya tenía nombre.
-   Queda documentado explícitamente que dos hipótesis alternativas se comprobaron y eran FALSAS:
-   ni hay caché al guardar (`SubstanceKnowledge` es un diccionario por `materialId` consultado en
-   vivo) ni el nombre se guarda "por mezcla" en vez de por material (el catálogo de materiales es
-   fijo, 17 en `MaterialId`), así que el modelo de datos era correcto y no se tocó — el bug era de
-   una sola línea de flujo. Fix: `StorageRack` expone `public static byte MaterialBajoCursor()` y
-   `ResolveTarget` la consulta PRIMERO, antes del muestreo del grid. De paso, legibilidad: la
-   cantidad de cada redoma llena se muestra SIEMPRE (indicador barato de "hay algo aquí y
-   cuánto"), y el NOMBRE completo solo se dibuja en UNA redoma a la vez — la que señala el ratón,
-   o si no la más cercana al aprendiz vía `UiStyles.Cercania` — truncado con "…" midiendo con
-   `UiStyles.Ancho` contra el hueco real de pantalla hasta la redoma vecina (`HuecoDisponiblePx`,
-   proyectado con la cámara, que en este taller es fija): hay 5 redomas repartidas en ~65 celdas
-   de losa, ~13 celdas cada una, y los nombres bautizados largos no caben todos a la vez. Queda
-   constancia de que Cesar pidió explícitamente NO rediseñar la ubicación de las botellas todavía
-   ("las botellas tienen un lugar protagónico para su poco uso... tampoco está mal para esta parte
-   del desarrollo, solo hagamos que funcione") — ver punto 2 del Backlog.
-
-**Preguntas abiertas para el próximo playtest**: ¿funciona el resalte dorado como sustituto del
-prompt "E — ..." (punto 2), o hace falta algo más explícito? ¿3 apariciones es el número correcto
-antes de silenciar un aviso repetido del frasco (punto 5), o debería ser más/menos? ¿el
-`FilterMode.Point` convence ahora que el fondo también lo usa (punto 7), tras la pregunta abierta
-que dejó el playtest 6 sin responder?
-
-**Reparto de modelos de esta ronda**: Opus 5 dirigió (diagnóstico de los ocho reportes de Cesar,
-decisiones de diseño y de arte, especificación de cada encargo y revisión); Sonnet 5 escribió TODO
-el código, en seis encargos paralelos con propiedad de archivos disjunta, más dos pases de
-revisión de compilación también con Sonnet 5.
+**PENDIENTE tras esta ronda** (orden sugerido):
+(a) verificar en Unity que TODO compila y jugar la partida entera de 3 jornadas con el balance
+nuevo; (b) decidir si el audio se queda o se apaga con `SistemaActivo = false`; (c) **build limpia
+de Windows** (nunca se ha verificado una desde el rediseño del espacio, playtest 4); (d) renombrar
+el repo GitHub `Alkahest`→`ChaosAlchemy` + `git remote set-url`; (e) replantear las redomas (Cesar
+sugirió que quizás deberían ir abajo y levantar el gameplay de reacciones); (f) resto de M5 (glow,
+agua con más cuerpo); (g) integración multiplayer (sim solo-host + deltas RLE por chunks despiertos
+a 10-15 Hz, MEDIR antes de decidir — sección Backlog).
+Preguntas abiertas para el próximo playtest: ¿el audio funciona o hay que apagarlo? ¿el día 3 se
+siente jugable con 290 celdas? ¿los cuatro desenlaces dan razón para seguir jugando pasada la
+meta? ¿el imp se lee bien en movimiento sobre materia saturada?

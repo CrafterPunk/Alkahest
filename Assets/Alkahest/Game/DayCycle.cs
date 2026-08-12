@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace Alkahest.Game
@@ -14,11 +13,15 @@ namespace Alkahest.Game
     /// <see cref="InputLocked"/> para que Flask/Dispenser/HeatPlate/
     /// ChillStone/NamingUi ignoren por completo el input del jugador.
     ///
-    /// Derrota anticipada: si dos jornadas SEGUIDAS terminan sin un solo
-    /// encargo completado, la jornada 3 (si se llega a jugar) desemboca
-    /// igualmente en la pantalla de derrota. Victoria: Favor &gt;=
-    /// OrderSystem.WinFavorTarget tras la jornada 3 (y sin derrota
-    /// anticipada).
+    /// DISEÑO (balance playtest 8): la partida SIEMPRE juega las 3 jornadas
+    /// completas -- el arco de tres días es la forma del juego, y llegar
+    /// pronto a un Favor alto (con los encargos de día 1+2 solos se llegaba
+    /// a 175, ver derivación en OrderSystem) ya NO corta la partida. El
+    /// desenlace se decide SOLO al final de la jornada 3, graduado en 4
+    /// escalones por <see cref="OrderSystem.DesenlaceParaFavor"/>. El aviso
+    /// de "dos jornadas sin entregar nada" se conserva como advertencia de
+    /// sabor (el Maestro pierde la paciencia) pero YA NO fuerza el final
+    /// anticipado: solo el Favor acumulado al cierre de la jornada 3 decide.
     /// </summary>
     public sealed class DayCycle : MonoBehaviour
     {
@@ -26,16 +29,6 @@ namespace Alkahest.Game
 
         public const int TotalDays = 3;
         private const float DayDurationSeconds = 6f * 60f; // "6:00" en el HUD.
-
-        // (fix playtest 6: "al acabar las metas no termino el nivel") Cuando
-        // OrderSystem confirma que ya no queda NINGÚN encargo activo por
-        // entregar, la jornada no se corta en seco -- el jugador puede seguir
-        // experimentando -- pero arranca esta cuenta atrás y un aviso en
-        // pantalla; a los 12 s (o antes si el jugador pulsa ENTER) se cierra
-        // la jornada por el MISMO camino que el fin por temporizador
-        // (EnterDayEnd), así que no hay dos formas distintas de terminar el día.
-        private const float GoalsMetCountdownSeconds = 12f;
-        private const string GoalsMetMensajeBase = "TODOS LOS ENCARGOS ENTREGADOS · pulsa ENTER para cerrar la jornada (";
 
         // Nota IMGUI: los overlays de esta clase usan GUILayout.BeginArea
         // (no GUILayout.Window), así que no necesitan un id constante --
@@ -73,22 +66,21 @@ namespace Alkahest.Game
         private int _day = 1;
         private float _timeRemaining;
         private int _consecutiveZeroOrderDays;
-        private bool _earlyLose;
+        /// <summary>
+        /// Aviso de sabor (balance playtest 8): dos jornadas seguidas sin
+        /// entregar nada. YA NO fuerza el final anticipado (la partida
+        /// siempre juega las 3 jornadas) -- solo se muestra como advertencia
+        /// en <see cref="DrawDayEnd"/>, coherente con un Maestro exigente
+        /// pero justo que avisa antes de graduar mal, no que expulsa a
+        /// media partida.
+        /// </summary>
+        private bool _avisoDesatencion;
 
         private string _seedField = "";
 
         // Caché del reloj de la jornada (ver DrawPlayingHud).
         private int _relojSegundos = -1;
         private string _relojTexto = "";
-
-        // Estado de "metas cumplidas" (fix playtest 6) y caché de su texto,
-        // igual que el reloj: la cuenta atrás es en segundos enteros y solo
-        // cambia una vez por segundo, así que no hace falta reconstruir la
-        // cadena en cada frame de OnGUI.
-        private bool _goalsMet;
-        private float _goalsMetCountdown;
-        private int _goalsMetSegundos = -1;
-        private string _goalsMetTexto = "";
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, OrderSystem orderSystem, SubstanceKnowledge knowledge,
@@ -115,62 +107,14 @@ namespace Alkahest.Game
         {
             ApplyPause();
 
-            if (_phase != Phase.Playing) return;
-
-            _timeRemaining -= Time.deltaTime;
-            if (_timeRemaining <= 0f)
+            if (_phase == Phase.Playing)
             {
-                _timeRemaining = 0f;
-                EnterDayEnd();
-                return; // el reloj manda: si llega a cero este frame, no hace
-                        // falta evaluar encima la cuenta atrás de metas cumplidas.
-            }
-
-            UpdateGoalsMetCountdown();
-        }
-
-        /// <summary>
-        /// (fix playtest 6) Detecta que OrderSystem ya no tiene ningún encargo
-        /// activo pendiente (AllOrdersCompleted, la API pública que ya expone
-        /// OrderSystem para esto -- no hizo falta tocar ese archivo) y arranca
-        /// la cuenta atrás de cierre. Reutiliza EnterDayEnd() -- el mismo
-        /// método que usa el fin de jornada por temporizador -- tanto si el
-        /// jugador pulsa ENTER como si se agotan los 12 s, para que exista un
-        /// único camino de código hacia el fin de día.
-        /// </summary>
-        private void UpdateGoalsMetCountdown()
-        {
-            if (!_goalsMet)
-            {
-                // El guard de Count > 0 evita que un día sin encargos activos
-                // (no debería darse, pero AllOrdersCompleted() de una lista
-                // vacía es trivialmente true) dispare el aviso desde el segundo 0.
-                bool todosEntregados = _orderSystem != null
-                    && _orderSystem.ActiveOrders.Count > 0
-                    && _orderSystem.AllOrdersCompleted();
-                if (!todosEntregados) return;
-
-                _goalsMet = true;
-                _goalsMetCountdown = GoalsMetCountdownSeconds;
-                _goalsMetSegundos = -1; // fuerza reconstruir el texto cacheado ya.
-            }
-
-            // Regla de diseño: si entregas en el último momento con menos
-            // tiempo de jornada que de cuenta atrás, gana el que ocurra antes
-            // -- nunca alargamos la jornada por culpa de este aviso. Basta con
-            // acotar la cuenta atrás al tiempo que de verdad queda; si ambas
-            // llegan a cero en el mismo frame, el chequeo de _timeRemaining de
-            // más arriba en Update() ya cerró el día antes de llegar aquí.
-            _goalsMetCountdown -= Time.deltaTime;
-            if (_goalsMetCountdown > _timeRemaining) _goalsMetCountdown = _timeRemaining;
-
-            var kb = Keyboard.current;
-            bool enterPulsado = kb != null
-                && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
-
-            if (enterPulsado || _goalsMetCountdown <= 0f)
-            {
-                EnterDayEnd();
+                _timeRemaining -= Time.deltaTime;
+                if (_timeRemaining <= 0f)
+                {
+                    _timeRemaining = 0f;
+                    EnterDayEnd();
+                }
             }
         }
 
@@ -212,15 +156,6 @@ namespace Alkahest.Game
         private void EnterPlaying()
         {
             _timeRemaining = DayDurationSeconds;
-
-            // Reinicio del estado de "metas cumplidas" (fix playtest 6): cada
-            // jornada nueva debe volver a evaluarse desde cero, si no el aviso
-            // de la jornada anterior (o su cuenta atrás ya agotada) se
-            // arrastraría al día siguiente.
-            _goalsMet = false;
-            _goalsMetCountdown = 0f;
-            _goalsMetSegundos = -1;
-
             _phase = Phase.Playing;
         }
 
@@ -232,12 +167,20 @@ namespace Alkahest.Game
             if (completed == 0) _consecutiveZeroOrderDays++;
             else _consecutiveZeroOrderDays = 0;
 
-            if (_consecutiveZeroOrderDays >= 2) _earlyLose = true;
+            // Solo aviso de sabor (ver doc de _avisoDesatencion): ya no
+            // fuerza el salto a EndScreen.
+            if (_consecutiveZeroOrderDays >= 2) _avisoDesatencion = true;
         }
 
+        /// <summary>
+        /// Balance playtest 8: la partida SIEMPRE juega las 3 jornadas
+        /// completas -- antes saltaba a EndScreen en cuanto _earlyLose se
+        /// activaba, cortando el arco de tres días que es la forma del
+        /// juego. Ahora solo el día alcanzado decide si sigue.
+        /// </summary>
         private void AdvanceAfterDayEnd()
         {
-            if (_earlyLose || _day >= TotalDays)
+            if (_day >= TotalDays)
             {
                 _phase = Phase.EndScreen;
             }
@@ -418,35 +361,6 @@ namespace Alkahest.Game
             estilo.normal.textColor = urgente ? UiStyles.Peligro : UiStyles.Texto;
             GUI.Label(r, _relojTexto, estilo);
             estilo.normal.textColor = previo;
-
-            DrawGoalsMetBanner();
-        }
-
-        /// <summary>
-        /// (fix playtest 6) Aviso sobrio bajo el reloj cuando ya no queda
-        /// ningún encargo activo por entregar: por qué existe, ver
-        /// UpdateGoalsMetCountdown. Solo puede llegar a dibujarse desde
-        /// DrawPlayingHud (caso Phase.Playing del switch de OnGUI), fase en la
-        /// que InputLocked siempre es false -- así que el aviso nunca puede
-        /// coincidir con Título/intro/DayEnd/EndScreen; el chequeo explícito de
-        /// abajo es solo un cinturón de seguridad si algún día se llama desde
-        /// otro sitio.
-        /// </summary>
-        private void DrawGoalsMetBanner()
-        {
-            if (!_goalsMet || InputLocked) return;
-
-            int segundos = Mathf.CeilToInt(_goalsMetCountdown);
-            if (segundos != _goalsMetSegundos)
-            {
-                _goalsMetSegundos = segundos;
-                _goalsMetTexto = GoalsMetMensajeBase + Mathf.Max(0, segundos) + "s)";
-            }
-
-            float w = UiStyles.S(460f), h = UiStyles.S(28f);
-            var r = new Rect((Screen.width - w) * 0.5f, UiStyles.S(52f), w, h);
-            UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.Oro);
-            GUI.Label(r, _goalsMetTexto, UiStyles.Alerta);
         }
 
         private void DrawDayEnd()
@@ -473,7 +387,7 @@ namespace Alkahest.Game
                 GUILayout.Label($"Favor total: {_orderSystem.Favor} ★", UiStyles.Titulo);
             }
 
-            if (_earlyLose)
+            if (_avisoDesatencion)
             {
                 GUILayout.Space(UiStyles.S(6f));
                 GUILayout.Label("Dos jornadas sin un solo encargo cumplido — el Maestro pierde la paciencia.",
@@ -481,7 +395,10 @@ namespace Alkahest.Game
             }
 
             GUILayout.FlexibleSpace();
-            string nextLabel = (_earlyLose || _day >= TotalDays) ? "Ver desenlace" : "Siguiente jornada";
+            // Balance playtest 8: la partida siempre juega las 3 jornadas, así
+            // que el botón solo cambia de texto en la última (ya no depende
+            // de _avisoDesatencion, que dejó de cortar la partida).
+            string nextLabel = _day >= TotalDays ? "Ver desenlace" : "Siguiente jornada";
             if (GUILayout.Button(nextLabel, UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
             {
                 AdvanceAfterDayEnd();
@@ -490,30 +407,76 @@ namespace Alkahest.Game
             GUILayout.EndArea();
         }
 
+        /// <summary>
+        /// Pantalla final (balance playtest 8): ya no es un binario victoria/
+        /// derrota, sino uno de los 4 <see cref="OrderSystem.Desenlace"/>
+        /// graduados por el Favor final (ver derivación de umbrales en
+        /// OrderSystem). Colores: Despedido en rojo (Peligro), Aprendiz/
+        /// Oficial en verde (Exito), Maestro en dorado (Oro) como remate
+        /// visual del escalón máximo. Si no se llegó al máximo, se dice
+        /// cuánto faltaba para el siguiente -- tono exigente pero justo, sin
+        /// humillar: nunca "has fallado", siempre "os faltaron N ★".
+        /// </summary>
         private void DrawEndScreen()
         {
             DrawFullscreenDim();
 
-            bool win = !_earlyLose && _orderSystem != null && _orderSystem.Favor >= OrderSystem.WinFavorTarget;
+            int favorFinal = _orderSystem != null ? _orderSystem.Favor : 0;
+            var desenlace = OrderSystem.DesenlaceParaFavor(favorFinal);
 
             UiStyles.Preparar();
-            AbrirPanel(520f, 400f);
+            AbrirPanel(520f, 420f);
+
+            string tituloTexto;
+            string subtitulo;
+            Color colorTitulo;
+            switch (desenlace)
+            {
+                case OrderSystem.Desenlace.Maestro:
+                    tituloTexto = "MAESTRO";
+                    subtitulo = "El Maestro se inclina ante vosotros: sois maestros por derecho propio.";
+                    colorTitulo = UiStyles.Oro;
+                    break;
+                case OrderSystem.Desenlace.Oficial:
+                    tituloTexto = "OFICIAL";
+                    subtitulo = "El Maestro os asciende a Oficial del taller: dominad el oficio, y volved a por más.";
+                    colorTitulo = UiStyles.Exito;
+                    break;
+                case OrderSystem.Desenlace.Aprendiz:
+                    tituloTexto = "APRENDIZ";
+                    subtitulo = "El Maestro os concede el título de Aprendiz: un comienzo sólido.";
+                    colorTitulo = UiStyles.Exito;
+                    break;
+                default:
+                    tituloTexto = "DESPEDIDO";
+                    subtitulo = "El Maestro os despide del taller: esperaba más disciplina de vosotros.";
+                    colorTitulo = UiStyles.Peligro;
+                    break;
+            }
 
             var titulo = UiStyles.TituloGrande;
             var previo = titulo.normal.textColor;
-            titulo.normal.textColor = win ? UiStyles.Exito : UiStyles.Peligro;
-            GUILayout.Label(win ? "VICTORIA" : "DERROTA", titulo, GUILayout.Height(UiStyles.S(42f)));
+            titulo.normal.textColor = colorTitulo;
+            GUILayout.Label(tituloTexto, titulo, GUILayout.Height(UiStyles.S(42f)));
             titulo.normal.textColor = previo;
 
-            GUILayout.Label(win
-                ? "El Maestro asiente. El universo os pertenece."
-                : "El Maestro os expulsa del taller.", UiStyles.Subtitulo);
+            GUILayout.Label(subtitulo, UiStyles.Subtitulo);
+
+            // Cuánto faltaba para el siguiente escalón (nada si ya se llegó a
+            // Maestro, el máximo): tono justo, nunca humillante.
+            if (OrderSystem.TryGetNextTier(favorFinal, out int siguienteUmbral, out string siguienteNombre))
+            {
+                int faltan = siguienteUmbral - favorFinal;
+                GUILayout.Space(UiStyles.S(4f));
+                GUILayout.Label($"Os faltaron {faltan} ★ para el siguiente escalón ({siguienteNombre}).",
+                    UiStyles.CuerpoTenue);
+            }
 
             GUILayout.Space(UiStyles.S(10f));
             GUILayout.Label($"Seed: {(_sim != null && _sim.Universe != null ? _sim.Universe.Seed.ToString() : "?")}", UiStyles.Cuerpo);
             GUILayout.Label($"Materiales descubiertos: {(_knowledge != null ? _knowledge.CountDiscovered() : 0)}", UiStyles.Cuerpo);
             GUILayout.Label($"Materiales bautizados: {(_knowledge != null ? _knowledge.CountNamed() : 0)}", UiStyles.Cuerpo);
-            GUILayout.Label($"Favor final: {(_orderSystem != null ? _orderSystem.Favor : 0)} ★", UiStyles.Titulo);
+            GUILayout.Label($"Favor final: {favorFinal} ★", UiStyles.Titulo);
 
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
