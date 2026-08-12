@@ -69,6 +69,51 @@ namespace Alkahest.Game
             return _playerName[matId] ?? "???";
         }
 
+        /// <summary>
+        /// Nombre "de taller" en español de los materiales mundanos: los que
+        /// salen de los grifos y sus derivados obvios. El Maestro ya los tiene
+        /// catalogados, así que mostrarlos no rompe la fantasía de descubrir.
+        /// Devuelve null para las sustancias exóticas (Slime, Azoth, Vivium,
+        /// Cristal, Ácido...): esas hay que descubrirlas y bautizarlas.
+        ///
+        /// Existe para que la UI NUNCA enseñe los devName internos en inglés
+        /// ("Water", "Nutrient"), que era lo que hacían el HUD del frasco y los
+        /// rótulos de los grifos.
+        /// </summary>
+        public static string NombreComun(byte matId)
+        {
+            switch (matId)
+            {
+                case MaterialId.Stone: return "piedra";
+                case MaterialId.Sand: return "arena";
+                case MaterialId.Water: return "agua";
+                case MaterialId.Oil: return "aceite";
+                case MaterialId.Nutrient: return "nutriente";
+                case MaterialId.Steam: return "vapor";
+                case MaterialId.Smoke: return "humo";
+                case MaterialId.Fire: return "fuego";
+                case MaterialId.Ash: return "ceniza";
+                case MaterialId.Ice: return "hielo";
+                // El Maestro entrega estos dos EN MANO y por su nombre al empezar
+                // la jornada 2 (ver Game/MasterSupplies.cs y la intro de jornada),
+                // así que ocultarlos tras "???" en el grifo y en las redomas sería
+                // absurdo. Lo verdaderamente desconocido (vivium, cristal, limo,
+                // ácido) sigue sin nombre hasta que lo bauticéis.
+                case MaterialId.Azoth: return "azoth";
+                case MaterialId.CrystalSeed: return "semilla de cristal";
+                default: return null;
+            }
+        }
+
+        /// <summary>Nombre para los HUD: el que le puso el jugador &gt; el común de taller &gt; "???".</summary>
+        public string NombreParaHud(byte matId)
+        {
+            if (matId >= MaterialId.Count) return "???";
+            string propio = _playerName[matId];
+            if (!string.IsNullOrEmpty(propio)) return propio;
+            return NombreComun(matId) ?? "???";
+        }
+
         /// <summary>Pone/quita el nombre de un material. Nombre vacío o solo espacios equivale a "olvidarlo" (vuelve a mostrar "???").</summary>
         public void Bautizar(byte matId, string nombre)
         {

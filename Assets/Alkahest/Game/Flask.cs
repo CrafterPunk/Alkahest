@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
@@ -10,13 +11,86 @@ namespace Alkahest.Game
     /// central). Guarda hasta <see cref="Capacity"/> celdas como conteos
     /// por materialId.
     ///
+    /// EL FRASCO ES UN TERMO (fix de progresión del playtest 4). Antes solo
+    /// guardaba CUÁNTO llevaba de cada material, no a qué temperatura: al
+    /// verter, la celda nacía a temperatura AMBIENTE. Consecuencia real: los
+    /// encargos "algo helado (-5 °C o menos)" y "algo que queme al tacto
+    /// (80 °C o más)" eran IMPOSIBLES de cumplir — no hay forma de calentar ni
+    /// enfriar dentro de la boca de la Tolva, que consume lo vertido en el tick
+    /// siguiente. Ahora el frasco lleva también la temperatura MEDIA de cada
+    /// material (<see cref="_tempSum"/>) y la restituye al verter, vía
+    /// AlkahestSim.PaintCell. Es además lo que la fantasía promete: si aspiras
+    /// hielo, sigues llevando hielo.
+    ///
     /// Nota de determinismo/netcode: TODA mutación de la grilla pasa por
-    /// AlkahestSim.Paint (nunca acceso directo a CellGrid), tal y como
+    /// AlkahestSim.Paint/PaintCell (nunca acceso directo a CellGrid), tal y como
     /// exige el resto del proyecto.
     /// </summary>
     [RequireComponent(typeof(ApprenticeController))]
     public sealed class Flask : MonoBehaviour
     {
+        /// <summary>Mensaje corto de feedback para el HUD ("frasco vacío", "demasiado lejos"). Se autolimpia.</summary>
+        public string Feedback { get; private set; } = "";
+        public float FeedbackUntil { get; private set; }
+
+        // ---------------------------------------------------------------------------------
+        // "Ya lo sabes" (fix playtest 7): "el mensaje de que no tengo algo en el
+        // frasco... también estorba y es cansado después de que ya lo sabes; a
+        // veces solo clickeas y te sale ese mensaje por todo el mapa". El fallo
+        // (lejos, vacío, lleno...) se repite constantemente porque el jugador
+        // clickea sin pensarlo — pero el TEXTO solo aporta la primera vez.
+        //
+        // Registro por TIPO de mensaje (clave = el propio texto, así cada aviso
+        // "aprende" por separado: que ya sepas "frasco vacío" no calla "demasiado
+        // lejos"). Dictionary creado UNA sola vez, nunca dentro de OnGUI/Update.
+        // Las 3 primeras veces que se dispara un texto concreto se muestra
+        // normal; a partir de ahí NO se vuelve a mostrar como texto — pero la
+        // acción fallida sigue teniendo respuesta: un destello corto (~0.15 s,
+        // ver DestelloIntensidad) del panel del frasco en UiStyles.Aviso,
+        // pintado por FlaskHud. Nada de texto, nada de globos por el mapa; y
+        // "hice clic y no pasó nada" deja de ser cierto porque el destello SÍ
+        // ocurre.
+        //
+        // Se reinicia solo: es un campo de INSTANCIA (no PlayerPrefs), y Flask
+        // no sobrevive a un reload de escena (RestartRun recarga la escena
+        // entera), así que cada partida nueva arranca con el registro vacío sin
+        // necesidad de limpiarlo a mano.
+        private const int VecesAntesDeCallar = 3;
+        private const float DestelloDuracion = 0.15f;
+
+        private readonly Dictionary<string, int> _vecesMostrado = new Dictionary<string, int>();
+        private float _destelloUntil;
+
+        /// <summary>Intensidad 0..1 del destello silencioso del panel del frasco (0 = sin destello). Lo pinta FlaskHud.</summary>
+        public float DestelloIntensidad => Mathf.Clamp01((_destelloUntil - Time.time) / DestelloDuracion);
+
+        /// <summary>
+        /// `repetitivo` = true (por defecto) para los regaños de una acción
+        /// fallida ("demasiado lejos", "frasco vacío"...): esos son los que se
+        /// callan tras <see cref="VecesAntesDeCallar"/> repeticiones DEL MISMO
+        /// texto. `repetitivo` = false para información real de algo que SÍ
+        /// ocurrió (p.ej. una confirmación): esos se muestran siempre.
+        /// </summary>
+        private void SetFeedback(string msg, bool repetitivo = true)
+        {
+            if (repetitivo)
+            {
+                int veces = _vecesMostrado.TryGetValue(msg, out int v) ? v : 0;
+                if (veces >= VecesAntesDeCallar)
+                {
+                    _destelloUntil = Time.time + DestelloDuracion;
+                    return; // ya lo sabe: nada de texto, solo el destello mudo.
+                }
+                _vecesMostrado[msg] = veces + 1;
+            }
+
+            Feedback = msg;
+            FeedbackUntil = Time.time + 1.5f;
+        }
+
+        /// <summary>Mismo canal de feedback, para que otros aparatos (la estantería de redomas) avisen junto al cursor y no en su propia esquina.</summary>
+        public void Avisar(string msg, bool repetitivo = true) => SetFeedback(msg, repetitivo);
+
         public const int Capacity = 900;
 
         private const float TickDt = 1f / 30f;
@@ -27,12 +101,15 @@ namespace Alkahest.Game
         private const int PourRadius = 2;
         private const int PourRatePerTick = 20;
         private const int DumpRadius = 4;
-        private const float ReachWorld = 6f; // unidades de mundo de alcance máximo desde el aprendiz.
+        /// <summary>Alcance máximo (unidades de mundo) desde el aprendiz. Público para que el HUD pinte la retícula en rojo cuando el cursor se sale.</summary>
+        public const float ReachWorld = 6f;
 
         private AlkahestSim _sim;
         private ApprenticeController _apprentice;
 
         private readonly int[] _counts = new int[256];
+        /// <summary>Suma de temperaturas raw de las celdas guardadas de cada material (media = _tempSum/_counts). Ver doc de la clase.</summary>
+        private readonly int[] _tempSum = new int[256];
         private int _total;
         private byte[] _pourOrder; // ids 1..255 del universo, ordenados por densidad descendente (calculado una sola vez).
 
@@ -44,6 +121,60 @@ namespace Alkahest.Game
 
         public int Total => _total;
         public int GetCount(byte matId) => _counts[matId];
+
+        /// <summary>Temperatura raw media del material guardado (ambiente si no llevas nada de él).</summary>
+        public byte TempMediaDe(byte matId)
+        {
+            int c = _counts[matId];
+            return c > 0 ? (byte)Mathf.Clamp(_tempSum[matId] / c, 0, 255) : CellGrid.AmbientRaw;
+        }
+
+        /// <summary>Material del que más llevas (Empty si el frasco está vacío). Usado por la estantería de redomas para saber qué guardar.</summary>
+        public byte MaterialDominante()
+        {
+            byte mejor = MaterialId.Empty;
+            int mejorConteo = 0;
+            for (int m = 1; m < MaterialId.Count; m++)
+            {
+                if (_counts[m] > mejorConteo) { mejorConteo = _counts[m]; mejor = (byte)m; }
+            }
+            return mejor;
+        }
+
+        /// <summary>
+        /// Saca hasta `cantidad` celdas de `matId` del frasco SIN tocar la
+        /// grilla (transferencia frasco -&gt; contenedor, ver Game/StorageRack.cs).
+        /// Devuelve cuántas salieron y a qué temperatura media iban.
+        /// </summary>
+        public int Extraer(byte matId, int cantidad, out byte tempRaw)
+        {
+            tempRaw = TempMediaDe(matId);
+            if (matId == MaterialId.Empty || cantidad <= 0) return 0;
+
+            int n = Mathf.Min(cantidad, _counts[matId]);
+            if (n <= 0) return 0;
+
+            _tempSum[matId] -= tempRaw * n;
+            if (_tempSum[matId] < 0) _tempSum[matId] = 0;
+            _counts[matId] -= n;
+            _total -= n;
+            return n;
+        }
+
+        /// <summary>Mete hasta `cantidad` celdas de `matId` en el frasco (respetando <see cref="Capacity"/>). Devuelve cuántas entraron.</summary>
+        public int Guardar(byte matId, int cantidad, byte tempRaw)
+        {
+            if (matId == MaterialId.Empty || cantidad <= 0) return 0;
+
+            int hueco = Capacity - _total;
+            int n = Mathf.Min(cantidad, hueco);
+            if (n <= 0) return 0;
+
+            _counts[matId] += n;
+            _tempSum[matId] += tempRaw * n;
+            _total += n;
+            return n;
+        }
 
         private void Awake()
         {
@@ -102,10 +233,20 @@ namespace Alkahest.Game
 
             var mouse = Mouse.current;
             var kb = Keyboard.current;
-            bool wantSuck = mouse != null && mouse.leftButton.isPressed;
-            bool wantPour = mouse != null && mouse.rightButton.isPressed;
-            bool wantDump = (mouse != null && mouse.middleButton.wasPressedThisFrame)
-                            || (kb != null && kb.qKey.wasPressedThisFrame);
+            // (fix playtest 2) Con la paleta dev (F3) abierta, el pincel manda: el frasco no actúa.
+            if (Alkahest.Dev.DevPalette.IsOpen) return;
+
+            // La estantería de redomas captura el ratón cuando el cursor está
+            // sobre una redoma: ahí los clics son "guardar/recuperar", no
+            // "aspirar/verter" sobre la grilla (si no, verter sobre el estante
+            // pintaría material suelto encima del mueble).
+            bool ratonCapturado = StorageRack.RatonSobreRedoma();
+
+            bool wantSuck = mouse != null && mouse.leftButton.isPressed && !ratonCapturado;
+            bool wantPour = mouse != null && mouse.rightButton.isPressed && !ratonCapturado;
+            bool wantDump = !ratonCapturado
+                            && ((mouse != null && mouse.middleButton.wasPressedThisFrame)
+                                || (kb != null && kb.qKey.wasPressedThisFrame));
 
             _hasCursor = TryGetCursorCell(out _cursorCell);
 
@@ -153,10 +294,23 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         private void TickSuck(Vector2Int cursor)
         {
-            if (_total >= Capacity) return;
-
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
+
+            // (playtest 3) Feedback explícito de los dos motivos por los que
+            // "aspirar no hace nada": estar lejos o llevar el frasco lleno.
+            int cdxCursor = cursor.x - apprenticeCell.x, cdyCursor = cursor.y - apprenticeCell.y;
+            if (cdxCursor * cdxCursor + cdyCursor * cdyCursor > reachCellsSq)
+            {
+                SetFeedback("demasiado lejos — acércate");
+                return;
+            }
+            if (_total >= Capacity)
+            {
+                SetFeedback("frasco lleno — vierte (clic der.) o vacía (Q)");
+                return;
+            }
+
             int budget = SuckRatePerTick;
 
             // Anillos de distancia entera creciente desde el cursor: sensación de
@@ -179,8 +333,30 @@ namespace Alkahest.Game
 
                         byte matId = (byte)_sim.SampleMaterial(x, y);
                         if (matId == MaterialId.Empty) continue;
-                        if (_sim.Universe.Get(matId).archetype == MaterialArchetype.StaticSolid) continue;
 
+                        // Filtro de aspirado (revisado en el playtest 3):
+                        //  · PIEDRA: nunca. Es la arquitectura del taller (muros,
+                        //    cubas, boca de la Tolva) — la queja "aspira las
+                        //    barreras" no debe poder volver a pasar.
+                        //  · FUEGO: nunca, y con aviso. Chupar una llama con un
+                        //    frasco de cristal no aporta nada al juego y confunde;
+                        //    es más legible que el fuego "te queme".
+                        //  · Hielo y Cristal SÍ se aspiran aunque sean sólidos
+                        //    estáticos: son materia que FABRICA el jugador y que
+                        //    los encargos del Maestro piden entregar (cristal,
+                        //    "algo helado"). Con el filtro antiguo por arquetipo
+                        //    esos encargos eran literalmente imposibles.
+                        if (matId == MaterialId.Stone) continue;
+                        if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire)
+                        {
+                            SetFeedback("¡el fuego te quemaría el frasco!");
+                            continue;
+                        }
+
+                        // El frasco se lleva la TEMPERATURA con la materia (ver
+                        // doc de la clase): es lo que hace posibles los encargos
+                        // de frío y de calor.
+                        _tempSum[matId] += _sim.SampleTempRaw(x, y);
                         _sim.Paint(x, y, 0, MaterialId.Empty);
                         _counts[matId]++;
                         _total++;
@@ -197,10 +373,18 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         private void TickPour(Vector2Int cursor)
         {
-            if (_total <= 0) return;
+            if (_total <= 0) { SetFeedback("frasco vacío — ASPIRA algo primero (clic izq.)"); return; }
 
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
+
+            int cdxCursor = cursor.x - apprenticeCell.x, cdyCursor = cursor.y - apprenticeCell.y;
+            if (cdxCursor * cdxCursor + cdyCursor * cdyCursor > reachCellsSq)
+            {
+                SetFeedback("demasiado lejos — acércate");
+                return;
+            }
+
             int budget = PourRatePerTick;
 
             // Materiales más "pesados" (mayor densidad) primero, como pide el diseño.
@@ -232,7 +416,12 @@ namespace Alkahest.Game
 
                         if (_sim.SampleMaterial(x, y) != MaterialId.Empty) continue;
 
-                        _sim.Paint(x, y, 0, matId);
+                        // Se restituye la temperatura media guardada: el hielo
+                        // sale frío y la arena de la placa ardiente sale ardiendo.
+                        byte tempRaw = TempMediaDe(matId);
+                        _sim.PaintCell(x, y, matId, tempRaw);
+                        _tempSum[matId] -= tempRaw;
+                        if (_tempSum[matId] < 0) _tempSum[matId] = 0;
                         _counts[matId]--;
                         _total--;
                         budget--;
@@ -251,7 +440,7 @@ namespace Alkahest.Game
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
             int cdx0 = cursor.x - apprenticeCell.x, cdy0 = cursor.y - apprenticeCell.y;
-            if (cdx0 * cdx0 + cdy0 * cdy0 > reachCellsSq) return; // fuera de alcance: no se derrama nada.
+            if (cdx0 * cdx0 + cdy0 * cdy0 > reachCellsSq) { SetFeedback("demasiado lejos — acércate"); return; }
 
             for (int i = 0; i < _pourOrder.Length; i++)
             {
@@ -267,7 +456,11 @@ namespace Alkahest.Game
 
         private void ClearFlask()
         {
-            for (int i = 0; i < _pourOrder.Length; i++) _counts[_pourOrder[i]] = 0;
+            for (int i = 0; i < _pourOrder.Length; i++)
+            {
+                _counts[_pourOrder[i]] = 0;
+                _tempSum[_pourOrder[i]] = 0;
+            }
             _total = 0;
         }
 

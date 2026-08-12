@@ -4,39 +4,31 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// Punto de entrada de la capa de interacción: busca el AlkahestSim de
-    /// la escena y genera al aprendiz, su frasco, las máquinas del
-    /// laboratorio (placas calefactoras, piedra fría, grifos), y (M4) todo
-    /// el bucle de partida -- conocimiento de sustancias, encargos del
-    /// Maestro, la Tolva de entrega, y la máquina de estados de jornada con
-    /// sus overlays.
+    /// Punto de entrada de la capa de interacción: busca el AlkahestSim de la
+    /// escena y genera al aprendiz, su frasco, las máquinas del taller (placas
+    /// ígneas, piedra gélida, grifos, estantería de redomas) y todo el bucle de
+    /// partida — conocimiento de sustancias, encargos del Maestro, la Tolva de
+    /// entrega, las muestras del Maestro y la máquina de estados de jornada.
+    ///
+    /// NINGUNA COORDENADA VIVE AQUÍ (reingeniería del espacio, playtest 4).
+    /// Antes esta clase duplicaba a mano las constantes del nivel ("si el layout
+    /// de M1 cambia, hay que actualizar también estos números"), y bastaba con
+    /// mover una cuba para que las placas se quedasen colgadas en el aire. Todo
+    /// se lee de Sim/SimLevelBuilder.cs, que es EL PLANO.
     ///
     /// Nota de orden de ejecución: no hay garantía de que AlkahestSim.Start()
-    /// (que crea Universe/Grid) se ejecute antes que este Start(), al vivir
-    /// en GameObjects distintos, así que reintentamos en Update() hasta que
-    /// Universe/Grid existan antes de generar nada — el mismo patrón
-    /// defensivo que ya usa Dev/DevPalette.cs. Dentro de TrySpawn() el orden
-    /// de las llamadas de Init(...) SÍ importa (son invocaciones directas,
-    /// no Update() de Unity), pero el orden relativo en el que Unity vaya a
-    /// llamar a Update() en los componentes ya creados NO debe importarle a
-    /// ninguno de ellos (cada uno lee del otro por referencia guardada, no
-    /// asume haberse actualizado ya en este mismo frame).
+    /// (que crea Universe/Grid) se ejecute antes que este Start(), al vivir en
+    /// GameObjects distintos, así que reintentamos en Update() hasta que
+    /// Universe/Grid existan antes de generar nada — el mismo patrón defensivo
+    /// que ya usa Dev/DevPalette.cs. Dentro de TrySpawn() el orden de las
+    /// llamadas de Init(...) SÍ importa (son invocaciones directas, no Update()
+    /// de Unity), pero el orden relativo en el que Unity vaya a llamar a
+    /// Update() en los componentes ya creados NO debe importarle a ninguno de
+    /// ellos (cada uno lee del otro por referencia guardada, no asume haberse
+    /// actualizado ya en este mismo frame).
     /// </summary>
     public sealed class AlkahestGameBootstrap : MonoBehaviour
     {
-        // Constantes de layout duplicadas de Sim/SimLevelBuilder.cs (ver
-        // BuildVats/BuildShelves ahí): si el layout de M1 cambia, hay que
-        // actualizar también estos números.
-        private const int VatWidth = 56;
-        private const int VatWallThickness = 3;
-        private const int FloorHeight = 8;
-        private const int VatCount = 3;
-
-        private const int ShelfRightX0 = 250;
-        private const int ShelfRightY0 = 132;
-        private const int ShelfRightWidth = 58;
-        private const int ShelfRightHeight = 3;
-
         private AlkahestSim _sim;
         private bool _spawned;
 
@@ -45,7 +37,7 @@ namespace Alkahest.Game
             _sim = FindAnyObjectByType<AlkahestSim>();
             if (_sim == null)
             {
-                Debug.LogError("[Alkahest] AlkahestGameBootstrap no encontró un AlkahestSim en la escena.");
+                Debug.LogError("[ChaosAlchemy] AlkahestGameBootstrap no encontró un AlkahestSim en la escena.");
                 enabled = false;
                 return;
             }
@@ -62,6 +54,11 @@ namespace Alkahest.Game
         {
             if (_spawned || _sim == null || _sim.Universe == null || _sim.Grid == null) return;
 
+            // El árbitro de foco es estático y sobrevive a la recarga de escena
+            // que hace DayCycle entre partidas: hay que vaciarlo antes de
+            // registrar las máquinas nuevas.
+            MachineFocus.Limpiar();
+
             var apprentice = SpawnApprentice();
             var flask = apprentice.GetComponent<Flask>();
             var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
@@ -70,82 +67,120 @@ namespace Alkahest.Game
             SpawnChillStone(apprentice.transform);
 
             var orderSystem = SpawnOrderSystem(knowledge);
-            SpawnDispensers(apprentice.transform, orderSystem);
+            var grifoAzoth = SpawnDispensers(apprentice.transform, orderSystem);
             SpawnDeliveryChute(orderSystem);
+            SpawnStorageRack(apprentice.transform, flask, knowledge);
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
             SpawnOrdersHud(orderSystem);
-            SpawnDayCycle(orderSystem, knowledge);
 
-            // M5: presentación y onboarding (fondo del taller + pistas de la primera partida).
+            // Fondo del taller + pistas + muestras del Maestro se crean ANTES que
+            // el ciclo de jornadas: DayCycle avisa a los dos últimos en cuanto
+            // entra en la intro de la jornada 1 (ver DayCycle.Init).
             new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
-            new GameObject("HintSystem").AddComponent<HintSystem>();
+            var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
+            var supplies = new GameObject("MasterSupplies").AddComponent<MasterSupplies>();
+            supplies.Init(_sim, grifoAzoth);
+
+            SpawnDayCycle(orderSystem, knowledge, supplies, hints);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] Capa de interacción (M2-M4) inicializada.");
+            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (taller 256x144).");
         }
 
         private ApprenticeController SpawnApprentice()
         {
             var go = new GameObject("Apprentice");
-            go.transform.position = new Vector3(19.2f, 12f, 0f);
+            // Arranca flotando sobre la cuba izquierda, entre el banco de grifos
+            // y la Tolva: desde ahí se ve el taller entero sin volar a ninguna
+            // parte (antes aparecía en el centro geométrico de un mundo el doble
+            // de ancho, lejos de todo).
+            float celda = SimRenderer.CellWorldSize;
+            float x = (SimLevelBuilder.VatAX0 + SimLevelBuilder.VatWidth * 0.5f) * celda;
+            float y = (SimLevelBuilder.VatInteriorY1 + 10) * celda;
+            go.transform.position = new Vector3(x, y, 0f);
 
             var apprentice = go.AddComponent<ApprenticeController>();
             var flask = go.AddComponent<Flask>();
             flask.Init(_sim);
-            var hud = go.AddComponent<FlaskHud>();
-            hud.Init(_sim, flask);
 
+            // El conocimiento se crea ANTES que el HUD: el HUD del frasco lo
+            // necesita para mostrar el nombre que el jugador le puso a cada
+            // sustancia (o el nombre común) en vez del devName interno.
             var knowledge = go.AddComponent<SubstanceKnowledge>();
             knowledge.Init(_sim, flask);
+
+            var hud = go.AddComponent<FlaskHud>();
+            hud.Init(_sim, flask, knowledge);
 
             return apprentice;
         }
 
+        /// <summary>Una placa ígnea bajo cada una de las dos cubas centrales.</summary>
         private void SpawnHeatPlates(Transform player)
         {
-            int totalWidth = VatWidth * VatCount;
-            int gap = (CellGrid.W - totalWidth) / (VatCount + 1);
-
-            for (int i = 0; i < VatCount; i++)
-            {
-                int x0 = gap + i * (VatWidth + gap);
-                int cellX0 = x0 + VatWallThickness;
-                int cellX1 = x0 + VatWidth - 1 - VatWallThickness;
-                int plateRow = FloorHeight + VatWallThickness - 1;
-
-                var go = new GameObject($"HeatPlate_{i}");
-                var plate = go.AddComponent<HeatPlate>();
-                plate.Init(_sim, player, cellX0, cellX1, plateRow);
-            }
+            SpawnOneHeatPlate(player, 0, SimLevelBuilder.VatAX0);
+            SpawnOneHeatPlate(player, 1, SimLevelBuilder.VatBX0);
         }
 
+        private void SpawnOneHeatPlate(Transform player, int indice, int vatX0)
+        {
+            var go = new GameObject($"HeatPlate_{indice}");
+            var plate = go.AddComponent<HeatPlate>();
+            plate.Init(_sim, player,
+                SimLevelBuilder.VatInteriorX0(vatX0),
+                SimLevelBuilder.VatInteriorX1(vatX0),
+                SimLevelBuilder.VatPlateRow);
+        }
+
+        /// <summary>La piedra gélida vive bajo la bandeja fría del estante superior.</summary>
         private void SpawnChillStone(Transform player)
         {
-            int plateRow = ShelfRightY0 + ShelfRightHeight - 1;
-
-            var go = new GameObject("ChillStone_Shelf");
+            var go = new GameObject("ChillStone_Bandeja");
             var stone = go.AddComponent<ChillStone>();
-            stone.Init(_sim, player, ShelfRightX0, ShelfRightX0 + ShelfRightWidth - 1, plateRow);
+            stone.Init(_sim, player,
+                SimLevelBuilder.ChillTrayInteriorX0,
+                SimLevelBuilder.ChillTrayInteriorX1,
+                SimLevelBuilder.ChillPlateRow);
         }
 
-        private void SpawnDispensers(Transform player, OrderSystem orderSystem)
+        /// <summary>
+        /// Los cinco grifos, en COLUMNA VERTICAL sobre el pilar del banco, todos
+        /// vertiendo en la misma pila de recogida. Devuelve el de Azoth, que
+        /// nace sellado y lo abre el Maestro en la jornada 2.
+        ///
+        /// Coste de Favor por activación: los básicos son gratis, los versátiles
+        /// cuestan — fijado aquí, no en el propio Dispenser, para tener toda la
+        /// economía en un sitio.
+        /// </summary>
+        private Dispenser SpawnDispensers(Transform player, OrderSystem orderSystem)
         {
-            // Coste de Favor por activación (M4): los básicos son gratis, los
-            // más versátiles/potentes cuestan Favor -- fijado aquí, no en el
-            // propio Dispenser, para tener toda la economía en un sitio.
-            SpawnOneDispenser(player, "Water", MaterialId.Water, 40, orderSystem, 0);
-            SpawnOneDispenser(player, "Sand", MaterialId.Sand, 70, orderSystem, 0);
-            SpawnOneDispenser(player, "Oil", MaterialId.Oil, 110, orderSystem, 2);
-            SpawnOneDispenser(player, "Nutrient", MaterialId.Nutrient, 150, orderSystem, 5);
+            SpawnOneDispenser(player, "Water", MaterialId.Water, 0, orderSystem, 0, false);
+            SpawnOneDispenser(player, "Sand", MaterialId.Sand, 1, orderSystem, 0, false);
+            SpawnOneDispenser(player, "Oil", MaterialId.Oil, 2, orderSystem, 2, false);
+            SpawnOneDispenser(player, "Nutrient", MaterialId.Nutrient, 3, orderSystem, 5, false);
+            return SpawnOneDispenser(player, "Azoth", MaterialId.Azoth, 4, orderSystem, 4, true);
         }
 
-        private void SpawnOneDispenser(Transform player, string label, byte matId, int cellY, OrderSystem orderSystem, int favorCost)
+        private Dispenser SpawnOneDispenser(Transform player, string label, byte matId, int fila,
+            OrderSystem orderSystem, int favorCost, bool bloqueado)
         {
             var go = new GameObject($"Dispenser_{label}");
             var dispenser = go.AddComponent<Dispenser>();
-            dispenser.Init(_sim, player, 3, cellY, matId, orderSystem, favorCost);
+            dispenser.Init(_sim, player,
+                SimLevelBuilder.TapMountX,
+                SimLevelBuilder.TapFirstY + fila * SimLevelBuilder.TapStepY,
+                matId, orderSystem, favorCost, bloqueado);
+            return dispenser;
+        }
+
+        private void SpawnStorageRack(Transform player, Flask flask, SubstanceKnowledge knowledge)
+        {
+            var go = new GameObject("StorageRack");
+            var rack = go.AddComponent<StorageRack>();
+            rack.Init(_sim, flask, knowledge, player,
+                SimLevelBuilder.RackX0, SimLevelBuilder.RackX1, SimLevelBuilder.RackTopY);
         }
 
         private OrderSystem SpawnOrderSystem(SubstanceKnowledge knowledge)
@@ -184,11 +219,12 @@ namespace Alkahest.Game
             hud.Init(orderSystem);
         }
 
-        private void SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge)
+        private void SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,
+            MasterSupplies supplies, HintSystem hints)
         {
             var go = new GameObject("DayCycle");
             var cycle = go.AddComponent<DayCycle>();
-            cycle.Init(_sim, orderSystem, knowledge);
+            cycle.Init(_sim, orderSystem, knowledge, supplies, hints);
         }
     }
 }

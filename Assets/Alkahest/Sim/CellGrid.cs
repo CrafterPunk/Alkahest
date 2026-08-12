@@ -13,12 +13,26 @@ namespace Alkahest.Sim
     /// </summary>
     public sealed class CellGrid
     {
-        public const int W = 384;
-        public const int H = 216; // 384:216 == 16:9 exacto
+        // -----------------------------------------------------------------
+        // REINGENIERÍA DEL ESPACIO (playtest 4). El mundo era 384x216: con la
+        // cámara encuadrando el nivel entero, cada celda ocupaba ~1/384 del
+        // ancho de pantalla y las reacciones se veían "pequeñitas"; además
+        // obligaba a vuelos largos por un taller medio vacío.
+        //
+        // 256x144 es el mismo 16:9 EXACTO con un 33% menos de celdas por eje:
+        // cada celda se ve un 50% MÁS GRANDE en pantalla (384/256 = 1.5) sin
+        // tocar CellWorldSize ni una sola regla de la simulación.
+        //
+        // Bonus estructural: 144/16 = 9 EXACTO (y 256/16 = 16), así que ya no
+        // existe la "fila de chunks recortada" que obligaba a SimRenderer a
+        // mantener dos buffers scratch distintos (ver SimRenderer.Init).
+        // -----------------------------------------------------------------
+        public const int W = 256;
+        public const int H = 144; // 256:144 == 16:9 exacto
 
         public const int CHUNK = 16;
-        public const int ChunksX = (W + CHUNK - 1) / CHUNK; // 24
-        public const int ChunksY = (H + CHUNK - 1) / CHUNK; // 14 (última fila de chunks recortada a 8 celdas)
+        public const int ChunksX = (W + CHUNK - 1) / CHUNK; // 16 (256/16 exacto)
+        public const int ChunksY = (H + CHUNK - 1) / CHUNK; // 9  (144/16 exacto: ya no hay chunk de borde)
 
         /// <summary>Ticks consecutivos sin actividad antes de dormir un chunk.</summary>
         public const int SleepTicks = 30;

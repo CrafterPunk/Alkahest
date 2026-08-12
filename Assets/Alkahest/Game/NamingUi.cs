@@ -76,6 +76,18 @@ namespace Alkahest.Game
 
         private byte ResolveTarget()
         {
+            // (fix playtest 7 — causa raíz del bautizo que "no se ve en la
+            // botella" y que "pisó" otro nombre) Las redomas del estante NO
+            // ocupan celdas de la simulación: son un mueble visual que guarda
+            // (Mat, Cantidad) por su cuenta (ver StorageRack.Redoma). Por eso
+            // apuntar con el ratón a una redoma llena SIEMPRE muestreaba la
+            // PIEDRA del listón bajo ella y esta función se replegaba a "lo
+            // que más llevas en el frasco" — que casi nunca es lo que hay
+            // realmente en la redoma señalada. Consultarla PRIMERO hace que
+            // "T" sobre una redoma bautice de verdad su contenido.
+            byte enRedoma = StorageRack.MaterialBajoCursor();
+            if (enRedoma != MaterialId.Empty) return enRedoma;
+
             byte underCursor = SampleUnderCursor();
             if (underCursor != MaterialId.Empty && underCursor != MaterialId.Stone) return underCursor;
             return LargestInFlask();

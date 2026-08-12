@@ -69,21 +69,28 @@ namespace Alkahest.Game
                     break;
 
                 case 2:
+                    // Los tres encargos de hoy usan EXACTAMENTE las tres muestras
+                    // que el Maestro acaba de dejar (ver Game/MasterSupplies.cs):
+                    // el retoño de vivium, la piedra gélida y el azoth + semilla.
                     AddOrder(OrderType.Grows, 120, 35,
                         "El Maestro quiere ver crecer algo vivo -- 120 celdas de Vivium.");
                     AddOrder(OrderType.Cold, 60, 30,
                         "Algo helado -- 60 celdas a -5°C o menos.", minTempC: -5);
-                    AddOrder(OrderType.CrystalSolid, 80, 40,
-                        "Cristal, ni más ni menos -- 80 celdas.");
+                    AddOrder(OrderType.CrystalSolid, 70, 40,
+                        "Cristal, ni más ni menos -- 70 celdas.");
                     break;
 
                 case 3:
                 default:
-                    AddOrder(OrderType.CrystalSolid, 200, 50,
-                        "El Maestro quiere una gran veta de cristal -- 200 celdas.");
+                    // Rebajados de 200/250 a 150/220: la bandeja fría del taller
+                    // nuevo tiene ~276 celdas útiles y cristalizar es lento por
+                    // diseño (12-27% por comprobación). Con 150 el encargo sigue
+                    // exigiendo montar una producción, no un milagro.
+                    AddOrder(OrderType.CrystalSolid, 150, 50,
+                        "El Maestro quiere una gran veta de cristal -- 150 celdas.");
                     AddNamedOrFallback(rng);
-                    AddOrder(OrderType.Grows, 250, 55,
-                        "Que el taller rebose de vida -- 250 celdas de Vivium.");
+                    AddOrder(OrderType.Grows, 220, 55,
+                        "Que el taller rebose de vida -- 220 celdas de Vivium.");
                     break;
             }
         }

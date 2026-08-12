@@ -67,7 +67,9 @@ namespace Alkahest.Game
                 GUI.DrawTexture(swatch, Texture2D.whiteTexture);
                 GUI.color = prevColor;
 
-                GUILayout.Label(_knowledge.NombreDe(matId), GUILayout.Width(110f));
+                // NombreParaHud (no NombreDe): el agua se llama "agua" aunque no
+                // la hayas bautizado; solo lo exótico sigue siendo "???".
+                GUILayout.Label(_knowledge.NombreParaHud(matId), GUILayout.Width(110f));
                 GUILayout.Label(BuildChips(matId));
 
                 GUILayout.EndHorizontal();

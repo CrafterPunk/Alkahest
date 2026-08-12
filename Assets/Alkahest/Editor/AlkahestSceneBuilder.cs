@@ -52,14 +52,21 @@ namespace Alkahest.EditorTools
 
         private static void BuildMainCamera()
         {
+            // La cámara encuadra EXACTAMENTE la grilla: se deriva de
+            // CellGrid.W/H para que nunca se quede desfasada si el tamaño del
+            // mundo vuelve a cambiar (con 256x144 sale centro (12.8, 7.2) y
+            // orthographicSize 7.2; antes eran (19.2, 10.8) y 10.8 hardcodeados).
+            float mundoW = CellGrid.W * SimRenderer.CellWorldSize;
+            float mundoH = CellGrid.H * SimRenderer.CellWorldSize;
+
             var camGO = new GameObject("Main Camera");
             camGO.tag = "MainCamera";
-            camGO.transform.position = new Vector3(19.2f, 10.8f, -10f);
+            camGO.transform.position = new Vector3(mundoW * 0.5f, mundoH * 0.5f, -10f);
             camGO.transform.rotation = Quaternion.identity;
 
             var cam = camGO.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.orthographicSize = 10.8f;
+            cam.orthographicSize = mundoH * 0.5f;
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 100f;
             cam.clearFlags = CameraClearFlags.SolidColor;

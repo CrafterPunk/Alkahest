@@ -211,7 +211,11 @@ namespace Alkahest.Sim
                 id = MaterialId.Stone,
                 devName = "Stone",
                 archetype = MaterialArchetype.StaticSolid,
-                baseColor = new Color32(110, 108, 112, 255),
+                // (pase visual M5) Antes gris neutro 110: competía con la arena y
+                // con la ceniza, y el taller entero se veía "lavado". Ahora es un
+                // gris más oscuro y emparentado con el ciruela del fondo: la
+                // arquitectura RETROCEDE y los materiales del jugador destacan.
+                baseColor = new Color32(92, 86, 98, 255),
                 colorJitter = 14,
                 density = short.MaxValue,
             };
@@ -311,7 +315,10 @@ namespace Alkahest.Sim
                 id = MaterialId.Ash,
                 devName = "Ash",
                 archetype = MaterialArchetype.Powder,
-                baseColor = new Color32(72, 66, 68, 255),
+                // (pase visual M5) Era (72,66,68), casi idéntico al humo
+                // (58,54,58): un montón de ceniza parecía humo posado. Ahora tira
+                // a pardo cálido de brasa apagada, distinguible de humo y piedra.
+                baseColor = new Color32(88, 74, 64, 255),
                 colorJitter = 16,
                 density = 120,
                 fluidity = 1,
@@ -393,7 +400,12 @@ namespace Alkahest.Sim
                 id = MaterialId.Crystal,
                 devName = "Crystal",
                 archetype = MaterialArchetype.StaticSolid,
-                baseColor = new Color32(170, 220, 235, 255),
+                // (pase visual M5) Era (170,220,235), casi el mismo pálido que el
+                // hielo (196,226,236): imposible saber si habías fabricado cristal
+                // o simplemente congelado agua — y el cristal es lo que piden los
+                // encargos de las jornadas 2 y 3. Ahora es violeta-cian (hereda el
+                // tono del Azoth del que nace) y además brilla.
+                baseColor = new Color32(152, 172, 255, 255),
                 colorJitter = 10,
                 density = short.MaxValue,
                 emitsGlow = true,

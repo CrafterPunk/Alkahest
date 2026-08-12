@@ -10,10 +10,14 @@ namespace Alkahest.Dev
     /// en builds de desarrollo (Application.isEditor || Debug.isDebugBuild),
     /// sin necesidad de un define de compilación aparte.
     ///
-    /// F3 = mostrar/ocultar ventana (empieza visible).
+    /// F3 = mostrar/ocultar ventana (empieza CERRADA y recuerda tu elección).
     /// P  = pausa/reanuda (Time.timeScale 0 &lt;-&gt; anterior).
     /// N  = un solo tick de simulación (útil en pausa).
     /// LMB = pintar el material seleccionado. RMB = borrar (Empty).
+    ///
+    /// El pincel SOLO existe con la ventana abierta: con la paleta cerrada esta
+    /// clase no toca la grilla bajo ningún concepto (ver UpdateHoverAndPaint),
+    /// porque si no se mezcla con el Frasco del jugador.
     ///
     /// Usa exclusivamente Keyboard.current / Mouse.current del nuevo Input
     /// System; UnityEngine.Input (legacy) NUNCA se usa en este proyecto.
@@ -26,8 +30,14 @@ namespace Alkahest.Dev
         private const int WindowId = 837465;
 
         private AlkahestSim _sim;
-        private bool _visible = true;
-        private Rect _windowRect = new Rect(12, 12, 300, 480);
+        private bool _visible;
+        /// <summary>Abierta = el ratón pinta materiales; el Frasco debe ignorar sus clics.</summary>
+        public static bool IsOpen { get; private set; }
+        private const string PrefKey = "ChaosAlchemy_DevPalette";
+
+        // Arranca por debajo del panel del frasco (arriba-izquierda) para no
+        // taparlo al abrirse; sigue siendo arrastrable.
+        private Rect _windowRect = new Rect(12, 180, 300, 480);
 
         private byte _selectedMaterial = MaterialId.Sand;
         private float _brushRadius = 3f;
@@ -39,6 +49,12 @@ namespace Alkahest.Dev
         private void Awake()
         {
             _sim = GetComponent<AlkahestSim>();
+
+            // (fix playtest 2) Antes empezaba visible y su pincel (p.ej. Empty/Sand) se mezclaba
+            // con el Frasco: "aspirar borra todo", "tiro arena sin querer". Ahora empieza cerrada
+            // y recuerda tu última elección entre sesiones.
+            _visible = PlayerPrefs.GetInt(PrefKey, 0) == 1;
+            IsOpen = _visible && IsDevBuild();
         }
 
         private void Update()
@@ -48,7 +64,12 @@ namespace Alkahest.Dev
             var kb = Keyboard.current;
             if (kb != null)
             {
-                if (kb.f3Key.wasPressedThisFrame) _visible = !_visible;
+                if (kb.f3Key.wasPressedThisFrame)
+                {
+                    _visible = !_visible;
+                    PlayerPrefs.SetInt(PrefKey, _visible ? 1 : 0);
+                }
+                IsOpen = _visible && IsDevBuild();
                 if (kb.pKey.wasPressedThisFrame) TogglePause();
                 if (kb.nKey.wasPressedThisFrame) _sim.StepOnce();
             }
@@ -75,6 +96,13 @@ namespace Alkahest.Dev
         {
             _hoverValid = false;
 
+            // (fix playtest 3) EL BUG DE "TIRA ARENA COMO LOCO": esto se ejecutaba
+            // SIEMPRE, también con la paleta cerrada, así que el clic izquierdo
+            // pintaba arena a la vez que el Frasco aspiraba ("aspirar rompe el
+            // mundo") y el clic derecho borraba celdas mientras se vertía. Con la
+            // paleta cerrada el pincel no existe: ni pinta, ni borra, ni hace hover.
+            if (!_visible) return;
+
             var mouse = Mouse.current;
             var cam = Camera.main;
             if (mouse == null || cam == null || _sim == null || _sim.Grid == null) return;
@@ -82,7 +110,7 @@ namespace Alkahest.Dev
             Vector2 screenPos = mouse.position.ReadValue();
 
             // No pintar/interactuar con la grilla si el ratón está sobre la ventana IMGUI.
-            if (_visible && IsOverWindow(screenPos)) return;
+            if (IsOverWindow(screenPos)) return;
 
             var ray = cam.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0f));
             var groundPlane = new Plane(Vector3.forward, Vector3.zero);

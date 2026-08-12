@@ -9,28 +9,38 @@ namespace Alkahest.Game
     /// mueve libremente por el laboratorio con WASD/flechas. Si no se le
     /// asigna un sprite en el inspector, genera uno procedimentalmente (un
     /// pequeño imp encapuchado) para no depender de assets externos.
+    ///
+    /// AJUSTES DEL PLAYTEST 4 ("el muñeco y los vuelos largos cansan"):
+    ///  · Velocidad +40% (8 -> 11.2 u/s). Cruzar el taller nuevo (25.6 u) pasa
+    ///    de 4.8 s a 2.3 s, y ningún salto entre estaciones llega a un segundo.
+    ///  · Bobbing a la mitad (0.08 -> 0.04): el cabeceo original, sumado al
+    ///    vuelo libre, mareaba y desalineaba la retícula respecto al frasco.
+    ///  · Sprite un 15% más pequeño (28 -> 33 px por unidad). Con la grilla a
+    ///    256x144 las celdas se ven un 50% más grandes; el aprendiz ya no
+    ///    necesita tamaño para leerse y así tapa menos materia.
     /// </summary>
     public sealed class ApprenticeController : MonoBehaviour
     {
         [Header("Movimiento")]
-        [SerializeField] private float moveSpeed = 8f;
-        [SerializeField] private float acceleration = 30f; // unidades/s^2 de suavizado hacia la velocidad objetivo
+        [SerializeField] private float moveSpeed = 11.2f;
+        [SerializeField] private float acceleration = 44f; // unidades/s^2 de suavizado hacia la velocidad objetivo (escalado con la velocidad nueva para que el arranque siga siendo igual de nítido)
 
         [Header("Visual")]
         [SerializeField] private Sprite customSprite; // si se asigna, se usa en vez del sprite generado
         [SerializeField] private int sortingOrder = 50;
 
         // Límites del mundo, derivados del tamaño real de la grilla de simulación
-        // (CellGrid.W/H * SimRenderer.CellWorldSize == 38.4 x 21.6).
+        // (CellGrid.W/H * SimRenderer.CellWorldSize == 25.6 x 14.4 tras la
+        // reingeniería del espacio). Nunca hardcodear: se derivan solos.
         private const float WorldMinX = 0f;
         private const float WorldMinY = 0f;
         private const float WorldMaxX = CellGrid.W * SimRenderer.CellWorldSize;
         private const float WorldMaxY = CellGrid.H * SimRenderer.CellWorldSize;
 
         private const float BobFrequency = 2.4f;
-        private const float BobAmplitude = 0.08f;
+        private const float BobAmplitude = 0.04f;  // playtest 4: la mitad que antes
         private const float VisualZOffset = -0.05f; // más cerca de la cámara que el quad de la sim (z=0), para quedar siempre por encima.
-        private const float SpritePixelsPerUnit = 28f;
+        private const float SpritePixelsPerUnit = 33f; // playtest 4: ~15% más pequeño (era 28)
 
         private Vector2 _velocity;
         private bool _facingRight = true;

@@ -129,6 +129,13 @@ namespace Alkahest
             return _grid.GetMat(x, y);
         }
 
+        /// <summary>Temperatura "raw" (0..255) en (x,y), o la ambiente si está fuera de rango. Ver CellGrid.RawToC.</summary>
+        public byte SampleTempRaw(int x, int y)
+        {
+            if (_grid == null || !CellGrid.InBounds(x, y)) return CellGrid.AmbientRaw;
+            return _grid.temp[CellGrid.Idx(x, y)];
+        }
+
         /// <summary>Pinta un disco de radio `radius` centrado en (x,y) con el material indicado.</summary>
         public void Paint(int x, int y, int radius, byte materialId)
         {
@@ -148,6 +155,49 @@ namespace Alkahest
 
                     _grid.SetCell(px, py, materialId);
                     _grid.WakeChunk(px, py, _stepper.Tick);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Pinta UNA celda con material Y temperatura. Existe porque el Frasco
+        /// del aprendiz conserva el frío/calor de lo que aspira (ver Game/Flask.cs):
+        /// sin esto, verter hielo en la Tolva entregaba una celda a temperatura
+        /// AMBIENTE y los encargos "algo helado" / "algo que queme al tacto"
+        /// eran literalmente imposibles de cumplir.
+        ///
+        /// Igual que <see cref="Paint"/>, nunca escribe sobre el borde del mundo
+        /// y despierta el chunk afectado.
+        /// </summary>
+        public void PaintCell(int x, int y, byte materialId, byte tempRaw)
+        {
+            if (_grid == null || _stepper == null) return;
+            if (x <= 0 || x >= CellGrid.W - 1 || y <= 0 || y >= CellGrid.H - 1) return;
+
+            int idx = CellGrid.Idx(x, y);
+            _grid.SetCell(idx, materialId);
+            _grid.temp[idx] = tempRaw;
+            _grid.WakeChunk(x, y, _stepper.Tick);
+        }
+
+        /// <summary>
+        /// Rellena un rectángulo de celdas con un material. Usado por las
+        /// "muestras del Maestro" de la jornada 2 (Game/MasterSupplies.cs) para
+        /// dejar un saquito de semilla de cristal sobre el estante con una
+        /// cantidad exacta y predecible (un disco de <see cref="Paint"/> no
+        /// permite pedir "60 celdas").
+        /// </summary>
+        public void PaintRect(int x0, int y0, int width, int height, byte materialId)
+        {
+            if (_grid == null || _stepper == null) return;
+            for (int y = y0; y < y0 + height; y++)
+            {
+                if (y <= 0 || y >= CellGrid.H - 1) continue;
+                for (int x = x0; x < x0 + width; x++)
+                {
+                    if (x <= 0 || x >= CellGrid.W - 1) continue;
+                    _grid.SetCell(CellGrid.Idx(x, y), materialId);
+                    _grid.WakeChunk(x, y, _stepper.Tick);
                 }
             }
         }
