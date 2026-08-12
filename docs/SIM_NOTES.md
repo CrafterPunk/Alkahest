@@ -271,3 +271,224 @@ desperdiciadas.
 0, Oil 2, Nutrient 5. Se cobra una única vez al pasar de OFF a ON (no por
 tick); si no hay Favor suficiente el grifo no se enciende y el label
 muestra "(sin Favor)" un momento.
+
+## M12 — Campo morfológico (playtest 12): la materia TIENDE a un patrón
+
+Referencia técnica para quien vaya a tocar la simulación. Origen: hasta esta
+ronda la variación por seed era solo numérica (probabilidades, bandas de
+temperatura, Edictos) — dos partidas se veían idénticas porque la materia se
+veía idéntica. Tesis del sistema (palabras de Cesar, el diseñador): *"la
+morfología puede ser una propiedad del material, no una forma rígida"* y *"no
+necesitas que al aspirarlo conserve exactamente el dibujo píxel por píxel;
+necesitas que cuando vuelva a existir, vuelva a TENDER a formar ese tipo de
+patrón"*. Por eso el patrón no se guarda ni se serializa: se REGENERA por una
+regla local que cada celda vuelve a aplicar dondequiera que acabe.
+
+### El contrato
+
+`CellGrid.morph` (`byte[]`, 0..255) es la intensidad morfológica por celda,
+paralela a `mat`/`temp`/`aux`. `SimRenderer` la convierte en desplazamiento de
+brillo sobre el color base, escalado por `MaterialDef.patronFuerza`. Qué hace
+cada familia (`PatronMorfologico`) con ese byte:
+
+| Familia | Quién la evoluciona | Significado de `morph` |
+|---|---|---|
+| `Liso` | nadie | no se usa |
+| `Vetas` | `SimRenderer` (hash puro de x,y,tick) | **no se usa** — puramente posicional |
+| `Celdas` | `SimRenderer` (Voronoi puro de x,y,tick) | **no se usa** — puramente posicional |
+| `Manchas` / `Laberinto` | `SimStepper.MorphTick` | concentración de reacción-difusión |
+| `Dendritas` | `SimStepper.MorphTick` | fuerza de rama (0 = sin rama) |
+| `Pulso` | `SimStepper.MorphTick` | fase 0..255 |
+| `Motas` | `SimStepper.MorphTick` | intensidad de chispa (0 = apagada) |
+
+`Vetas` y `Celdas` cuestan CERO en el stepper — `MorphTick` las descarta en el
+primer `if` sin tocar memoria. El ahorro es real: en un taller típico, la
+mayoría de la materia en pantalla es vocabulario del taller (`Liso`).
+
+### Doble búfer — obligatorio, no una optimización
+
+`CellGrid.morphScratch` es un segundo array del mismo tamaño. `MorphTick`
+copia `morph → morphScratch` al empezar, TODAS las familias escriben
+exclusivamente en `morphScratch` durante el recorrido, y al final se copia
+`morphScratch → morph`. Es obligatorio porque `Manchas`/`Laberinto` leen los 4
+vecinos ortogonales para su reacción-difusión: si leyeran y escribieran el
+mismo array, el resultado dependería del orden en que el bucle visita las
+celdas, y eso rompe el determinismo del que depende el netcode futuro (mismo
+principio que ya obligó al fix de `DiffuseTemperature` en el playtest 9,
+aplicado aquí desde el diseño en vez de como parche posterior). `Dendritas`
+escribe en un VECINO (no en sí misma) usando `max()` en vez de sobrescribir,
+que es conmutativo: si dos ramas compiten por el mismo vecino en el mismo
+tick, el resultado no depende de cuál se procesó primero.
+
+`CellGrid.SetCell` siembra `morph` con un hash barato de `(idx, material)` en
+vez de ponerlo a cero — un campo plano tarda mucho en romper la simetría y se
+vería un instante de materia lisa antes de que aparezca el patrón.
+`CellGrid.SwapCells` intercambia `morph` junto con `mat`/`temp`/`aux`: un
+líquido que fluye arrastra su dibujo consigo en vez de dejarlo clavado a las
+coordenadas del mundo.
+
+### El estriado 1/4 y su verificación aritmética
+
+`MorphTick` solo procesa 1/4 de las celdas por tick: `offset = tick % 4`,
+bucle `for (i = offset; i < n; i += 4)`. Verificación: cada celda `i` tiene un
+offset fijo `o = i % 4` para siempre. "Le toca turno" se evalúa como
+`(tick % 4) == o`, que es congruencia módulo 4 — se cumple exactamente una vez
+cada 4 ticks consecutivos, para cualquier `o` en {0,1,2,3}. Las cuatro clases
+cubren el 100% de las celdas con la MISMA frecuencia (una vez cada 4 ticks,
+7.5 Hz a 30 Hz de sim). A diferencia de los dos bugs de deriva de temperatura
+del playtest 9, aquí el offset es la ÚNICA guarda — no hay una segunda
+condición temporal combinada con él que pudiera colapsar la cobertura a un
+subconjunto (ese fue exactamente el bug 1 de `DiffuseTemperature`).
+
+### Chunks dormidos: se respetan, pero a 1/8 de frecuencia
+
+Un chunk dormido (`!CellGrid.IsChunkAwake`) SÍ sigue evolucionando su morph,
+solo que 8x más despacio: `dormantActiveRound = ((tick >> 2) & 7) == 0`, así
+que un chunk dormido muta 1 vez cada 32 ticks (~1.07 s a 30 Hz) en vez de 1
+vez cada 4 (~0.13 s). Decisión deliberada frente a las dos alternativas
+obvias:
+- Congelar del todo mientras duerme: un charco que se queda quieto justo
+  cuando su Manchas/Laberinto está a medio converger se congelaría con ese
+  dibujo incompleto PARA SIEMPRE — contradice la premisa del sistema
+  ("vuelve a TENDER a formar el patrón", no "se congela a mitad de camino").
+  Además Dendritas/Pulso/Motas ni siquiera tienen un estado "converged":
+  Motas dejaría de titilar del todo, Pulso dejaría de respirar — se leería
+  como un bug, no como sueño.
+- Ignorar el sueño (evolucionar dormidos a la misma frecuencia): anula el
+  ahorro por el que existen los chunks dormidos.
+
+### Parámetros reales por familia
+
+**Manchas / Laberinto** (`MorphReactionDiffusion`): reacción-difusión
+estilo Gray-Scott simplificada a un único byte `v` (el sustrato `u` se
+aproxima como `255-v`). `feed = 8 + (patronFuerza>>4)` (8..23, misma fórmula
+en ambos regímenes); lo que separa las dos familias es el DELTA `kill-feed`,
+en bandas que nunca se solapan sea cual sea `feed`: Laberinto delta 2..6
+(`kill = feed + 2 + (patronEscala>>1)`, bandas que serpentean, kill≈feed);
+Manchas delta 16..23 (`kill = feed + 15 + patronEscala`, puntos que colapsan
+y compiten por sustrato, kill≫feed). Difusión con `lap / diffDiv` donde
+`diffDiv = max(4, 20 - patronEscala*2)` (división con truncamiento hacia
+cero, no `>>`, mismo criterio de simetría de signo que el fix de temperatura
+del playtest 9 — `lap` puede ser negativo).
+
+**Dendritas** (`MorphDendrites`): semillas dispersas y raras — probabilidad
+`1 / (600 + (8-patronEscala)*300)` por turno de estriado de la celda. Al
+germinar arranca en 200..255. Se propaga a UN vecino por tick con 70% de
+sesgo al eje `semillaPatron & 3` (el resto reparte entre los otros 3),
+decayendo `10 + patronEscala` por paso hasta morir en 0 — se lee como aguja
+que se afina hacia la punta, no como mancha redonda.
+
+**Pulso** (`MorphPulse`): NO acumula sobre el valor anterior (evita deriva
+por redondeo y es autocorrectivo si la celda se mueve). Se recalcula como
+función pura: `fase = (tick*velocidad + distanciaManhattan(ancla)*5) mod 256`,
+con `velocidad = 1 + (ritmoAnim>>4)` (1..16) y el ancla fija por
+`semillaPatron`. A `ritmoAnim` alto (~160) completa una vuelta cada ~256
+ticks (~8.5 s): un respirar lento, no un parpadeo.
+
+**Motas** (`MorphSparkle`): probabilidad de chispazo `1 / (2500 -
+patronEscala*200)` por turno; al encenderse arranca en 220..255 y decae con
+el TIEMPO (a diferencia de Dendritas, que decae con la distancia recorrida) a
+`40 + (patronFuerza>>2)` por turno — un parpadeo de pocos turnos de vida, no
+una mancha que se queda pintada.
+
+### Morfología de CRECIMIENTO: cristalización y Vivium
+
+La firma visual no solo pinta: también sesga qué VECINO elige una reacción de
+crecimiento, sin tocar nunca CUÁNTOS se convierten (la tasa/probabilidad es
+idéntica a antes de esta ronda).
+
+**Cristalización** (`TryCrystalGrowth`, `SimStepper.cs`): solo hay una
+reacción de cristalización que de verdad elige vecino —
+`CrystalSeed`(Powder)+`Azoth` vista desde `CrystalSeed`, porque `Crystal` es
+`StaticSolid` y nunca ejecuta sus propias reacciones (Azoth+Crystal a granel
+es autoconversión del propio Azoth, sin vecino que elegir). Tres modos según
+`patron` de `Crystal`:
+- **Compacto** (`Celdas`): puntúa cada Azoth candidato por cuántos vecinos
+  suyos ya son Crystal/CrystalSeed y elige el más rodeado (`CountCrystalNeighbors`)
+  — el cristal rellena huecos en vez de alargar un frente.
+- **Dendrítico** (`Dendritas`): orden de comprobación de los 4 vecinos con
+  sesgo fuerte a un único eje (`semillaPatron & 3`), mismo criterio que
+  `MorphDendrites` — forma y textura cuentan la misma historia.
+- **Laminar** (cualquier otro plausible para StaticSolid — Vetas/Liso): sesgo
+  a UN EJE completo (las dos direcciones opuestas primero, no una sola
+  punta), horizontal o vertical fijo por el bit menos significativo de
+  `semillaPatron`.
+Garantía de tasa: `TryReactNeighbor` tira el dado con
+`XorShift.FromCell(tick,x,y,77)` sobre las coordenadas de SELF (no del
+vecino), así que el resultado de "¿cristaliza este tick?" es el mismo sin
+importar qué vecino se compruebe primero — reordenar los vecinos cambia solo
+CUÁL se convierte, nunca SI se convierte.
+
+**Vivium** (`GrowthTick`, `SimStepper.cs`): tres modos según `patron` de
+`Vivium` (`VivGrowthModeFor`):
+- **Enredadera** (Dendritas/Laberinto): sigue la dirección de la que vino la
+  célula madre, guardada en 3 bits libres de `aux` (`CameFromDirMask = 0x03`
+  para la dirección, `CameFromKnownFlag = 0x04`; no colisiona con `0x80`
+  "asentado" de Organic ni `0x40` `OrganicDormantAux`).
+- **Disperso** (Manchas/Motas, y fallback si Enredadera/Mata no encuentran
+  candidato): prefiere el candidato con MENOS vecinos de Vivium alrededor
+  (`CountOrganicNeighbors`) — lo opuesto al modo Compacto del cristal; deja
+  huecos en vez de rellenarlos.
+- **Mata** (Celdas/Pulso): comportamiento original, isótropo, orden aleatorio
+  sembrado por celda.
+Garantía de tasa: la elegibilidad sigue siendo exactamente "¿hay un Nutrient
+ortogonal?" en los tres modos, y `rng.ChancePercent(VivGrowChancePct)` (60%)
+se llama UNA sola vez por célula elegible por tick, igual que antes de esta
+ronda — solo cambia CUÁL Nutrient candidato se usa cuando hay más de uno.
+
+### Render (SimRenderer.cs)
+
+Vetas: bandas senoidales (tabla de seno de 256 entradas, construida una vez)
+deformadas por `LatticeNoise` (rejilla de hash con interpolación bilineal
+entera); `patronEscala` (1..8) se remapea a periodos de 14..35 celdas —nunca
+literal, o a ~7.5 px/celda sería ruido. Celdas: Voronoi barato de 9 puntos
+jitterados por rejilla (`VoronoiEdge`), `patronEscala` remapeado a teselas de
+18..46 celdas. Manchas/Laberinto/Pulso/Dendritas/Motas leen `CellGrid.morph`
+directamente. Dendritas SOLO ilumina (nunca oscurece), para leerse como aguja
+y no como sombra; Motas es aditivo puro hacia blanco.
+Bordes (detectando vecino `Empty` ortogonal): `Neto` no hace nada; `Halo`
+suma brillo fijo +34 (independiente de `patronFuerza` — el borde es silueta,
+no patrón); `Escarcha` enciende ~1/3 de las celdas de contorno con un hash
+estable por posición (no por tick, para no titilar); `Difuso` oscurece hacia
+`BackgroundColor` en la mitad de las celdas de contorno — deliberadamente NO
+baja el alfa (ver advertencia abajo).
+**Chunks dormidos + patrones puramente posicionales**: Vetas y Celdas se
+recalculan puras de `(x,y,tick)` sin leer `morph`, así que si el chunk no se
+redibuja por estar dormido, SE CONGELAN aunque `ritmoAnim>0`. Las demás
+familias ya avanzan al ritmo throttleado de `MorphTick`. Solución:
+`_chunkContinuousAnim[]` (`bool[]` por chunk), marcado por `RenderChunk` si
+alguna celda del chunk es Vetas/Celdas con `ritmoAnim>0`; `RenderFrame` exime
+a esos chunks del sueño SOLO para el redibujado (la física de la sim sigue
+dormida igual). Deliberadamente no se subió `FullRefreshEveryFrames`, que
+habría encarecido toda la grilla por un puñado de sustancias.
+**Advertencia para quien toque el renderer**: el borde `Difuso` NO debe bajar
+el alfa. El sim es 1 téxel/celda en `FilterMode.Point`, y detrás vive
+`WorkshopBackdrop` — otra textura Point a triple resolución. Un téxel
+semitransparente ahí no se funde con nada: dos texturas Point de resoluciones
+distintas componiendo alfa producen un mosaico duro del fondo asomando en
+bloques de ~7.5 px, que se lee como "recorte roto", no como deshilachado. Es
+una idea que ya se probó y se descartó — no reimplementarla (ver regla 15 de
+`CLAUDE.md`).
+
+### El sorteo de firma (Universe.Create → SortearFirmasVisuales)
+
+Solo aplica a lo innominado (Azoth, CrystalSeed, Crystal, Vivium, Slime,
+Acid) — el vocabulario del taller se queda siempre en `Liso`/`Neto`. Tres
+garantías con verificación numérica:
+1. **Separación de tono**: ancla de tono por seed + reparto a intervalos de
+   `360/6 = 60°` con jitter ±12° → separación angular mínima garantizada de
+   36° entre cualquier par (60 - 2×12).
+2. **Diversidad de familias**: orden barajado + cada material prefiere una
+   familia aún no usada dentro de su lista de plausibles por arquetipo
+   (`FamiliasPlausibles`), con refuerzo de que al menos una quede
+   `Liso`/`Vetas` para que la pantalla no se vuelva ruido puro.
+3. **Legibilidad**: luminancia perceptual `L = 0.2126R + 0.7152G + 0.0722B`,
+   mínimo `L >= 0.40` (pared del taller L≈0.127, piedra L≈0.345). `EnsureMinLuma`
+   sube primero `V`; si `V` ya está a tope y sigue sin llegar al mínimo (caso
+   real: azules/violetas saturados con H≈240°, donde R y G son casi cero
+   incluso con V=1), baja `S` hasta un suelo de 0.15 (sigue leyéndose como
+   color, no gris puro).
+
+API: `Universe.CaracterDelUniverso` (frase corta cacheada del "clima visual"
+de la run, sin nombrar sustancias) y `Universe.DescribirFirma(byte matId)`
+(cacheada en array privado en la creación, nunca reconstruida por frame).

@@ -7,13 +7,19 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 
 ## Mapa del código (Assets/Alkahest/)
 - `Sim/` — autómata celular DETERMINISTA (grid **256x144**, 30Hz): `Universe` (materiales + leyes
-  por seed + Edictos), `SimStepper` (reglas por arquetipo + ring buffer de eventos),
-  `ReactionEngine` (tabla de reacciones), `CellGrid`, `SimRenderer` (textura + sprite),
-  `SimLevelBuilder` (**EL PLANO del taller: única fuente de verdad de TODAS las coordenadas**).
+  por seed + Edictos + sorteo de FIRMA VISUAL, ver regla 16), `SimStepper` (reglas por arquetipo +
+  `MorphTick` que evoluciona el campo morfológico + ring buffer de eventos), `ReactionEngine`
+  (tabla de reacciones), `CellGrid` (incluye `byte[] morph`/`morphScratch`, ver regla 16),
+  `SimRenderer` (textura + sprite; también dibuja el patrón/borde de la firma), `SimLevelBuilder`
+  (**EL PLANO del taller: única fuente de verdad de TODAS las coordenadas**).
   REGLA DE ORO: nada de UnityEngine.Random ni allocs en el hot path; solo `XorShift` sembrado
   por (tick,x,y). El determinismo es el plan para el futuro netcode.
   Mundo = 25.6 x 14.4 unidades; cámara ortográfica centrada en (12.8, 7.2) con size 7.2 —
   el `AlkahestSceneBuilder` lo deriva de `CellGrid.W/H`, nunca hardcodeado.
+  `MaterialDef` lleva la FIRMA VISUAL de cada sustancia (playtest 12): `patron`
+  (`PatronMorfologico`: Liso/Vetas/Manchas/Laberinto/Celdas/Dendritas/Pulso/Motas), `borde`
+  (`BordeMorfologico`: Neto/Halo/Escarcha/Difuso), `patronEscala`, `patronFuerza`, `ritmoAnim`,
+  `emision`, `semillaPatron`.
 - `Game/` — capa jugable: `ApprenticeController` (imp volador), `Flask` (aspirar/verter, conserva
   la TEMPERATURA de lo aspirado; TODA mutación del grid vía `AlkahestSim.Paint`/`PaintCell`;
   BLOQUEO DE MATERIAL al pulsar aspirar, más el haz de mundo — el anillo de alcance que lo
@@ -106,25 +112,55 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     quitar el anillo de alcance de `Flask.cs` se dejó un párrafo en la cabecera de la clase
     explicando qué era y por qué se retiró, para que nadie lo reimplemente pensando que es una idea
     nueva. Práctica del proyecto de aquí en adelante.
+16. **EL CONTRATO DE `morph` (playtest 12, campo morfológico)**: `CellGrid.morph`/`morphScratch`
+    son un byte de intensidad 0..255 por celda que `SimRenderer` traduce a desplazamiento de brillo
+    escalado por `patronFuerza`. `Liso` no lo usa. **`Vetas` y `Celdas` son PURAMENTE
+    POSICIONALES: `SimStepper.MorphTick` NO las toca, las calcula `SimRenderer` con hashes de
+    `(x,y,tick)`** — coste cero en el stepper. `Manchas`/`Laberinto` = concentración de
+    reacción-difusión (leen vecinos); `Dendritas` = fuerza de rama; `Pulso` = fase; `Motas` =
+    intensidad de chispa. **El doble búfer `morphScratch` es OBLIGATORIO** para las familias que
+    leen vecinos: leer y escribir el mismo array daría un resultado dependiente del orden de
+    recorrido, rompiendo el determinismo del que depende el netcode futuro (`Array.Copy` de ida al
+    empezar `MorphTick`, de vuelta al final; todas las familias escriben solo en `morphScratch`).
+    `morph` viaja CON la sustancia en `CellGrid.SwapCells` (un líquido que fluye arrastra su
+    dibujo) y nace sembrado con un hash de `(idx, material)` en `SetCell`, nunca a cero. Detalle
+    técnico completo (parámetros por familia, estriado, chunks dormidos, modos de crecimiento):
+    `docs/SIM_NOTES.md`.
+17. **SOLO VARÍA LO INNOMINADO (playtest 12)**: la firma visual (`Universe.Create` →
+    `SortearFirmasVisuales`) solo se sortea para Azoth/CrystalSeed/Crystal/Vivium/Slime/Acid. El
+    VOCABULARIO DEL TALLER (Water/Sand/Oil/Nutrient/Stone/Fire/Smoke/Ash/Steam/Ice) se ve SIEMPRE
+    igual (`patron=Liso`, `borde=Neto`) en toda partida — mismo criterio de circularidad que la
+    regla 13. Si todo cambia por seed, nada se reconoce.
+18. **`NamingUi.Open()` YA NO EXISTE (playtest 12): es `TryOpen()`**, y SIEMPRE responde al
+    jugador vía `Flask.Avisar` (nunca `return` mudo) distinguiendo apuntar a nada / apuntar a una
+    redoma de `StorageRack` (no vive en la grilla de la sim, siempre resuelve `Empty`) / apuntar a
+    vocabulario del taller (no se bautiza, regla 13/17).
+19. **TRAMPA DEL BORDE `Difuso` (playtest 12, para quien toque `SimRenderer`)**: NO bajar el alfa
+    para simular un borde deshilachado. El sim es 1 téxel/celda en `FilterMode.Point` sobre otra
+    textura Point a triple resolución detrás (`WorkshopBackdrop`); un téxel semitransparente
+    produce un mosaico duro del fondo en bloques de ~7,5 px, que se lee como bug de recorte, no
+    como deshilachado. La solución correcta es oscurecer hacia `BackgroundColor` en una fracción de
+    las celdas de contorno (ver `SimRenderer.ComputeCellColor`, caso `BordeMorfologico.Difuso`).
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 11 (Opus 5 dirige, Sonnet 5 escribe en 2 encargos): VALIDADO por
-Cesar el punto de luz del haz, el bloqueo de material y el rótulo del frío (cierra el pendiente del
-playtest 10); anillo de alcance del frasco RETIRADO por petición del jugador (el haz y el bloqueo
-se quedan, regla 15 arriba); pre-vuelo de la build de Windows (regla 14 arriba): el builder ahora
-regenera la escena antes de compilar — se encontró que la escena guardada llevaba la cámara vieja
-del rediseño del playtest 4, salvada sin que nadie lo supiera por `SimRenderer.FitMainCamera()`;
-build aún sin EJECUTAR ni verificar el `.exe`. Reconocida la falta de curva de dificultad como
-deuda de diseño (no un ajuste de números): el balance del día 3 está calibrado para la velocidad de
-prueba de Cesar, no para un jugador nuevo — falta una ronda de progresión con jornadas cortas.
-PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas; 2) ejecutar
-la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección "Playtest 11"); 3)
-enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya existe, sin
-consumidor); 4) decidir si el audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 5)
-CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una; 6) renombrar repo GitHub
-`Alkahest`→`ChaosAlchemy` + `productName`; 7) replantear las redomas (`StorageRack`, sugerencia de
-Cesar); 8) resto de M5 (glow, agua con más cuerpo); 9) multiplayer: sim solo-host + deltas RLE por
-chunks despiertos a 10-15Hz — MEDIR antes de decidir (plan en HANDOFF). Detalle completo de la
-ronda 11: `docs/HANDOFF.md` sección "Playtest 11".
+VERIFICAR en editor. Playtest 12 (Opus 5 dirige, Sonnet 5 escribe en 5 encargos + 1 revisión), la
+ronda más ARQUITECTÓNICA hasta ahora: campo morfológico `CellGrid.morph`/`morphScratch` +
+`SimStepper.MorphTick` + firma visual sorteada por seed en `Universe.Create` (con las tres
+garantías: separación de tono ≥36°, diversidad de familias, legibilidad L≥0.40) + render en
+`SimRenderer` + catálogo con miniaturas en `JournalHud` + morfología de CRECIMIENTO en
+cristalización y Vivium (mismas tasas, solo cambia qué vecino se elige). De paso, fix de un bug real
+de bautizar (`NamingUi.Open()` hacía `return` mudo con target vacío — ahora `TryOpen()`, siempre
+avisa). Todo SIN VERIFICAR en editor. Detalle técnico completo: `docs/HANDOFF.md` sección
+"Playtest 12" y `docs/SIM_NOTES.md`.
+PENDIENTE (orden): 1) verificar en Unity y jugar DOS universos seguidos para juzgar si la variación
+se percibe; 2) revisar que ningún patrón quede ilegible a 7,5 px/celda; 3) medir el coste real de
+`MorphTick` (F3, estimado <0,5 ms/tick); 4) enganchar `HintSystem.PistasMostradas` en la sección
+PROCEDIMIENTOS del diario (API ya existe, sin consumidor desde el playtest 10); 5) decidir si el
+audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 6) CURVA DE PROGRESIÓN — jornadas
+cortas de una mecánica cada una; 7) renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`;
+8) replantear las redomas (`StorageRack`, sugerencia de Cesar); 9) resto de M5 (glow, agua con más
+cuerpo); 10) ejecutar la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección
+"Playtest 11"); 11) multiplayer: sim solo-host + deltas RLE por chunks despiertos a 10-15Hz — el
+formato de deltas debe contemplar el campo `morph` (regla 16) — MEDIR antes de decidir.

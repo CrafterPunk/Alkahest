@@ -64,11 +64,37 @@ namespace Alkahest.Sim
         /// </summary>
         public const byte OrganicDormantAux = 0x40;
 
+        // =================================================================
+        // CAMPO MORFOLÓGICO (playtest 12)
+        // =================================================================
+        // El "dibujo interno" de cada sustancia NO se guarda: se REGENERA.
+        // Cada celda lleva un byte de estado que evoluciona por la regla local
+        // de la familia morfológica de su material (ver Sim/MaterialDef.cs,
+        // PatronMorfologico) y que SimRenderer traduce a píxeles.
+        //
+        // Por qué un campo y no una textura por material: porque así el patrón
+        // es una PROPIEDAD FÍSICA y no un adorno. Si aspiras materia y la
+        // viertes en otro sitio, el campo arranca desde una semilla de posición
+        // y la regla lo lleva otra vez hacia el mismo tipo de dibujo — no el
+        // mismo dibujo, el mismo TIPO. Esa era exactamente la petición.
+        //
+        // `morphScratch` es el doble búfer que necesitan las familias de
+        // reacción-difusión (Manchas, Laberinto): leer y escribir el mismo
+        // array daría un resultado dependiente del orden de recorrido, que es
+        // justo lo que rompe el determinismo del que depende el netcode futuro.
+
+        /// <summary>Estado morfológico por celda. Lo evoluciona SimStepper.MorphTick y lo lee SimRenderer.</summary>
+        public readonly byte[] morph;
+        /// <summary>Doble búfer para las reglas morfológicas que leen vecinos (reacción-difusión). Solo lo usa SimStepper.</summary>
+        public readonly byte[] morphScratch;
+
         public CellGrid()
         {
             mat = new byte[W * H];
             temp = new byte[W * H];
             aux = new byte[W * H];
+            morph = new byte[W * H];
+            morphScratch = new byte[W * H];
             touchedTick = new uint[W * H];
             chunkSleepTimer = new byte[ChunksX * ChunksY];
             chunkTouchedTick = new uint[ChunksX * ChunksY];
@@ -101,6 +127,12 @@ namespace Alkahest.Sim
         {
             mat[idx] = materialId;
             if (resetAux) aux[idx] = 0;
+            // (playtest 12) Materia nueva nace con una SEMILLA morfológica, no
+            // con un cero: un campo plano tarda mucho en romper la simetría y
+            // se vería un instante de materia lisa antes de aparecer el patrón.
+            // Hash barato de (posición, material) — sin divisiones, esto está
+            // en el hot path. La regla de la familia hará el resto.
+            morph[idx] = (byte)(idx * 37 + materialId * 101 + 13);
         }
 
         public void SetCell(int x, int y, byte materialId, bool resetAux = true)
@@ -114,6 +146,10 @@ namespace Alkahest.Sim
             (mat[idxA], mat[idxB]) = (mat[idxB], mat[idxA]);
             (temp[idxA], temp[idxB]) = (temp[idxB], temp[idxA]);
             (aux[idxA], aux[idxB]) = (aux[idxB], aux[idxA]);
+            // El estado morfológico viaja CON la sustancia (playtest 12): un
+            // líquido que fluye arrastra su dibujo y lo va reacomodando, en vez
+            // de dejar el patrón clavado a las coordenadas del mundo.
+            (morph[idxA], morph[idxB]) = (morph[idxB], morph[idxA]);
         }
 
         // ---- Chunks ------------------------------------------------------------------------

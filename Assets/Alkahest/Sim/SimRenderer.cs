@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Alkahest.Sim
@@ -16,6 +17,35 @@ namespace Alkahest.Sim
         /// <summary>Color de fondo de cámara recomendado (charcoal cálido oscuro).</summary>
         public static readonly Color BackgroundColor = new Color32(0x1A, 0x14, 0x18, 0xFF);
 
+        /// <summary>
+        /// Mismo color que <see cref="BackgroundColor"/> pero como Color32 fijo
+        /// (playtest 12): lo usa el borde Difuso de ComputeCellColor para
+        /// oscurecer hacia el fondo con LerpByte (que trabaja en bytes) sin
+        /// reconvertir el Color de punto flotante en cada celda.
+        /// </summary>
+        private static readonly Color32 BgColor32 = new Color32(0x1A, 0x14, 0x18, 0xFF);
+
+        /// <summary>
+        /// Tabla de seno de 256 entradas (índice = byte de fase 0..255, valor =
+        /// sin(fase) escalado a ±127), construida UNA VEZ aquí como inicializador
+        /// estático (playtest 12). La regla del encargo prohíbe Mathf.Sin en el
+        /// bucle de render -- este es exactamente el patrón idiomático que pide:
+        /// precalcular la curva una vez y solo indexarla por celda. La usan Pulso
+        /// (fase -> brillo) y Vetas (fase de banda -> brillo).
+        /// </summary>
+        private static readonly short[] SineTable256 = BuildSineTable256();
+
+        private static short[] BuildSineTable256()
+        {
+            var t = new short[256];
+            for (int i = 0; i < 256; i++)
+            {
+                double rad = i * (Math.PI * 2.0 / 256.0);
+                t[i] = (short)Math.Round(Math.Sin(rad) * 127.0);
+            }
+            return t;
+        }
+
         private const int FullRefreshEveryFrames = 30;
 
         private Universe _universe;
@@ -29,6 +59,13 @@ namespace Alkahest.Sim
         // última fila de chunks medía 16x8 y había que mantener dos buffers y
         // elegir uno por chunk en el hot-path de render.
         private Color32[] _chunkScratch;   // CHUNK*CHUNK
+        // (playtest 12) Un chunk por su índice: true si CUALQUIER celda de ese
+        // chunk lleva un patrón que se recalcula del `tick` en vivo (Vetas,
+        // Celdas, Pulso -- no usan CellGrid.morph) con ritmoAnim>0. Lo escribe
+        // RenderChunk cada vez que efectivamente redibuja el chunk; lo lee
+        // RenderFrame para decidir si vale la pena saltárselo aunque esté
+        // dormido. Ver el porqué completo en RenderFrame.
+        private bool[] _chunkContinuousAnim;
         private Transform _quad;
 
         private int _frameCounter;
@@ -59,6 +96,7 @@ namespace Alkahest.Sim
 
             _pixels = new Color32[CellGrid.W * CellGrid.H];
             _chunkScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
+            _chunkContinuousAnim = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
 
             // Guardia explícita: todo el render por chunks asume que CHUNK divide
             // los dos ejes. Si alguien vuelve a cambiar CellGrid.W/H a un tamaño
@@ -140,7 +178,38 @@ namespace Alkahest.Sim
             {
                 for (int cx = 0; cx < CellGrid.ChunksX; cx++)
                 {
-                    if (!full && !_grid.IsChunkAwake(cx, cy)) continue;
+                    // (playtest 12) "Un patrón animado en un chunk DORMIDO no se
+                    // verá animar" -- el problema real y por qué NO basta con
+                    // subir FullRefreshEveryFrames:
+                    //   · Manchas/Laberinto/Dendritas/Motas viven en CellGrid.morph,
+                    //     que SimStepper.MorphTick SIGUE evolucionando en chunks
+                    //     dormidos (a 1/8 de frecuencia, ~1s por paso -- ver la
+                    //     cabecera de MorphTick). El refresco periódico de aquí
+                    //     (cada 30 frames, ~1s) ya va prácticamente a la par de esa
+                    //     cadencia: perderse algún frame intermedio no se nota
+                    //     porque el propio DATO tampoco cambiaba en ese hueco.
+                    //   · Vetas y Celdas son DISTINTOS: el contrato dice que el
+                    //     stepper NO les toca morph -- son puramente posicionales y
+                    //     los recalcula ComputeCellColor del `tick` en cada llamada
+                    //     (ver más abajo). No tienen NINGÚN throttling propio -- si
+                    //     el chunk no se redibuja, el patrón no "avanza despacio",
+                    //     se queda CONGELADO en el frame exacto en que el chunk se
+                    //     durmió, y al llegar el refresco completo salta de golpe al
+                    //     instante actual. (Pulso NO entra en este grupo aunque
+                    //     también "respire": Pulso sí vive en morph y ya hereda el
+                    //     throttle de MorphTick -- ver el comentario junto a
+                    //     `continuousAnim` en ComputeCellColor.)
+                    //   · Subir la frecuencia de refresco completo "arreglaría" esto
+                    //     a costa de redibujar TODA la grilla (16x9 chunks) más a
+                    //     menudo por un puñado de sustancias innominadas que quizá
+                    //     ocupen 2 o 3 chunks -- caro de más para el problema real.
+                    // Solución elegida: marcar por chunk (RenderChunk, abajo) si
+                    // contiene materia con patrón puramente temporal + ritmoAnim>0,
+                    // y eximir SOLO esos chunks del sueño para el REDIBUJADO (la
+                    // física de esa celda se queda dormida igual; solo se repinta).
+                    bool awake = _grid.IsChunkAwake(cx, cy);
+                    bool animado = _chunkContinuousAnim[CellGrid.ChunkIndex(cx, cy)];
+                    if (!full && !awake && !animado) continue;
                     RenderChunk(cx, cy, tick);
                 }
             }
@@ -157,23 +226,34 @@ namespace Alkahest.Sim
 
             int t = (int)tick;
             int scratchI = 0;
+            bool chunkAnimado = false;
             for (int y = y0; y < y1; y++)
             {
                 int rowBase = y * CellGrid.W;
                 for (int x = x0; x < x1; x++)
                 {
                     int idx = rowBase + x;
-                    Color32 c = ComputeCellColor(x, y, idx, t);
+                    Color32 c = ComputeCellColor(x, y, idx, t, out bool continuo);
+                    if (continuo) chunkAnimado = true;
                     _pixels[idx] = c;
                     scratch[scratchI++] = c;
                 }
             }
+            _chunkContinuousAnim[CellGrid.ChunkIndex(cx, cy)] = chunkAnimado;
 
             _texture.SetPixels32(x0, y0, w, h, scratch);
         }
 
-        private Color32 ComputeCellColor(int x, int y, int idx, int tick)
+        private Color32 ComputeCellColor(int x, int y, int idx, int tick, out bool continuousAnim)
         {
+            // (playtest 12) Se asigna en la primera línea porque hay un `return`
+            // temprano un poco más abajo (celda vacía) y C# exige que un
+            // parámetro `out` quede asignado en TODOS los caminos. Por defecto
+            // "no": solo lo pone a `true` el bloque de patrón (más abajo), y solo
+            // para Vetas/Celdas/Pulso con ritmoAnim>0 -- el porqué completo está
+            // en RenderFrame, donde se consume.
+            continuousAnim = false;
+
             byte matId = _grid.mat[idx];
             if (matId == MaterialId.Empty) return default;
 
@@ -203,6 +283,48 @@ namespace Alkahest.Sim
                 r = ClampByte(r + j);
                 g = ClampByte(g + j);
                 b = ClampByte(b + j);
+            }
+
+            // =================================================================
+            // FIRMA VISUAL: PATRÓN MORFOLÓGICO (playtest 12)
+            // =================================================================
+            // "después del color base y su jitter" -- exactamente aquí, antes de
+            // cualquier ajuste de arquetipo (sillería, canto de polvo, líquidos...)
+            // para que ambas capas se sumen igual que ya se suman colorJitter y la
+            // sillería de StaticSolid: el patrón MODULA lo que venga después, no lo
+            // sustituye.
+            //
+            // Gate único: patronFuerza>0. Universe.Create fuerza patronFuerza=0
+            // SIEMPRE que patron==Liso (y Liso es lo único que puede llevar el
+            // vocabulario del taller -- ver la cabecera de MaterialDef). Con esto
+            // el vocabulario del taller ni siquiera evalúa el switch de ApplyPatron:
+            // un único branch barato, cero cambio de imagen, la garantía que pide
+            // el encargo ("debe verse EXACTAMENTE igual que hoy").
+            if (def.patronFuerza > 0)
+            {
+                byte morphVal = _grid.morph[idx];
+                ApplyPatron(x, y, morphVal, def, tick, ref r, ref g, ref b);
+
+                // SOLO Vetas y Celdas fuerzan redibujo en chunk dormido (ver el
+                // porqué completo en RenderFrame). Deliberadamente NO se incluye
+                // Pulso aquí aunque sea "lo que más se nota respirar": Pulso SÍ usa
+                // CellGrid.morph (SimStepper.MorphTick lo recalcula de tick+posición
+                // cada vez que le toca turno), y ese turno YA se throttlea 8x en
+                // chunks dormidos (ver MorphTick, "dormantActiveRound"). Redibujar
+                // Pulso cada frame no arreglaría nada: el valor guardado en morph
+                // seguiría siendo el mismo entre esos turnos throttleados, así que
+                // solo se pagaría el coste de subir a GPU un píxel IDÉNTICO. El
+                // refresco periódico de más abajo (cada ~1s) ya va a la par de ese
+                // throttle de 1/8 (~1.07s) -- ahí no hay nada que el renderer pueda
+                // arreglar sin tocar SimStepper (fuera de alcance de este archivo).
+                // Vetas y Celdas son el caso distinto: no usan morph en absoluto,
+                // así que NO tienen throttling de ningún tipo -- si no se redibujan,
+                // se congelan de verdad, no "avanzan despacio".
+                if (def.ritmoAnim > 0 &&
+                    (def.patron == PatronMorfologico.Vetas || def.patron == PatronMorfologico.Celdas))
+                {
+                    continuousAnim = true;
+                }
             }
 
             // PIEDRA Y SÓLIDOS ESTÁTICOS (fix playtest 6: baja resolución): el color
@@ -322,6 +444,97 @@ namespace Alkahest.Sim
                 }
             }
 
+            // =================================================================
+            // BORDE MORFOLÓGICO (playtest 12): lo primero que el ojo compara
+            // entre dos sustancias, y es barato -- se reutiliza el mismo chequeo
+            // de "vecino vacío" que ya paga StaticSolid arriba, generalizado a
+            // los 4 vecinos ortogonales (arriba/abajo/izq/der) para cualquier
+            // arquetipo, no solo piedra.
+            // =================================================================
+            // Gate: borde!=Neto. Neto (0) es el valor por defecto de MaterialDef
+            // y NUNCA se toca para el vocabulario del taller (Universe.Create solo
+            // sortea `borde` para lo innominado) -- otro branch barato, cero
+            // cambio de imagen para lo ya validado.
+            if (def.borde != BordeMorfologico.Neto)
+            {
+                bool esBorde = (y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty)
+                            || (y > 0 && _grid.mat[idx - CellGrid.W] == MaterialId.Empty)
+                            || (x > 0 && _grid.mat[idx - 1] == MaterialId.Empty)
+                            || (x < CellGrid.W - 1 && _grid.mat[idx + 1] == MaterialId.Empty);
+                if (esBorde)
+                {
+                    switch (def.borde)
+                    {
+                        case BordeMorfologico.Halo:
+                            // Aureola tenue del propio color: brillo + el empuje de
+                            // saturación de ModulatePattern (mismo lenguaje que el
+                            // patrón interno, así el borde "rima" con el resto de la
+                            // firma visual en vez de ser un efecto aparte). Fuerza
+                            // fija (no depende de patronFuerza): el borde es una
+                            // propiedad de SILUETA, no del patrón interno -- una
+                            // sustancia con patronFuerza=0 pero borde=Halo (caso
+                            // raro pero posible si algún día se desacoplan) debe
+                            // seguir teniendo aureola.
+                            ModulatePattern(ref r, ref g, ref b, 34);
+                            break;
+
+                        case BordeMorfologico.Escarcha:
+                            // Cristalitos claros DISPERSOS, no una línea continua:
+                            // ~1 de cada 3 celdas de contorno se enciende. Hash
+                            // estable por celda (no por tick) -- es un rasgo de
+                            // SILUETA, no debe titilar.
+                            if ((Hash3D(x, y, 211 + def.semillaPatron) % 3) == 0)
+                            {
+                                r = ClampByte(r + 70);
+                                g = ClampByte(g + 70);
+                                b = ClampByte(b + 70);
+                            }
+                            break;
+
+                        case BordeMorfologico.Difuso:
+                            // (decisión de arte, playtest 12) La lectura obvia de
+                            // "el borde pierde opacidad" es bajar alfa. Se descarta
+                            // A PROPÓSITO tras comprobarlo: el sprite del sim es 1
+                            // téxel por celda con FilterMode.Point (ver Init, arriba)
+                            // estirado a pantalla completa, y detrás vive
+                            // Game/WorkshopBackdrop -- OTRA textura, a triple
+                            // resolución (x3, ver su cabecera), TAMBIÉN en Point. Un
+                            // téxel semitransparente ahí no se funde con nada: dos
+                            // texturas Point de resoluciones distintas componiendo
+                            // alfa producen un mosaico duro del ladrillo de fondo
+                            // asomando por bloques de ~7.5px sin ningún suavizado --
+                            // exactamente la lectura de "recorte roto" que advertía
+                            // el encargo, no "deshilachado orgánico". Se consigue la
+                            // MISMA sensación (el borde "se pierde" contra el fondo)
+                            // oscureciendo hacia BackgroundColor en la mitad de las
+                            // celdas de contorno (mismo hash disperso que Escarcha,
+                            // pero hacia oscuro en vez de hacia claro) -- el borde se
+                            // funde visualmente con el taller sin tocar el canal
+                            // alfa ni depender de qué haya detrás en ese frame.
+                            if ((Hash3D(x, y, 217 + def.semillaPatron) % 2) == 0)
+                            {
+                                r = LerpByte(r, BgColor32.r, 0.55f);
+                                g = LerpByte(g, BgColor32.g, 0.55f);
+                                b = LerpByte(b, BgColor32.b, 0.55f);
+                            }
+                            break;
+                    }
+                }
+            }
+
+            // EMISIÓN (playtest 12): luz propia, CONSTANTE e independiente del
+            // patrón -- distinta de emitsGlow (el parpadeo heredado del fuego,
+            // arriba, que sigue exactamente igual). def.emision es 0 para todo el
+            // vocabulario del taller (nunca se sortea ahí, ver Universe.Create):
+            // otro no-op de un branch para lo ya validado.
+            if (def.emision > 0)
+            {
+                int amt = def.emision * 2 / 5; // 0..255 -> 0..~102: aporta sin quemar a blanco de golpe en el tope.
+                r = ClampByte(r + amt);
+                g = ClampByte(g + amt);
+                b = ClampByte(b + amt);
+            }
+
             // Tinte de temperatura: por encima de raw 150 (~180°C) se calienta hacia
             // naranja/blanco incandescente proporcionalmente a la temperatura.
             byte raw = _grid.temp[idx];
@@ -361,6 +574,281 @@ namespace Alkahest.Sim
                 h ^= h >> 16;
                 return h;
             }
+        }
+
+        // =====================================================================
+        // FIRMA VISUAL: patrón morfológico -- despacho por familia (playtest 12)
+        // =====================================================================
+        // Aritmética entera pura, hashes estables, CERO Mathf.Sin/Pow/PerlinNoise
+        // en el bucle (regla del encargo) -- la única curva suave que hace falta
+        // (Pulso, Vetas) sale de SineTable256, construida UNA VEZ arriba, no en
+        // cada celda.
+        private static void ApplyPatron(int x, int y, byte morphVal, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
+        {
+            switch (def.patron)
+            {
+                case PatronMorfologico.Vetas:
+                    ApplyVetas(x, y, def, tick, ref r, ref g, ref b);
+                    break;
+                case PatronMorfologico.Celdas:
+                    ApplyCeldas(x, y, def, tick, ref r, ref g, ref b);
+                    break;
+                case PatronMorfologico.Manchas:
+                case PatronMorfologico.Laberinto:
+                    // Misma regla de mapeo para las dos: la FORMA (puntos vs.
+                    // bandas) ya la produce SimStepper.MorphReactionDiffusion en el
+                    // propio campo morph -- aquí solo se traduce concentración a
+                    // brillo, igual en ambas.
+                    ApplyReactionDiffusion(morphVal, def, ref r, ref g, ref b);
+                    break;
+                case PatronMorfologico.Dendritas:
+                    ApplyDendritas(morphVal, def, ref r, ref g, ref b);
+                    break;
+                case PatronMorfologico.Pulso:
+                    ApplyPulso(morphVal, def, ref r, ref g, ref b);
+                    break;
+                case PatronMorfologico.Motas:
+                    ApplyMotas(morphVal, def, ref r, ref g, ref b);
+                    break;
+                // Liso no llega aquí: el gate patronFuerza>0 en ComputeCellColor lo
+                // descarta siempre (Universe.Create fuerza patronFuerza=0 cuando
+                // patron==Liso).
+            }
+        }
+
+        /// <summary>
+        /// Vetas: mármol veteado. PURAMENTE POSICIONAL (el contrato prohíbe que
+        /// SimStepper toque morph aquí) -- se recalcula del todo cada vez que se
+        /// pide, con (x, y, semillaPatron, patronEscala, tick). Técnica: bandas
+        /// senoidales (SineTable256) DEFORMADAS por un campo de ruido de baja
+        /// frecuencia (LatticeNoise, bilinear sobre una rejilla de hash) -- eso es
+        /// literalmente "ruido deformado": sin el warp sería una franja recta y
+        /// aburrida; con él, la franja serpentea como una veta mineral real.
+        /// </summary>
+        private static void ApplyVetas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
+        {
+            // Remapeo de patronEscala (1..8, "tamaño del rasgo en celdas" según el
+            // contrato) a un periodo de banda MUCHO mayor que el literal: a 7.5px
+            // de pantalla por celda, un periodo de 1-2 celdas se leería como ruido
+            // gris puro (la advertencia explícita del encargo). Con el suelo en 14
+            // celdas (~105px a 1080p) la veta SIEMPRE se lee como veta, y
+            // patronEscala sigue controlando el ancho relativo entre sustancias.
+            int veinScale = 11 + def.patronEscala * 3; // 14..35 celdas.
+
+            int warp = LatticeNoise(x, y, veinScale, 220 + def.semillaPatron) - 128; // -128..127, deformación suave.
+
+            // Orientación de la veta: variada por sustancia (semillaPatron), no
+            // siempre vertical -- dos materiales con Vetas no deben calcarse.
+            int tiltY = 1 + (def.semillaPatron % 3); // 1..3
+
+            // Deriva de tiempo: Vetas es "quieto y mineral" por definición (ver el
+            // enum en MaterialDef.cs) -- Universe.Create ya limita su ritmoAnim a
+            // 0..20 (muy por debajo del resto de familias), así que aquí basta un
+            // desplazamiento de fase minúsculo por tick; a ritmoAnim=20 tarda
+            // minutos en dar una vuelta completa de fase -- un asentamiento apenas
+            // perceptible, no una animación.
+            int drift = def.ritmoAnim > 0 ? (int)(((uint)tick * (uint)def.ritmoAnim) >> 10) : 0;
+
+            int stripePos = ((x * 4 + y * tiltY) * 256 / (veinScale * 4)) + warp * 3 + drift;
+            int wave = SineTable256[stripePos & 0xFF]; // -127..127
+
+            int amt = wave * def.patronFuerza / 255;
+            ModulatePattern(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>
+        /// Celdas: teselas tipo Voronoi con borde marcado (espuma, tejido
+        /// celular). PURAMENTE POSICIONAL igual que Vetas -- feature points de un
+        /// diagrama de Voronoi hasheados por rejilla (VoronoiEdge, 3x3 celdas
+        /// vecinas) en vez de guardar nada en morph.
+        /// </summary>
+        private static void ApplyCeldas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
+        {
+            // Mismo remapeo que Vetas y por la misma razón: patronEscala 1..8
+            // literal en celdas daría teselas de un par de celdas, indistinguibles
+            // de ruido a 7.5px/celda. 18..46 celdas por tesela es SIEMPRE legible.
+            int cellSize = 14 + def.patronEscala * 4;
+
+            // Deriva de las teselas si la sustancia fluye (Liquid/Gas -- StaticSolid
+            // siempre trae ritmoAnim=0 por Universe.Create, así que este bloque es
+            // un no-op automático para lo mineral): desplaza el MUESTREO en X, no
+            // los feature points -- más barato y visualmente idéntico (todo el
+            // campo de Voronoi se desliza como una balsa de espuma).
+            int driftX = def.ritmoAnim > 0 ? (int)(((uint)tick * (uint)def.ritmoAnim) >> 9) : 0;
+            int sx = x + driftX;
+
+            int edgeDiff = VoronoiEdge(sx, y, cellSize, 230 + def.semillaPatron, out uint cellId);
+            int edgeBand = cellSize * 2; // banda de borde ~2 celdas de ancho (ver la nota de unidades en VoronoiEdge).
+
+            int amt;
+            if (edgeDiff < edgeBand)
+            {
+                // Borde de tesela: oscurece, más cuanto más cerca de la costura.
+                int t01 = edgeDiff * 100 / (edgeBand > 0 ? edgeBand : 1); // 0 (costura)..100 (ya interior)
+                amt = -((100 - t01) * def.patronFuerza / 100);
+            }
+            else
+            {
+                // Interior: variación de tono estable POR TESELA (mismo lenguaje
+                // que el hash de sillería de StaticSolid, pero por celda de
+                // Voronoi en vez de por bloque rectangular).
+                int tono = (int)(cellId % 41) - 20; // ±20
+                amt = tono * def.patronFuerza / 255;
+            }
+
+            ModulatePattern(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>
+        /// Manchas / Laberinto: morph = concentración de reacción-difusión
+        /// (0..255, ver SimStepper.MorphReactionDiffusion). Se centra en 128 para
+        /// que el punto medio del campo sea "color base sin modular" y los
+        /// extremos aclaren/oscurezcan simétricamente -- así la mancha/banda se
+        /// lee como relieve sobre el color, no como un tinte plano.
+        /// </summary>
+        private static void ApplyReactionDiffusion(byte morphVal, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int centered = morphVal - 128; // -128..127
+            int amt = centered * def.patronFuerza / 255;
+            ModulatePattern(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>
+        /// Dendritas: morph = fuerza de rama (0 = sin rama). A diferencia de
+        /// Manchas/Laberinto NO se centra: v=0 debe devolver el color base
+        /// intacto (no hay rama ahí, nada que dibujar) y v alto ilumina hacia
+        /// arriba -- así se lee como aguja que brilla sobre el fondo, nunca como
+        /// una sombra que "muerde" la sustancia entre ramas.
+        /// </summary>
+        private static void ApplyDendritas(byte morphVal, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            if (morphVal == 0) return;
+            int amt = morphVal * def.patronFuerza / 255;
+            ModulatePattern(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>
+        /// Pulso: morph = fase 0..255 (SimStepper.MorphPulse). Curva suave vía
+        /// SineTable256 -- "respira": aclara y oscurece simétricamente alrededor
+        /// del color base según la fase, sin ningún Mathf.Sin en este bucle.
+        /// </summary>
+        private static void ApplyPulso(byte morphVal, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int wave = SineTable256[morphVal]; // -127..127
+            int amt = wave * def.patronFuerza / 255;
+            ModulatePattern(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>
+        /// Motas: morph = intensidad de chispa (0 = apagada, ver
+        /// SimStepper.MorphSparkle). A propósito NO pasa por ModulatePattern: un
+        /// destello debe leerse como luz que se AÑADE (hacia blanco-caliente), no
+        /// como un tinte más saturado del propio color -- aditivo puro y solo
+        /// hacia arriba, nunca resta brillo cuando está apagada.
+        /// </summary>
+        private static void ApplyMotas(byte morphVal, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            if (morphVal == 0) return;
+            int amt = morphVal * def.patronFuerza / 255;
+            r = ClampByte(r + amt);
+            g = ClampByte(g + amt);
+            b = ClampByte(b + amt);
+        }
+
+        /// <summary>
+        /// Aplica un desplazamiento de brillo con un empujón de saturación
+        /// "gratis" cuando aclara (signedAmt&gt;0): aleja cada canal de la media de
+        /// los tres, así el pico del patrón se lee más VIVO, no solo más claro
+        /// (la regla de arte del encargo: "el patrón modula brillo y algo de
+        /// saturación"). Al oscurecer (signedAmt&lt;0) no se toca la saturación --
+        /// se lee como sombra/humedad del mismo color, no como un tono distinto.
+        /// Compartida por Vetas, Celdas, Manchas/Laberinto, Dendritas, Pulso y el
+        /// borde Halo: un único sitio donde ajustar el "carácter" del sistema
+        /// entero si hace falta retocarlo.
+        /// </summary>
+        private static void ModulatePattern(ref byte r, ref byte g, ref byte b, int signedAmt)
+        {
+            int mean = (r + g + b) / 3;
+            int sat = signedAmt > 0 ? signedAmt / 3 : 0;
+            r = ClampByte(r + signedAmt + (r - mean) * sat / 128);
+            g = ClampByte(g + signedAmt + (g - mean) * sat / 128);
+            b = ClampByte(b + signedAmt + (b - mean) * sat / 128);
+        }
+
+        /// <summary>
+        /// Ruido de valor (tipo Perlin barato) sobre una rejilla de hash con
+        /// interpolación BILINEAR entera: sin la interpolación, cualquier escala
+        /// pequeña se leería como estática pura (un hash por celda sin relación
+        /// con sus vecinos). Con ella, el campo es continuo y liso entre nodos de
+        /// la rejilla aunque la rejilla misma sea gruesa -- exactamente lo que
+        /// hace falta para deformar una veta sin que parezca ruido de televisión.
+        /// x,y siempre &gt;=0 en esta grilla (0..255, 0..143): la división entera
+        /// trunca igual que un floor, sin casos especiales de signo.
+        /// </summary>
+        private static int LatticeNoise(int x, int y, int scale, int salt)
+        {
+            if (scale < 1) scale = 1;
+            int gx = x / scale, gy = y / scale;
+            int fx = x - gx * scale; // 0..scale-1
+            int fy = y - gy * scale;
+
+            int h00 = (int)(Hash3D(gx, gy, salt) & 0xFF);
+            int h10 = (int)(Hash3D(gx + 1, gy, salt) & 0xFF);
+            int h01 = (int)(Hash3D(gx, gy + 1, salt) & 0xFF);
+            int h11 = (int)(Hash3D(gx + 1, gy + 1, salt) & 0xFF);
+
+            int tx = scale > 1 ? fx * 256 / scale : 0;
+            int ty = scale > 1 ? fy * 256 / scale : 0;
+
+            int top = h00 + ((h10 - h00) * tx >> 8);
+            int bot = h01 + ((h11 - h01) * tx >> 8);
+            return top + ((bot - top) * ty >> 8); // 0..255 aprox.
+        }
+
+        /// <summary>
+        /// Distancia (al cuadrado) a la tesela más cercana MENOS la distancia a la
+        /// segunda más cercana, de un diagrama de Voronoi barato: 9 puntos
+        /// candidatos (la celda de rejilla de (x,y) y sus 8 vecinas), cada uno
+        /// hasheado a una posición fija dentro de su celda (jitter de rejilla, la
+        /// técnica estándar para que el resultado no se vea como una rejilla
+        /// cuadrada disfrazada). El valor devuelto es pequeño cerca de una costura
+        /// entre dos teselas (las dos distancias casi empatan) y grande en el
+        /// centro de una tesela (la más cercana gana con claridad) -- eso es
+        /// literalmente "borde marcado" sin dibujar ninguna línea aparte.
+        /// cellId identifica la tesela ganadora (para un tono estable por tesela).
+        /// </summary>
+        private static int VoronoiEdge(int x, int y, int cellSize, int salt, out uint cellId)
+        {
+            int gx = x / cellSize, gy = y / cellSize;
+            int best = int.MaxValue, second = int.MaxValue;
+            uint bestId = 0;
+            for (int oy = -1; oy <= 1; oy++)
+            {
+                int cyg = gy + oy;
+                for (int ox = -1; ox <= 1; ox++)
+                {
+                    int cxg = gx + ox;
+                    uint hh = Hash3D(cxg, cyg, salt);
+                    int jx = (int)(hh & 0xFF) * cellSize / 256;
+                    int jy = (int)((hh >> 8) & 0xFF) * cellSize / 256;
+                    int fpx = cxg * cellSize + jx;
+                    int fpy = cyg * cellSize + jy;
+                    int dx = x - fpx, dy = y - fpy;
+                    int d2 = dx * dx + dy * dy;
+                    if (d2 < best)
+                    {
+                        second = best;
+                        best = d2;
+                        bestId = hh;
+                    }
+                    else if (d2 < second)
+                    {
+                        second = d2;
+                    }
+                }
+            }
+            cellId = bestId;
+            return second - best;
         }
     }
 }

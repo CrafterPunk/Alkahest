@@ -392,6 +392,34 @@ namespace Alkahest.Game
             if (_day == 1 && _sim != null && _sim.Universe != null)
             {
                 GUILayout.Label(_sim.Universe.EdictoDescripcion, UiStyles.Subtitulo);
+
+                // (playtest 12) "AL ESCOGER OTRO UNIVERSO SOLO TUVE MÁS DE LO
+                // MISMO": Sim/Universe.cs ya sortea por seed una frase corta de
+                // carácter (Universe.CaracterDelUniverso, p.ej. "Un mundo de
+                // carmines que serpentea.") -- horneada una vez en Create() y
+                // hasta ahora solo consumida por Game/JournalHud.cs (cabecera
+                // del diario). Se muestra AQUÍ, junto a la seed, y no en la
+                // pantalla de Título: el Título puede tener cargado un Universe
+                // "de usar y tirar" (si el campo de seed se deja en blanco,
+                // RestartRun(null) sortea OTRA seed distinta al recargar la
+                // escena -- ver AlkahestSim.Start), así que enseñar su carácter
+                // ahí sería prometer un mundo que luego no es el que se juega.
+                // La intro de la jornada 1 SÍ es el universo real de la partida
+                // (AlkahestGameBootstrap.TrySpawn espera a que Universe/Grid
+                // existan antes de crear este mismo DayCycle) -- es el momento
+                // exacto de arranque de partida, la promesa "este mundo no es
+                // el anterior". Estilo tenue (no Subtitulo, que ya usa el
+                // Edicto): es un dato de contexto, no la voz del Maestro en sí.
+                // Una sola línea corta -- comprobado que cabe: el panel de la
+                // jornada 1 (420px de diseño, ver AbrirPanel unas líneas más
+                // arriba) tiene ~230px de aire de sobra según el cálculo
+                // documentado justo ahí (sin el bloque de "entrega" de la
+                // jornada 2, que es el que obligó a subir el panel a 510 la
+                // vez pasada); esta línea añade como mucho ~20-24px, muy por
+                // debajo de ese margen.
+                GUILayout.Space(UiStyles.S(3f));
+                GUILayout.Label($"{_sim.Universe.CaracterDelUniverso} — seed {_sim.Universe.Seed}", UiStyles.CuerpoTenue);
+
                 GUILayout.Space(UiStyles.S(8f));
             }
 
@@ -597,6 +625,19 @@ namespace Alkahest.Game
             GUILayout.Label($"Materiales descubiertos: {(_knowledge != null ? _knowledge.CountDiscovered() : 0)}", UiStyles.Cuerpo);
             GUILayout.Label($"Materiales bautizados: {(_knowledge != null ? _knowledge.CountNamed() : 0)}", UiStyles.Cuerpo);
             GUILayout.Label($"Favor final: {favorFinal} ★", UiStyles.Titulo);
+
+            // (playtest 12) "AL ESCOGER OTRO UNIVERSO SOLO TUVE MÁS DE LO
+            // MISMO": la promesa se cumple ahora en Sim/Universe.cs (seed nueva
+            // -> Edicto/leyes/firma visual/CaracterDelUniverso nuevos, ver
+            // DrawDayIntro), pero el jugador tiene que SABER que "Nuevo
+            // universo" cambia algo antes de pulsarlo, sin destriparle el
+            // sorteo (ni siquiera se nombra el Edicto ni la firma aquí, solo
+            // se promete variación). Una línea sobria, junto al botón que la
+            // cumple -- no se toca "Reintentar mismo universo", que
+            // deliberadamente NO varía (misma seed, mismo Universe.Create).
+            GUILayout.Space(UiStyles.S(6f));
+            GUILayout.Label("\"Nuevo universo\" sortea otra seed y otro carácter -- nunca repite este mundo.",
+                UiStyles.CuerpoTenue);
 
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();

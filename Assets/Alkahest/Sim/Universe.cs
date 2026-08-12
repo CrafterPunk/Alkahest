@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Alkahest.Sim
@@ -86,9 +87,26 @@ namespace Alkahest.Sim
         /// <summary>Texto de rumor en español mostrado al jugador (DayCycle, log de arranque). Nunca revela mecánicamente las leyes, solo insinúa.</summary>
         public readonly string EdictoDescripcion;
 
+        // -----------------------------------------------------------------
+        // FIRMA VISUAL DEL UNIVERSO (playtest 12, reporte "más de lo mismo").
+        // Ver el bloque grande en Create() para el sorteo; aquí solo se
+        // cachea el resultado (nunca se construyen estas cadenas por frame).
+        // -----------------------------------------------------------------
+        /// <summary>
+        /// Frase corta (idioma del Maestro) que resume el carácter visual de
+        /// esta run: tono dominante + rasgo morfológico más repetido entre lo
+        /// innominado. NUNCA nombra sustancias (siguen siendo "???" hasta que
+        /// el jugador las bautiza, ver CLAUDE.md regla 13) — describe el
+        /// "clima" del universo, no su contenido.
+        /// </summary>
+        public readonly string CaracterDelUniverso;
+
+        /// <summary>Descripción corta cacheada de la firma visual por material ("granate, manchas lentas, borde escarchado"), indexada por id. Consumida por el diario.</summary>
+        private readonly string[] _firmaPorMaterial;
+
         private Universe(int seed, MaterialDef[] materials, ReactionEngine reactions,
             byte vivGrowMinRaw, byte vivGrowMaxRaw, byte crystallizeMaxTempRaw, byte crystallizeChancePct,
-            Edicto edicto, string edictoDescripcion)
+            Edicto edicto, string edictoDescripcion, string caracterDelUniverso, string[] firmaPorMaterial)
         {
             Seed = seed;
             Materials = materials;
@@ -99,9 +117,17 @@ namespace Alkahest.Sim
             CrystallizeChancePct = crystallizeChancePct;
             ActiveEdicto = edicto;
             EdictoDescripcion = edictoDescripcion;
+            CaracterDelUniverso = caracterDelUniverso;
+            _firmaPorMaterial = firmaPorMaterial;
         }
 
         public MaterialDef Get(byte id) => Materials[id];
+
+        /// <summary>Descripción corta y cacheada de la firma visual de un material ("granate, manchas lentas, borde escarchado"). Usada por el diario; nunca se construye por frame.</summary>
+        public string DescribirFirma(byte matId)
+        {
+            return matId < _firmaPorMaterial.Length ? _firmaPorMaterial[matId] : string.Empty;
+        }
 
         /// <summary>
         /// Crea un universo determinista a partir de una seed. Un
@@ -403,8 +429,13 @@ namespace Alkahest.Sim
                 // (pase visual M5) Era (170,220,235), casi el mismo pálido que el
                 // hielo (196,226,236): imposible saber si habías fabricado cristal
                 // o simplemente congelado agua — y el cristal es lo que piden los
-                // encargos de las jornadas 2 y 3. Ahora es violeta-cian (hereda el
-                // tono del Azoth del que nace) y además brilla.
+                // encargos de las jornadas 2 y 3. Placeholder violeta-cian y brillo;
+                // el color REAL de cada run lo decide SortearFirmasVisuales más
+                // abajo (playtest 12): ya NO hereda el tono de Azoth a propósito
+                // — la separación de tono entre las 6 sustancias innominadas exige
+                // repartirlas por el círculo cromático entero, y el jugador de
+                // todas formas aprende la relación Azoth→Cristal viendo la reacción
+                // de cristalización, no por parecido de color.
                 baseColor = new Color32(152, 172, 255, 255),
                 colorJitter = 10,
                 density = short.MaxValue,
@@ -425,16 +456,17 @@ namespace Alkahest.Sim
                 fluidity = 4,
             };
 
-            // Pequeño jitter de color por seed: cada universo "se siente"
-            // ligeramente distinto aunque las reglas de juego sean iguales.
-            // Nota: esto NO afecta al hot-path por tick, solo se ejecuta
-            // una vez en la creación del universo.
-            for (int i = 0; i < mats.Length; i++)
-            {
-                var m = mats[i];
-                if (m.archetype == MaterialArchetype.Empty) continue;
-                m.baseColor = JitterHue(m.baseColor, rng);
-            }
+            // -----------------------------------------------------------------
+            // FIRMA VISUAL (playtest 12): sortea patrón/borde/color de LO
+            // INNOMINADO y deja el vocabulario del taller con su color EXACTO
+            // e intacto (sin jitter siquiera) — ver SortearFirmasVisuales.
+            // Antes había aquí un jitter de hue de ±8° aplicado a TODOS los
+            // materiales, vocabulario incluido: eso contradice el reporte del
+            // playtest 12 ("solo tuve más de lo mismo") por el lado contrario
+            // — hacía que el suelo firme del jugador (agua, arena...) también
+            // se moviera un poco entre partidas. Se retira a propósito: el
+            // vocabulario del taller debe leerse IDÉNTICO en toda seed.
+            SortearFirmasVisuales(mats, rng, out string caracterDelUniverso, out string[] firmaPorMaterial);
 
             // -----------------------------------------------------------------
             // Tabla de reacciones de contacto (ver ReactionEngine/SimStepper).
@@ -467,7 +499,7 @@ namespace Alkahest.Sim
             return new Universe(seed, mats, reactionEngine,
                 CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC),
                 crystallizeMaxTempRaw, crystallizeChancePct,
-                edicto, edictoDescripcion);
+                edicto, edictoDescripcion, caracterDelUniverso, firmaPorMaterial);
         }
 
         private static string DescribeEdicto(Edicto edicto)
@@ -499,17 +531,405 @@ namespace Alkahest.Sim
             }
         }
 
-        private static Color32 JitterHue(Color32 c, System.Random rng)
+        // ===================================================================
+        // FIRMA VISUAL POR SEED (playtest 12) — Ver Sim/MaterialDef.cs para
+        // los campos que se rellenan aquí. Todo este bloque corre UNA vez por
+        // Universe.Create, así que las asignaciones/List/HashSet de abajo son
+        // aceptables (regla de oro del hot-path es sobre SimStepper, no esto).
+        // ===================================================================
+
+        /// <summary>
+        /// Los 6 materiales innominados de esta run (ver CLAUDE.md regla 13).
+        /// El vocabulario del taller (Stone/Sand/Water/Oil/Nutrient/Fire/
+        /// Smoke/Ash/Steam/Ice) NO pasa por aquí: se queda con los valores
+        /// por defecto de MaterialDef (patron=Liso, patronFuerza=0, borde=
+        /// Neto) y el baseColor tal cual se definió arriba, sin tocar un solo
+        /// byte — es el suelo firme desde el que el jugador juzga todo lo
+        /// demás. (Se valoró darles un patrón fijo MUY tenue idéntico en toda
+        /// seed —la excepción que el diseño permite— pero se descartó: con
+        /// patronFuerza en 0 el campo `patron` es inerte de todas formas, así
+        /// que la "excepción" no aportaba nada que un `patronFuerza` en 0 no
+        /// garantizara ya, y cada byte que se toca aquí es un byte más que
+        /// vigilar si mañana alguien reintroduce jitter global por error.)
+        /// </summary>
+        private static readonly byte[] UnnamedMaterialIds =
         {
-            Color.RGBToHSV(c, out float h, out float s, out float v);
-            // ±8 grados de hue aprox (8/360).
-            float delta = ((float)rng.NextDouble() * 2f - 1f) * (8f / 360f);
-            h = Mathf.Repeat(h + delta, 1f);
-            Color rgb = Color.HSVToRGB(h, s, v, true);
+            MaterialId.Azoth, MaterialId.CrystalSeed, MaterialId.Crystal,
+            MaterialId.Vivium, MaterialId.Slime, MaterialId.Acid,
+        };
+
+        /// <summary>
+        /// TABLA DE ARQUETIPO → FAMILIAS PLAUSIBLES (playtest 12). La firma no
+        /// debe contradecir la física: un StaticSolid (Crystal) no anima
+        /// frenético, un Organic (Vivium) no debería salir "muerto" (Liso).
+        ///   StaticSolid (Crystal)    → Liso, Vetas, Celdas, Dendritas
+        ///                              (facetas minerales o agujas de cristal;
+        ///                              nunca algo que "lata" o "burbujee").
+        ///   Powder (CrystalSeed)     → Liso, Vetas, Manchas, Motas
+        ///                              (grano suelto: nada de laberintos ni
+        ///                              teselas continuas, eso pide un medio
+        ///                              continuo que un polvo no tiene).
+        ///   Liquid (Azoth/Slime/Acid)→ Liso, Vetas, Manchas, Laberinto,
+        ///                              Celdas, Pulso, Motas (casi todo vale
+        ///                              menos Dendritas: una rama rígida no
+        ///                              cuadra con algo que fluye y se vierte).
+        ///   Organic (Vivium)         → Dendritas, Celdas, Manchas, Laberinto,
+        ///                              Pulso, Motas (crece, así que nada de
+        ///                              Liso/Vetas: eso es lo mineral e
+        ///                              inerte, lo opuesto a "vivo").
+        /// </summary>
+        private static PatronMorfologico[] FamiliasPlausibles(MaterialArchetype arquetipo)
+        {
+            switch (arquetipo)
+            {
+                case MaterialArchetype.StaticSolid:
+                    return new[] { PatronMorfologico.Liso, PatronMorfologico.Vetas, PatronMorfologico.Celdas, PatronMorfologico.Dendritas };
+                case MaterialArchetype.Powder:
+                    return new[] { PatronMorfologico.Liso, PatronMorfologico.Vetas, PatronMorfologico.Manchas, PatronMorfologico.Motas };
+                case MaterialArchetype.Organic:
+                    return new[] { PatronMorfologico.Dendritas, PatronMorfologico.Celdas, PatronMorfologico.Manchas, PatronMorfologico.Laberinto, PatronMorfologico.Pulso, PatronMorfologico.Motas };
+                case MaterialArchetype.Liquid:
+                default:
+                    return new[] { PatronMorfologico.Liso, PatronMorfologico.Vetas, PatronMorfologico.Manchas, PatronMorfologico.Laberinto, PatronMorfologico.Celdas, PatronMorfologico.Pulso, PatronMorfologico.Motas };
+            }
+        }
+
+        /// <summary>Bordes plausibles por arquetipo: Escarcha solo en lo mineral/granular (frío que cristaliza), Difuso no en lo sólido (un sólido no se deshilacha).</summary>
+        private static BordeMorfologico[] BordesPlausibles(MaterialArchetype arquetipo)
+        {
+            switch (arquetipo)
+            {
+                case MaterialArchetype.StaticSolid:
+                    return new[] { BordeMorfologico.Neto, BordeMorfologico.Halo, BordeMorfologico.Escarcha };
+                case MaterialArchetype.Powder:
+                    return new[] { BordeMorfologico.Neto, BordeMorfologico.Difuso, BordeMorfologico.Escarcha };
+                case MaterialArchetype.Organic:
+                    return new[] { BordeMorfologico.Neto, BordeMorfologico.Halo, BordeMorfologico.Difuso };
+                case MaterialArchetype.Liquid:
+                default:
+                    return new[] { BordeMorfologico.Neto, BordeMorfologico.Halo, BordeMorfologico.Difuso };
+            }
+        }
+
+        /// <summary>
+        /// Sortea la firma visual completa de lo innominado y escribe el
+        /// resultado directamente en <paramref name="mats"/>. Ver el cuerpo
+        /// para las tres garantías (separación de tono, diversidad de
+        /// familias, legibilidad) y su verificación aritmética.
+        /// </summary>
+        private static void SortearFirmasVisuales(MaterialDef[] mats, System.Random rng, out string caracterDelUniverso, out string[] firmaPorMaterial)
+        {
+            int n = UnnamedMaterialIds.Length; // 6
+
+            // -----------------------------------------------------------------
+            // GARANTÍA 1: separación de tono. Un tono de anclaje por seed +
+            // reparto a intervalos regulares de 360/n grados con jitter
+            // acotado a ±12°: la separación angular entre dos vecinos del
+            // círculo NUNCA baja de (360/n) - 2*12. Con n=6 eso es 60-24=36°,
+            // muy por encima del umbral en el que dos tonos empiezan a
+            // confundirse a simple vista (~20-25° en una pantalla típica) —
+            // el jugador tiene margen de sobra para distinguirlas en una cuba
+            // llena. El orden material→hueco se baraja para que no sea
+            // siempre "Azoth se lleva el primer hueco".
+            // -----------------------------------------------------------------
+            float anchorHueDeg = (float)rng.NextDouble() * 360f;
+            float hueStepDeg = 360f / n;
+            int[] hueSlots = new int[n];
+            for (int i = 0; i < n; i++) hueSlots[i] = i;
+            ShuffleFisherYates(hueSlots, rng);
+
+            // -----------------------------------------------------------------
+            // GARANTÍA 2: diversidad de familias. Se procesa en un orden
+            // barajado (no siempre el mismo material "gana" la familia que
+            // más le conviene) y cada material prefiere una familia AÚN NO
+            // usada esta run dentro de las plausibles para su arquetipo; solo
+            // repite si su arquetipo ya agotó las no usadas. Con 4-7 familias
+            // plausibles por arquetipo y solo 6 materiales, las repeticiones
+            // son raras y nunca totales.
+            // -----------------------------------------------------------------
+            int[] procOrder = new int[n];
+            for (int i = 0; i < n; i++) procOrder[i] = i;
+            ShuffleFisherYates(procOrder, rng);
+
+            var arquetipos = new MaterialArchetype[n];
+            for (int i = 0; i < n; i++) arquetipos[i] = mats[UnnamedMaterialIds[i]].archetype;
+
+            var patronPorIdx = new PatronMorfologico[n];
+            var familiasUsadas = new HashSet<PatronMorfologico>();
+            for (int k = 0; k < n; k++)
+            {
+                int idx = procOrder[k];
+                var plausibles = FamiliasPlausibles(arquetipos[idx]);
+                var frescas = new List<PatronMorfologico>();
+                foreach (var f in plausibles) if (!familiasUsadas.Contains(f)) frescas.Add(f);
+                var pool = frescas.Count > 0 ? frescas : new List<PatronMorfologico>(plausibles);
+                var elegida = pool[rng.Next(pool.Count)];
+                familiasUsadas.Add(elegida);
+                patronPorIdx[idx] = elegida;
+            }
+
+            // Refuerzo de la garantía 2: "al menos una debe quedar Liso o
+            // Vetas" (si todo late y burbujea, la pantalla se vuelve ruido).
+            // Vivium (Organic) nunca puede ser la elegida: su tabla de
+            // familias plausibles no incluye ni Liso ni Vetas a propósito
+            // (regla 3 del encargo: coherencia con lo que la sustancia hace).
+            bool hayCalma = false;
+            for (int i = 0; i < n; i++)
+                if (patronPorIdx[i] == PatronMorfologico.Liso || patronPorIdx[i] == PatronMorfologico.Vetas) { hayCalma = true; break; }
+            if (!hayCalma)
+            {
+                var candidatos = new List<int>();
+                for (int i = 0; i < n; i++)
+                {
+                    var pl = FamiliasPlausibles(arquetipos[i]);
+                    if (Array.IndexOf(pl, PatronMorfologico.Liso) >= 0 || Array.IndexOf(pl, PatronMorfologico.Vetas) >= 0)
+                        candidatos.Add(i);
+                }
+                int pick = candidatos[rng.Next(candidatos.Count)];
+                patronPorIdx[pick] = rng.Next(2) == 0 ? PatronMorfologico.Liso : PatronMorfologico.Vetas;
+            }
+
+            // -----------------------------------------------------------------
+            // GARANTÍA 3: legibilidad sobre el fondo. La pared del taller
+            // (Game/WorkshopBackdrop.cs) va de ciruela oscuro (0.150,0.115,
+            // 0.190) arriba a casi negro (0.062,0.048,0.058) abajo, y la
+            // piedra (Stone) es (92,86,98). Con luminancia perceptual
+            // L = 0.2126R + 0.7152G + 0.0722B (0..1):
+            //   pared arriba  -> L ≈ 0.127
+            //   piedra        -> L ≈ 0.345  (el elemento más claro del fondo)
+            // Se exige L >= 0.40 para toda sustancia innominada: por encima
+            // de la piedra con margen y muy por encima de la pared, así que
+            // nunca se hunde visualmente contra ninguno de los dos.
+            // -----------------------------------------------------------------
+            const float minLuma = 0.40f;
+
+            var huePorIdx = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                byte matId = UnnamedMaterialIds[i];
+                var m = mats[matId];
+                var arch = arquetipos[i];
+                var patron = patronPorIdx[i];
+
+                // ---- Borde ----
+                var bordes = BordesPlausibles(arch);
+                m.borde = bordes[rng.Next(bordes.Length)];
+
+                // ---- Escala/fuerza/ritmo/emisión, por arquetipo (regla 3:
+                // coherencia con lo que la sustancia HACE) ----
+                byte escala, fuerza, ritmo, emision;
+                switch (arch)
+                {
+                    case MaterialArchetype.StaticSolid:
+                        // Mineral, facetas grandes, y NUNCA anima: StaticSolid
+                        // ni siquiera cae solo (CLAUDE.md regla 7) — que tampoco lata.
+                        escala = (byte)(3 + rng.Next(6)); // 3..8
+                        fuerza = (byte)(50 + rng.Next(101)); // 50..150
+                        ritmo = 0;
+                        break;
+                    case MaterialArchetype.Powder:
+                        escala = (byte)(1 + rng.Next(3)); // 1..3, grano fino
+                        fuerza = (byte)(40 + rng.Next(71)); // 40..110
+                        ritmo = (byte)rng.Next(41); // 0..40, casi estático
+                        break;
+                    case MaterialArchetype.Organic:
+                        // Vivo: nunca del todo quieto (mínimo 40) para que se
+                        // note que crece incluso antes de que el jugador lo sepa.
+                        escala = (byte)(2 + rng.Next(5)); // 2..6
+                        fuerza = (byte)(60 + rng.Next(91)); // 60..150
+                        ritmo = (byte)(40 + rng.Next(121)); // 40..160
+                        break;
+                    case MaterialArchetype.Liquid:
+                    default:
+                        escala = (byte)(2 + rng.Next(4)); // 2..5
+                        fuerza = (byte)(50 + rng.Next(81)); // 50..130
+                        ritmo = (byte)rng.Next(121); // 0..120
+                        break;
+                }
+                // Vetas es "quieto y mineral" por definición (ver doc del enum
+                // en MaterialDef.cs): se frena aunque su arquetipo sea Liquid.
+                if (patron == PatronMorfologico.Vetas) ritmo = (byte)rng.Next(21); // 0..20
+                // Liso no tiene dibujo que animar; forzar 0 evita "ritmo
+                // fantasma" en un patrón invisible.
+                if (patron == PatronMorfologico.Liso) { ritmo = 0; fuerza = 0; }
+
+                emision = m.emitsGlow ? (byte)(70 + rng.Next(111)) : (byte)rng.Next(41); // 70..180 si ya brilla, si no 0..40
+
+                m.patron = patron;
+                m.patronEscala = escala;
+                m.patronFuerza = fuerza;
+                m.ritmoAnim = ritmo;
+                m.emision = emision;
+                m.semillaPatron = (byte)rng.Next(256);
+
+                // ---- Color: tono repartido + legibilidad garantizada ----
+                float jitterDeg = ((float)rng.NextDouble() * 2f - 1f) * 12f; // ±12°
+                float hueDeg = Mathf.Repeat(anchorHueDeg + hueSlots[i] * hueStepDeg + jitterDeg, 360f);
+                float sat = 0.55f + (float)rng.NextDouble() * 0.30f; // 0.55..0.85
+                float val = 0.55f + (float)rng.NextDouble() * 0.30f; // 0.55..0.85 (punto de partida; EnsureMinLuma lo empuja si hace falta)
+                byte alphaOriginal = m.baseColor.a; // conserva la transparencia de diseño (líquidos vs sólidos), el color se resortea entero
+                Color32 candidato = Color.HSVToRGB(hueDeg / 360f, sat, val, true);
+                candidato.a = alphaOriginal;
+                candidato = EnsureMinLuma(candidato, minLuma);
+                m.baseColor = candidato;
+                huePorIdx[i] = hueDeg;
+            }
+
+            // -----------------------------------------------------------------
+            // Carácter del universo: tono del material con la familia más
+            // repetida (excluyendo Liso, que por definición no es un "rasgo").
+            // No nombra sustancias: describe el clima visual de la run.
+            // -----------------------------------------------------------------
+            var conteoFamilia = new Dictionary<PatronMorfologico, int>();
+            foreach (var p in patronPorIdx)
+            {
+                if (p == PatronMorfologico.Liso) continue;
+                conteoFamilia.TryGetValue(p, out int c);
+                conteoFamilia[p] = c + 1;
+            }
+            PatronMorfologico dominante = PatronMorfologico.Liso;
+            int mejorConteo = -1;
+            int idxDominante = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (patronPorIdx[i] == PatronMorfologico.Liso) continue;
+                int c = conteoFamilia[patronPorIdx[i]];
+                if (c > mejorConteo) { mejorConteo = c; dominante = patronPorIdx[i]; idxDominante = i; }
+            }
+            string colorPlural = HueNombrePlural(huePorIdx[idxDominante]);
+            caracterDelUniverso = $"Un mundo de {colorPlural} que {VerboParaFamilia(dominante)}.";
+
+            // -----------------------------------------------------------------
+            // Cachear DescribirFirma para TODOS los materiales (no solo lo
+            // innominado): el vocabulario del taller también tiene firma
+            // (siempre Liso/Neto), así el diario puede llamarlo sin distinguir
+            // casos. Nunca se reconstruye por frame: se hornea aquí, una vez.
+            // -----------------------------------------------------------------
+            firmaPorMaterial = new string[mats.Length];
+            for (int id = 0; id < mats.Length; id++)
+            {
+                var m = mats[id];
+                if (m == null || m.archetype == MaterialArchetype.Empty) { firmaPorMaterial[id] = string.Empty; continue; }
+                Color.RGBToHSV(m.baseColor, out float h01, out _, out _);
+                string colorNombre = HueNombreSingular(h01 * 360f);
+                string fraseFamilia = FraseFamiliaIndividual(m.patron, m.ritmoAnim);
+                string bordeEtiqueta = BordeEtiqueta(m.borde);
+                firmaPorMaterial[id] = $"{colorNombre}, {fraseFamilia}, {bordeEtiqueta}";
+            }
+        }
+
+        /// <summary>Luminancia perceptual 0..1 (coeficientes Rec.709, aproximación suficiente para un umbral de legibilidad, no para color science).</summary>
+        private static float Luma(Color32 c)
+        {
+            return (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255f;
+        }
+
+        /// <summary>
+        /// Empuja el color hacia arriba de luminancia en pasos deterministas
+        /// acotados, hasta cumplir el mínimo o agotar el rango.
+        /// PRIMERO sube V (brillo); pero subir V solo no basta para tonos
+        /// azul/violeta puros a saturación alta — con H≈240° y S alta, HSV
+        /// da R≈G≈0 incluso con V=1 (L=0.2126R+0.7152G+0.0722B se apoya casi
+        /// todo en el canal B, que pesa solo 0.0722), así que un azul
+        /// saturado puede quedarse en L≈0.07 aunque V esté a tope. Bug real
+        /// encontrado simulando el sorteo (seed 42, Crystal caía a L≈0.31,
+        /// por debajo del mínimo de 0.40) antes de fijarlo aquí: una vez V
+        /// toca techo, el bucle SIGUE bajando S (hacia blanco) hasta cumplir
+        /// el mínimo o tocar un suelo de saturación (0.15, sigue leyéndose
+        /// como color, no gris puro).
+        /// </summary>
+        private static Color32 EnsureMinLuma(Color32 c, float minLuma)
+        {
             byte a = c.a;
-            Color32 result = rgb;
+            Color.RGBToHSV(c, out float h, out float s, out float v);
+            for (int i = 0; i < 24 && Luma(Color.HSVToRGB(h, s, v, true)) < minLuma; i++)
+            {
+                if (v < 1f) v = Mathf.Min(1f, v + 0.08f);
+                else if (s > 0.15f) s = Mathf.Max(0.15f, s - 0.08f);
+                else break; // rango agotado (no debería ocurrir con minLuma=0.40, ver comentario arriba)
+            }
+            Color32 result = Color.HSVToRGB(h, s, v, true);
             result.a = a;
             return result;
+        }
+
+        // 12 tonos a intervalos de 30° cubriendo el círculo cromático completo,
+        // en singular (descripción de un material) y plural (frase del universo).
+        private static readonly string[] HueNombresSingular =
+        {
+            "rojo", "naranja", "ámbar", "dorado", "verde", "esmeralda",
+            "turquesa", "azul", "añil", "violeta", "magenta", "carmín",
+        };
+        private static readonly string[] HueNombresPlural =
+        {
+            "rojos", "naranjas", "ámbares", "dorados", "verdes", "esmeraldas",
+            "turquesas", "azules", "añiles", "violetas", "magentas", "carmines",
+        };
+
+        private static int HueBucket(float hueDeg)
+        {
+            int b = Mathf.FloorToInt(Mathf.Repeat(hueDeg, 360f) / 30f);
+            return Mathf.Clamp(b, 0, 11);
+        }
+
+        private static string HueNombreSingular(float hueDeg) => HueNombresSingular[HueBucket(hueDeg)];
+        private static string HueNombrePlural(float hueDeg) => HueNombresPlural[HueBucket(hueDeg)];
+
+        /// <summary>Verbo (plural, concuerda con el nombre de color plural) para la frase de carácter del universo.</summary>
+        private static string VerboParaFamilia(PatronMorfologico p)
+        {
+            switch (p)
+            {
+                case PatronMorfologico.Vetas: return "se agrietan en vetas quietas";
+                case PatronMorfologico.Manchas: return "se reparten en manchas inquietas";
+                case PatronMorfologico.Laberinto: return "se enredan en serpentinas laberínticas";
+                case PatronMorfologico.Celdas: return "se organizan en celdas como panal";
+                case PatronMorfologico.Dendritas: return "crecen en agujas y ramas";
+                case PatronMorfologico.Pulso: return "respiran";
+                case PatronMorfologico.Motas: return "titilan en motas dispersas";
+                default: return "guardan una calma tersa"; // Liso, no debería llegar aquí (se excluye antes)
+            }
+        }
+
+        /// <summary>Frase corta de familia+ritmo para DescribirFirma (un material concreto).</summary>
+        private static string FraseFamiliaIndividual(PatronMorfologico p, byte ritmoAnim)
+        {
+            if (p == PatronMorfologico.Liso) return "superficie lisa";
+            string velocidad = VelocidadAdjetivo(p, ritmoAnim);
+            string sustantivo;
+            switch (p)
+            {
+                case PatronMorfologico.Vetas: sustantivo = "vetas"; break;
+                case PatronMorfologico.Manchas: sustantivo = "manchas"; break;
+                case PatronMorfologico.Laberinto: sustantivo = "laberinto"; break;
+                case PatronMorfologico.Celdas: sustantivo = "celdas"; break;
+                case PatronMorfologico.Dendritas: sustantivo = "dendritas"; break;
+                case PatronMorfologico.Pulso: sustantivo = "pulso"; break;
+                case PatronMorfologico.Motas: sustantivo = "motas"; break;
+                default: sustantivo = "patrón"; break;
+            }
+            return $"{sustantivo} {velocidad}";
+        }
+
+        /// <summary>Adjetivo de velocidad concordado en género/número con el sustantivo de familia (Laberinto/Pulso son masculino singular; el resto, femenino plural).</summary>
+        private static string VelocidadAdjetivo(PatronMorfologico p, byte ritmoAnim)
+        {
+            bool masculinoSingular = p == PatronMorfologico.Laberinto || p == PatronMorfologico.Pulso;
+            int tier = ritmoAnim == 0 ? 0 : (ritmoAnim < 90 ? 1 : 2);
+            if (masculinoSingular)
+                return tier == 0 ? "quieto" : tier == 1 ? "lento" : "vivo";
+            return tier == 0 ? "quietas" : tier == 1 ? "lentas" : "vivas";
+        }
+
+        private static string BordeEtiqueta(BordeMorfologico b)
+        {
+            switch (b)
+            {
+                case BordeMorfologico.Halo: return "borde con halo";
+                case BordeMorfologico.Escarcha: return "borde escarchado";
+                case BordeMorfologico.Difuso: return "borde difuso";
+                default: return "borde neto";
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
@@ -34,9 +35,16 @@ namespace Alkahest.Game
     ///    GrowthTick, así que se añade a mano pero con los NÚMEROS REALES de
     ///    esta seed). Formato "de un vistazo": fórmula (entrada) + condición
     ///    de temperatura (detalle) + distintivo ★ SE PROPAGA cuando aplica.
-    ///  · SUSTANCIAS -- lo descubierto, con su color real, su nombre
-    ///    (bautizado si lo hay) y las observaciones que guarda
-    ///    SubstanceKnowledge (WitnessOf).
+    ///  · SUSTANCIAS -- REHECHA EN EL PLAYTEST 12 como fichas de catálogo:
+    ///    "en esta ronda cada sustancia innominada recibe una firma visual
+    ///    sorteada por seed... el diario pasa a ser el catálogo de este
+    ///    universo concreto". Cada ficha muestra una MINIATURA real (textura
+    ///    generada por código que reproduce color+patrón+borde de la firma,
+    ///    ver ObtenerMiniatura/CrearMiniatura más abajo, NUNCA un cuadradito
+    ///    de color plano), el nombre (bautizado o "???"), la descripción de
+    ///    firma de Universe.DescribirFirma, las observaciones que guarda
+    ///    SubstanceKnowledge (WitnessOf) y, si sigue innominada, una
+    ///    invitación discreta a bautizarla.
     ///  · PROCEDIMIENTOS -- LA SECCIÓN NUEVA que ataca la queja de la
     ///    memoria/capturas de pantalla. Ver el bloque de comentario grande
     ///    sobre HintSystem más abajo (ConstruirEntradaProcedimiento) para la
@@ -86,10 +94,16 @@ namespace Alkahest.Game
         /// <summary>
         /// Una fila de cualquier página del libro: dos niveles tipográficos
         /// (Titulo = "entrada", Cuerpo = "detalle") más los adornos que solo
-        /// aplican a algunas secciones (swatch de color en SUSTANCIAS,
+        /// aplican a algunas secciones (miniatura + firma en SUSTANCIAS,
         /// distintivo de propagación en LEYES). Reutilizada por las tres
         /// secciones para que la paginación (ComputePages/FillColumn) sea un
         /// único algoritmo, no tres copias.
+        ///
+        /// (playtest 12) `Swatch` (Color plano) se sustituye por `MatId` +
+        /// `Firma`: la ficha de SUSTANCIAS ya no rellena un cuadradito de
+        /// color, dibuja la miniatura cacheada de ese material (ver
+        /// DrawEntradaSustancia) y añade la línea de descripción de firma que
+        /// expone Universe.DescribirFirma.
         /// </summary>
         private struct Entrada
         {
@@ -97,7 +111,8 @@ namespace Alkahest.Game
             public string Cuerpo;
             public bool Propaga;
             public bool TieneSwatch;
-            public Color Swatch;
+            public byte MatId;
+            public string Firma;
         }
 
         // -----------------------------------------------------------------
@@ -157,6 +172,37 @@ namespace Alkahest.Game
         private string _pieTexto = "";
 
         // -----------------------------------------------------------------
+        // FIRMA VISUAL DEL UNIVERSO (playtest 12): "que se note que este
+        // universo es OTRO". Construido UNA vez en Init (CaracterDelUniverso
+        // y Seed son inmutables durante toda la partida, igual que _leyes),
+        // nunca reconstruido en OnGUI. Dibujado sobrio, una línea, bajo el
+        // título de tapa (ver DrawCabecera) -- "una línea, no una portada".
+        // -----------------------------------------------------------------
+        private string _tituloUniverso = "";
+
+        // -----------------------------------------------------------------
+        // MINIATURAS DE CATÁLOGO (playtest 12): una Texture2D por material,
+        // generada UNA sola vez (la primera vez que se pide, ver
+        // ObtenerMiniatura) y cacheada aquí para siempre -- igual criterio
+        // que _entradasSustancias: nunca se reconstruye una textura en
+        // OnGUI/por frame. Tamaño de índice MaterialId.Count, igual que el
+        // resto de arrays por-material de SubstanceKnowledge.
+        //
+        // MEMORIA (playtest 12, encargo): un Texture2D creado con `new
+        // Texture2D(...)` vive FUERA del árbol de la escena -- destruir este
+        // GameObject (o el reload de escena que DayCycle.RestartRun dispara
+        // con SceneManager.LoadScene al empezar cada universo nuevo, ver
+        // AlkahestGameBootstrap.SpawnJournalHud: crea un JournalHud NUEVO
+        // cada vez, no sobrevive entre partidas) NO libera la textura sola.
+        // Sin el Destroy() explícito de OnDestroy (más abajo) se acumularían
+        // huérfanas, una tanda de hasta MaterialId.Count texturas más por
+        // cada "empezar otro universo" de la sesión. Son pocas y pequeñas
+        // (17 materiales * MiniLado² RGBA32 ≈ 53 KB en total) pero la
+        // disciplina es la misma que si fueran grandes.
+        // -----------------------------------------------------------------
+        private readonly Texture2D[] _miniaturas = new Texture2D[MaterialId.Count];
+
+        // -----------------------------------------------------------------
         // Estilos propios (cacheados, reconstruidos solo si cambia la
         // resolución -- mismo criterio que UiStyles.Preparar). El libro
         // necesita niveles que UiStyles no tiene ya hechos (título de tapa,
@@ -164,15 +210,25 @@ namespace Alkahest.Game
         // dentro de OnGUI en cada frame.
         // -----------------------------------------------------------------
         private GUIStyle _estiloTituloLibro;
+        private GUIStyle _estiloSubtituloUniverso;
         private GUIStyle _estiloPestana;
         private GUIStyle _estiloTituloSeccion;
         private GUIStyle _estiloEntradaTitulo;
+        private GUIStyle _estiloFirma;
         private GUIStyle _estiloDetalle;
         private GUIStyle _estiloBadgePropaga;
         private GUIStyle _estiloPie;
         private GUIStyle _estiloAyudaPie;
         private GUIStyle _estiloBotonPagina;
         private int _alturaEstilos = -1;
+
+        /// <summary>Lado (px de diseño, ver UiStyles.S) de la miniatura de catálogo en la ficha de SUSTANCIAS.</summary>
+        private const float MiniSwatchLado = 34f;
+
+        /// <summary>Lado en píxeles REALES de la textura generada (pequeña a propósito: es un icono de catálogo, no arte de detalle).</summary>
+        private const int MiniLado = 30;
+
+        private const string TextoInvitaBautizo = "todavía sin nombre — cierra el diario y bautízala con T";
 
         // Pergamino apagado y lomo: coherentes con la paleta ciruela/latón
         // del taller (UiStyles.Tinta/Oro), NO blanco puro -- el reporte pide
@@ -193,6 +249,30 @@ namespace Alkahest.Game
             _sim = sim;
             _knowledge = knowledge;
             ConstruirLeyesDesdeUniverso();
+
+            // (playtest 12) Ver doc del campo _tituloUniverso: construido aquí,
+            // una única vez, nunca en OnGUI -- CaracterDelUniverso y Seed no
+            // cambian durante la partida.
+            if (_sim != null && _sim.Universe != null)
+            {
+                _tituloUniverso = $"{_sim.Universe.CaracterDelUniverso} · seed {_sim.Universe.Seed}";
+            }
+        }
+
+        /// <summary>
+        /// (playtest 12) Ver doc del campo _miniaturas: un Texture2D creado por
+        /// código no se libera solo con destruir este GameObject. Este
+        /// componente se recrea entero (AlkahestGameBootstrap.SpawnJournalHud)
+        /// cada vez que DayCycle.RestartRun recarga la escena para un universo
+        /// nuevo, así que sin esto cada partida nueva dejaría huérfana la tanda
+        /// de miniaturas de la anterior.
+        /// </summary>
+        private void OnDestroy()
+        {
+            for (int i = 0; i < _miniaturas.Length; i++)
+            {
+                if (_miniaturas[i] != null) Destroy(_miniaturas[i]);
+            }
         }
 
         private void Update()
@@ -299,7 +379,8 @@ namespace Alkahest.Game
             float padTapa = UiStyles.S(20f);
             var interior = new Rect(libro.x + padTapa, libro.y + padTapa, libro.width - padTapa * 2f, libro.height - padTapa * 2f);
 
-            float altoCabecera = _estiloTituloLibro.lineHeight + UiStyles.S(8f) + _estiloPestana.lineHeight + UiStyles.S(10f);
+            float altoCabecera = _estiloTituloLibro.lineHeight + UiStyles.S(2f) + _estiloSubtituloUniverso.lineHeight +
+                                  UiStyles.S(6f) + _estiloPestana.lineHeight + UiStyles.S(10f);
             float altoPie = _estiloPie.lineHeight + UiStyles.S(4f) + _estiloAyudaPie.lineHeight + UiStyles.S(10f);
             float anchoLomo = UiStyles.S(20f);
 
@@ -330,7 +411,15 @@ namespace Alkahest.Game
             float altoTitulo = _estiloTituloLibro.lineHeight;
             GUI.Label(new Rect(r.x, r.y, r.width, altoTitulo), "DIARIO DEL APRENDIZ", _estiloTituloLibro);
 
-            float yTabs = r.y + altoTitulo + UiStyles.S(8f);
+            // (playtest 12) "Que se note que este universo es OTRO": una línea
+            // sobria, cacheada en Init (_tituloUniverso), nunca reconstruida
+            // aquí -- carácter del universo + seed, para que el jugador pueda
+            // decir "en la partida del mundo carmín pasaba esto".
+            float altoSubtitulo = _estiloSubtituloUniverso.lineHeight;
+            float ySubtitulo = r.y + altoTitulo + UiStyles.S(2f);
+            GUI.Label(new Rect(r.x, ySubtitulo, r.width, altoSubtitulo), _tituloUniverso, _estiloSubtituloUniverso);
+
+            float yTabs = ySubtitulo + altoSubtitulo + UiStyles.S(6f);
             float altoTabs = r.yMax - yTabs;
             float anchoTab = r.width / 3f;
 
@@ -519,11 +608,25 @@ namespace Alkahest.Game
 
         private float EntradaAltura(Entrada e, float ancho, bool badge)
         {
-            float sangriaTitulo = e.TieneSwatch ? (_estiloEntradaTitulo.lineHeight * 0.72f) + UiStyles.S(8f) : 0f;
-            float h = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, ancho - sangriaTitulo);
-            if (badge && e.Propaga) h += UiStyles.S(2f) + _estiloBadgePropaga.lineHeight;
-            if (!string.IsNullOrEmpty(e.Cuerpo)) h += UiStyles.S(3f) + UiStyles.Alto(_estiloDetalle, e.Cuerpo, ancho);
-            return h;
+            // (playtest 12) Ficha de catálogo (SUSTANCIAS): miniatura a la
+            // izquierda + columna de texto (título/firma/observaciones) a la
+            // derecha -- la fila mide lo que sea más alto de los dos (el
+            // swatch tiene lado fijo, el texto crece con el contenido).
+            if (e.TieneSwatch)
+            {
+                float ladoSwatch = UiStyles.S(MiniSwatchLado);
+                float anchoTexto = ancho - ladoSwatch - UiStyles.S(10f);
+
+                float h = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, anchoTexto);
+                if (!string.IsNullOrEmpty(e.Firma)) h += UiStyles.S(2f) + UiStyles.Alto(_estiloFirma, e.Firma, anchoTexto);
+                if (!string.IsNullOrEmpty(e.Cuerpo)) h += UiStyles.S(3f) + UiStyles.Alto(_estiloDetalle, e.Cuerpo, anchoTexto);
+                return Mathf.Max(h, ladoSwatch);
+            }
+
+            float hOtros = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, ancho);
+            if (badge && e.Propaga) hOtros += UiStyles.S(2f) + _estiloBadgePropaga.lineHeight;
+            if (!string.IsNullOrEmpty(e.Cuerpo)) hOtros += UiStyles.S(3f) + UiStyles.Alto(_estiloDetalle, e.Cuerpo, ancho);
+            return hOtros;
         }
 
         private void DrawColumna(Rect r, Entrada[] entradas, int start, int end, bool badge)
@@ -546,19 +649,20 @@ namespace Alkahest.Game
 
         private void DrawEntrada(Rect r, Entrada e, bool badge)
         {
-            float y = r.y;
-
+            // (playtest 12) La ficha de SUSTANCIAS tiene maqueta propia
+            // (miniatura + columna de texto): se despacha aparte en vez de
+            // meter más ramas condicionales en este método, que sigue
+            // sirviendo tal cual a LEYES/PROCEDIMIENTOS.
             if (e.TieneSwatch)
             {
-                float lado = _estiloEntradaTitulo.lineHeight * 0.72f;
-                var sw = new Rect(r.x, y + UiStyles.S(2f), lado, lado);
-                UiStyles.Rellenar(sw, e.Swatch);
+                DrawEntradaSustancia(r, e);
+                return;
             }
 
-            float sangriaTitulo = e.TieneSwatch ? (_estiloEntradaTitulo.lineHeight * 0.72f) + UiStyles.S(8f) : 0f;
-            float anchoTitulo = r.width - sangriaTitulo;
-            float altoTitulo = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, anchoTitulo);
-            GUI.Label(new Rect(r.x + sangriaTitulo, y, anchoTitulo, altoTitulo), e.Titulo, _estiloEntradaTitulo);
+            float y = r.y;
+
+            float altoTitulo = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, r.width);
+            GUI.Label(new Rect(r.x, y, r.width, altoTitulo), e.Titulo, _estiloEntradaTitulo);
             y += altoTitulo;
 
             if (badge && e.Propaga)
@@ -576,6 +680,57 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// Ficha de catálogo de una sustancia (playtest 12): miniatura real de
+        /// su firma visual a la izquierda (ver ObtenerMiniatura -- generada y
+        /// cacheada una única vez, jamás por frame) + columna de texto a la
+        /// derecha con nombre / firma descrita / observaciones (con la
+        /// invitación a bautizar ya integrada en Cuerpo, ver ActualizarCache).
+        /// </summary>
+        private void DrawEntradaSustancia(Rect r, Entrada e)
+        {
+            float ladoSwatch = UiStyles.S(MiniSwatchLado);
+            float gap = UiStyles.S(10f);
+            float anchoTexto = r.width - ladoSwatch - gap;
+
+            var swatchRect = new Rect(r.x, r.y, ladoSwatch, ladoSwatch);
+            var miniatura = ObtenerMiniatura(e.MatId);
+            if (miniatura != null)
+            {
+                GUI.DrawTexture(swatchRect, miniatura);
+            }
+            else
+            {
+                // Defensivo: no debería pasar nunca en el flujo normal (todo
+                // matId de una Entrada con TieneSwatch viene de un material
+                // real del universo), pero un color plano de repuesto es
+                // mejor que un hueco vacío si algún día algo falla aquí.
+                UiStyles.Rellenar(swatchRect, UiStyles.TextoTenue);
+            }
+
+            float xTexto = r.x + ladoSwatch + gap;
+            float y = r.y;
+
+            float altoTitulo = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, anchoTexto);
+            GUI.Label(new Rect(xTexto, y, anchoTexto, altoTitulo), e.Titulo, _estiloEntradaTitulo);
+            y += altoTitulo;
+
+            if (!string.IsNullOrEmpty(e.Firma))
+            {
+                y += UiStyles.S(2f);
+                float altoFirma = UiStyles.Alto(_estiloFirma, e.Firma, anchoTexto);
+                GUI.Label(new Rect(xTexto, y, anchoTexto, altoFirma), e.Firma, _estiloFirma);
+                y += altoFirma;
+            }
+
+            if (!string.IsNullOrEmpty(e.Cuerpo))
+            {
+                y += UiStyles.S(3f);
+                float altoCuerpo = UiStyles.Alto(_estiloDetalle, e.Cuerpo, anchoTexto);
+                GUI.Label(new Rect(xTexto, y, anchoTexto, altoCuerpo), e.Cuerpo, _estiloDetalle);
+            }
+        }
+
         // ===================================================================
         // ESTILOS PROPIOS (cacheados; ver docs del campo _alturaEstilos)
         // ===================================================================
@@ -587,12 +742,21 @@ namespace Alkahest.Game
             var raiz = GUI.skin.label;
 
             _estiloTituloLibro = NuevoEstilo(raiz, 21, FontStyle.Bold, TextAnchor.UpperCenter, UiStyles.Oro, false);
+            // (playtest 12) Línea de carácter del universo, bajo el título de
+            // tapa -- ver DrawCabecera. Tenue a propósito: es un dato de
+            // contexto, no compite con "DIARIO DEL APRENDIZ".
+            _estiloSubtituloUniverso = NuevoEstilo(raiz, 12, FontStyle.Italic, TextAnchor.UpperCenter, UiStyles.OroTenue, false);
             _estiloPestana = NuevoEstilo(raiz, 14, FontStyle.Bold, TextAnchor.MiddleCenter, UiStyles.TextoTenue, false);
             // Nivel 1: título de sección/capítulo, repetido como cabecera
             // corrida en ambas páginas del tramo.
             _estiloTituloSeccion = NuevoEstilo(raiz, 15, FontStyle.Bold, TextAnchor.UpperLeft, UiStyles.OroTenue, false);
             // Nivel 2: entrada (una ley, un procedimiento, una sustancia).
             _estiloEntradaTitulo = NuevoEstilo(raiz, 15, FontStyle.Bold, TextAnchor.UpperLeft, UiStyles.Texto, true);
+            // (playtest 12) Línea de firma visual en la ficha de SUSTANCIAS
+            // ("carmín, manchas lentas, borde escarchado") -- entre el título y
+            // las observaciones, un nivel tipográfico propio pero tenue: es
+            // descripción de catálogo, no el dato más importante de la fila.
+            _estiloFirma = NuevoEstilo(raiz, 12, FontStyle.Italic, TextAnchor.UpperLeft, UiStyles.OroTenue, true);
             // Nivel 3: detalle (condición, pasos, observaciones).
             _estiloDetalle = NuevoEstilo(raiz, 13, FontStyle.Normal, TextAnchor.UpperLeft, UiStyles.TextoTenue, true);
             _estiloBadgePropaga = NuevoEstilo(raiz, 12, FontStyle.Bold, TextAnchor.UpperRight, UiStyles.Exito, false);
@@ -729,7 +893,8 @@ namespace Alkahest.Game
             }
 
             _entradasSustanciasCount = 0;
-            var mats = _sim.Universe.Materials;
+            var universe = _sim.Universe;
+            var mats = universe.Materials;
             for (int m = 1; m < mats.Length; m++)
             {
                 byte matId = (byte)m;
@@ -738,12 +903,24 @@ namespace Alkahest.Game
                 string chips = BuildChips(matId);
                 if (string.IsNullOrEmpty(chips)) chips = "(sin transformaciones presenciadas todavía)";
 
+                // (playtest 12) Invitación discreta a bautizar, integrada en la
+                // propia ficha (distinta del globo junto al cursor de
+                // SubstanceKnowledge.DrawAvisoBautizo, que solo aparece al
+                // apuntar/cargar: esta vive en el diario, pasiva, para quien
+                // vuelve a consultar el catálogo). "Sin nombre de verdad" =
+                // ni bautizado por el jugador NI vocabulario de taller (mismo
+                // criterio que SubstanceKnowledge.NecesitaBautizo, recompuesto
+                // aquí con la API pública existente para no tocar esa clase).
+                bool sinNombre = SubstanceKnowledge.NombreComun(matId) == null && _knowledge.NombreDe(matId) == "???";
+                if (sinNombre) chips = chips + "\n" + TextoInvitaBautizo;
+
                 _entradasSustancias[_entradasSustanciasCount++] = new Entrada
                 {
                     Titulo = _knowledge.NombreParaHud(matId),
                     Cuerpo = chips,
                     TieneSwatch = true,
-                    Swatch = mats[m].baseColor,
+                    MatId = matId,
+                    Firma = universe.DescribirFirma(matId),
                 };
             }
         }
@@ -862,5 +1039,333 @@ namespace Alkahest.Game
             string chip = SubstanceKnowledge.ChipLabel(flag);
             return s.Length == 0 ? chip : s + " · " + chip;
         }
+
+        // ===================================================================
+        // MINIATURAS DE CATÁLOGO (playtest 12)
+        // ===================================================================
+        // "Genera una miniatura que reproduzca su firma... por código
+        // (Texture2D + GUI.DrawTexture, FilterMode.Point), una sola vez por
+        // material, cacheada." Réplica SIMPLIFICADA Y ESTÁTICA de la lógica
+        // real de Sim/SimRenderer.cs (ApplyPatron/ComputeCellColor, archivo
+        // de solo lectura en este encargo): mismo lenguaje visual (color base
+        // + patrón que modula brillo/saturación con ModulatePattern, borde
+        // que reacciona sobre un anillo de contorno), pero recalculado sobre
+        // los MiniLado² téxeles de la propia miniatura en vez de sobre celdas
+        // de la simulación real -- no hay `tick` de sim que leer aquí y no
+        // hace falta: una ficha de catálogo es una FOTO fija de la firma, no
+        // una ventana en vivo al material (para eso ya está el propio taller
+        // al fondo del velo). No es idéntica píxel a píxel a como se ve en
+        // juego -- no tiene por qué serlo -- pero usa el MISMO despacho por
+        // PatronMorfologico/BordeMorfologico, así que la familia se reconoce
+        // de un vistazo, que es el contrato del encargo.
+        // ===================================================================
+
+        /// <summary>
+        /// Miniatura cacheada del material (ver doc de <see cref="_miniaturas"/>):
+        /// se genera la PRIMERA vez que se pide (la primera vez que ese
+        /// material tiene una Entrada de SUSTANCIAS que dibujar, ya filtrado
+        /// por descubierto en ActualizarCache) y nunca se reconstruye después.
+        /// </summary>
+        private Texture2D ObtenerMiniatura(byte matId)
+        {
+            if (matId >= _miniaturas.Length || _sim == null || _sim.Universe == null) return null;
+
+            var existente = _miniaturas[matId];
+            if (existente != null) return existente;
+
+            var tex = CrearMiniatura(_sim.Universe.Get(matId));
+            _miniaturas[matId] = tex;
+            return tex;
+        }
+
+        private static Texture2D CrearMiniatura(MaterialDef def)
+        {
+            var tex = new Texture2D(MiniLado, MiniLado, TextureFormat.RGBA32, false, false)
+            {
+                filterMode = FilterMode.Point, // mismo criterio que SimRenderer: pixel-art nítido, nunca borroso.
+                wrapMode = TextureWrapMode.Clamp,
+                name = "MiniaturaCatalogo_" + def.devName,
+            };
+
+            var pixeles = new Color32[MiniLado * MiniLado];
+            Color32 baseColor = def.baseColor;
+
+            for (int y = 0; y < MiniLado; y++)
+            {
+                for (int x = 0; x < MiniLado; x++)
+                {
+                    byte r = baseColor.r, g = baseColor.g, b = baseColor.b;
+                    byte a = baseColor.a;
+
+                    if (def.colorJitter > 0)
+                    {
+                        int j = (int)(MiniHash2D(x, y, def.semillaPatron) % (uint)(def.colorJitter * 2 + 1)) - def.colorJitter;
+                        r = ClampByteMini(r + j);
+                        g = ClampByteMini(g + j);
+                        b = ClampByteMini(b + j);
+                    }
+
+                    // Gate patronFuerza>0: idéntico al de ComputeCellColor -- el
+                    // vocabulario del taller (Liso, patronFuerza siempre 0 por
+                    // contrato de Universe.Create) ni evalúa el switch.
+                    if (def.patronFuerza > 0) ApplyPatronMini(x, y, def, ref r, ref g, ref b);
+
+                    // Gate borde!=Neto: igual que ComputeCellColor. Aquí el
+                    // "vecino vacío" de la sim se sustituye por "cerca del
+                    // borde de la propia miniatura" (ver ApplyBordeMini): en
+                    // una ficha de catálogo la silueta ES el contorno del
+                    // swatch, no hay vacío de sim que consultar.
+                    if (def.borde != BordeMorfologico.Neto) ApplyBordeMini(x, y, def, ref r, ref g, ref b, ref a);
+
+                    if (def.emision > 0)
+                    {
+                        int amt = def.emision * 2 / 5;
+                        r = ClampByteMini(r + amt);
+                        g = ClampByteMini(g + amt);
+                        b = ClampByteMini(b + amt);
+                    }
+
+                    pixeles[y * MiniLado + x] = new Color32(r, g, b, a);
+                }
+            }
+
+            tex.SetPixels32(pixeles);
+            // makeNoLongerReadable=true: esta textura nunca se vuelve a leer
+            // desde CPU (solo se pinta con GUI.DrawTexture), así que Unity
+            // puede soltar la copia duplicada en RAM de sistema tras subirla.
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        /// <summary>Despacho por familia morfológica, réplica simplificada de SimRenderer.ApplyPatron (ver cabecera de esta región).</summary>
+        private static void ApplyPatronMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            switch (def.patron)
+            {
+                case PatronMorfologico.Vetas: ApplyVetasMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Manchas: ApplyManchasMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Laberinto: ApplyLaberintoMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Celdas: ApplyCeldasMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Dendritas: ApplyDendritasMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Pulso: ApplyPulsoMini(x, y, def, ref r, ref g, ref b); break;
+                case PatronMorfologico.Motas: ApplyMotasMini(x, y, def, ref r, ref g, ref b); break;
+                // Liso no llega aquí (patronFuerza siempre 0 para Liso).
+            }
+        }
+
+        /// <summary>Vetas: bandas senoidales deformadas -- mármol veteado, quieto.</summary>
+        private static void ApplyVetasMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int periodo = 5 + def.patronEscala; // 6..13px: banda siempre legible en 30px de miniatura.
+            int warp = (int)(MiniHash2D(x / 3, y / 3, def.semillaPatron) % 41) - 20; // deformación suave por bloques de 3px.
+            int tiltY = 1 + (def.semillaPatron % 3); // orientación variada por sustancia.
+            double fase = (x + y * tiltY + warp) * (Math.PI * 2.0 / periodo);
+            int onda = (int)Math.Round(Math.Sin(fase) * 127.0);
+            ModulateMini(ref r, ref g, ref b, onda * def.patronFuerza / 255);
+        }
+
+        /// <summary>Manchas: discos de concentración alrededor de puntos jitterados -- lunares, no costuras.</summary>
+        private static void ApplyManchasMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int celda = 4 + def.patronEscala;
+            int d2 = DistanciaMinimaAPunto2(x, y, celda, def.semillaPatron + 30, out _);
+            int radio = Mathf.Max(1, celda / 2);
+            int d = (int)Math.Sqrt(d2);
+            int t01 = Mathf.Clamp(100 - d * 100 / radio, -60, 100); // >0 dentro de la mancha, negativo lejos de cualquiera.
+            ModulateMini(ref r, ref g, ref b, t01 * def.patronFuerza / 200);
+        }
+
+        /// <summary>Laberinto: dos ondas perpendiculares entrelazadas -- serpentinas, no bandas rectas (lo que lo distingue de Vetas).</summary>
+        private static void ApplyLaberintoMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int periodo = 5 + def.patronEscala;
+            int warp = (int)(MiniHash2D(x / 4, y / 4, def.semillaPatron + 60) % 61) - 30;
+            double fx = (x + warp * 0.2) * (Math.PI * 2.0 / periodo);
+            double fy = (y - warp * 0.2) * (Math.PI * 2.0 / periodo);
+            double banda = Math.Sin(fx) * Math.Cos(fy); // entrelazado: ni horizontal ni vertical puro.
+            int onda = (int)Math.Round(banda * 127.0);
+            ModulateMini(ref r, ref g, ref b, onda * def.patronFuerza / 255);
+        }
+
+        /// <summary>Celdas: teselas tipo Voronoi con borde marcado -- espuma/tejido celular.</summary>
+        private static void ApplyCeldasMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            int celda = 5 + def.patronEscala;
+            int mejorD2 = DistanciaMinimaAPunto2(x, y, celda, def.semillaPatron + 90, out uint mejorId);
+            int segundoD2 = SegundaDistanciaAPunto2(x, y, celda, def.semillaPatron + 90);
+            int diff = (int)(Math.Sqrt(segundoD2) - Math.Sqrt(mejorD2));
+            int bandaBorde = Mathf.Max(2, celda / 3);
+
+            int amt;
+            if (diff < bandaBorde)
+            {
+                int t01 = diff * 100 / bandaBorde;
+                amt = -((100 - t01) * def.patronFuerza / 100);
+            }
+            else
+            {
+                int tono = (int)(mejorId % 41) - 20;
+                amt = tono * def.patronFuerza / 255;
+            }
+            ModulateMini(ref r, ref g, ref b, amt);
+        }
+
+        /// <summary>Dendritas: ramas/agujas radiales desde el centro -- crecimiento ramificado, nunca un medio continuo.</summary>
+        private static void ApplyDendritasMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            float cx = MiniLado * 0.5f, cy = MiniLado * 0.5f;
+            float dx = x - cx, dy = y - cy;
+            float radio = Mathf.Sqrt(dx * dx + dy * dy);
+            if (radio < 0.5f) { ModulateMini(ref r, ref g, ref b, def.patronFuerza / 3); return; } // núcleo, siempre algo de brillo.
+
+            float radioMax = MiniLado * 0.5f;
+            float anguloDeg = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg; // -180..180
+            int sectores = 7 + (def.semillaPatron % 5); // 7..11 ramas, variado por semilla.
+            float anguloSector = 360f / sectores;
+            int sector = Mathf.FloorToInt((anguloDeg + 180f) / anguloSector);
+            uint h = MiniHash2D(sector, 0, def.semillaPatron + 120); // "y"=0: solo hace falta una dimensión (el sector) más la sal.
+            float largoRama = radioMax * (0.35f + (h % 100) / 100f * 0.65f); // 35%..100% del radio.
+            float centroSectorDeg = sector * anguloSector - 180f + anguloSector * 0.5f;
+            float distAngular = Mathf.Abs(Mathf.DeltaAngle(anguloDeg, centroSectorDeg));
+
+            if (radio <= largoRama && distAngular <= 9f)
+            {
+                float t01 = 1f - radio / Mathf.Max(1f, largoRama); // brilla cerca del centro, se apaga hacia la punta.
+                ModulateMini(ref r, ref g, ref b, (int)(t01 * def.patronFuerza));
+            }
+            else
+            {
+                ModulateMini(ref r, ref g, ref b, -(def.patronFuerza / 6)); // entre ramas: vacío mineral, algo más oscuro.
+            }
+        }
+
+        /// <summary>Pulso: anillos concéntricos -- "late" alrededor del centro de la miniatura.</summary>
+        private static void ApplyPulsoMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            float cx = MiniLado * 0.5f, cy = MiniLado * 0.5f;
+            float radio = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+            int periodo = 4 + def.patronEscala;
+            double fase = radio * (Math.PI * 2.0 / periodo);
+            int onda = (int)Math.Round(Math.Sin(fase) * 127.0);
+            ModulateMini(ref r, ref g, ref b, onda * def.patronFuerza / 255);
+        }
+
+        /// <summary>Motas: destellos dispersos, aditivo puro (nunca resta) -- igual criterio que SimRenderer.ApplyMotas.</summary>
+        private static void ApplyMotasMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b)
+        {
+            uint h = MiniHash2D(x, y, def.semillaPatron + 150);
+            if ((h % 11) != 0) return; // ~1 de cada 11 téxeles lleva mota.
+            r = ClampByteMini(r + def.patronFuerza);
+            g = ClampByteMini(g + def.patronFuerza);
+            b = ClampByteMini(b + def.patronFuerza);
+        }
+
+        /// <summary>
+        /// Borde morfológico sobre un anillo de contorno de la propia
+        /// miniatura (los `bandaBorde` téxeles más cercanos a cualquiera de
+        /// los 4 lados del swatch) -- la silueta que en la sim real da el
+        /// vecino vacío, aquí la da el borde del icono. Difuso baja alfa (no
+        /// oscurece hacia un color de fondo fijo, ver el porqué en la
+        /// cabecera de la región): GUI.DrawTexture compone con blending alfa
+        /// normal contra el pergamino de la página, así que "se pierde"
+        /// igual sin depender de qué color tenga la página en cada tema.
+        /// </summary>
+        private static void ApplyBordeMini(int x, int y, MaterialDef def, ref byte r, ref byte g, ref byte b, ref byte a)
+        {
+            const int bandaBorde = 3;
+            int distBorde = Mathf.Min(Mathf.Min(x, MiniLado - 1 - x), Mathf.Min(y, MiniLado - 1 - y));
+            if (distBorde >= bandaBorde) return;
+
+            switch (def.borde)
+            {
+                case BordeMorfologico.Halo:
+                    ModulateMini(ref r, ref g, ref b, 40);
+                    break;
+                case BordeMorfologico.Escarcha:
+                    if ((MiniHash2D(x, y, def.semillaPatron + 211) % 3) == 0)
+                    {
+                        r = ClampByteMini(r + 80);
+                        g = ClampByteMini(g + 80);
+                        b = ClampByteMini(b + 80);
+                    }
+                    break;
+                case BordeMorfologico.Difuso:
+                    if ((MiniHash2D(x, y, def.semillaPatron + 217) % 2) == 0)
+                    {
+                        a = (byte)(a * 55 / 100);
+                    }
+                    break;
+            }
+        }
+
+        /// <summary>Igual lenguaje que SimRenderer.ModulatePattern: desplaza brillo con un empujón de saturación "gratis" al aclarar, sin tocarla al oscurecer.</summary>
+        private static void ModulateMini(ref byte r, ref byte g, ref byte b, int signedAmt)
+        {
+            int mean = (r + g + b) / 3;
+            int sat = signedAmt > 0 ? signedAmt / 3 : 0;
+            r = ClampByteMini(r + signedAmt + (r - mean) * sat / 128);
+            g = ClampByteMini(g + signedAmt + (g - mean) * sat / 128);
+            b = ClampByteMini(b + signedAmt + (b - mean) * sat / 128);
+        }
+
+        /// <summary>Distancia al cuadrado al punto-semilla más cercano de una rejilla jitterada (feature point de Voronoi barato). Usada por Manchas y Celdas.</summary>
+        private static int DistanciaMinimaAPunto2(int x, int y, int celda, int semilla, out uint idGanador)
+        {
+            int gx = x / celda, gy = y / celda;
+            int mejorD2 = int.MaxValue;
+            uint mejorId = 0;
+            for (int oy = -1; oy <= 1; oy++)
+            {
+                for (int ox = -1; ox <= 1; ox++)
+                {
+                    int cx = gx + ox, cy = gy + oy;
+                    uint h = MiniHash2D(cx, cy, semilla);
+                    int px = cx * celda + (int)(h % (uint)celda);
+                    int py = cy * celda + (int)((h >> 8) % (uint)celda);
+                    int dx = x - px, dy = y - py;
+                    int d2 = dx * dx + dy * dy;
+                    if (d2 < mejorD2) { mejorD2 = d2; mejorId = h; }
+                }
+            }
+            idGanador = mejorId;
+            return mejorD2;
+        }
+
+        /// <summary>Distancia al cuadrado al SEGUNDO punto-semilla más cercano (para marcar la costura entre teselas de Celdas). Recorre la misma rejilla 3x3 que DistanciaMinimaAPunto2, aparte porque el `out` de esa función solo trae el primero.</summary>
+        private static int SegundaDistanciaAPunto2(int x, int y, int celda, int semilla)
+        {
+            int gx = x / celda, gy = y / celda;
+            int mejorD2 = int.MaxValue, segundoD2 = int.MaxValue;
+            for (int oy = -1; oy <= 1; oy++)
+            {
+                for (int ox = -1; ox <= 1; ox++)
+                {
+                    int cx = gx + ox, cy = gy + oy;
+                    uint h = MiniHash2D(cx, cy, semilla);
+                    int px = cx * celda + (int)(h % (uint)celda);
+                    int py = cy * celda + (int)((h >> 8) % (uint)celda);
+                    int dx = x - px, dy = y - py;
+                    int d2 = dx * dx + dy * dy;
+                    if (d2 < mejorD2) { segundoD2 = mejorD2; mejorD2 = d2; }
+                    else if (d2 < segundoD2) segundoD2 = d2;
+                }
+            }
+            return segundoD2;
+        }
+
+        private static byte ClampByteMini(int v) => (byte)(v < 0 ? 0 : (v > 255 ? 255 : v));
+
+        /// <summary>Hash entero estable de 2 coordenadas + sal, réplica local de SimRenderer.Hash2D (privado en Sim/, archivo de solo lectura aquí) para no depender de él.</summary>
+        private static uint MiniHash2D(int x, int y, int salt)
+        {
+            unchecked
+            {
+                uint h = (uint)x * 374761393u + (uint)y * 668265263u + (uint)salt * 2654435761u;
+                h = (h ^ (h >> 13)) * 1274126177u;
+                h ^= h >> 16;
+                return h;
+            }
+        }
+
     }
 }

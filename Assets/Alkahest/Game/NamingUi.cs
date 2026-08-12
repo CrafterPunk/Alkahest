@@ -22,6 +22,56 @@ namespace Alkahest.Game
     /// nueva del proyecto, ver su doc-comment: "todos los atajos de una tecla deben
     /// consultarla") y el propio toggle de T la respeta -- así T solo abre/cierra
     /// cuando NO hay nada que escribir, y mientras se escribe, T escribe.
+    ///
+    /// =====================================================================
+    /// (fix playtest 12) "LA T ESTUVO BLOQUEADA HASTA QUE QUITÉ LAS PISTAS CON LA
+    /// H" -- reporte literal, investigado a fondo. CAUSA RAÍZ CONFIRMADA: no era la
+    /// H. El antiguo <c>Open()</c> (sustituido por <see cref="TryOpen"/>, ver más
+    /// abajo) hacía `return` MUDO en cuanto <see cref="ResolveTarget()"/> devolvía <see cref="MaterialId.Empty"/>
+    /// -- indistinguible, para quien pulsa T, de "la tecla no responde". Eso pasa
+    /// con el frasco vacío y el cursor sobre algo sin material sampleable (aire,
+    /// Piedra, o -- ver más abajo -- una redoma de la estantería). H (Game/
+    /// HintSystem.cs) no toca ningún estado que esta clase lea: no comparten más
+    /// que <see cref="UiStyles.EscribiendoTexto"/>, y H solo la CONSULTA, nunca la
+    /// escribe. La correlación que vio el jugador es real pero CASUAL, no causal:
+    /// el panel de pistas vive arriba-centro (Game/HintSystem.cs, y = S(54f)) justo
+    /// donde el jugador tiene el cursor mientras LEE la pista -- y esa franja alta
+    /// de pantalla, en coordenadas de mundo, suele caer sobre aire (encima del
+    /// taller). Con el cursor ahí Y el frasco recién vaciado, T caía justo en el
+    /// caso mudo; al ocultar las pistas (H) el jugador bajó el cursor a apuntar
+    /// materia de verdad, y T "volvió a funcionar" -- sin que H hiciera nada por
+    /// ello. NO SE TOCA HintSystem.cs para esto: no hay nada que arreglar ahí.
+    ///
+    /// "NO PUDE ACTIVARLA EN OTRO FRASCO": solo existe UN Flask de verdad (el del
+    /// aprendiz, inyectado aquí). Lo que el jugador llama "otro frasco" son las
+    /// REDOMAS de Game/StorageRack.cs (la estantería) -- que NO viven en la grilla
+    /// de la sim: son atrezzo (SpriteRenderer) + un conteo `Redoma.Mat`/`Cantidad`
+    /// privado, sin getter público. <see cref="SampleUnderCursor"/> solo sabe leer
+    /// `AlkahestSim.SampleMaterial`, así que sobre una redoma siempre ve Empty (o
+    /// la Piedra del listón), y `ResolveTarget` cae al frasco de verdad -- que
+    /// suele estar vacío justo cuando algo se acaba de guardar en una redoma. Es
+    /// el MISMO bug del párrafo de arriba (silencio en target Empty), con el
+    /// agravante de que aquí no hay forma de arreglarlo del todo sin tocar
+    /// StorageRack.cs (fuera de la lista de archivos modificables de este
+    /// encargo): <see cref="TryOpen"/> al menos distingue este caso con
+    /// <see cref="StorageRack.RatonSobreRedoma"/> (API pública ya existente) para
+    /// explicar POR QUÉ, en vez de callar.
+    ///
+    /// ARREGLO REAL (este playtest): T nunca vuelve a no hacer NADA. Toda rama sin
+    /// éxito da un aviso corto junto al cursor por el mismo canal que ya usa
+    /// Game/StorageRack.cs (<see cref="Flask.Avisar"/>), distinguiendo motivo. De
+    /// paso, aprovechando la reclasificación del playtest 10 (dos clases de
+    /// material, ver Game/SubstanceKnowledge.cs regla 13 de CLAUDE.md): apuntar a
+    /// VOCABULARIO DEL TALLER (agua, arena, aceite...) YA NO abre la ventana --
+    /// antes sí lo hacía (`ResolveTarget` solo excluía Empty/Stone, nunca el resto
+    /// del vocabulario mundano), dejando "bautizar" el agua, que el diseño prohíbe
+    /// explícitamente. La invitación discreta "esto no tiene nombre -- T para
+    /// bautizarlo" YA EXISTÍA antes de esta ronda (Game/SubstanceKnowledge.cs,
+    /// <see cref="ActualizarAvisoBautizo"/>/<see cref="DrawAvisoBautizo"/>, mismo
+    /// <see cref="UiStyles.Globo"/>, mismo criterio de una vez por material) y
+    /// sigue funcionando sin cambios: reutiliza este mismo <see cref="ResolveTarget()"/>,
+    /// así que el callejón sigue evitándose igual que antes.
+    /// =====================================================================
     /// </summary>
     public sealed class NamingUi : MonoBehaviour
     {
@@ -70,7 +120,7 @@ namespace Alkahest.Game
             if (kb.tKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
             {
                 if (_open) Close();
-                else Open();
+                else TryOpen();
             }
             else if (_open && kb.escapeKey.wasPressedThisFrame)
             {
@@ -78,10 +128,60 @@ namespace Alkahest.Game
             }
         }
 
-        private void Open()
+        /// <summary>
+        /// Mensaje corto para el aviso que sale junto al cursor cuando T no
+        /// abre nada (mismo canal que Flask.Avisar, ver Game/StorageRack.cs) --
+        /// se autolimpia solo (Flask.SetFeedback), así que no hace falta
+        /// throttle propio aquí: solo se dispara una vez por PULSACIÓN real de
+        /// T, nunca por frame.
+        /// </summary>
+        private void Aviso(string msg) => _flask?.Avisar(msg);
+
+        /// <summary>
+        /// (fix playtest 12) Sustituye al antiguo <c>Open()</c> mudo -- ver el
+        /// bloque grande de la CAUSA RAÍZ en el doc-comment de la clase. T
+        /// SIEMPRE responde: o abre la ventana, o explica en un aviso breve
+        /// por qué no hay nada que bautizar ahora mismo, distinguiendo los
+        /// tres motivos reales (no hay objetivo en absoluto / es vocabulario
+        /// del taller, no se bautiza / está en una redoma de la estantería,
+        /// fuera de alcance de esta ventana). El cuarto caso -- "esto ya lo
+        /// bautizaste tú" -- NO necesita aviso: ResolveTarget lo devuelve como
+        /// un objetivo válido normal y la ventana se abre YA con el nombre
+        /// actual precargado (ver más abajo), que es la propia respuesta
+        /// ("ofrecer renombrar").
+        /// </summary>
+        private void TryOpen()
         {
             byte target = ResolveTarget();
-            if (target == MaterialId.Empty) return; // nada que bautizar todavía (frasco vacío y cursor sobre nada).
+            if (target == MaterialId.Empty)
+            {
+                // (fix playtest 12) Distingue el caso de la estantería (ver doc
+                // de clase, "NO PUDE ACTIVARLA EN OTRO FRASCO"): StorageRack.cs
+                // es de solo lectura este encargo y no expone el material de
+                // cada redoma, pero SÍ expone si el cursor está sobre una --
+                // suficiente para explicar la causa sin adivinar el contenido.
+                if (StorageRack.RatonSobreRedoma())
+                    Aviso("eso está en la estantería -- recupéralo (clic izq.) al frasco para bautizarlo");
+                else
+                    Aviso("no apuntas a nada -- señala una sustancia o llévala en el frasco");
+                return;
+            }
+
+            // (fix playtest 12, regla 13 de CLAUDE.md) VOCABULARIO DEL TALLER:
+            // agua/arena/aceite/vapor/humo/fuego/ceniza/hielo ya tienen nombre
+            // desde el día 1 -- nadie los bautiza. Antes de esta ronda
+            // ResolveTarget solo excluía Empty/Stone, así que apuntar a agua
+            // SÍ abría esta ventana (con "Nombre actual: ???" porque NombreDe
+            // no consulta el vocabulario común -- habría dejado ponerle un
+            // nombre de jugador al agua). NombreComun() es la fuente de verdad
+            // de esa clasificación (SubstanceKnowledge.cs, no se toca aquí,
+            // solo se consulta su API pública).
+            string comun = SubstanceKnowledge.NombreComun(target);
+            if (comun != null)
+            {
+                Aviso("eso ya se llama " + comun + " -- el vocabulario del taller no se bautiza");
+                return;
+            }
 
             _targetMat = target;
             string current = _knowledge != null ? _knowledge.NombreDe(_targetMat) : "???";

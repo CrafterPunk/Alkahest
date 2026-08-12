@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 
 namespace Alkahest.Sim
@@ -16,6 +17,9 @@ namespace Alkahest.Sim
     ///   3) Por celda: transición de fase genérica (fusión/ebullición/...)
     ///      seguida de la regla específica de su arquetipo.
     ///   4) Actualización de temporizadores de sueño por chunk.
+    ///   5) MorphTick: evolución del campo morfológico (playtest 12) para
+    ///      las 5 familias que lo necesitan (Manchas, Laberinto, Dendritas,
+    ///      Pulso, Motas) -- ver la cabecera de <see cref="MorphTick"/>.
     ///
     /// Determinismo: toda aleatoriedad usa <see cref="XorShift"/> sembrado
     /// a partir de (tick, x, y, sal), nunca UnityEngine.Random ni estado
@@ -111,6 +115,8 @@ namespace Alkahest.Sim
             }
             ActiveChunks = awakeChunks;
 
+            MorphTick();
+
             _sw.Stop();
             LastStepMs = _sw.Elapsed.TotalMilliseconds;
         }
@@ -187,10 +193,137 @@ namespace Alkahest.Sim
             byte matSelf = _grid.mat[idx];
             if (matSelf == MaterialId.Empty) return;
 
+            // ---------------------------------------------------------------
+            // MORFOLOGÍA DE CRECIMIENTO (playtest 12) -- cristalización.
+            // Solo aplica cuando SELF es CrystalSeed: Crystal en sí es
+            // StaticSolid y el switch de ProcessIfNeeded NUNCA llama a
+            // MaybeReact/ProcessReactions para StaticSolid (ver ese switch),
+            // así que Crystal jamás inicia su propio barrido de reacciones.
+            // La reacción Azoth+Crystal (bulk) solo puede dispararse desde
+            // el lado de AZOTH (self=Azoth), y ahí el producto que cambia es
+            // SIEMPRE self (el propio Azoth se autoconvierte, ver la tabla
+            // en Universe.Create: productA==productB==Crystal para esa
+            // entrada) -- no hay ningún vecino que "elegir" en ese caso, la
+            // forma no se puede sesgar por ese camino. La ÚNICA reacción de
+            // cristalización que de verdad convierte a un VECINO (no a sí
+            // misma) es Azoth+CrystalSeed vista desde CrystalSeed
+            // (productNeighbor==Crystal): ahí sí hay una elección real de
+            // vecino que hacer, y es la que se sesga aquí.
+            if (matSelf == MaterialId.CrystalSeed && TryCrystalGrowth(x, y, idx, ref matSelf)) return;
+
             if (TryReactNeighbor(x, y, idx, ref matSelf, x - 1, y)) return;
             if (TryReactNeighbor(x, y, idx, ref matSelf, x + 1, y)) return;
             if (TryReactNeighbor(x, y, idx, ref matSelf, x, y - 1)) return;
             TryReactNeighbor(x, y, idx, ref matSelf, x, y + 1);
+        }
+
+        /// <summary>
+        /// (playtest 12) Elige a qué Azoth vecino le toca cristalizar según
+        /// la firma del Cristal (<see cref="MaterialDef.patron"/> de
+        /// MaterialId.Crystal), en vez del orden fijo Izq/Der/Abajo/Arriba
+        /// de <see cref="ProcessReactions"/>. GARANTÍA DE TASA: dentro de
+        /// <see cref="TryReactNeighbor"/> la tirada de probabilidad usa
+        /// <c>XorShift.FromCell(_tick, x, y, 77)</c> -- las MISMAS
+        /// coordenadas (x,y) para los 4 posibles vecinos de esta celda, así
+        /// que el primer número que produce el generador es idéntico sin
+        /// importar cuál de los vecinos se compruebe primero. Como además
+        /// el umbral de temperatura se evalúa contra <c>_grid.temp[idx]</c>
+        /// (la temperatura de SELF, no la del vecino), el resultado de la
+        /// tirada para "¿cristaliza este tick?" es el MISMO para cualquier
+        /// candidato Azoth de esta celda -- reordenar los vecinos cambia
+        /// SOLO cuál se convierte cuando la tirada sale bien, nunca si sale
+        /// bien. Si el candidato elegido falla, <see cref="ProcessReactions"/>
+        /// cae al barrido de siempre (reintenta el mismo u otro vecino con
+        /// el mismo resultado determinista, y sigue cubriendo Ácido u otras
+        /// reacciones no relacionadas con el cristal).
+        /// </summary>
+        private bool TryCrystalGrowth(int x, int y, int idx, ref byte matSelf)
+        {
+            var crystalDef = _universe.Get(MaterialId.Crystal);
+            int bestDir = -1;
+
+            if (crystalDef.patron == PatronMorfologico.Celdas)
+            {
+                // COMPACTO: puntúa cada candidato Azoth por cuántos vecinos
+                // suyos YA son Crystal/CrystalSeed y elige el más rodeado --
+                // así el cristal rellena huecos en vez de alargar un frente.
+                int bestScore = -1;
+                for (int d = 0; d < 4; d++)
+                {
+                    if (!IsAzothDir(x, y, d)) continue;
+                    int nx = x + DirX[d], ny = y + DirY[d];
+                    int score = CountCrystalNeighbors(nx, ny);
+                    if (score > bestScore) { bestScore = score; bestDir = d; }
+                }
+            }
+            else
+            {
+                // DENDRÍTICO (Dendritas) o LAMINAR (cualquier otro plausible
+                // para StaticSolid: Vetas/Liso, ver FamiliasPlausibles) --
+                // orden de preferencia fijo por la firma del Cristal.
+                GetCrystalDirOrder(crystalDef, out int d0, out int d1, out int d2, out int d3);
+                if (IsAzothDir(x, y, d0)) bestDir = d0;
+                else if (IsAzothDir(x, y, d1)) bestDir = d1;
+                else if (IsAzothDir(x, y, d2)) bestDir = d2;
+                else if (IsAzothDir(x, y, d3)) bestDir = d3;
+            }
+
+            if (bestDir < 0) return false;
+            int tx = x + DirX[bestDir], ty = y + DirY[bestDir];
+            return TryReactNeighbor(x, y, idx, ref matSelf, tx, ty);
+        }
+
+        /// <summary>
+        /// Orden de comprobación de los 4 vecinos ortogonales para el modo
+        /// DENDRÍTICO/LAMINAR de <see cref="TryCrystalGrowth"/>. Determinista
+        /// por <see cref="MaterialDef.semillaPatron"/> del Cristal (NO usa
+        /// XorShift de tick: la FORMA de crecimiento debe ser estable en el
+        /// tiempo, no un ruido distinto cada tick).
+        ///   Dendritas  -> sesgo FUERTE a un único eje preferido (crece en
+        ///                 punta, casi nunca a los lados): mismo criterio de
+        ///                 semillaPatron que <see cref="MorphDendrites"/>,
+        ///                 para que forma y textura cuenten la misma
+        ///                 historia direccional.
+        ///   Vetas/Liso -> LAMINAR: sesgo a UN EJE completo (las dos
+        ///                 direcciones opuestas de ese eje primero), no a
+        ///                 una única punta -- una lámina crece hacia los dos
+        ///                 lados de su plano, no en una sola dirección.
+        /// </summary>
+        private void GetCrystalDirOrder(MaterialDef crystalDef, out int d0, out int d1, out int d2, out int d3)
+        {
+            if (crystalDef.patron == PatronMorfologico.Dendritas)
+            {
+                int pref = crystalDef.semillaPatron & 3;
+                d0 = pref;
+                d1 = (pref + 1) & 3;
+                d2 = (pref + 2) & 3;
+                d3 = (pref + 3) & 3;
+                return;
+            }
+
+            // Laminar: DirX/DirY = {Izq,Der,Abajo,Arriba} (índices 0,1,2,3).
+            // semillaPatron decide si el eje preferido es horizontal o
+            // vertical, fijo para toda la run (una sola tirada, en el bit
+            // menos significativo).
+            bool horizontal = (crystalDef.semillaPatron & 1) == 0;
+            if (horizontal) { d0 = 0; d1 = 1; d2 = 2; d3 = 3; }
+            else { d0 = 2; d1 = 3; d2 = 0; d3 = 1; }
+        }
+
+        private bool IsAzothDir(int x, int y, int dir)
+        {
+            int nx = x + DirX[dir], ny = y + DirY[dir];
+            return CellGrid.InBounds(nx, ny) && _grid.mat[CellGrid.Idx(nx, ny)] == MaterialId.Azoth;
+        }
+
+        private int CountCrystalNeighbors(int x, int y)
+        {
+            int c = 0;
+            if (CellGrid.InBounds(x - 1, y)) { byte m = _grid.mat[CellGrid.Idx(x - 1, y)]; if (m == MaterialId.Crystal || m == MaterialId.CrystalSeed) c++; }
+            if (CellGrid.InBounds(x + 1, y)) { byte m = _grid.mat[CellGrid.Idx(x + 1, y)]; if (m == MaterialId.Crystal || m == MaterialId.CrystalSeed) c++; }
+            if (CellGrid.InBounds(x, y - 1)) { byte m = _grid.mat[CellGrid.Idx(x, y - 1)]; if (m == MaterialId.Crystal || m == MaterialId.CrystalSeed) c++; }
+            if (CellGrid.InBounds(x, y + 1)) { byte m = _grid.mat[CellGrid.Idx(x, y + 1)]; if (m == MaterialId.Crystal || m == MaterialId.CrystalSeed) c++; }
+            return c;
         }
 
         /// <summary>Consulta y, si procede, aplica la reacción entre la celda (x,y)/idx y su vecino (nx,ny). Devuelve true si algo reaccionó (para dejar de comprobar más vecinos: matSelf pudo cambiar).</summary>
@@ -723,6 +856,11 @@ namespace Alkahest.Sim
         // Organic (Vivium)
         // ---------------------------------------------------------------------------------
         private const byte SettledFlag = 0x80;
+        // (playtest 12 -- morfología de crecimiento, modo Enredadera) Bits
+        // de aux libres para Organic: 0x80=SettledFlag, 0x40=OrganicDormantAux
+        // (CellGrid), así que 0x01/0x02/0x04 quedan libres sin colisionar.
+        private const byte CameFromKnownFlag = 0x04; // "esta célula recuerda de qué dirección vino" (sembradas por el jugador no lo tienen: aux nace en 0).
+        private const byte CameFromDirMask = 0x03;   // índice (0..3) en DirX/DirY de la dirección de la que vino.
         private static readonly int[] DirX = { -1, 1, 0, 0 };
         private static readonly int[] DirY = { 0, 0, -1, 1 };
 
@@ -788,25 +926,115 @@ namespace Alkahest.Sim
             if (((x * 13 + y * 7 + (int)_tick) & 3) != 0) return;
 
             var rng = XorShift.FromCell(_tick, x, y, 88);
-            int start = rng.Next(4);
+            int start = rng.Next(4); // SIEMPRE se consume (aunque el modo no lo use) para no alterar qué número le toca a rng.ChancePercent más abajo entre modos -- es la misma tirada de siempre, solo cambia qué dirección se prueba primero.
 
-            for (int i = 0; i < 4; i++)
+            // ---------------------------------------------------------------
+            // MORFOLOGÍA DE CRECIMIENTO (playtest 12) -- Vivium. Ver
+            // VivGrowthModeFor para la tabla de qué familia visual implica
+            // qué modo. GARANTÍA DE TASA: en los tres modos, la elegibilidad
+            // para crecer sigue siendo EXACTAMENTE "¿hay al menos un
+            // Nutrient ortogonal?" (igual que el código original), y
+            // rng.ChancePercent(VivGrowChancePct) se llama UNA sola vez por
+            // célula elegible por tick, igual que antes -- solo cambia CUÁL
+            // Nutrient candidato se usa cuando hay más de uno disponible.
+            var vivDef = _universe.Get(MaterialId.Vivium);
+            var mode = VivGrowthModeFor(vivDef.patron);
+            int dir = -1;
+
+            if (mode == VivGrowthMode.Enredadera && (_grid.aux[idx] & CameFromKnownFlag) != 0)
             {
-                int dir = (start + i) & 3;
-                int nx = x + DirX[dir], ny = y + DirY[dir];
-                if (!CellGrid.InBounds(nx, ny)) continue;
-                int nidx = CellGrid.Idx(nx, ny);
-                if (_grid.mat[nidx] != MaterialId.Nutrient) continue;
-
-                bool grows = rng.ChancePercent(_universe.VivGrowChancePct);
-                Transform(nidx, MaterialId.Empty);
-                if (grows)
-                {
-                    Transform(nidx, MaterialId.Vivium);
-                    PushEvent(SimEventType.Grow, MaterialId.Vivium, nx, ny);
-                }
-                return; // un Nutrient por célula y por tick.
+                // Sigue en la MISMA dirección de la que vino esta célula
+                // (avanza, no retrocede hacia el padre): así la colonia
+                // crece como una enredadera en vez de abrirse en abanico.
+                int continueDir = _grid.aux[idx] & CameFromDirMask;
+                if (IsNutrientDir(x, y, continueDir)) dir = continueDir;
             }
+            else if (mode == VivGrowthMode.Disperso)
+            {
+                // Prefiere el candidato con MENOS vecinos de Vivium ya
+                // alrededor (lo opuesto al "compacto" del Cristal, ver
+                // TryCrystalGrowth): así el crecimiento deja huecos en vez
+                // de rellenar el hueco más rodeado.
+                int bestScore = int.MaxValue;
+                for (int d = 0; d < 4; d++)
+                {
+                    if (!IsNutrientDir(x, y, d)) continue;
+                    int nx0 = x + DirX[d], ny0 = y + DirY[d];
+                    int score = CountOrganicNeighbors(nx0, ny0);
+                    if (score < bestScore) { bestScore = score; dir = d; }
+                }
+            }
+            // Mata (o fallback si Enredadera/Disperso no encontraron
+            // candidato válido este tick): comportamiento original,
+            // isotrópico, orden aleatorio sembrado por celda.
+            if (dir < 0)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    int d = (start + i) & 3;
+                    if (IsNutrientDir(x, y, d)) { dir = d; break; }
+                }
+            }
+
+            if (dir < 0) return; // ningún Nutrient adyacente: igual que antes, sin cambio de tasa.
+
+            int nx = x + DirX[dir], ny = y + DirY[dir];
+            int nidx = CellGrid.Idx(nx, ny);
+
+            bool grows = rng.ChancePercent(_universe.VivGrowChancePct);
+            Transform(nidx, MaterialId.Empty);
+            if (grows)
+            {
+                Transform(nidx, MaterialId.Vivium);
+                // Graba de qué dirección vino (para que SU cría, si la
+                // tiene, siga la misma vena en modo Enredadera). Transform
+                // ya puso aux[nidx]=0 arriba, así que esto no pisa nada.
+                _grid.aux[nidx] = (byte)((dir & CameFromDirMask) | CameFromKnownFlag);
+                PushEvent(SimEventType.Grow, MaterialId.Vivium, nx, ny);
+            }
+            // un Nutrient por célula y por tick (igual que antes).
+        }
+
+        /// <summary>Modo de crecimiento derivado de la familia visual de Vivium (playtest 12, morfología de crecimiento). Ver GrowthTick para las garantías de tasa.</summary>
+        private enum VivGrowthMode { Mata, Enredadera, Disperso }
+
+        /// <summary>
+        /// Dendritas/Laberinto (rasgo lineal o ramificado) -> Enredadera
+        /// (sigue una dirección). Celdas/Pulso (rasgo compacto y coherente,
+        /// panal o respiración de bloque) -> Mata, el comportamiento
+        /// isotrópico original. Manchas/Motas (rasgo disperso por
+        /// definición) -> Disperso (deja huecos). Cubre las 6 familias
+        /// plausibles para Organic (Universe.FamiliasPlausibles), 2 cada una.
+        /// </summary>
+        private static VivGrowthMode VivGrowthModeFor(PatronMorfologico patron)
+        {
+            switch (patron)
+            {
+                case PatronMorfologico.Dendritas:
+                case PatronMorfologico.Laberinto:
+                    return VivGrowthMode.Enredadera;
+                case PatronMorfologico.Celdas:
+                case PatronMorfologico.Pulso:
+                    return VivGrowthMode.Mata;
+                default: // Manchas, Motas (y cualquier caso no plausible que llegara aquí de todos modos).
+                    return VivGrowthMode.Disperso;
+            }
+        }
+
+        private bool IsNutrientDir(int x, int y, int dir)
+        {
+            int nx = x + DirX[dir], ny = y + DirY[dir];
+            return CellGrid.InBounds(nx, ny) && _grid.mat[CellGrid.Idx(nx, ny)] == MaterialId.Nutrient;
+        }
+
+        private int CountOrganicNeighbors(int x, int y)
+        {
+            int c = 0;
+            if (CellGrid.InBounds(x - 1, y) && _grid.mat[CellGrid.Idx(x - 1, y)] == MaterialId.Vivium) c++;
+            if (CellGrid.InBounds(x + 1, y) && _grid.mat[CellGrid.Idx(x + 1, y)] == MaterialId.Vivium) c++;
+            if (CellGrid.InBounds(x, y - 1) && _grid.mat[CellGrid.Idx(x, y - 1)] == MaterialId.Vivium) c++;
+            if (CellGrid.InBounds(x, y + 1) && _grid.mat[CellGrid.Idx(x, y + 1)] == MaterialId.Vivium) c++;
+            return c;
         }
 
         // ---------------------------------------------------------------------------------
@@ -915,6 +1143,307 @@ namespace Alkahest.Sim
 
                 if (next < 0) next = 0; else if (next > 255) next = 255;
                 temp[i] = (byte)next;
+            }
+        }
+
+        // ---------------------------------------------------------------------------------
+        // CAMPO MORFOLÓGICO (playtest 12) -- ver CellGrid.morph/morphScratch y
+        // MaterialDef.PatronMorfologico para el contrato completo. Solo evoluciona
+        // para las 5 familias que lo necesitan: Manchas y Laberinto (reacción-difusión,
+        // leen vecinos), Dendritas (rama que se propaga a un vecino), Pulso (fase que
+        // avanza) y Motas (chispa que se enciende y decae). Liso no se usa; Vetas y
+        // Celdas son puramente posicionales y las calcula SimRenderer con hashes --
+        // esas tres familias cuestan CERO aquí, ni una sola operación aparte del
+        // chequeo del enum `patron` que ya se hace para descartarlas.
+        // ---------------------------------------------------------------------------------
+        private void MorphTick()
+        {
+            // ---- Doble búfer (obligatorio para Manchas/Laberinto, que leen vecinos) ----
+            // morphScratch arranca como copia exacta de morph: cualquier celda que esta
+            // ronda NO toquemos queda igual que estaba. TODAS las familias -- no solo las
+            // de reacción-difusión -- escriben en morphScratch y nunca en morph durante
+            // el recorrido, así el resultado no depende del orden en que se visitan las
+            // celdas dentro del tick (el mismo requisito de determinismo que ya obligó al
+            // fix de DiffuseTemperature del playtest 9, aplicado aquí desde el principio
+            // en vez de como parche posterior). Dendritas escribe en un VECINO (no en sí
+            // misma): con el búfer roto, dos ramas que compitieran por el mismo vecino en
+            // el mismo tick darían un resultado distinto según quién se recorriera antes;
+            // con morphScratch como único destino de escritura, la resolución de esa
+            // pugna (nos quedamos con la rama más fuerte, ver MorphDendrites) es
+            // conmutativa y no depende del orden de recorrido.
+            // Coste: dos memcpy de 256*144 = 36864 bytes sobre arrays PREASIGNADOS
+            // (System.Array.Copy, no crea memoria) -- del orden de microsegundos, muy por
+            // debajo de cualquier presupuesto de este método.
+            Array.Copy(_grid.morph, _grid.morphScratch, _grid.morph.Length);
+
+            // ---- Estriado 1/4 -- VERIFICACIÓN ARITMÉTICA de cobertura uniforme ----
+            // offset = tick % 4 recorre {0,1,2,3,0,1,2,3,...} en secuencia estricta.
+            // Cada celda i tiene un offset FIJO o=i%4 para siempre (no depende del tick).
+            // "Le toca turno a la celda i" se evalúa como (tick%4)==(i%4): para cualquier
+            // o fijo en {0,1,2,3}, esta condición se cumple exactamente una vez cada 4
+            // ticks consecutivos (es congruencia módulo 4, no un subconjunto arbitrario).
+            // Por tanto las CUATRO clases o=0,1,2,3 -- es decir, el 100% de las celdas --
+            // se visitan con la MISMA frecuencia: una vez cada 4 ticks (7.5 Hz a 30 Hz de
+            // sim). A diferencia de los dos bugs de deriva de temperatura del playtest 9,
+            // aquí NO hay una guarda temporal separada combinada con el offset: el offset
+            // ES la única guarda, así que no existe la combinación "offset fijo AND guarda
+            // basada en el mismo tick" que dejaba 7/8 de la grilla sin visitar nunca en
+            // DiffuseTemperature (bug 1 de ese fix). El único filtro adicional de abajo
+            // (chunks dormidos) usa un contador de RONDA (`tick>>2`) que es el MISMO
+            // número para TODAS las celdas visitadas en el mismo tick sin importar su
+            // offset -- ver el comentario de `dormantActiveRound` -- así que tampoco
+            // introduce ese patrón de bug.
+            int offset = (int)(_tick % 4u);
+
+            // ---- Chunks dormidos: SÍ se respetan, pero a 1/8 de frecuencia ----
+            // Decisión: un chunk dormido (charco quieto, cristal ya formado...) sigue
+            // evolucionando su patrón morfológico, solo que mucho más despacio, en vez de
+            // congelarse a medias o de ignorar el ahorro de los chunks dormidos por
+            // completo. Las dos alternativas descartadas tienen un problema real cada una:
+            //   - Respetarlos a rajatabla (saltar del todo mientras duermen): un charco
+            //     que se queda quieto justo cuando su Manchas/Laberinto está a medio
+            //     converger se congela con ese dibujo incompleto PARA SIEMPRE (mientras
+            //     no se vuelva a tocar) -- contradice literalmente la premisa del playtest
+            //     12 ("vuelve a TENDER a formar el patrón", no "se congela a mitad de
+            //     camino"). Además Dendritas/Pulso/Motas ni siquiera tienen un estado
+            //     "converged": Motas dejaría de titilar del todo, Pulso dejaría de
+            //     respirar -- se leería como un bug, no como sueño.
+            //   - Ignorar el sueño (evolucionar dormidos a la misma frecuencia que
+            //     despiertos): pierde el ahorro por el que existen los chunks dormidos.
+            //     El taller de una partida típica tiene mucha más agua/aceite/arena
+            //     (Liso, coste cero aquí de todas formas) en reposo que innominado
+            //     RD/Dendritas/Pulso/Motas, así que el ahorro real de saltarse dormidos
+            //     por completo sería pequeño comparado con el coste de "se ve mal".
+            // g = tick>>2 es el número de ronda de 4 ticks en curso. Para CUALQUIER celda
+            // a la que le toque turno en este tick (por construcción del estriado de
+            // arriba, tick == offsetDeEsaCelda + 4*g), g es el MISMO valor para todas las
+            // celdas procesadas este tick sin importar su offset -- por eso "g%8==0" no
+            // favorece a ningún subconjunto de celdas dormidas sobre otro: en cada ronda
+            // de 4 ticks, o mutan TODAS las celdas dormidas a las que les toca turno, o
+            // NINGUNA. Resultado: un chunk dormido evoluciona su morph 1 vez cada 32
+            // ticks (~1.07s a 30Hz) en vez de 1 vez cada 4 (~0.13s) -- 8x más barato -- y
+            // el patrón converge igual, solo más despacio, tal como pide la premisa.
+            bool dormantActiveRound = ((_tick >> 2) & 7u) == 0u;
+
+            int n = W * H;
+            for (int i = offset; i < n; i += 4)
+            {
+                byte m = _grid.mat[i];
+                if (m == MaterialId.Empty) continue;
+
+                var def = _universe.Get(m);
+                var patron = def.patron;
+                bool needsEvolve = patron == PatronMorfologico.Manchas || patron == PatronMorfologico.Laberinto
+                    || patron == PatronMorfologico.Dendritas || patron == PatronMorfologico.Pulso
+                    || patron == PatronMorfologico.Motas;
+                if (!needsEvolve) continue; // Liso/Vetas/Celdas: coste cero, ver cabecera de MorphTick.
+
+                int x = i % W;
+                int y = i / W;
+
+                int cx = x / CellGrid.CHUNK, cy = y / CellGrid.CHUNK;
+                if (!_grid.IsChunkAwake(cx, cy) && !dormantActiveRound) continue;
+
+                switch (patron)
+                {
+                    case PatronMorfologico.Manchas:
+                        MorphReactionDiffusion(x, y, i, def, laberinto: false);
+                        break;
+                    case PatronMorfologico.Laberinto:
+                        MorphReactionDiffusion(x, y, i, def, laberinto: true);
+                        break;
+                    case PatronMorfologico.Dendritas:
+                        MorphDendrites(x, y, i, def);
+                        break;
+                    case PatronMorfologico.Pulso:
+                        MorphPulse(x, y, i, def);
+                        break;
+                    case PatronMorfologico.Motas:
+                        MorphSparkle(x, y, i, def);
+                        break;
+                }
+            }
+
+            Array.Copy(_grid.morphScratch, _grid.morph, _grid.morph.Length);
+        }
+
+        /// <summary>
+        /// Manchas y Laberinto: reacción-difusión de un único campo (morph = "v", el
+        /// reactivo) al estilo Gray-Scott, simplificado a UN byte por celda en vez de
+        /// dos especies (u,v) porque CellGrid solo lleva un morph por celda por diseño
+        /// (contrato del renderer). El sustrato "u" se aproxima como el complementario
+        /// local u=255-v (allí donde v es alto, se asume que el sustrato disponible es
+        /// bajo) -- no es Gray-Scott textbook (ahí u difunde por su cuenta), pero
+        /// reproduce el mismo comportamiento cualitativo: producción autocatalítica
+        /// uv² que se satura cuando v→255 (u→0) y decae con (feed+kill)*v, exactamente
+        /// lo que separa un régimen que colapsa en puntos de uno que se sostiene en
+        /// bandas.
+        ///
+        /// PARÁMETROS (derivados de patronEscala 1..8 y patronFuerza 0..255): "feed" usa
+        /// la MISMA fórmula en los dos regímenes (feed=8..23, solo de patronFuerza) y lo
+        /// que separa Manchas de Laberinto es el DELTA kill-feed, deliberadamente en
+        /// bandas que NUNCA se solapan aunque feed varíe:
+        ///   Laberinto (bandas):  kill-feed = 2..6   (delta pequeño: kill≈feed)
+        ///   Manchas (puntos):    kill-feed = 16..23 (delta grande: kill≫feed)
+        /// kill≫feed (Manchas) es el régimen real de Gray-Scott para puntos (p.ej.
+        /// F=0.035 K=0.065): el reactivo no se sostiene en un frente amplio y colapsa en
+        /// manchas aisladas que compiten por el sustrato. kill≈feed (Laberinto) es el
+        /// régimen de bandas/laberinto real (p.ej. F=0.029 K=0.057, mucho más cerca entre
+        /// sí que en el régimen de puntos): el reactivo se sostiene en frentes alargados
+        /// que serpentean en vez de colapsar. Se usa el DELTA (no el ratio kill/feed)
+        /// precisamente para que las dos bandas NUNCA se toquen sea cual sea el valor de
+        /// feed que toque por seed: verificación aritmética, delta_manchas_min(16) >
+        /// delta_laberinto_max(6) siempre, sin excepción, para cualquier patronFuerza/
+        /// patronEscala.
+        /// </summary>
+        private void MorphReactionDiffusion(int x, int y, int idx, MaterialDef def, bool laberinto)
+        {
+            if (x == 0 || x == W - 1 || y == 0 || y == H - 1) return; // defensivo: el borde es siempre Stone/Liso y no debería llegar aquí de todas formas.
+
+            int v = _grid.morph[idx];
+            int left = _grid.morph[idx - 1];
+            int right = _grid.morph[idx + 1];
+            int down = _grid.morph[idx - W];
+            int up = _grid.morph[idx + W];
+
+            int feed = 8 + (def.patronFuerza >> 4); // 8..23, misma fórmula en ambos regímenes.
+            int kill;
+            if (laberinto)
+            {
+                kill = feed + 2 + (def.patronEscala >> 1); // delta 2..6.
+            }
+            else
+            {
+                kill = feed + 15 + def.patronEscala; // delta 16..23.
+            }
+
+            // Difusión: escala grande -> rasgo más ancho -> más peso de difusión
+            // (divisor más pequeño). truncamiento hacia cero (operador "/", no ">>":
+            // mismo criterio de simetría de signo que el fix de temperatura del
+            // playtest 9 -- lap puede ser negativo).
+            int diffDiv = 20 - def.patronEscala * 2; // escala 1->18, escala 8->4
+            if (diffDiv < 4) diffDiv = 4;
+
+            int lap = left + right + up + down - 4 * v;
+            int diffuseStep = lap / diffDiv;
+
+            int u = 255 - v;
+            int reactTerm = (u * v * v) >> 16;        // aprox. u*v² escalado a ~0..254
+            int decay = ((feed + kill) * v) >> 8;       // aprox. (feed+kill)*v
+
+            int next = v + diffuseStep + reactTerm - decay;
+            if (next < 0) next = 0; else if (next > 255) next = 255;
+            _grid.morphScratch[idx] = (byte)next;
+        }
+
+        /// <summary>
+        /// Dendritas: morph = fuerza de rama (0 = sin rama). Semillas dispersas y raras
+        /// (patronEscala controla la densidad); desde una semilla, la rama se propaga a
+        /// UN vecino por tick elegido con sesgo direccional fijo por
+        /// <see cref="MaterialDef.semillaPatron"/> (mismo eje preferido que usa
+        /// <see cref="GetCrystalDirOrder"/> para el modo dendrítico de cristalización:
+        /// forma y textura cuentan la misma historia), decayendo con la distancia
+        /// recorrida -- así se lee como aguja que se afina hacia la punta, no como una
+        /// mancha redonda que crece uniforme.
+        /// </summary>
+        private void MorphDendrites(int x, int y, int idx, MaterialDef def)
+        {
+            int v = _grid.morph[idx];
+
+            if (v == 0)
+            {
+                // Semilla DISPERSA y RARA: sin esto, cualquier celda a 0 (recién pintada,
+                // o punta de una rama que ya decayó) arrancaría una rama nueva cada pocos
+                // ticks y el resultado se vería como una alfombra de agujas, no como
+                // cristales/agujas aisladas que arrancan de un punto.
+                int seedChanceInv = 600 + (8 - def.patronEscala) * 300; // 1 entre ~2400..3000 por turno de esta celda.
+                var seedRng = XorShift.FromCell(_tick, x, y, (uint)(201 + def.semillaPatron));
+                if (seedRng.Next(seedChanceInv) == 0)
+                {
+                    _grid.morphScratch[idx] = (byte)(200 + seedRng.Next(56)); // 200..255: arranca fuerte.
+                }
+                return;
+            }
+
+            if (x == 0 || x == W - 1 || y == 0 || y == H - 1) return; // no propaga fuera de rango (defensivo).
+
+            // Decaimiento por paso: escalas grandes producen agujas más largas antes de
+            // apagarse (menos decaimiento por paso).
+            int decayStep = 10 + def.patronEscala; // 11..18
+            int next = v - decayStep;
+            if (next <= 0) return; // la rama muere aquí; no se propaga más.
+
+            var rng = XorShift.FromCell(_tick, x, y, 205);
+            int preferredDir = def.semillaPatron & 3;
+            // 70% continúa por el eje preferido de la sustancia (fuerte sesgo
+            // direccional: agujas, no manchas); el resto reparte entre las otras 3.
+            int dir = rng.ChancePercent(70) ? preferredDir : (preferredDir + 1 + rng.Next(3)) & 3;
+
+            int nx = x + DirX[dir], ny = y + DirY[dir];
+            if (!CellGrid.InBounds(nx, ny)) return;
+            int nidx = CellGrid.Idx(nx, ny);
+            if (_grid.mat[nidx] != _grid.mat[idx]) return; // la rama no cruza a otra sustancia.
+
+            // max() en vez de sobrescribir: conmutativo, así que si dos ramas compiten
+            // por el mismo vecino en el mismo tick, el resultado no depende de cuál de
+            // las dos se procesó primero en el recorrido (determinismo, ver cabecera).
+            if (_grid.morphScratch[nidx] < next) _grid.morphScratch[nidx] = (byte)next;
+        }
+
+        /// <summary>
+        /// Pulso: morph = fase 0..255. Se recalcula como función DIRECTA de
+        /// (tick, posición) en vez de acumular sobre el valor anterior: fase =
+        /// (tick * velocidad + desfaseEspacial) mod 256. Esto evita cualquier deriva
+        /// por acumulación de redondeo y es autocorrectivo si la celda cambia de
+        /// posición (un líquido con Pulso que fluye arrastra un morph "viejo" con el
+        /// SwapCells de CellGrid, pero en su próximo turno de estriado se recalcula de
+        /// cero para su posición ACTUAL, sin arrastrar error). El desfase espacial usa
+        /// distancia Manhattan a un ancla fija por sustancia (semillaPatron) para que la
+        /// "ola" de fase recorra la masa en vez de que todas las celdas respiren a la
+        /// vez.
+        /// </summary>
+        private void MorphPulse(int x, int y, int idx, MaterialDef def)
+        {
+            // ritmoAnim (0..255, mismo campo que ya usa el renderer) fija la velocidad:
+            // avanza 1..16 unidades de fase por CADA turno de estriado de esta celda
+            // (que le toca una vez cada 4 ticks), así que a ritmoAnim alto (~160, típico
+            // de Organic) completa una vuelta de fase cada ~64 turnos (~256 ticks,
+            // ~8.5s) -- un respirar lento y perceptible, no un parpadeo.
+            uint speed = (uint)(1 + (def.ritmoAnim >> 4)); // 1..16
+            uint globalPhase = (_tick * speed) & 0xFFu;
+
+            int anchorX = def.semillaPatron % W;
+            int anchorY = (def.semillaPatron * 41) % H; // segundo hash barato, para no alinear anchorY con anchorX.
+            int dist = System.Math.Abs(x - anchorX) + System.Math.Abs(y - anchorY);
+            int spatialOffset = (dist * 5) & 0xFF; // bandas de "onda expansiva" concéntrica (Manhattan) desde el ancla.
+
+            _grid.morphScratch[idx] = (byte)((globalPhase + (uint)spatialOffset) & 0xFFu);
+        }
+
+        /// <summary>
+        /// Motas: morph = intensidad de una chispa (0 = apagada). Rara vez se enciende
+        /// una celda a un valor alto (patronEscala controla la rareza) y decae rápido
+        /// con el TIEMPO (a diferencia de Dendritas, que decae con la distancia
+        /// recorrida): unos pocos turnos de vida, un parpadeo, no una mancha que se
+        /// queda pintada.
+        /// </summary>
+        private void MorphSparkle(int x, int y, int idx, MaterialDef def)
+        {
+            int v = _grid.morph[idx];
+            if (v > 0)
+            {
+                int decay = 40 + (def.patronFuerza >> 2); // 40..~103 por turno -> muere en 3-6 turnos (12-24 ticks, ~0.4-0.8s).
+                int next = v - decay;
+                _grid.morphScratch[idx] = (byte)(next > 0 ? next : 0);
+                return;
+            }
+
+            int chanceInv = 2500 - def.patronEscala * 200; // 1 entre ~900..2300 por turno de esta celda.
+            if (chanceInv < 300) chanceInv = 300;
+            var rng = XorShift.FromCell(_tick, x, y, (uint)(209 + def.semillaPatron));
+            if (rng.Next(chanceInv) == 0)
+            {
+                _grid.morphScratch[idx] = (byte)(220 + rng.Next(36)); // 220..255: chispazo brillante.
             }
         }
     }

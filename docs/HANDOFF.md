@@ -18,6 +18,7 @@ en el proyecto pero no integrado con la sim.
 | Leyes/reacciones/cultivo (M3) | ✅ Compila y arranca; Edictos sortean y se muestran; reacciones/cultivo SIN prueba de juego profunda aún |
 | Loop de juego (M4) | ✅ Título → Jornada 1 con pedidos generados VISTO en pantalla; el resto del flujo (entregas→Favor→jornadas 2-3→final) SIN probar |
 | Color de fuego + shimmer líquidos | ✅ código desplegado, PENDIENTE verificación visual (feedback del usuario: "el fuego no tenía color fuego") |
+| Firma morfológica por seed (M12) | código desplegado, PENDIENTE verificar en editor: jugar dos universos seguidos y comprobar legibilidad a escala de celda (ver "Playtest 12") |
 | Commits | M1+M2 en `001a9a1`; M3+M4+rebranding PENDIENTE de commit (script `ca_commit.cmd` listo en la raíz del proyecto) |
 
 ## Cómo continuar (receta operativa)
@@ -30,17 +31,17 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 11)
-1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con todos los fixes
-   del playtest 10 (ver esa sección) — sigue sin probarse en editor.
-2. **Ejecutar la build de Windows y validarla con la checklist del playtest 11**: el builder ya
-   regenera la escena antes de compilar y deja el resumen en consola + diálogo — falta EJECUTARLO
-   y pasar el `.exe` por la checklist (`docs/HANDOFF.md` sección "Playtest 11").
-3. ~~Confirmar con una captura nueva que el rótulo del frío quedó bien~~ **RESUELTO (playtest 11)**:
-   Cesar lo confirmó jugando — "el rótulo de frío quedó muy bien".
+## Backlog priorizado (actualizado tras playtest 12)
+1. **Verificar en Unity y jugar DOS universos seguidos** para juzgar si la variación de la firma
+   morfológica (playtest 12) se PERCIBE de verdad — es la pregunta que motivó toda la ronda.
+2. **Revisar que ningún patrón quede ilegible o molesto a la escala real de celda** (7,5 px/celda
+   en 1080p): Manchas/Laberinto/Dendritas/Motas solo se han comprobado por lectura de código y
+   verificación aritmética, nunca en pantalla.
+3. **Medir el coste real de `SimStepper.MorphTick`** con el overlay de dev (F3): estimado
+   <0,5 ms/tick sobre un presupuesto de 33 ms, SIN VERIFICAR en Unity.
 4. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
    (`JournalHud`): la API ya existe, escrita en paralelo en el playtest 10, pero nadie la consume
-   todavía.
+   todavía (arrastrado sin tocar desde el playtest 10).
 5. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
    `DirectorDeAudio`? Depende de feedback de Cesar.
 6. **CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una** (playtest 11 §4): no hay
@@ -50,15 +51,25 @@ en el proyecto pero no integrado con la sim.
 8. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
    accesibles, para levantar el gameplay de reacciones/experimentación.
 9. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
-10. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
-   - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
-   - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
-     tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
-     optimizar. Fallback: lockstep determinista (la sim ya es determinista por diseño: XorShift
-     por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
-   - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
-     habla con él. NO rediseñar el template.
-11. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+10. **Ejecutar la build de Windows y validarla con la checklist del playtest 11**: el builder ya
+    regenera la escena antes de compilar y deja el resumen en consola + diálogo — falta EJECUTARLO
+    y pasar el `.exe` por la checklist (`docs/HANDOFF.md` sección "Playtest 11").
+11. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado. Se decidió hacer la
+    morfología (playtest 12) ANTES por dos razones: de diseño, el co-op multiplica una experiencia
+    (y si la experiencia se agota en una partida, el co-op multiplica el agotamiento); y técnica —
+    el plan de netcode ya añadía un campo nuevo por celda (`CellGrid.morph`), y si se hubiera hecho
+    después del multiplayer habría obligado a rehacer el formato de deltas.
+    - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
+    - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
+      tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
+      optimizar. Fallback: lockstep determinista (la sim ya es determinista por diseño: XorShift
+      por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
+    - **NOTA (playtest 12): el formato de deltas debe contemplar el campo `morph`** — es un byte
+      más por celda que viaja con la materia (`CellGrid.SwapCells`), así que cualquier RLE de
+      `mat[]` que no lo lleve dejará la textura interna desincronizada entre host y clientes.
+    - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
+      habla con él. NO rediseñar el template.
+12. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
     NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
@@ -223,6 +234,180 @@ herramienta, o hay que probar que el imp se mueva hacia el cursor? ¿el diario s
 ¿bautizar se siente ahora como un descubrimiento?
 
 
+## Playtest 12 → LA FIRMA MORFOLÓGICA: cada sustancia tiende a un patrón, no solo a un número —
+## LA RONDA MÁS ARQUITECTÓNICA HASTA AHORA, TOCA EL NÚCLEO DETERMINISTA — SIN VERIFICAR EN EDITOR
+Ronda dirigida por Opus 5 (arquitectura del campo morfológico, el contrato compartido entre los
+tres archivos de `Sim/`, las tres garantías del sorteo y las reglas de diseño); Sonnet 5 escribió
+el código en 5 encargos paralelos con propiedad de archivos disjunta, más 1 pase de revisión.
+
+**0. Contexto y decisión de orden.** Cesar terminó las tres jornadas por primera vez, empezó otro
+universo y dijo: *"al final, al escoger otro universo, solo tuve más de lo mismo"*. Hasta ahora la
+variación por seed era SOLO NUMÉRICA (probabilidades, bandas de temperatura, Edictos): dos partidas
+se veían idénticas porque la materia se veía idéntica. Él mismo propuso la solución, y era la
+correcta — es la TESIS del sistema: *"la morfología puede ser una propiedad del material, no una
+forma rígida"* y *"no necesitas que al aspirarlo conserve exactamente el dibujo píxel por píxel;
+necesitas que cuando vuelva a existir, vuelva a TENDER a formar ese tipo de patrón"*.
+Preguntó si hacerlo antes o después del multiplayer. Se decidió ANTES, por dos razones: (a) de
+diseño, el co-op multiplica una experiencia, y si la experiencia se agota en una partida el co-op
+multiplica el agotamiento; (b) TÉCNICA Y DECISIVA — el plan de netcode es sim solo-host + deltas
+RLE por chunks despiertos, y esta ronda añade un campo nuevo POR CELDA (`CellGrid.morph`).
+Añadirlo después del multiplayer habría obligado a rehacer el formato de deltas.
+
+**1. LA ARQUITECTURA: el patrón no se guarda, se REGENERA.**
+- `Sim/MaterialDef.cs`: dos enums nuevos — `PatronMorfologico` (`Liso, Vetas, Manchas, Laberinto,
+  Celdas, Dendritas, Pulso, Motas`) y `BordeMorfologico` (`Neto, Halo, Escarcha, Difuso`) — y la
+  FIRMA VISUAL como campos: `patron`, `borde`, `patronEscala` (1..8, tamaño del rasgo),
+  `patronFuerza` (contraste, útil ~40..150), `ritmoAnim` (0 = quieto), `emision` (luz propia,
+  distinta de `emitsGlow`), `semillaPatron` (desplaza los hashes para que dos materiales de la
+  misma familia no se calquen).
+- `Sim/CellGrid.cs`: campos nuevos `byte[] morph` (estado morfológico por celda) y `byte[]
+  morphScratch` (doble búfer, imprescindible para las familias que leen vecinos: leer y escribir el
+  mismo array daría un resultado dependiente del orden de recorrido y rompería el determinismo del
+  que depende el netcode). `SetCell` SIEMBRA `morph` con un hash barato de (idx, material) — no lo
+  pone a cero, porque un campo plano tarda mucho en romper la simetría y se vería un instante de
+  materia lisa. `SwapCells` intercambia `morph` con la materia, para que un líquido que fluye
+  arrastre su dibujo en vez de dejarlo clavado a las coordenadas del mundo.
+- **EL CONTRATO** que respetan los tres archivos: `morph` es una intensidad 0..255 que el renderer
+  convierte en desplazamiento de brillo escalado por `patronFuerza`. `Liso` no lo usa. **`Vetas` y
+  `Celdas` son PURAMENTE POSICIONALES: el stepper NO las toca, las calcula el renderer con hashes**
+  (ahorro grande — coste cero en `MorphTick`). `Manchas`/`Laberinto` = concentración de
+  reacción-difusión. `Dendritas` = fuerza de rama. `Pulso` = fase. `Motas` = intensidad de chispa.
+
+**2. `Universe.Create(seed)` — el sorteo con garantías.** Tabla de familias plausibles por
+arquetipo: StaticSolid (Crystal) → Liso/Vetas/Celdas/Dendritas (nunca late); Powder (CrystalSeed) →
+Liso/Vetas/Manchas/Motas (sin laberintos ni teselas, eso pide medio continuo); Liquid
+(Azoth/Slime/Acid) → todo menos Dendritas; Organic (Vivium) → Dendritas/Celdas/Manchas/
+Laberinto/Pulso/Motas (nunca Liso/Vetas, que es lo mineral e inerte). Hay tabla equivalente de
+bordes plausibles (Escarcha solo mineral/granular, Difuso nunca en sólido).
+TRES GARANTÍAS implementadas y verificadas, con sus números:
+- **Separación de tono**: tono ancla por seed + reparto a intervalos de 360/6 = 60° con jitter ±12°
+  → separación angular mínima garantizada de **36°** entre cualquier par de las 6 sustancias.
+- **Diversidad de familias**: orden barajado + cada material prefiere una familia aún no usada
+  dentro de su lista plausible + refuerzo explícito de que al menos una quede `Liso` o `Vetas`.
+  Razón de diseño: **si todo late y burbujea la pantalla se vuelve ruido y nada destaca; la
+  quietud es contraste.**
+- **Legibilidad**: luminancia perceptual `L = 0.2126R + 0.7152G + 0.0722B`, mínimo `L >= 0.40` (la
+  pared del taller está en L≈0.127 y la piedra en L≈0.345). BUG REAL ENCONTRADO Y CORREGIDO durante
+  el desarrollo: subir solo V no basta para azules/violetas saturados (en H≈240° R y G son casi
+  cero incluso con V=1, y se quedaba en L≈0.31, visto con seed 42/Crystal); el fallback es
+  desaturar hasta S=0.15.
+- **REGLA DE DISEÑO CENTRAL**: solo varían LO INNOMINADO (Azoth, CrystalSeed, Crystal, Vivium,
+  Slime, Acid). El VOCABULARIO DEL TALLER (Water, Sand, Oil, Nutrient, Stone, Fire, Smoke, Ash,
+  Steam, Ice) se ve SIEMPRE igual — es el suelo firme desde el que el jugador juzga lo demás; si
+  todo cambia, nada se reconoce. Se retiró además el jitter de tono global de ±8° que antes se
+  aplicaba a todos (`docs/SIM_NOTES.md` de M1 lo mencionaba; ya no aplica, ver ahí).
+- API nueva: `Universe.CaracterDelUniverso` (frase corta cacheada, sin nombrar sustancias — respeta
+  la regla 13 de circularidad) y `Universe.DescribirFirma(byte matId)` (cacheada en array privado,
+  nunca construye por frame).
+
+**3. `SimStepper.MorphTick` — la evolución.**
+- Estriado 1/4 por tick con `offset = tick%4`. **VERIFICACIÓN ARITMÉTICA** (ver regla 9 de
+  CLAUDE.md): la congruencia módulo 4 se cumple exactamente una vez cada 4 ticks para cualquier
+  celda; a diferencia de los dos bugs de `DiffuseTemperature` del playtest 9, aquí el offset es la
+  ÚNICA guarda, no hay una segunda condición temporal combinada con él.
+- Doble búfer: `Array.Copy(morph→morphScratch)` al inicio, todas las familias escriben SOLO en
+  `morphScratch`, `Array.Copy` de vuelta al final. Dendritas escribe en un vecino con `max()`, que
+  es conmutativo y por tanto independiente del orden.
+- Chunks dormidos: SÍ se respetan pero a 1/8 de frecuencia (ronda de 32 ticks ≈ 1,07 s). Razón:
+  congelarlos del todo deja un charco a medio patrón para siempre; no respetarlos anula el ahorro.
+- Parámetros reales: Manchas/Laberinto comparten `feed = 8 + (fuerza>>4)` (8..23) y se separan por
+  el delta kill−feed en bandas que nunca se solapan (Laberinto delta 2..6 → bandas; Manchas delta
+  16..23 → puntos que colapsan). Dendritas: semilla 1/(600+(8−escala)·300), 70% de sesgo al eje
+  `semillaPatron&3`, decae 10+escala por paso. Pulso: función PURA de `(tick·velocidad +
+  distanciaManhattan·5) mod 256`, autocorrectiva si la celda se mueve. Motas: chispa
+  1/(2500−escala·200) a 220-255, decae con el TIEMPO a 40+(fuerza>>2) por turno.
+
+**4. Morfología de CRECIMIENTO (lo que más se nota: es silueta, no textura).**
+- Cristalización, tres modos derivados de `patron` del Crystal: **dendrítico** (sesgo fuerte a un
+  eje), **compacto** (elige el Azoth candidato más rodeado de cristal), **laminar** (sesgo a un eje
+  completo). Hallazgo: solo hay UNA reacción de cristalización que elige vecino de verdad —
+  `CrystalSeed` (Powder) alcanzando un Azoth adyacente; `Crystal` es `StaticSolid` y nunca ejecuta
+  sus propias reacciones, así que vista desde el Azoth es autoconversión sin vecino que elegir.
+- Vivium, tres modos: **enredadera** (sigue la dirección de la que vino, guardada en bits libres de
+  `aux`: `0x01/0x02` dirección y `0x04` flag, sin colisionar con `0x80` asentado ni `0x40`
+  OrganicDormantAux), **mata** (isótropo, lo de antes), **disperso** (prefiere el candidato con
+  menos vecinos de Vivium, deja huecos).
+- **LAS TASAS NO CAMBIAN**: solo cambia QUÉ VECINO se elige, nunca cuántos. Verificado:
+  `TryReactNeighbor` tira el dado con `XorShift.FromCell(tick,x,y,77)` sobre las coordenadas
+  propias, así que reordenar los vecinos cambia cuál se convierte, jamás si se convierte. Igual con
+  el 60% del Vivium y su throttle `&3`.
+
+**5. `SimRenderer` — hacerlo visible.** Técnica por familia: Vetas = bandas senoidales (tabla de
+seno de 256 entradas construida una vez) deformadas por `LatticeNoise` (rejilla de hash con
+interpolación bilineal entera), con `patronEscala` remapeada a periodos de 14..35 celdas (nunca
+literal, o a 7,5 px/celda sería ruido). Celdas = Voronoi de 9 puntos jitterados, remapeado a
+teselas de 18..46 celdas. Manchas/Laberinto/Pulso/Dendritas/Motas leen `morph`. Dendritas solo
+ILUMINA (nunca oscurece) para leerse como aguja y no como sombra. Motas es aditivo puro hacia
+blanco.
+Bordes: Neto (no-op), Halo (+34 fijo, independiente de `patronFuerza`: el borde es silueta, no
+patrón), Escarcha (1/3 de las celdas de contorno +70, hash estable sin tiempo). **Difuso: se
+DESCARTÓ bajar el alfa** — el sprite del sim es 1 téxel/celda en Point y detrás hay otra textura
+Point a triple resolución, así que un téxel semitransparente produce un mosaico duro del fondo
+asomando en bloques de ~7,5 px, que se lee como bug de recorte. Se resolvió oscureciendo hacia
+`BackgroundColor` en la mitad de las celdas de contorno. **Es una trampa que reaparecerá — no
+volver a intentar bajar el alfa del borde.**
+PROBLEMA DE CHUNKS DORMIDOS Y PATRONES ANIMADOS, con su solución: solo Vetas y Celdas son un
+problema real (no usan `morph`, se recalculan puras de `tick`, así que si el chunk no se redibuja
+se CONGELAN). Las demás ya avanzan al ritmo throttleado del stepper. Solución: `_chunkContinuousAnim[]`,
+un `bool[]` por chunk que `RenderChunk` marca si alguna celda es Vetas/Celdas con `ritmoAnim>0`, y
+`RenderFrame` exime a esos chunks del sueño SOLO para el redibujado (la física sigue dormida). No se
+subió `FullRefreshEveryFrames` porque habría encarecido toda la grilla por un puñado de sustancias.
+Todo lo validado sigue intacto: ruta de color del FUEGO, shimmer y línea de superficie de los
+líquidos, sillería + iluminación de canto de StaticSolid, canto superior de los polvos, tinte de
+temperatura, guard de CHUNK con el pragma, `FitMainCamera` con `Mathf.Max`, `_lastAspect`,
+`FilterMode.Point`.
+
+**6. El diario como catálogo del universo.** `JournalHud`: la sección SUSTANCIAS pasa a fichas de
+catálogo con una MINIATURA REAL generada por código (30x30, `FilterMode.Point`, cacheada por
+material en `_miniaturas`, construida una sola vez en el primer dibujado, `Apply(false, true)`),
+que reproduce el patrón y el borde de la sustancia. Más el nombre (o `???`), la firma escrita vía
+`Universe.DescribirFirma`, y las observaciones. El carácter del universo y la seed van en la
+cabecera del libro. `OnDestroy` destruye las miniaturas: `DayCycle.RestartRun` recarga la escena
+entera, así que sin eso se acumularían texturas huérfanas partida tras partida.
+`SubstanceKnowledge` NO se modificó (la comprobación de "sin bautizar" se compone con la API
+existente).
+
+**7. BUG: la tecla T de bautizar.** Reporte: *"me parece que la T estuvo bloqueada hasta que quité
+las pistas con la H... igual luego no pude activarla en otro frasco"*. TRES hallazgos:
+- **La H no tenía nada que ver** — H y T no comparten estado mutable; H solo LEE
+  `UiStyles.EscribiendoTexto`. Fue percepción. Teoría plausible del porqué: el panel de pistas vive
+  arriba en el centro, justo donde suele estar el cursor mientras se lee, y esa zona cae sobre aire
+  en coordenadas de mundo — o sea, estaba apuntando a nada. **Era percepción; nadie debe "arreglar"
+  algo que no existe.**
+- **CAUSA RAÍZ**: `NamingUi.Open()` hacía `return` EN SILENCIO cuando `ResolveTarget()` devolvía
+  `Empty`. Indistinguible de "la tecla está bloqueada".
+- **"otro frasco" = las redomas del estante**: solo hay un `Flask` (el del aprendiz); las redomas
+  no viven en la grilla de la sim (son atrezzo + un conteo privado), así que el muestreo bajo el
+  cursor siempre las ve `Empty` y T no podía resolver objetivo ahí.
+- **Bug adicional**: apuntar a vocabulario del taller SÍ abría la ventana — se podía bautizar el
+  agua, contra la regla 13.
+FIX: `Open()` → `TryOpen()`, que SIEMPRE responde vía `Flask.Avisar` (mismo canal que
+`StorageRack`, globo junto al cursor), distinguiendo los tres casos que para el jugador son
+distintos: no apuntas a nada / eso está en la estantería / eso ya se llama X y el vocabulario del
+taller no se bautiza. **Nota para futuros llamantes: `NamingUi.Open()` ya no existe, es
+`TryOpen()`.**
+
+**8. Otros.** `DayCycle` muestra `CaracterDelUniverso` + seed en la intro de la jornada 1 (NO en la
+pantalla de Título, porque ahí el Universe cargado puede ser de usar y tirar si el campo de seed
+queda vacío: prometería un mundo que luego no se juega), y en la pantalla final una línea aclarando
+que "Nuevo universo" sortea otro carácter. Verificado que `UpdateAllOrdersDoneEarlyClose` sigue
+vivo (regla 11).
+Confirmado también que el commit 12 se subió UNA sola vez pese a la duda de Cesar (una segunda
+ejecución del script habría dado "nothing to commit" y "everything up to date", sin daño).
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo): (a) verificar en Unity
+y jugar DOS universos seguidos para juzgar si la variación se percibe; (b) revisar que ningún
+patrón quede ilegible o molesto a 7,5 px/celda; (c) medir el coste real de `MorphTick` (estimado
+<0,5 ms/tick sobre un presupuesto de 33 ms, sin verificar en Unity); (d) enganchar
+`HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario; (e) decidir si el audio se
+queda (`DirectorDeAudio.SistemaActivo`); (f) CURVA DE PROGRESIÓN; (g) renombrar `Alkahest` →
+`ChaosAlchemy` (GitHub + `productName`); (h) replantear las redomas; (i) resto de M5; (j)
+multiplayer — con una nota nueva: el formato de deltas debe contemplar el campo `morph`.
+Preguntas abiertas para el próximo playtest: ¿se percibe de verdad que el segundo universo es otro
+sitio? ¿alguna familia queda ilegible a la escala de celda? ¿el sesgo dendrítico del cristal se lee
+como agujas o como ruido?
+
+
 ## Playtest 11 → FUERA EL ANILLO, PRE-VUELO DE LA BUILD DE WINDOWS, y la dificultad como deuda
 ## de diseño reconocida — SIN VERIFICAR EN EDITOR NI CON EL .exe
 Ronda dirigida por Opus 5 (diagnóstico del feedback de Cesar, especificación de 2 encargos con
@@ -370,6 +555,11 @@ gradual dentro del mismo día 1?
   especificación de 2 encargos con propiedad de archivos disjunta y revisión); **Sonnet 5 escribió
   el código** en esos 2 encargos (extirpación del anillo de alcance en `Flask.cs`, y pre-vuelo de
   la build de Windows en `AlkahestBuildTools.cs`).
+- **Playtest 12**: mismo reparto, ronda más arquitectónica hasta ahora (toca el núcleo
+  determinista) — **Opus 5 dirigió** (arquitectura del campo morfológico, el contrato compartido
+  entre los tres archivos de `Sim/`, las tres garantías del sorteo de firma visual y las reglas de
+  diseño); **Sonnet 5 escribió el código** en 5 encargos paralelos con propiedad de archivos
+  disjunta, más 1 pase de revisión de compilación.
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no
