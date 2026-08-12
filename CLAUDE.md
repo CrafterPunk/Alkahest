@@ -16,8 +16,8 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   el `AlkahestSceneBuilder` lo deriva de `CellGrid.W/H`, nunca hardcodeado.
 - `Game/` — capa jugable: `ApprenticeController` (imp volador), `Flask` (aspirar/verter, conserva
   la TEMPERATURA de lo aspirado; TODA mutación del grid vía `AlkahestSim.Paint`/`PaintCell`;
-  BLOQUEO DE MATERIAL al pulsar aspirar, más el haz y el anillo de alcance de mundo, ver playtest
-  10), máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
+  BLOQUEO DE MATERIAL al pulsar aspirar, más el haz de mundo — el anillo de alcance que lo
+  acompañaba se retiró en el playtest 11, ver regla 15), máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
   `MaquinariaSprites` y foco de interacción arbitrado por `MachineFocus` (solo el aparato más
   cercano responde a E), `SubstanceKnowledge` (descubrir/bautizar/observaciones; dos clases de
   material, ver regla 12), `OrderSystem`+`DeliveryChute` (pedidos por EFECTO, Favor),
@@ -51,6 +51,11 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 6. Commits frecuentes; mensajes descriptivos en español; push a `CrafterPunk/Alkahest`
    (renombrar repo a `ChaosAlchemy` está pendiente — hacerlo en GitHub Settings y
    `git remote set-url` después).
+6b. **EL REPO DE GITHUB ES LA FUENTE DE VERDAD; EL SANDBOX ES VOLÁTIL (playtest 11)**: el sandbox
+    de trabajo en la nube se ha reiniciado a mitad de sesión y ha perdido la copia de trabajo
+    entera, revirtiéndola a un snapshot de rondas atrás. Ante cualquier duda sobre el estado del
+    código, comparar contra un clon fresco de GitHub antes de editar, y no acumular varias rondas
+    de trabajo sin commit — un commit reciente es la única red de seguridad real.
 7. **`StaticSolid` no cae**: `SimStepper` no le aplica gravedad (Cristal, Hielo). Toda mecánica
    que dependa de que la materia baje sola tiene que arrastrarla ella misma (ver
    `DeliveryChute.ArrastreTick`, playtest 8).
@@ -89,24 +94,37 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     en pistas, banners de "LEY DESCUBIERTA" y texto del Maestro: describir por origen/lugar, nunca
     revelar la identidad interna de algo que el HUD todavía enseña como "???" (la misma
     circularidad que ya se corrigió una vez, no reintroducirla).
+14. **REGLA DE BUILD (playtest 11)**: `AlkahestBuildTools.BuildDemoWindows()` REGENERA la escena
+    (`AlkahestSceneBuilder.GenerateLabScene()`) antes de compilar — nunca confiar en que el `.unity`
+    guardado en el repo esté al día (una escena vieja se coló sin avisar durante cinco rondas,
+    salvada solo por `SimRenderer.FitMainCamera()`). Build actual usa
+    `BuildOptions.Development | ShowBuiltPlayer` (Player.log + F3 activa para verificar); **quitar
+    `BuildOptions.Development` antes de la build de reparto** o F3 llega al jugador. La checklist
+    para validar el `.exe` vive en `docs/HANDOFF.md` sección "Playtest 11" — reutilizarla en cada
+    build futura, no reinventarla.
+15. **DOCUMENTAR EN EL CÓDIGO LAS IDEAS DESCARTADAS, no solo las que se quedan** (playtest 11): al
+    quitar el anillo de alcance de `Flask.cs` se dejó un párrafo en la cabecera de la clase
+    explicando qué era y por qué se retiró, para que nadie lo reimplemente pensando que es una idea
+    nueva. Práctica del proyecto de aquí en adelante.
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 10 (Opus 5 dirige, Sonnet 5 escribe en 4 encargos paralelos):
-la fantasía de bautizar recuperada (dos clases de material, regla 13 arriba; encargos por
-efecto/origen hasta bautizar); el diario reescrito como libro a pantalla completa con sección
-PROCEDIMIENTOS nueva; el frasco con bloqueo de material + haz + anillo de alcance (responde a
-"cursor y personaje se sienten dos herramientas" y "aspiro restos de otro material sin querer");
-barrido de atajos con la regla nueva del proyecto (regla 12 arriba, `UiStyles.EscribiendoTexto` +
-`JournalHud.Abierto`), el pase de revisión encontró 2 huecos más del mismo tipo; investigación
-(sin cambios) del rótulo del frío en `ChillStone`, pendiente de confirmar con captura.
-PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas; 2)
-confirmar con captura que el rótulo del frío quedó bien; 3) enganchar
-`HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya existe, sin
+VERIFICAR en editor. Playtest 11 (Opus 5 dirige, Sonnet 5 escribe en 2 encargos): VALIDADO por
+Cesar el punto de luz del haz, el bloqueo de material y el rótulo del frío (cierra el pendiente del
+playtest 10); anillo de alcance del frasco RETIRADO por petición del jugador (el haz y el bloqueo
+se quedan, regla 15 arriba); pre-vuelo de la build de Windows (regla 14 arriba): el builder ahora
+regenera la escena antes de compilar — se encontró que la escena guardada llevaba la cámara vieja
+del rediseño del playtest 4, salvada sin que nadie lo supiera por `SimRenderer.FitMainCamera()`;
+build aún sin EJECUTAR ni verificar el `.exe`. Reconocida la falta de curva de dificultad como
+deuda de diseño (no un ajuste de números): el balance del día 3 está calibrado para la velocidad de
+prueba de Cesar, no para un jugador nuevo — falta una ronda de progresión con jornadas cortas.
+PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas; 2) ejecutar
+la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección "Playtest 11"); 3)
+enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya existe, sin
 consumidor); 4) decidir si el audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 5)
-build Windows limpia (nunca verificada desde el rediseño del espacio); 6) renombrar repo GitHub
-`Alkahest`→`ChaosAlchemy`; 7) replantear las redomas (`StorageRack`, sugerencia de Cesar); 8) resto
-de M5 (glow, agua con más cuerpo); 9) multiplayer: sim solo-host + deltas RLE por chunks despiertos
-a 10-15Hz — MEDIR antes de decidir (plan en HANDOFF). Detalle completo de la ronda 10:
-`docs/HANDOFF.md` sección "Playtest 10".
+CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una; 6) renombrar repo GitHub
+`Alkahest`→`ChaosAlchemy` + `productName`; 7) replantear las redomas (`StorageRack`, sugerencia de
+Cesar); 8) resto de M5 (glow, agua con más cuerpo); 9) multiplayer: sim solo-host + deltas RLE por
+chunks despiertos a 10-15Hz — MEDIR antes de decidir (plan en HANDOFF). Detalle completo de la
+ronda 11: `docs/HANDOFF.md` sección "Playtest 11".

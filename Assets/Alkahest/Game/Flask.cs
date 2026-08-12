@@ -41,11 +41,14 @@ namespace Alkahest.Game
     ///     cursor mientras se aspira/vierte — convierte "dos cosas que muevo"
     ///     (reporte 7) en "una herramienta que apunta". Se corta en el borde
     ///     del alcance y cambia de color si el cursor está fuera.
-    ///  3) EL ANILLO DE ALCANCE: el límite que fuerza a "acercar el cuerpo"
-    ///     era invisible hasta chocar con el aviso "demasiado lejos". Un aro
-    ///     tenue alrededor del aprendiz, casi apagado en reposo, que se
-    ///     enciende al acercarse al borde, lo hace visible SIN dejar un
-    ///     elemento permanente en pantalla (ya se quejaron de eso antes).
+    ///  3) (retirado, playtest 11) Hubo un ANILLO DE ALCANCE: un aro tenue
+    ///     alrededor del aprendiz que se encendía al acercarse al borde. El
+    ///     jugador probó las dos cosas y pidió quitar solo esta: "el anillo
+    ///     de alcance está feo, quítalo" (el haz y el bloqueo de material se
+    ///     quedan, le encantaron). El límite de alcance (<see cref="ReachWorld"/>)
+    ///     se sigue comunicando solo con el corte del haz en el borde y el
+    ///     aviso "demasiado lejos" — no reintroducir el anillo pensando que
+    ///     es una idea nueva, ya se probó y se descartó.
     ///
     /// Nota de determinismo/netcode: TODA mutación de la grilla pasa por
     /// AlkahestSim.Paint/PaintCell (nunca acceso directo a CellGrid), tal y como
@@ -176,7 +179,6 @@ namespace Alkahest.Game
             BuildPourOrder();
             BuildCarryVisual();
             BuildBeamVisual();
-            BuildRingVisual();
         }
 
         private void BuildPourOrder()
@@ -292,7 +294,7 @@ namespace Alkahest.Game
             UpdateWorldVisuals(wantSuck, wantPour);
         }
 
-        /// <summary>Raycast puro cámara-&gt;plano de mundo (z=0), sin comprobar límites de la grilla: lo usan tanto el aspirado/vertido (que sí necesita la celda) como el haz/anillo (que necesitan el punto aunque caiga fuera de la grilla, p.ej. cursor en el borde de pantalla).</summary>
+        /// <summary>Raycast puro cámara-&gt;plano de mundo (z=0), sin comprobar límites de la grilla: lo usan tanto el aspirado/vertido (que sí necesita la celda) como el haz (que necesita el punto aunque caiga fuera de la grilla, p.ej. cursor en el borde de pantalla).</summary>
         private bool TryGetCursorWorld(out Vector3 world)
         {
             world = default;
@@ -607,14 +609,14 @@ namespace Alkahest.Game
         }
 
         // ===================================================================
-        // EL HAZ + EL ANILLO DE ALCANCE (fix playtest 10, reportes 7+8).
+        // EL HAZ (fix playtest 10, reportes 7+8; el anillo de alcance que
+        // vivía junto a él se retiró en el playtest 11, ver doc de clase punto 3).
         // Ver doc de clase para el porqué de este diseño. Todo generado por
         // código, cero Shader.Find (solo SpriteRenderer), creado UNA vez en
         // Build*Visual() — Update() solo mueve/rota/escala/tiñe lo ya creado.
         // ===================================================================
 
         private const int BeamSortingOrder = 40;   // por debajo del Cuerpo del aprendiz (50) y de sus alas (47-49): nunca lo tapa.
-        private const int RingSortingOrder = 20;   // por debajo de todo lo demás salvo el propio suelo de materia (-5).
 
         private const float BeamThicknessWorld = 0.045f;
         private const float BeamAlpha = 0.34f;      // "alfa bajo": es una guía, no un rayo láser.
@@ -622,27 +624,15 @@ namespace Alkahest.Game
         private const float PulseSizeWorld = 0.09f;
         private const float PulseSpeed = 1.6f;      // ciclos/segundo que recorre el haz.
 
-        // Latón tenue de mundo (NO UiStyles.Oro, que es color de UI): mismo
-        // tono que pide el diseño para el anillo, reutilizado en el haz cuando
-        // no hay un material que lo tiña (Shift/indiscriminado).
+        // Latón tenue de mundo (NO UiStyles.Oro, que es color de UI): el tono
+        // neutro del haz cuando no hay un material que lo tiña (Shift/indiscriminado).
         private static readonly Color32 BrassBase = new Color32(168, 126, 58, 255);
-        private static readonly Color32 BrassLight = new Color32(214, 176, 96, 255);
-        private static readonly Color32 BrassShadow = new Color32(86, 62, 28, 255);
         private static readonly Color32 BeamColorAviso = new Color32(219, 84, 71, 255); // fuera de alcance: tono de aviso cálido-rojo, mundo (no UiStyles.Peligro, que es de UI).
 
         private Transform _beamRoot;
         private SpriteRenderer _beamLineSr;
         private Transform _beamPulseTr;
         private SpriteRenderer _beamPulseSr;
-
-        private const float RingRestAlpha = 0.05f;   // casi invisible en reposo.
-        private const float RingMaxAlpha = 0.60f;
-        private const float RingProximityStartFrac = 0.55f; // empieza a encenderse a partir del 55% del alcance.
-        private const float RingProximityFullFrac = 1.05f;  // totalmente encendido justo al cruzar el borde.
-        private const float RingAlphaSmooth = 9f;
-
-        private SpriteRenderer _ringSr;
-        private float _ringAlpha;
 
         private void BuildBeamVisual()
         {
@@ -669,21 +659,6 @@ namespace Alkahest.Game
             _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
         }
 
-        private void BuildRingVisual()
-        {
-            var sprite = CrearSpriteAnillo();
-            var go = new GameObject("FlaskAlcanceAnillo");
-            go.transform.SetParent(transform, false);
-            _ringSr = go.AddComponent<SpriteRenderer>();
-            _ringSr.sprite = sprite;
-            _ringSr.sortingOrder = RingSortingOrder;
-            _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, 0f);
-            // El sprite nace 1x1 unidad de mundo (ver CrearSpriteAnillo). Se
-            // escala UNA vez al diámetro real del alcance: ReachWorld es una
-            // constante, así que esto no hay que tocarlo nunca en Update.
-            go.transform.localScale = Vector3.one * (ReachWorld * 2f);
-        }
-
         private static Sprite CrearSpriteBlanco1x1(string nombre, Vector2 pivot01)
         {
             var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = nombre };
@@ -692,7 +667,7 @@ namespace Alkahest.Game
             return Sprite.Create(tex, new Rect(0, 0, 1, 1), pivot01, 1f);
         }
 
-        /// <summary>Punto suave (gradiente radial) para la "cuenta" que recorre el haz insinuando la dirección del flujo. Bilinear a propósito: es un brillo difuso, no una silueta que deba leerse nítida (a diferencia del anillo).</summary>
+        /// <summary>Punto suave (gradiente radial) para la "cuenta" que recorre el haz insinuando la dirección del flujo. Bilinear a propósito: es un brillo difuso, no una silueta que deba leerse nítida.</summary>
         private static Sprite CrearSpritePulso()
         {
             const int n = 16;
@@ -715,82 +690,15 @@ namespace Alkahest.Game
             return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
         }
 
-        /// <summary>
-        /// Anillo de alcance: aro fino cerca del borde exterior del sprite (para
-        /// leerse como "límite", no como disco relleno), con degradado suave de
-        /// alfa en ambos cantos y un ligero tinte luz-arriba/sombra-abajo.
-        /// FilterMode.Point: coherencia de estilo pixel-art con el resto del
-        /// proyecto (MaquinariaSprites, ApprenticeController), no una elección
-        /// suelta aquí.
-        /// </summary>
-        private static Sprite CrearSpriteAnillo()
-        {
-            const int n = 128;
-            var px = new Color32[n * n];
-            float c = (n - 1) * 0.5f;
-            const float rOuter = 0.97f, rInner = 0.82f, feather = 0.035f;
-
-            for (int y = 0; y < n; y++)
-            {
-                for (int x = 0; x < n; x++)
-                {
-                    float dx = (x - c) / c, dy = (y - c) / c; // -1..1, con 1 = borde del sprite.
-                    float d = Mathf.Sqrt(dx * dx + dy * dy);
-                    if (d < rInner - feather || d > rOuter + feather) continue;
-
-                    float alpha;
-                    if (d < rInner) alpha = Mathf.InverseLerp(rInner - feather, rInner, d);
-                    else if (d > rOuter) alpha = 1f - Mathf.InverseLerp(rOuter, rOuter + feather, d);
-                    else alpha = 1f;
-
-                    float luzY = y / (float)(n - 1); // 0 abajo, 1 arriba.
-                    Color32 tinte = luzY > 0.6f ? BrassLight : (luzY < 0.35f ? BrassShadow : BrassBase);
-                    px[y * n + x] = new Color32(tinte.r, tinte.g, tinte.b, (byte)(alpha * 255f));
-                }
-            }
-
-            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
-            {
-                name = "AlkahestFlaskAnillo",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-            };
-            tex.SetPixels32(px);
-            tex.Apply(false, false);
-            return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
-        }
-
-        /// <summary>Apaga el haz de golpe y relaja el anillo hacia su reposo. Se llama en los primeros `return` de Update (título/paleta dev/escribiendo texto) para que ningún visual de mundo se quede "pegado" en pantalla mientras el frasco no actúa.</summary>
+        /// <summary>Apaga el haz de golpe. Se llama en los primeros `return` de Update (título/paleta dev/escribiendo texto) para que ningún visual de mundo se quede "pegado" en pantalla mientras el frasco no actúa.</summary>
         private void OcultarVisualesDeMundo()
         {
             if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
             if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
-            if (_ringSr != null)
-            {
-                _ringAlpha = Mathf.Lerp(_ringAlpha, RingRestAlpha, 1f - Mathf.Exp(-RingAlphaSmooth * Time.deltaTime));
-                _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, _ringAlpha);
-            }
         }
 
         private void UpdateWorldVisuals(bool wantSuck, bool wantPour)
         {
-            // --- Anillo: reacciona SIEMPRE a la proximidad del cursor, no solo
-            // mientras se aspira/vierte -- es la única forma de que el jugador
-            // aprenda dónde está el límite ANTES de chocar con él y leer
-            // "demasiado lejos" (ver doc de clase, punto 3). ---
-            float proximidad = 0f;
-            if (_hasCursorWorld)
-            {
-                float distReach = Vector3.Distance(transform.position, _cursorWorld);
-                proximidad = Mathf.InverseLerp(ReachWorld * RingProximityStartFrac, ReachWorld * RingProximityFullFrac, distReach);
-            }
-            float ringAlphaObjetivo = Mathf.Lerp(RingRestAlpha, RingMaxAlpha, proximidad);
-            _ringAlpha = Mathf.Lerp(_ringAlpha, ringAlphaObjetivo, 1f - Mathf.Exp(-RingAlphaSmooth * Time.deltaTime));
-            if (_ringSr != null)
-            {
-                _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, _ringAlpha);
-            }
-
             // --- Haz: solo existe mientras se aspira/vierte DE VERDAD (ver doc de
             // clase, punto 2) -- fuera de esos momentos sería justo el ruido
             // visual permanente del que ya se quejó el jugador en otro playtest. ---

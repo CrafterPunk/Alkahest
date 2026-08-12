@@ -30,26 +30,27 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 10)
+## Backlog priorizado (actualizado tras playtest 11)
 1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con todos los fixes
    del playtest 10 (ver esa sección) — sigue sin probarse en editor.
-2. **Confirmar con una captura nueva que el rótulo del frío quedó bien** (`ChillStone`, playtest
-   10 §5): el análisis de código dice que el anclaje ya era correcto, pero el jugador no lo ha
-   vuelto a ver.
-3. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
-   (`JournalHud`): la API ya existe, escrita en paralelo esta misma ronda, pero nadie la consume
-   todavía (playtest 10 §2).
-4. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
+2. **Ejecutar la build de Windows y validarla con la checklist del playtest 11**: el builder ya
+   regenera la escena antes de compilar y deja el resumen en consola + diálogo — falta EJECUTARLO
+   y pasar el `.exe` por la checklist (`docs/HANDOFF.md` sección "Playtest 11").
+3. ~~Confirmar con una captura nueva que el rótulo del frío quedó bien~~ **RESUELTO (playtest 11)**:
+   Cesar lo confirmó jugando — "el rótulo de frío quedó muy bien".
+4. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
+   (`JournalHud`): la API ya existe, escrita en paralelo en el playtest 10, pero nadie la consume
+   todavía.
+5. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
    `DirectorDeAudio`? Depende de feedback de Cesar.
-5. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
-   (playtest 4) ni con M5 (audio + aprendiz) encima. Menú ya existe (`AlkahestBuildTools`, ver
-   stint M5-parcial) — falta EJECUTARLO y probar el .exe.
-6. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
-   es ChaosAlchemy; los namespaces `Alkahest.*` se quedan — decisión registrada).
-7. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
+6. **CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una** (playtest 11 §4): no hay
+   onboarding, es diseño y no un ajuste de números. Ver detalle en la sección "Playtest 11".
+7. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` + `productName` en
+   ProjectSettings (los namespaces `Alkahest.*` se quedan — decisión registrada).
+8. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
    accesibles, para levantar el gameplay de reacciones/experimentación.
-8. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
-9. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
+9. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
+10. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
    - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
    - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
      tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
@@ -57,7 +58,7 @@ en el proyecto pero no integrado con la sim.
      por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
    - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
      habla con él. NO rediseñar el template.
-10. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+11. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
     NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
@@ -222,6 +223,130 @@ herramienta, o hay que probar que el imp se mueva hacia el cursor? ¿el diario s
 ¿bautizar se siente ahora como un descubrimiento?
 
 
+## Playtest 11 → FUERA EL ANILLO, PRE-VUELO DE LA BUILD DE WINDOWS, y la dificultad como deuda
+## de diseño reconocida — SIN VERIFICAR EN EDITOR NI CON EL .exe
+Ronda dirigida por Opus 5 (diagnóstico del feedback de Cesar, especificación de 2 encargos con
+propiedad de archivos disjunta, revisión); Sonnet 5 escribió TODO el código en esos 2 encargos.
+
+**1. Validado por el jugador (no tocar).** Cesar, tras probar la ronda 10: *"El punto de luz del
+color de material está increíble, gracias."* · *"Lo del bloqueo del material me encantó, quedó
+increíble."* · *"El rótulo de frío quedó muy bien."* Este último **cierra el pendiente** que quedaba
+abierto del playtest 10 §5 (confirmar por captura el anclaje del rótulo de `ChillStone`) —
+RESUELTO, no hacía falta tocar el código. El momento LEY DESCUBIERTA sigue validado desde el
+playtest 9.
+
+**2. FUERA EL ANILLO DE ALCANCE.** Cesar: *"El anillo de alcance está feo, quítalo. Lo dejamos con
+este único cambio para continuar pruebas."* El haz y el bloqueo de material (mismo trío del
+playtest 10 §3) se quedan intactos — solo se pidió quitar el anillo. Extirpación quirúrgica en
+`Game/Flask.cs`: eliminados `BuildRingVisual()`, `CrearSpriteAnillo()`, los campos `_ringSr`/
+`_ringAlpha`, las constantes `Ring*` (radio, alfas de reposo/máximo) y los campos de color
+`BrassLight`/`BrassShadow` (solo los usaba el degradado del anillo; `BrassBase` se conserva porque
+el haz sí lo usa como tono neutro cuando no hay material concreto que teñirlo). Se conservan
+intactos el haz, el punto de luz que lo recorre (`_beamPulseSr`), el bloqueo de material y
+`ReachWorld`. El límite de alcance se comunica ahora SOLO con el corte del haz en el borde (y el
+aviso "demasiado lejos" que ya existía). Queda un párrafo en la cabecera de `Flask` explicando que
+el anillo existió y por qué se retiró, para que nadie lo reimplemente pensando que es una idea
+nueva. **Práctica de proyecto que se deja registrada aquí y en `CLAUDE.md`: documentar en el propio
+código las ideas que se probaron y se descartaron, no solo las que se quedaron** — el coste de un
+párrafo es mucho menor que el de que alguien, rondas después, vuelva a implementar algo que ya se
+probó y no gustó.
+
+**3. PRE-VUELO DE LA BUILD DE WINDOWS.** Nunca se había verificado una build desde el rediseño del
+taller (playtest 4); se arrastraban cinco rondas de cambios sin comprobar el `.exe`. Precedente que
+motiva la cautela: el `Shader.Find` del playtest 2, que costó un playtest entero de confusión
+("todo un poco roto") porque solo se manifestaba fuera del editor.
+**HALLAZGO PRINCIPAL**: `AlkahestBuildTools.BuildDemoWindows()` solo comprobaba que
+`AlkahestLab.unity` **existiera** en disco, nunca que estuviera al día con el código. Y la escena
+guardada en el repo todavía tenía **la cámara de antes del rediseño del espacio**: posición
+(19.2, 10.8) y tamaño ortográfico 10.8 — valores hardcodeados de la grilla vieja 384x216, cuando la
+actual 256x144 exige centro (12.8, 7.2) y tamaño 7.2. Esto no llegó a manifestarse en ningún
+playtest porque `SimRenderer.FitMainCamera()` reajusta la cámara en cada `Start()` (fix del
+playtest 5): es decir, **llevábamos rondas enteras salvados por un parche defensivo**, sin saber
+que la escena guardada estaba desfasada. Lección que queda escrita: un parche defensivo en runtime
+puede ocultar durante rondas que el estado horneado (la escena) lleva tiempo desactualizado —
+verificar el fuente, no solo el síntoma.
+**FIX** en `Editor/AlkahestBuildTools.cs::BuildDemoWindows()`: guarda los cambios pendientes de
+forma segura (`EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()`, cancela la build si el
+usuario dice que no), **REGENERA la escena** llamando a `AlkahestSceneBuilder.GenerateLabScene()`
+antes de compilar (que ya deriva la cámara de `CellGrid.W/H` — el mismo mecanismo del playtest 4,
+ver `Editor/AlkahestSceneBuilder.cs::BuildMainCamera()`), aborta con `Debug.LogError` claro si la
+regeneración falla o si el `.unity` sigue sin existir después, envuelve
+`BuildPipeline.BuildPlayer` en try/catch (una excepción de configuración ya no se cuela como traza
+cruda), e imprime un resumen (resultado, errores, avisos, tamaño, tiempo, ruta) tanto en consola
+como en un `EditorUtility.DisplayDialog`. Opciones de build:
+`BuildOptions.Development | BuildOptions.ShowBuiltPlayer` **para esta primera verificación** —
+deja `Player.log` escrito y mantiene F3 (`DevPalette`) activa para inspeccionar la sim en vivo sin
+recompilar; **quitar `BuildOptions.Development` para la build de reparto** (cambio de una línea en
+`AlkahestBuildTools.cs`), o F3 llega al jugador final.
+**VERIFICADO Y CORRECTO por lectura de código (sin cambios) — se documenta la lista aquí porque es
+la checklist de build reutilizable para cualquier ronda futura:**
+- Cero `Shader.Find`/`Resources.Load`/`new Material`/fuentes dinámicas en runtime — todo el render
+  es `SpriteRenderer` + `Sprite.Create` sobre texturas generadas por código (regla del playtest 2,
+  ver `CLAUDE.md`).
+- Cero `UnityEditor` fuera de `Editor/` y cero `#if UNITY_EDITOR` en el resto del proyecto.
+- `Alkahest.Runtime.asmdef` no referencia `Alkahest.Editor.asmdef`; `Audio/` no tiene asmdef propio
+  y queda cubierta por el Runtime (solo hay 2 asmdefs en `Assets/Alkahest/`).
+- `AlkahestLab.unity` ya estaba en el índice 0 de `EditorBuildSettings.scenes`
+  (`AlkahestSceneBuilder.UpdateBuildSettings`).
+- Todos los sistemas de juego se generan por código en `AlkahestGameBootstrap.TrySpawn()`, así que
+  lo único horneado necesario en la escena es Cámara + un GameObject con `SimRenderer`+
+  `AlkahestSim`+`DevPalette`+`AlkahestGameBootstrap` (`AlkahestSceneBuilder.BuildAlkahestObject`).
+- `AudioListener` presente en la Main Camera (`AlkahestSceneBuilder.BuildMainCamera`) y
+  `Audio/DirectorDeAudio.EnsureListener()` lo añade defensivamente si faltara.
+- `Dev/DevPalette` gatea con `Application.isEditor || Debug.isDebugBuild` en `Awake`/`Update`/
+  `OnGUI` (`IsDevBuild()`): inerte en release, activa en Development.
+- `apiCompatibilityLevel: 6`, sin override de `managedStrippingLevel`, sin `link.xml` y sin
+  necesidad de él — cero reflexión en todo `Assets/Alkahest/`.
+**RIESGOS ANOTADOS, no corregidos en esta ronda:**
+(a) `productName` sigue siendo `Alkahest`, así que el `Player.log` de la build vive en
+`%USERPROFILE%\AppData\LocalLow\FriendsLoop\Alkahest\Player.log` — va junto con el renombrado del
+repo pendiente en el backlog.
+(b) `FriendsLoop` (Steamworks/Netcode) se compila en el player aunque su escena no se cargue, y no
+hay `steam_api64.dll` en el repo. No se encontró ningún `RuntimeInitializeOnLoadMethod` que pudiera
+auto-arrancar Steamworks al iniciar, pero no se pudo descartar al 100% sin compilar y ejecutar la
+build de verdad.
+**CHECKLIST PARA VALIDAR EL `.exe` (reutilizable en cada build futura, es el paso 2 del backlog):**
+que la materia se vea al abrir un grifo (el bug del `Shader.Find` del playtest 2); que el fondo del
+taller aparezca; que las máquinas se vean y respondan a E; que suene el audio y M lo silencie; que
+el diario se abra con J y cierre con J/ESC; que la simulación corra a velocidad normal (F3 da
+ms/tick y chunks activos); y una partida corta entregando algo en la Tolva para ver progresar un
+encargo.
+
+**4. DIFICULTAD: no hay curva, y es una deuda de diseño reconocida.** Cesar: *"La progresión de
+dificultad es muy alta pero imagino que es intencional porque es testeo y luego podremos hacer
+niveles más pequeños para que quede clara la mecánica. Para mí está 'bien' porque permite que no
+sean tan lentas mis pruebas, ¿esa es la intención?"*
+Respuesta honesta que queda escrita aquí: **en parte sí y en parte no.** Los umbrales del día 3
+(playtest 8) se derivaron midiendo tasas reales (cristalizar ~2,2 s/celda, ver la tabla de balance
+de esa sección) para ocupar el 60-70% de la jornada **de alguien que ya conoce el bucle** — está
+calibrado para la velocidad de prueba del propio Cesar, y en ese sentido sí es intencional. Pero
+**no existe una curva de dificultad**: tres jornadas de seis minutos con todo el sistema desplegado
+desde el día 1 es un vertical slice pensado para PROBAR el juego, no un onboarding pensado para
+APRENDERLO. Un jugador nuevo se come el taller entero de golpe: grifos, frasco, calor, frío,
+semillas que se propagan, Edictos, todo el día 1. Hace falta una ronda propia de **PROGRESIÓN**:
+jornadas cortas que introduzcan una mecánica cada una (grifos y frasco → calor → frío → las
+semillas que se propagan). Esto es diseño de nivel, no un ajuste de números de balance — se añade
+al backlog como punto propio y bien visible (ver arriba, punto 6).
+
+**5. Nota de infraestructura (para el que retome el proyecto).** El sandbox de trabajo en la nube
+se reinició a mitad de sesión y **perdió la copia de trabajo entera**, revirtiéndola a un snapshot
+anterior al playtest 8 (`Audio/DirectorDeAudio.cs` llegó a quedar en 0 bytes). Se recuperó
+**clonando el repo desde GitHub**, porque Cesar había subido el commit del playtest 10 (commit 11
+en `CrafterPunk/Alkahest`). Lección operativa, registrada también en `CLAUDE.md`: **el repo de
+GitHub es la única fuente de verdad fiable; la copia de trabajo del sandbox es volátil.** Ante
+cualquier duda sobre el estado del código, comparar contra un clon fresco antes de editar, y no
+acumular varias rondas sin commit.
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo: ejecutar la build de
+Windows y validarla con la checklist; enganchar `HintSystem.PistasMostradas` en PROCEDIMIENTOS del
+diario; decidir el destino del audio; curva de progresión con jornadas cortas; renombrar repo;
+replantear redomas; resto de M5; multiplayer).
+Preguntas abiertas para el próximo playtest: ¿el `.exe` pasa la checklist completa? ¿se nota la
+falta del anillo o el haz solo ya comunica bien el alcance? ¿por dónde empezar la curva de
+progresión — separar el día 1 en varias jornadas más cortas, o introducir mecánicas de forma
+gradual dentro del mismo día 1?
+
+
 ## Historial de modelos (para el informe final al usuario)
 - **Fable** (orquestador): visión y DECISIONS.md, arquitectura de la sim y del loop, specs de los
   4 agentes, fixes puntuales (regla del fuego, APIs 6.5, color de llama, shimmer), todo el
@@ -241,6 +366,10 @@ herramienta, o hay que probar que el imp se mueva hacia el cursor? ¿el diario s
   **Sonnet 5 escribió todo el código** en esos 4 encargos, más 1 pase de revisión de compilación
   que encontró 2 defectos reales de integración (T detrás del libro, `StorageRack` sin la guarda
   `EscribiendoTexto`).
+- **Playtest 11**: mismo reparto — **Opus 5 dirigió** (diagnóstico del feedback de Cesar,
+  especificación de 2 encargos con propiedad de archivos disjunta y revisión); **Sonnet 5 escribió
+  el código** en esos 2 encargos (extirpación del anillo de alcance en `Flask.cs`, y pre-vuelo de
+  la build de Windows en `AlkahestBuildTools.cs`).
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no
