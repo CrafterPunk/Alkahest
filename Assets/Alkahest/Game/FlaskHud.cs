@@ -21,6 +21,14 @@ namespace Alkahest.Game
     ///  · La retícula sustituye al glifo "◯": marca el punto exacto de
     ///    aspirado/vertido y cambia de color según la acción y el alcance
     ///    (rojo = fuera del alcance del aprendiz).
+    ///
+    /// (fix playtest 10, reporte 8) BLOQUEO DE MATERIAL: desde que Flask.cs
+    /// fija un único material por pulsación de aspirado (ver
+    /// Flask.BloquearMaterialBajoElCursor), la regla es invisible si nadie la
+    /// enseña. <see cref="DibujarMaterialBloqueado"/> pone un chip discreto
+    /// junto al cursor —color + nombre— SOLO mientras se está aspirando: nada
+    /// permanente, mismo criterio que ya sigue el resto de este HUD (el
+    /// jugador se quejó antes de elementos fijos en pantalla).
     /// </summary>
     public sealed class FlaskHud : MonoBehaviour
     {
@@ -52,6 +60,7 @@ namespace Alkahest.Game
             ComputeTopContents();
             DibujarPanel();
             DibujarReticulaYFeedback();
+            DibujarMaterialBloqueado();
         }
 
         // -----------------------------------------------------------------
@@ -77,15 +86,7 @@ namespace Alkahest.Game
                        + UiStyles.S(6f) + altoAyuda + pad;
 
             var panel = new Rect(margen, margen, ancho, alto);
-
-            // (fix playtest 7) Cuando un aviso ya "aprendido" no se muestra como
-            // texto (ver Flask.SetFeedback), la acción fallida sigue teniendo
-            // ALGUNA respuesta: el borde del panel destella un instante en
-            // UiStyles.Aviso en vez de quedarse mudo del todo — "hice clic y no
-            // pasó nada" seguiría sintiendo el juego roto.
-            float destello = _flask.DestelloIntensidad;
-            Color borde = destello > 0f ? Color.Lerp(UiStyles.Borde, UiStyles.Aviso, destello) : UiStyles.Borde;
-            UiStyles.Panel(panel, UiStyles.Tinta, borde);
+            UiStyles.Panel(panel);
 
             float x = panel.x + pad;
             float y = panel.y + pad;
@@ -223,6 +224,69 @@ namespace Alkahest.Game
             Vector3 delta = mundo - _flask.transform.position;
             delta.z = 0f;
             return delta.sqrMagnitude <= Flask.ReachWorld * Flask.ReachWorld;
+        }
+
+        // -----------------------------------------------------------------
+        // Chip de "qué se está bloqueando" (fix playtest 10, reporte 8).
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Cuadradito de color + nombre del material fijado para la pulsación de
+        /// aspirado actual (ver doc de clase). Vive junto al cursor, por debajo
+        /// del globo de feedback para no pisarlo, y SOLO mientras
+        /// <see cref="Flask.EstaAspirando"/> es true: en cuanto se suelta el
+        /// botón, desaparece — es una explicación de la regla en el momento en
+        /// que aplica, no un HUD permanente más.
+        /// </summary>
+        private void DibujarMaterialBloqueado()
+        {
+            if (_flask == null || !_flask.EstaAspirando) return;
+
+            var mouse = Mouse.current;
+            if (mouse == null) return;
+
+            string texto;
+            Color32 color;
+            // ModoIndiscriminado (Shift) se comprueba PRIMERO: si a mitad de una
+            // pulsación con material ya bloqueado el jugador mantiene Shift,
+            // Flask.TickSuck ignora ese bloqueo (aspira todo) -- el chip debe
+            // reflejar la regla que se está aplicando de verdad este frame, no
+            // el material que se dejó de discriminar.
+            if (_flask.ModoIndiscriminado)
+            {
+                color = new Color32(200, 190, 170, 255);
+                texto = "todo (Mayús.)";
+            }
+            else if (_flask.TieneMaterialBloqueado)
+            {
+                byte mat = _flask.MaterialBloqueado;
+                color = _sim.Universe.Get(mat).baseColor;
+                texto = NombreDe(mat);
+            }
+            else
+            {
+                return; // esta pulsación no bloqueó nada (nada aspirable cerca): no hay nada que explicar todavía.
+            }
+
+            Vector2 screenPos = mouse.position.ReadValue();
+            var gui = new Vector2(screenPos.x, Screen.height - screenPos.y);
+
+            float lado = UiStyles.S(11f);
+            float padX = UiStyles.S(6f);
+            float anchoTexto = UiStyles.Ancho(UiStyles.CuerpoLinea, texto);
+            float ancho = padX + lado + padX + anchoTexto + padX;
+            float alto = Mathf.Max(lado, UiStyles.CuerpoLinea.lineHeight) + UiStyles.S(6f);
+
+            // Debajo de la retícula/globo de feedback (que vive por ENCIMA del
+            // cursor): así los dos avisos conviven sin superponerse.
+            float x = Mathf.Clamp(gui.x - ancho * 0.5f, UiStyles.S(4f), Mathf.Max(UiStyles.S(4f), Screen.width - ancho - UiStyles.S(4f)));
+            float y = gui.y + UiStyles.S(16f);
+            var r = new Rect(x, y, ancho, alto);
+
+            Color colorUi = new Color(color.r / 255f, color.g / 255f, color.b / 255f, 1f);
+            UiStyles.Panel(r, UiStyles.TintaFuerte, new Color(colorUi.r, colorUi.g, colorUi.b, 0.55f));
+            UiStyles.Rellenar(new Rect(r.x + padX, r.y + (r.height - lado) * 0.5f, lado, lado), colorUi);
+            GUI.Label(new Rect(r.x + padX + lado + padX, r.y + (r.height - UiStyles.CuerpoLinea.lineHeight) * 0.5f, anchoTexto + UiStyles.S(4f), UiStyles.CuerpoLinea.lineHeight), texto, UiStyles.CuerpoLinea);
         }
     }
 }

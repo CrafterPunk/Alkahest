@@ -184,7 +184,13 @@ namespace Alkahest.Game
             if (_allOrdersDoneCountdown > _timeRemaining) _allOrdersDoneCountdown = _timeRemaining;
 
             var kb = Keyboard.current;
-            bool enterPulsado = kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
+            // (fix playtest 10) ENTER es un atajo de una sola tecla como cualquier otro:
+            // mientras el jugador ESCRIBE un nombre (UiStyles.EscribiendoTexto) no puede
+            // colarse y cerrar la jornada a mitad de bautizo -- la cuenta atrás en pantalla
+            // sigue corriendo igual (esto solo calla la TECLA, no el temporizador), así que
+            // el cierre automático a los DayEndAutoCloseSeconds sigue llegando si hace falta.
+            bool enterPulsado = kb != null && !UiStyles.EscribiendoTexto
+                && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
             if (_allOrdersDoneCountdown <= 0f || enterPulsado)
             {
                 EnterDayEnd();
@@ -364,7 +370,19 @@ namespace Alkahest.Game
             UiStyles.Preparar();
             // El panel crece los días en que el Maestro deja muestras: su párrafo
             // ocupa 2-3 líneas y no puede quedar apretado contra los encargos.
-            AbrirPanel(540f, MasterSupplies.TextoEntrega(_day) != null ? 490f : 420f);
+            //
+            // (fix playtest 10, reclasificación de sustancias) MasterSupplies.TextoEntrega(2)
+            // creció de 330 a 352 caracteres al describir las semillas del Maestro por ORIGEN
+            // en vez de por nombre (ver el porqué en el doc-comment de ese método) -- con el
+            // ancho interior real (540 - 2*18 de padding = 504px de diseño, Cuerpo a 13pt
+            // ajustado con word-wrap) eso son ~5-6 líneas, una más que antes. GUILayout.
+            // BeginArea RECORTA lo que no cabe (es un GUI.BeginGroup por debajo), así que un
+            // desbordamiento no "se sale", se PIERDE en silencio -- 490 ya llevaba margen de
+            // sobra (título 38 + entrega ~85 + "ENCARGOS DE HOY" ~22 + 1-3 encargos ~50 + aviso
+            // de entrega ~14 + botón 34 + paddings ronda los ~260px, dejando ~230px de aire para
+            // FlexibleSpace), así que 490 seguía sobrando; se sube a 510 solo como margen extra
+            // de seguridad para ese texto más largo, no porque hiciera falta.
+            AbrirPanel(540f, MasterSupplies.TextoEntrega(_day) != null ? 510f : 420f);
 
             GUILayout.Label($"Jornada {_day} de {TotalDays}", UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(38f)));
 

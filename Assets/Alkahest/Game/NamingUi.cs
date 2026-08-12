@@ -10,6 +10,18 @@ namespace Alkahest.Game
     /// T abre/cierra; ESC también cierra. El objetivo es el material bajo
     /// el cursor si no es Empty/Stone; si no, el material con mayor conteo
     /// en el frasco.
+    ///
+    /// (fix playtest 10) BUG DEL SILENCIADO, VERSIÓN "T": el mismo problema que
+    /// silenciaba el audio al escribir una "m" en el nombre (Input System nuevo +
+    /// atajo de una tecla escuchando en paralelo al campo de texto IMGUI) le pasaba
+    /// a esta propia clase con su PROPIA tecla -- escribir un nombre que contuviera
+    /// una "t" (p.ej. "musgo hambriento") cerraba la ventana a mitad de escritura,
+    /// porque <see cref="Update"/> mira Keyboard.current.tKey SIN saber que el campo
+    /// de texto también se estaba comiendo esa misma pulsación. Arreglo: mientras el
+    /// campo está abierto se levanta <see cref="UiStyles.EscribiendoTexto"/> (regla
+    /// nueva del proyecto, ver su doc-comment: "todos los atajos de una tecla deben
+    /// consultarla") y el propio toggle de T la respeta -- así T solo abre/cierra
+    /// cuando NO hay nada que escribir, y mientras se escribe, T escribe.
     /// </summary>
     public sealed class NamingUi : MonoBehaviour
     {
@@ -39,14 +51,23 @@ namespace Alkahest.Game
         {
             if (DayCycle.InputLocked)
             {
-                _open = false;
+                if (_open) Close(); // (fix playtest 10) no solo _open=false: hay que bajar también EscribiendoTexto.
                 return;
             }
 
             var kb = Keyboard.current;
             if (kb == null) return;
 
-            if (kb.tKey.wasPressedThisFrame)
+            // (fix playtest 10) Mientras se escribe, T teclea, no cierra -- ver doc de
+            // clase. Solo se comprueba en la rama de ABRIR/CERRAR: Escape sigue
+            // funcionando siempre, es la convención universal de "cancelar" y no es
+            // un carácter que pueda aparecer sin querer en un nombre.
+            // Con el diario a pantalla completa (JournalHud.Abierto) tampoco tiene
+            // sentido abrir este campo: quedaría dibujado detrás del libro (que
+            // fuerza GUI.depth por debajo de todo) pero seguiría robando el teclado
+            // -- mismo criterio que ya siguen Flask/HeatPlate/ChillStone/Dispenser/
+            // StorageRack/ApprenticeController/DevPalette con este mismo atajo.
+            if (kb.tKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
             {
                 if (_open) Close();
                 else Open();
@@ -66,38 +87,39 @@ namespace Alkahest.Game
             string current = _knowledge != null ? _knowledge.NombreDe(_targetMat) : "???";
             _nameField = current == "???" ? "" : current;
             _open = true;
+            UiStyles.EscribiendoTexto = true; // (fix playtest 10) ver doc de clase y de UiStyles.EscribiendoTexto.
         }
 
         private void Close()
         {
             _open = false;
+            UiStyles.EscribiendoTexto = false; // (fix playtest 10) simétrico con Open(): nunca se queda "atascada" en true.
             GUI.FocusControl(null);
         }
 
-        private byte ResolveTarget()
-        {
-            // (fix playtest 7 — causa raíz del bautizo que "no se ve en la
-            // botella" y que "pisó" otro nombre) Las redomas del estante NO
-            // ocupan celdas de la simulación: son un mueble visual que guarda
-            // (Mat, Cantidad) por su cuenta (ver StorageRack.Redoma). Por eso
-            // apuntar con el ratón a una redoma llena SIEMPRE muestreaba la
-            // PIEDRA del listón bajo ella y esta función se replegaba a "lo
-            // que más llevas en el frasco" — que casi nunca es lo que hay
-            // realmente en la redoma señalada. Consultarla PRIMERO hace que
-            // "T" sobre una redoma bautice de verdad su contenido.
-            byte enRedoma = StorageRack.MaterialBajoCursor();
-            if (enRedoma != MaterialId.Empty) return enRedoma;
+        private byte ResolveTarget() => ResolveTarget(_sim, _flask);
 
-            byte underCursor = SampleUnderCursor();
+        /// <summary>
+        /// Versión estática del criterio de objetivo (cursor primero, frasco de
+        /// respaldo), para que <see cref="SubstanceKnowledge"/> pueda saber, sin
+        /// duplicar esta lógica, exactamente qué material abriría T ahora mismo --
+        /// es lo que decide cuándo mostrar "esto no tiene nombre" (fix playtest 10,
+        /// ver SubstanceKnowledge.ActualizarAvisoBautizo). No requiere una instancia:
+        /// ambos MonoBehaviour reciben (AlkahestSim, Flask) por Init desde
+        /// AlkahestGameBootstrap, así que no hace falta cablear una referencia nueva.
+        /// </summary>
+        public static byte ResolveTarget(AlkahestSim sim, Flask flask)
+        {
+            byte underCursor = SampleUnderCursor(sim);
             if (underCursor != MaterialId.Empty && underCursor != MaterialId.Stone) return underCursor;
-            return LargestInFlask();
+            return LargestInFlask(flask);
         }
 
-        private byte SampleUnderCursor()
+        private static byte SampleUnderCursor(AlkahestSim sim)
         {
             var mouse = Mouse.current;
             var cam = Camera.main;
-            if (mouse == null || cam == null || _sim == null) return MaterialId.Empty;
+            if (mouse == null || cam == null || sim == null) return MaterialId.Empty;
 
             Vector2 screenPos = mouse.position.ReadValue();
             var ray = cam.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0f));
@@ -105,21 +127,21 @@ namespace Alkahest.Game
             if (!groundPlane.Raycast(ray, out float enter)) return MaterialId.Empty;
 
             Vector3 world = ray.GetPoint(enter);
-            Vector2Int cell = _sim.WorldToCell(world);
+            Vector2Int cell = sim.WorldToCell(world);
             if (!CellGrid.InBounds(cell.x, cell.y)) return MaterialId.Empty;
 
-            return (byte)_sim.SampleMaterial(cell.x, cell.y);
+            return (byte)sim.SampleMaterial(cell.x, cell.y);
         }
 
-        private byte LargestInFlask()
+        private static byte LargestInFlask(Flask flask)
         {
-            if (_flask == null) return MaterialId.Empty;
+            if (flask == null) return MaterialId.Empty;
 
             byte best = MaterialId.Empty;
             int bestCount = 0;
             for (int m = 1; m < MaterialId.Count; m++)
             {
-                int c = _flask.GetCount((byte)m);
+                int c = flask.GetCount((byte)m);
                 if (c > bestCount)
                 {
                     bestCount = c;

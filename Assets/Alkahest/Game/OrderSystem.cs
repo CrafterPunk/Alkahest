@@ -18,6 +18,36 @@ namespace Alkahest.Game
     /// como exige el proyecto para toda aleatoriedad de capa de juego.
     ///
     /// =====================================================================
+    /// (fix playtest 10) LOS ENCARGOS HABLAN POR EFECTO Y ORIGEN, NO POR
+    /// NOMBRE INTERNO (docs/DECISIONS.md §12: "el nombre es del grupo... el
+    /// interno visible solo en modo dev"). Antes "220 celdas de Vivium" leía
+    /// el devName aunque el jugador jamás hubiera bautizado nada. Ahora:
+    ///  · Grows/CrystalSolid describen su objetivo por EFECTO/ORIGEN mientras
+    ///    esté innominado ("algo vivo que crezca solo", "la piedra que crece
+    ///    en la bandeja fría") -- ver <see cref="DescribirGrows"/> y
+    ///    <see cref="DescribirCrystalSolid"/>. Sin ambigüedad posible: en
+    ///    TODO el roster fijo (Sim/Universe.cs) solo Vivium tiene arquetipo
+    ///    Organic y solo la reacción Azoth+semilla produce Crystal, así que
+    ///    la descripción por efecto identifica una única sustancia real del
+    ///    taller, no un grupo -- si el roster llega a cambiar (más de un
+    ///    material Organic, por ejemplo) esta suposición HAY QUE
+    ///    revalidarla, es la garantía de la regla de seguridad "un encargo
+    ///    nunca puede quedar ambiguo".
+    ///  · En cuanto el jugador bautiza esa sustancia, el texto pasa a usar SU
+    ///    nombre ("130 celdas de lo que llamáis \"musgo hambriento\"") -- el
+    ///    "el mundo empieza a hablar tu idioma" que pedía el reporte.
+    ///  · Flammable/Hot/Cold no dependen de una identidad concreta (cualquier
+    ///    material que cumpla la propiedad vale) así que su texto es
+    ///    literal y no se recalcula nunca -- no hay circularidad que evitar.
+    ///  · El recálculo lo dispara <see cref="SubstanceKnowledge.NamingVersion"/>
+    ///    (ver Update): como Order.Descripcion es readonly (Game/Order.cs,
+    ///    de solo lectura en esta ronda) no se muta in-place -- se sustituye
+    ///    la instancia entera en <see cref="ActiveOrders"/> conservando
+    ///    Progreso/Completado, así que OrdersHud (que lee el campo cada
+    ///    frame, sin cachear) lo recoge solo en el siguiente OnGUI. Nunca se
+    ///    construye texto dentro de OnGUI: todo el trabajo de string pasa
+    ///    por aquí, una vez por cambio de NamingVersion, no por frame.
+    /// =====================================================================
     /// BALANCE PLAYTEST 8 -- TASAS MEDIDAS (Fase 1, antes de tocar números)
     /// =====================================================================
     /// Todo lo de abajo sale de leer Sim/ y Game/ (solo lectura para este
@@ -210,11 +240,67 @@ namespace Alkahest.Game
 
         private int _nextOrderId;
 
+        // (fix playtest 10) Última NamingVersion ya aplicada a las descripciones -- ver
+        // Update/RefreshDescripciones. -1 fuerza un primer refresco inofensivo nada más
+        // arrancar (no hay nada que recalcular todavía si no hay encargos, pero así no
+        // hace falta razonar sobre "0 es también un valor válido de NamingVersion").
+        private int _ultimaNamingVersionAplicada = -1;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
         {
             _sim = sim;
             _knowledge = knowledge;
+        }
+
+        /// <summary>
+        /// (fix playtest 10) Único trabajo por frame: comprobar si el jugador bautizó o
+        /// re-bautizó algo desde el último frame (NamingVersion sube en CADA Bautizar,
+        /// incluso un re-bautizo del mismo material -- ver doc de esa propiedad) y, si
+        /// es así, recalcular las descripciones que dependen de un nombre. Barato: casi
+        /// siempre es una comparación de enteros que no hace nada.
+        /// </summary>
+        private void Update()
+        {
+            if (_knowledge == null) return;
+            int version = _knowledge.NamingVersion;
+            if (version == _ultimaNamingVersionAplicada) return;
+            _ultimaNamingVersionAplicada = version;
+            RefreshDescripciones();
+        }
+
+        /// <summary>
+        /// Recalcula la Descripcion de todo encargo activo cuyo texto dependa de un
+        /// nombre (TargetMat.HasValue -- ver AddOrder de Grows/CrystalSolid/
+        /// NamedMaterial más abajo). Order.Descripcion es readonly (Game/Order.cs es de
+        /// solo lectura en esta ronda), así que no se muta el campo: se sustituye la
+        /// instancia entera en <see cref="ActiveOrders"/>, conservando Id/Progreso/
+        /// Completado -- OrdersHud lee <c>orders[i].Descripcion</c> fresco cada OnGUI
+        /// (no lo cachea), así que el cambio se ve en el siguiente frame sin más.
+        /// </summary>
+        private void RefreshDescripciones()
+        {
+            for (int i = 0; i < ActiveOrders.Count; i++)
+            {
+                var o = ActiveOrders[i];
+                if (!o.TargetMat.HasValue) continue; // Flammable/Hot/Cold: texto literal, nunca depende de un nombre.
+
+                string nuevaDescripcion = o.Tipo switch
+                {
+                    OrderType.Grows => DescribirGrows(o.MinCells),
+                    OrderType.CrystalSolid => DescribirCrystalSolid(o.MinCells),
+                    OrderType.NamedMaterial => DescribirNamedMaterial(o.MinCells, o.TargetMat.Value),
+                    _ => o.Descripcion,
+                };
+                if (nuevaDescripcion == o.Descripcion) continue;
+
+                var actualizado = new Order(o.Id, nuevaDescripcion, o.Tipo, o.MinCells, o.Recompensa, o.MinTempC, o.TargetMat)
+                {
+                    Progreso = o.Progreso,
+                    Completado = o.Completado,
+                };
+                ActiveOrders[i] = actualizado;
+            }
         }
 
         public void AddFavor(int amount)
@@ -258,12 +344,15 @@ namespace Alkahest.Game
                     break;
 
                 case 2:
-                    // SIN CAMBIOS -- también referencia buena (completada).
+                    // Umbrales SIN CAMBIOS -- también referencia buena (completada).
                     // Los tres encargos de hoy usan EXACTAMENTE las tres muestras
                     // que el Maestro acaba de dejar (ver Game/MasterSupplies.cs):
                     // el retoño de vivium, la piedra gélida y el azoth + semilla.
-                    AddOrder(OrderType.Grows, 120, 35,
-                        "El Maestro quiere ver crecer algo vivo -- 120 celdas de Vivium.");
+                    // (fix playtest 10) Descripción por EFECTO/nombre, no literal fija
+                    // -- ver DescribirGrows/DescribirCrystalSolid y el docblock de la
+                    // clase: es justo lo que ambas eran ANTES de este cambio, un texto
+                    // fijo que decía "Vivium"/"Cristal" a las claras.
+                    AddOrder(OrderType.Grows, 120, 35, DescribirGrows(120), targetMat: MaterialId.Vivium);
                     AddOrder(OrderType.Cold, 60, 30,
                         "Algo helado -- 60 celdas a -5°C o menos.", minTempC: -5);
                     // 70 celdas de Crystal es coherente con la medición de
@@ -271,8 +360,7 @@ namespace Alkahest.Game
                     // sembrado): ronda 35-70s de conversión activa, primer
                     // contacto del jugador con la mecánica, sin exigir aún
                     // dominarla.
-                    AddOrder(OrderType.CrystalSolid, 70, 40,
-                        "Cristal, ni más ni menos -- 70 celdas.");
+                    AddOrder(OrderType.CrystalSolid, 70, 40, DescribirCrystalSolid(70), targetMat: MaterialId.Crystal);
                     break;
 
                 case 3:
@@ -292,8 +380,7 @@ namespace Alkahest.Game
                     // el día 3 -- no se arranca de cero, así que el margen real
                     // es aún mayor. 276 celdas de capacidad de bandeja dejan un
                     // 67% de la bandeja libre incluso al llegar al umbral.
-                    AddOrder(OrderType.CrystalSolid, 90, 45,
-                        "El Maestro quiere una gran veta de cristal -- 90 celdas.");
+                    AddOrder(OrderType.CrystalSolid, 90, 45, DescribirCrystalSolid(90), targetMat: MaterialId.Crystal);
                     AddNamedOrFallback(rng);
                     // Grows 220->130 (-41%): la MISMA cuba y el MISMO cultivo
                     // de vivium de la jornada 2 (que ya entregó 120) siguen
@@ -306,10 +393,48 @@ namespace Alkahest.Game
                     // bastante menos de un minuto de crecimiento puro -- el
                     // tiempo real se va en el arranque (atender la placa y
                     // verter Nutriente), no en esperar a que crezca.
-                    AddOrder(OrderType.Grows, 130, 50,
-                        "Que el taller rebose de vida -- 130 celdas de Vivium.");
+                    AddOrder(OrderType.Grows, 130, 50, DescribirGrows(130), targetMat: MaterialId.Vivium);
                     break;
             }
+        }
+
+        /// <summary>
+        /// (fix playtest 10) Descripción del encargo Grows: EFECTO/origen mientras
+        /// Vivium siga innominado, su nombre en cuanto se bautice. Sin ambigüedad: en
+        /// el roster fijo (Sim/Universe.cs) SOLO Vivium tiene arquetipo Organic (ver
+        /// OrderSystem.MatchesOrder), así que "algo vivo que crezca solo" señala una
+        /// única sustancia real del taller, nunca una familia difusa.
+        /// </summary>
+        private string DescribirGrows(int minCells)
+        {
+            string nombre = _knowledge != null ? _knowledge.NombreDe(MaterialId.Vivium) : "???";
+            if (nombre == "???")
+                return $"El Maestro quiere ver crecer algo vivo -- {minCells} celdas de lo que crece solo, sin que lo alimenten a mano.";
+            return $"El Maestro quiere ver crecer algo vivo -- {minCells} celdas de lo que llamáis \"{nombre}\".";
+        }
+
+        /// <summary>
+        /// (fix playtest 10) Descripción del encargo CrystalSolid: origen mientras
+        /// Crystal siga innominado, su nombre en cuanto se bautice. Deliberadamente NO
+        /// menciona "azoth" (también innominado por defecto en esta ronda): decir su
+        /// identidad aquí sería la misma circularidad que se corrigió en las pistas, así
+        /// que el origen se describe por LUGAR ("la bandeja fría"), no por sustancia.
+        /// Sin ambigüedad: OrderType.CrystalSolid solo hace match con matId==Crystal
+        /// (ver MatchesOrder), es la única piedra que nace ahí.
+        /// </summary>
+        private string DescribirCrystalSolid(int minCells)
+        {
+            string nombre = _knowledge != null ? _knowledge.NombreDe(MaterialId.Crystal) : "???";
+            if (nombre == "???")
+                return $"El Maestro quiere una gran veta de la piedra que crece en la bandeja fría -- {minCells} celdas.";
+            return $"El Maestro quiere una gran veta de \"{nombre}\" -- {minCells} celdas.";
+        }
+
+        /// <summary>(fix playtest 10) Descripción del encargo NamedMaterial: SIEMPRE por nombre (solo se genera para material ya bautizado, ver PickNamedMaterial), pero recalculable si el jugador lo re-bautiza (ver Update/RefreshDescripciones).</summary>
+        private string DescribirNamedMaterial(int minCells, byte targetMat)
+        {
+            string nombre = _knowledge != null ? _knowledge.NombreDe(targetMat) : "???";
+            return $"Trae {minCells} celdas de lo que llamáis \"{nombre}\".";
         }
 
         private void AddNamedOrFallback(System.Random rng)
@@ -317,15 +442,13 @@ namespace Alkahest.Game
             byte target = PickNamedMaterial(rng);
             if (target != MaterialId.Empty)
             {
-                string nombre = _knowledge.NombreDe(target);
                 // NamedMaterial 100->70 (-30%): reutiliza lo que el grupo ya
                 // sabe reproducir (por definición, está bautizado porque ya
                 // se descubrió y se sabe recrear) -- el grifo/mezcla que lo
                 // produce está muy por debajo del techo de 20-150 cel/s
                 // medido en cabecera, así que el coste real es de viajes de
                 // frasco, no de producción.
-                AddOrder(OrderType.NamedMaterial, 70, 35,
-                    $"Trae 70 celdas de lo que llamáis \"{nombre}\".", targetMat: target);
+                AddOrder(OrderType.NamedMaterial, 70, 35, DescribirNamedMaterial(70, target), targetMat: target);
             }
             else
             {

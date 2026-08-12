@@ -238,21 +238,7 @@ namespace Alkahest.Game
         /// son diminutos y no se mueven nunca.
         /// </summary>
         public static void PlacaMundo(Vector3 posicionMundo, string texto, Color color, float desplazarPx)
-            => PlacaMundo(posicionMundo, texto, color, desplazarPx, 1f);
-
-        /// <summary>
-        /// (fix playtest 6: "los labels se activan aunque esté lejos, y están
-        /// todo el tiempo en pantalla") Igual que la otra sobrecarga pero con un
-        /// factor de opacidad 0..1, para que los rótulos de mundo APAREZCAN Y
-        /// DESAPAREZCAN con la cercanía en vez de encenderse de golpe. Con
-        /// alfa≈0 no dibuja nada (ni el panel), así que llamarla de lejos es
-        /// gratis y no ensucia el encuadre.
-        /// </summary>
-        public static void PlacaMundo(Vector3 posicionMundo, string texto, Color color, float desplazarPx, float alfa)
         {
-            if (alfa <= 0.02f) return;
-            alfa = alfa > 1f ? 1f : alfa;
-
             Preparar();
             var cam = Camera.main;
             if (cam == null || ChipMini == null || string.IsNullOrEmpty(texto)) return;
@@ -269,76 +255,40 @@ namespace Alkahest.Game
             float y = Screen.height - s.y - desplazarPx - h * 0.5f;
             var r = new Rect(x, y, w, h);
 
-            Panel(r,
-                new Color(TintaFuerte.r, TintaFuerte.g, TintaFuerte.b, TintaFuerte.a * alfa),
-                new Color(color.r, color.g, color.b, 0.45f * alfa));
+            Panel(r, TintaFuerte, new Color(color.r, color.g, color.b, 0.45f));
             var previo = ChipMini.normal.textColor;
-            ChipMini.normal.textColor = new Color(color.r, color.g, color.b, color.a * alfa);
+            ChipMini.normal.textColor = color;
             GUI.Label(r, texto, ChipMini);
             ChipMini.normal.textColor = previo;
         }
 
         /// <summary>
-        /// (fix playtest 7: "el rótulo del agua está escrito sobre el grifo de
-        /// arena") Chapa anclada a un LADO del punto de mundo en vez de encima.
-        /// Los cinco grifos están en columna a 1 unidad de mundo unos de otros,
-        /// así que cualquier desplazamiento vertical cae inevitablemente sobre
-        /// el aparato vecino. Anclando la chapa a la IZQUIERDA (contra el pilar
-        /// de piedra, que es espacio muerto) cada grifo tiene su propio carril y
-        /// no hay colisión posible.
+        /// (fix playtest 10) ¿Está el jugador ESCRIBIENDO en un campo de texto
+        /// ahora mismo? Mientras bautizaba una sustancia, la "m" de su nombre
+        /// silenciaba el juego: la tecla la leían a la vez el campo de texto y
+        /// el atajo global.
         ///
-        /// `aLaIzquierda` = true pone el borde DERECHO de la chapa a
-        /// `separacionPx` de la posición; false pone el borde IZQUIERDO.
-        /// A diferencia de <see cref="PlacaMundo"/> no se acota en X: si el
-        /// aparato está fuera de cuadro su chapa también debe estarlo.
+        /// REGLA DEL PROYECTO: todo atajo de una sola tecla (M silenciar, H
+        /// pistas, T bautizar, E interactuar, Q vaciar, J diario, flechas,
+        /// F3 paleta dev) debe comprobar esta propiedad y NO hacer nada
+        /// mientras valga true. Un campo de texto se come TODAS las letras.
+        ///
+        /// La levanta y la baja quien abre y cierra el campo (Game/NamingUi.cs).
+        /// Se guarda el frame en que se bajó para que el atajo tampoco se
+        /// dispare en el mismo frame en que se confirma el nombre con Enter.
         /// </summary>
-        public static void PlacaMundoLateral(Vector3 posicionMundo, string texto, Color color,
-                                             float separacionPx, float desplazarYPx, float alfa, bool aLaIzquierda)
+        public static bool EscribiendoTexto
         {
-            if (alfa <= 0.02f) return;
-            alfa = alfa > 1f ? 1f : alfa;
-
-            Preparar();
-            var cam = Camera.main;
-            if (cam == null || ChipMini == null || string.IsNullOrEmpty(texto)) return;
-
-            Vector3 s = cam.WorldToScreenPoint(posicionMundo);
-            if (s.z <= 0f) return;
-
-            float w = Ancho(ChipMini, texto) + S(10f);
-            float h = ChipMini.lineHeight + S(6f);
-            float x = aLaIzquierda ? s.x - separacionPx - w : s.x + separacionPx;
-            float y = Screen.height - s.y - desplazarYPx - h * 0.5f;
-            var r = new Rect(x, y, w, h);
-
-            Panel(r,
-                new Color(TintaFuerte.r, TintaFuerte.g, TintaFuerte.b, TintaFuerte.a * alfa),
-                new Color(color.r, color.g, color.b, 0.45f * alfa));
-            var previo = ChipMini.normal.textColor;
-            ChipMini.normal.textColor = new Color(color.r, color.g, color.b, color.a * alfa);
-            GUI.Label(r, texto, ChipMini);
-            ChipMini.normal.textColor = previo;
+            get => _escribiendoTexto || Time.frameCount <= _frameFinEscritura + 1;
+            set
+            {
+                if (_escribiendoTexto && !value) _frameFinEscritura = Time.frameCount;
+                _escribiendoTexto = value;
+            }
         }
 
-        /// <summary>
-        /// CURVA DE CERCANÍA compartida por todos los aparatos del taller
-        /// (fix playtest 6). Devuelve 1 cuando el aprendiz está dentro de
-        /// `rangoPleno`, baja suavemente hasta 0 al llegar a `rangoDesvanece`,
-        /// y 0 más allá. Un único sitio donde vive el criterio de "cerca", para
-        /// que placa ígnea, piedra gélida, grifos y Tolva se comporten igual.
-        /// </summary>
-        public static float Cercania(Vector3 puntoMundo, Transform jugador, float rangoPleno, float rangoDesvanece)
-        {
-            if (jugador == null) return 0f;
-            float d2 = (puntoMundo - jugador.position).sqrMagnitude;
-            float pleno2 = rangoPleno * rangoPleno;
-            if (d2 <= pleno2) return 1f;
-            float fuera2 = rangoDesvanece * rangoDesvanece;
-            if (d2 >= fuera2 || fuera2 <= pleno2) return 0f;
-            // Suavizado en distancia real (no cuadrada): la aparición se siente lineal.
-            float t = (Mathf.Sqrt(d2) - rangoPleno) / (rangoDesvanece - rangoPleno);
-            return Mathf.SmoothStep(1f, 0f, t);
-        }
+        private static bool _escribiendoTexto;
+        private static int _frameFinEscritura = -10;
 
         /// <summary>
         /// True si el jugador tiene algún botón del ratón PULSADO (está

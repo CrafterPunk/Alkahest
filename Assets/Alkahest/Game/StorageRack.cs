@@ -16,11 +16,8 @@ namespace Alkahest.Game
     ///     Si está vacía, adopta el material del que más lleves; si ya tiene
     ///     dueño, solo acepta más de ESE material.
     ///   · CLIC IZQUIERDO apuntando a una redoma -> ASPIRAR de vuelta al frasco.
-    ///   · Cada redoma llena enseña SIEMPRE su cantidad; el NOMBRE completo
-    ///     (SubstanceKnowledge.NombreParaHud) solo se dibuja en la que señala
-    ///     el ratón o, si no, en la más cercana al aprendiz — 5 redomas en
-    ///     ~13 celdas no dejan sitio para cinco nombres largos a la vez (fix
-    ///     playtest 7; detalle en la sección "Etiquetas" más abajo).
+    ///   · Sobre cada redoma llena, una mini-etiqueta con el NOMBRE que le
+    ///     pusisteis (SubstanceKnowledge.NombreParaHud) y la cantidad.
     ///
     /// POR QUÉ IMPORTA AL DISEÑO: es el almacén VISIBLE del conocimiento del
     /// grupo (decisiones §11-§13). El frasco es memoria a corto plazo y se
@@ -68,18 +65,6 @@ namespace Alkahest.Game
             public byte TempMedia => Cantidad > 0
                 ? (byte)Mathf.Clamp(SumaTemp / Cantidad, 0, 255)
                 : CellGrid.AmbientRaw;
-
-            // Caches de las etiquetas de OnGUI (fix playtest 7 — "no construir
-            // strings cuando el texto no cambia"): solo se reconstruyen si
-            // cambia el nombre, la cantidad o el hueco disponible en pantalla,
-            // no en CADA frame como hacía la concatenación original.
-            public string CantidadCacheTexto;
-            public int CantidadCacheValor = int.MinValue;
-
-            public string NombreCacheTexto;
-            public string NombreCacheFuente;
-            public int NombreCacheCantidad = int.MinValue;
-            public float NombreCacheAncho = -1f;
         }
 
         private static StorageRack _instancia;
@@ -209,39 +194,18 @@ namespace Alkahest.Game
             return _instancia.RedomaBajoCursor() >= 0;
         }
 
-        /// <summary>
-        /// (fix playtest 7 — CAUSA RAÍZ de "bauticé algo y no se ve en la
-        /// botella, y encima me pisó otro nombre") Material de la redoma bajo
-        /// el cursor, o Empty si no hay ninguna (o está vacía). NamingUi.cs lo
-        /// consulta ANTES de su lógica normal: sin esto, apuntar con el ratón
-        /// a una redoma no sirve de nada porque las redomas son un mueble
-        /// puramente visual —no ocupan celdas de la simulación— así que el
-        /// muestreo de <c>AlkahestSim.SampleMaterial</c> bajo el cursor cae
-        /// siempre sobre la PIEDRA del listón (MaterialId.Stone) y NamingUi
-        /// se repliega a "el material dominante del FRASCO", que puede ser
-        /// una sustancia completamente distinta a la guardada en la redoma
-        /// que el jugador está señalando. Resultado exacto del playtest: se
-        /// bautiza lo que hay en el frasco (aparece en el panel del frasco,
-        /// que consulta el mismo diccionario por materialId) mientras la
-        /// redoma se queda en "???", y si el frasco llevaba un material YA
-        /// bautizado antes, ese nombre previo queda pisado sin querer.
-        /// </summary>
-        public static byte MaterialBajoCursor()
-        {
-            if (_instancia == null) return MaterialId.Empty;
-            int i = _instancia.RedomaBajoCursor();
-            if (i < 0) return MaterialId.Empty;
-            var r = _instancia._redomas[i];
-            return r != null ? r.Mat : MaterialId.Empty;
-        }
-
         private int RedomaBajoCursor()
         {
             if (_hoverFrame == Time.frameCount) return _hover;
             _hoverFrame = Time.frameCount;
             _hover = -1;
 
-            if (_sim == null || DayCycle.InputLocked || Alkahest.Dev.DevPalette.IsOpen) return _hover;
+            // (fix playtest 10) Guardar/recuperar en una redoma es un atajo del MUNDO como
+            // aspirar/verter (mismo criterio, ver UiStyles.EscribiendoTexto/JournalHud.Abierto):
+            // con el diario abierto a pantalla completa el velo NO bloquea los clics por sí solo
+            // (GUI.DrawTexture no intercepta input, solo los controles interactivos lo hacen), así
+            // que sin esta guarda se podía manipular la estantería "a través" del libro.
+            if (_sim == null || DayCycle.InputLocked || Alkahest.Dev.DevPalette.IsOpen || UiStyles.EscribiendoTexto || JournalHud.Abierto) return _hover;
 
             var mouse = Mouse.current;
             var cam = Camera.main;
@@ -271,7 +235,9 @@ namespace Alkahest.Game
         private void Update()
         {
             if (_sim == null || _frasco == null) return;
-            if (DayCycle.InputLocked || Alkahest.Dev.DevPalette.IsOpen) return;
+            // (fix playtest 10) Ver el mismo comentario en RedomaBajoCursor: atajo del MUNDO,
+            // se calla mientras se escribe un nombre o con el diario abierto a pantalla completa.
+            if (DayCycle.InputLocked || Alkahest.Dev.DevPalette.IsOpen || UiStyles.EscribiendoTexto || JournalHud.Abierto) return;
 
             int i = RedomaBajoCursor();
             var mouse = Mouse.current;
@@ -371,51 +337,13 @@ namespace Alkahest.Game
 
         // -----------------------------------------------------------------
         // Etiquetas
-        //
-        // (fix playtest 7 — "las etiquetas no caben") Con 5 redomas metidas en
-        // ~13 celdas cada una, un nombre bautizado largo ("que verga") centrado
-        // sobre CADA botella se come a la vecina. La solución, sin mover ni una
-        // redoma: la CANTIDAD (indicador barato de "hay algo aquí y cuánto") se
-        // dibuja SIEMPRE que la redoma tenga contenido — el color del líquido ya
-        // viene dado por el propio sprite de <see cref="ActualizarRedoma"/>, que
-        // se apaga a alfa 0 cuando está vacía, así que vacía/llena ya se
-        // distinguen sin leer nada. El NOMBRE completo, en cambio, solo se
-        // dibuja en UNA redoma a la vez: la que señala el ratón si hay alguna, o
-        // si no la más cercana al aprendiz (con <see cref="UiStyles.Cercania"/>,
-        // igual que el resto de rótulos del taller) — así nunca hay dos nombres
-        // largos compitiendo por el mismo hueco. Y si aun así no cabe en el
-        // espacio libre hasta la redoma vecina, se trunca con "…".
         // -----------------------------------------------------------------
-        private const float RangoNombrePleno = RangoJugador;
-        private const float RangoNombreDesvanece = RangoJugador + 2.5f;
-        /// <summary>Margen de seguridad para no tocar el hueco disponible hasta la redoma vecina.</summary>
-        private const float FraccionHuecoUsable = 0.88f;
-
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked) return;
 
             UiStyles.Preparar();
             int hover = RedomaBajoCursor();
-
-            // La más cercana al aprendiz entre las que tienen contenido (para
-            // decidir quién enseña el nombre completo cuando el ratón no señala
-            // ninguna redoma).
-            int cercana = -1;
-            float mejorD2 = float.MaxValue;
-            if (_jugador != null)
-            {
-                Vector2 pj = _jugador.position;
-                for (int i = 0; i < NumRedomas; i++)
-                {
-                    var r = _redomas[i];
-                    if (r == null || r.Cantidad <= 0) continue;
-                    Vector2 centro = new Vector2(r.MundoX, r.BaseY + RedomaAlto * 0.5f);
-                    float d2 = (pj - centro).sqrMagnitude;
-                    if (d2 < mejorD2) { mejorD2 = d2; cercana = i; }
-                }
-            }
-            int etiquetaIdx = hover >= 0 && _redomas[hover] != null && _redomas[hover].Cantidad > 0 ? hover : cercana;
 
             for (int i = 0; i < NumRedomas; i++)
             {
@@ -426,26 +354,10 @@ namespace Alkahest.Game
 
                 if (r.Cantidad > 0)
                 {
-                    // Indicador PERMANENTE: cantidad, siempre visible (criterio
-                    // "vacía se distingue de llena de un vistazo" — el color lo
-                    // aporta el propio líquido del sprite).
-                    UiStyles.PlacaMundo(cima, CantidadTexto(r), i == hover ? UiStyles.Oro : UiStyles.TextoTenue, UiStyles.S(11f));
-
-                    if (i == etiquetaIdx)
-                    {
-                        float alfa = i == hover ? 1f : UiStyles.Cercania(cima, _jugador, RangoNombrePleno, RangoNombreDesvanece);
-                        if (alfa > 0.02f)
-                        {
-                            Color c = i == hover ? UiStyles.Oro : UiStyles.Texto;
-                            float ancho = HuecoDisponiblePx(i);
-                            // Ancla en un punto de MUNDO distinto al de la cantidad
-                            // (no solo un desplazarPx distinto): así el hueco entre
-                            // ambas placas escala igual que el resto del taller con
-                            // el zoom/resolución y nunca quedan pegadas o solapadas.
-                            var cimaNombre = cima + Vector3.up * 0.24f;
-                            UiStyles.PlacaMundo(cimaNombre, EtiquetaNombre(r, ancho), c, UiStyles.S(11f), alfa);
-                        }
-                    }
+                    // Mini-etiqueta de la redoma llena: el nombre del grupo y
+                    // cuánto queda. Esto es el "almacén visible del conocimiento".
+                    Color c = i == hover ? UiStyles.Oro : UiStyles.Texto;
+                    UiStyles.PlacaMundo(cima, NombreDe(r.Mat) + "  " + r.Cantidad, c, UiStyles.S(11f));
                 }
                 else if (i == hover)
                 {
@@ -462,63 +374,6 @@ namespace Alkahest.Game
                 var pie = new Vector3(r.MundoX, r.BaseY, 0f);
                 UiStyles.PlacaMundo(pie, "clic der. guardar · clic izq. recuperar", UiStyles.Oro, -UiStyles.S(13f));
             }
-        }
-
-        /// <summary>Texto de la cantidad, cacheado: solo se reconstruye si el número cambió.</summary>
-        private static string CantidadTexto(Redoma r)
-        {
-            if (r.CantidadCacheValor == r.Cantidad && r.CantidadCacheTexto != null) return r.CantidadCacheTexto;
-            r.CantidadCacheValor = r.Cantidad;
-            r.CantidadCacheTexto = r.Cantidad.ToString();
-            return r.CantidadCacheTexto;
-        }
-
-        /// <summary>
-        /// Ancho en píxeles de pantalla disponible para el nombre de la redoma
-        /// `idx` sin invadir a su vecina más próxima (proyectando las posiciones
-        /// de mundo con la cámara — la cámara del taller es FIJA, así que esto
-        /// es barato y estable frame a frame). 999 si no hay cámara (defensivo).
-        /// </summary>
-        private float HuecoDisponiblePx(int idx)
-        {
-            var cam = Camera.main;
-            if (cam == null) return 999f;
-
-            float aquiX = cam.WorldToScreenPoint(new Vector3(_redomas[idx].MundoX, 0f, 0f)).x;
-            float distIzq = idx > 0 ? aquiX - cam.WorldToScreenPoint(new Vector3(_redomas[idx - 1].MundoX, 0f, 0f)).x : 999f;
-            float distDer = idx < NumRedomas - 1 ? cam.WorldToScreenPoint(new Vector3(_redomas[idx + 1].MundoX, 0f, 0f)).x - aquiX : 999f;
-            return Mathf.Min(distIzq, distDer) * FraccionHuecoUsable * 2f; // *2: la placa se centra, así que dispone de hueco a ambos lados.
-        }
-
-        /// <summary>Nombre + cantidad de la redoma, cacheado y truncado con "…" si no cabe en `anchoMaxPx`.</summary>
-        private string EtiquetaNombre(Redoma r, float anchoMaxPx)
-        {
-            string nombre = NombreDe(r.Mat);
-            if (r.NombreCacheFuente == nombre && r.NombreCacheCantidad == r.Cantidad
-                && r.NombreCacheAncho == anchoMaxPx && r.NombreCacheTexto != null)
-            {
-                return r.NombreCacheTexto;
-            }
-
-            string completo = nombre + "  " + r.Cantidad;
-            r.NombreCacheTexto = Truncar(UiStyles.ChipMini, completo, anchoMaxPx);
-            r.NombreCacheFuente = nombre;
-            r.NombreCacheCantidad = r.Cantidad;
-            r.NombreCacheAncho = anchoMaxPx;
-            return r.NombreCacheTexto;
-        }
-
-        /// <summary>Recorta `texto` con UiStyles.Ancho hasta que quepa en `anchoMaxPx`, añadiendo "…".</summary>
-        private static string Truncar(GUIStyle estilo, string texto, float anchoMaxPx)
-        {
-            if (string.IsNullOrEmpty(texto) || UiStyles.Ancho(estilo, texto) <= anchoMaxPx) return texto;
-
-            string acortado = texto;
-            while (acortado.Length > 1 && UiStyles.Ancho(estilo, acortado + "…") > anchoMaxPx)
-            {
-                acortado = acortado.Substring(0, acortado.Length - 1);
-            }
-            return acortado + "…";
         }
     }
 }

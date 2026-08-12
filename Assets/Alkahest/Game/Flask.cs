@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
@@ -22,6 +21,32 @@ namespace Alkahest.Game
     /// AlkahestSim.PaintCell. Es además lo que la fantasía promete: si aspiras
     /// hielo, sigues llevando hielo.
     ///
+    /// (fix playtest 10, reportes 7+8) DOS QUEJAS QUE ERAN LA MISMA: "manejar
+    /// cursor Y personaje se siente antinatural" y "aspiro y me llevo restos de
+    /// otro material sin querer". Ambas nacen de que la herramienta (el chorro
+    /// de aspirado/vertido) es invisible y no discrimina. Tres cambios:
+    ///  1) BLOQUEO DE MATERIAL: al pulsar aspirar se fija el material bajo el
+    ///     cursor para TODA la pulsación (ver <see cref="BloquearMaterialBajoElCursor"/>).
+    ///     Shift mantiene el comportamiento viejo (todo indiscriminado), para
+    ///     limpiar destrozos. Esto es la respuesta real al reporte 8 — el
+    ///     jugador proponía zoomear con el scroll para apuntar mejor, pero eso
+    ///     (a) pelearía con el autoencuadre de cámara que costó dos playtests
+    ///     arreglar (SimRenderer.FitMainCamera se ajusta al mundo ENTERO;
+    ///     zoomear reintroduce exactamente la clase de bug de encuadre de los
+    ///     playtests 5/6), (b) obliga a alternar "navegar" y "apuntar" en vez
+    ///     de solo apuntar, y (c) no arregla nada: la herramienta seguiría sin
+    ///     discriminar, solo se vería más grande. Bloquear el material lo
+    ///     arregla de raíz sin una tecla nueva en el bucle principal.
+    ///  2) EL HAZ (<see cref="UpdateWorldVisuals"/>): una línea del frasco al
+    ///     cursor mientras se aspira/vierte — convierte "dos cosas que muevo"
+    ///     (reporte 7) en "una herramienta que apunta". Se corta en el borde
+    ///     del alcance y cambia de color si el cursor está fuera.
+    ///  3) EL ANILLO DE ALCANCE: el límite que fuerza a "acercar el cuerpo"
+    ///     era invisible hasta chocar con el aviso "demasiado lejos". Un aro
+    ///     tenue alrededor del aprendiz, casi apagado en reposo, que se
+    ///     enciende al acercarse al borde, lo hace visible SIN dejar un
+    ///     elemento permanente en pantalla (ya se quejaron de eso antes).
+    ///
     /// Nota de determinismo/netcode: TODA mutación de la grilla pasa por
     /// AlkahestSim.Paint/PaintCell (nunca acceso directo a CellGrid), tal y como
     /// exige el resto del proyecto.
@@ -32,64 +57,10 @@ namespace Alkahest.Game
         /// <summary>Mensaje corto de feedback para el HUD ("frasco vacío", "demasiado lejos"). Se autolimpia.</summary>
         public string Feedback { get; private set; } = "";
         public float FeedbackUntil { get; private set; }
-
-        // ---------------------------------------------------------------------------------
-        // "Ya lo sabes" (fix playtest 7): "el mensaje de que no tengo algo en el
-        // frasco... también estorba y es cansado después de que ya lo sabes; a
-        // veces solo clickeas y te sale ese mensaje por todo el mapa". El fallo
-        // (lejos, vacío, lleno...) se repite constantemente porque el jugador
-        // clickea sin pensarlo — pero el TEXTO solo aporta la primera vez.
-        //
-        // Registro por TIPO de mensaje (clave = el propio texto, así cada aviso
-        // "aprende" por separado: que ya sepas "frasco vacío" no calla "demasiado
-        // lejos"). Dictionary creado UNA sola vez, nunca dentro de OnGUI/Update.
-        // Las 3 primeras veces que se dispara un texto concreto se muestra
-        // normal; a partir de ahí NO se vuelve a mostrar como texto — pero la
-        // acción fallida sigue teniendo respuesta: un destello corto (~0.15 s,
-        // ver DestelloIntensidad) del panel del frasco en UiStyles.Aviso,
-        // pintado por FlaskHud. Nada de texto, nada de globos por el mapa; y
-        // "hice clic y no pasó nada" deja de ser cierto porque el destello SÍ
-        // ocurre.
-        //
-        // Se reinicia solo: es un campo de INSTANCIA (no PlayerPrefs), y Flask
-        // no sobrevive a un reload de escena (RestartRun recarga la escena
-        // entera), así que cada partida nueva arranca con el registro vacío sin
-        // necesidad de limpiarlo a mano.
-        private const int VecesAntesDeCallar = 3;
-        private const float DestelloDuracion = 0.15f;
-
-        private readonly Dictionary<string, int> _vecesMostrado = new Dictionary<string, int>();
-        private float _destelloUntil;
-
-        /// <summary>Intensidad 0..1 del destello silencioso del panel del frasco (0 = sin destello). Lo pinta FlaskHud.</summary>
-        public float DestelloIntensidad => Mathf.Clamp01((_destelloUntil - Time.time) / DestelloDuracion);
-
-        /// <summary>
-        /// `repetitivo` = true (por defecto) para los regaños de una acción
-        /// fallida ("demasiado lejos", "frasco vacío"...): esos son los que se
-        /// callan tras <see cref="VecesAntesDeCallar"/> repeticiones DEL MISMO
-        /// texto. `repetitivo` = false para información real de algo que SÍ
-        /// ocurrió (p.ej. una confirmación): esos se muestran siempre.
-        /// </summary>
-        private void SetFeedback(string msg, bool repetitivo = true)
-        {
-            if (repetitivo)
-            {
-                int veces = _vecesMostrado.TryGetValue(msg, out int v) ? v : 0;
-                if (veces >= VecesAntesDeCallar)
-                {
-                    _destelloUntil = Time.time + DestelloDuracion;
-                    return; // ya lo sabe: nada de texto, solo el destello mudo.
-                }
-                _vecesMostrado[msg] = veces + 1;
-            }
-
-            Feedback = msg;
-            FeedbackUntil = Time.time + 1.5f;
-        }
+        private void SetFeedback(string msg) { Feedback = msg; FeedbackUntil = Time.time + 1.5f; }
 
         /// <summary>Mismo canal de feedback, para que otros aparatos (la estantería de redomas) avisen junto al cursor y no en su propia esquina.</summary>
-        public void Avisar(string msg, bool repetitivo = true) => SetFeedback(msg, repetitivo);
+        public void Avisar(string msg) => SetFeedback(msg);
 
         public const int Capacity = 900;
 
@@ -116,11 +87,28 @@ namespace Alkahest.Game
         private float _accumulator;
         private bool _hasCursor;
         private Vector2Int _cursorCell;
+        private bool _hasCursorWorld;
+        private Vector3 _cursorWorld;
 
         private SpriteRenderer _carryVisual;
 
         public int Total => _total;
         public int GetCount(byte matId) => _counts[matId];
+
+        // ---------------------------------------------------------------------------------
+        // BLOQUEO DE MATERIAL (fix playtest 10, reporte 8): ver doc de clase.
+        // ---------------------------------------------------------------------------------
+        private byte _lockedMaterial = MaterialId.Empty;
+        private bool _hasLockedMaterial;
+
+        /// <summary>¿Hay un material fijado para la pulsación de aspirado actual?</summary>
+        public bool TieneMaterialBloqueado => _hasLockedMaterial;
+        /// <summary>El material fijado (solo válido si <see cref="TieneMaterialBloqueado"/>). Usado por FlaskHud.</summary>
+        public byte MaterialBloqueado => _lockedMaterial;
+        /// <summary>True mientras se está aspirando de verdad (botón pulsado y cursor sobre la grilla). Usado por FlaskHud para mostrar el chip de material bloqueado SOLO mientras dura la acción.</summary>
+        public bool EstaAspirando { get; private set; }
+        /// <summary>True si Shift está manteniendo el modo "aspira todo indiscriminadamente" este frame. Usado por FlaskHud.</summary>
+        public bool ModoIndiscriminado { get; private set; }
 
         /// <summary>Temperatura raw media del material guardado (ambiente si no llevas nada de él).</summary>
         public byte TempMediaDe(byte matId)
@@ -187,6 +175,8 @@ namespace Alkahest.Game
             _sim = sim;
             BuildPourOrder();
             BuildCarryVisual();
+            BuildBeamVisual();
+            BuildRingVisual();
         }
 
         private void BuildPourOrder()
@@ -229,12 +219,24 @@ namespace Alkahest.Game
         private void Update()
         {
             if (_sim == null || _sim.Grid == null) return;
-            if (DayCycle.InputLocked) return; // M4: título/intro/fin de día/pantalla final congelan el frasco.
+            if (DayCycle.InputLocked) { OcultarVisualesDeMundo(); return; } // M4: título/intro/fin de día/pantalla final congelan el frasco.
 
             var mouse = Mouse.current;
             var kb = Keyboard.current;
             // (fix playtest 2) Con la paleta dev (F3) abierta, el pincel manda: el frasco no actúa.
-            if (Alkahest.Dev.DevPalette.IsOpen) return;
+            if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisualesDeMundo(); return; }
+
+            // (fix playtest 10) Mientras el jugador ESCRIBE un nombre (NamingUi), NINGÚN
+            // atajo del frasco debe colarse: ni Q (vaciar) ni Shift (mayúsculas al
+            // teclear, no "aspira todo"). Misma regla que ya obedecen M/H/T/E/J/F3/
+            // flechas en el resto del proyecto (ver UiStyles.EscribiendoTexto).
+            if (UiStyles.EscribiendoTexto) { OcultarVisualesDeMundo(); return; }
+
+            // (fix playtest 10) Con el DIARIO abierto a pantalla completa el mundo
+            // está tapado por el velo: aspirar o verter a ciegas detrás del libro
+            // solo puede acabar en destrozo. Además el libro pagina con Re Pág /
+            // Av Pág y el jugador tiene el ratón encima del papel, no del taller.
+            if (JournalHud.Abierto) { OcultarVisualesDeMundo(); return; }
 
             // La estantería de redomas captura el ratón cuando el cursor está
             // sobre una redoma: ahí los clics son "guardar/recuperar", no
@@ -247,8 +249,25 @@ namespace Alkahest.Game
             bool wantDump = !ratonCapturado
                             && ((mouse != null && mouse.middleButton.wasPressedThisFrame)
                                 || (kb != null && kb.qKey.wasPressedThisFrame));
+            bool suckJustPressed = mouse != null && mouse.leftButton.wasPressedThisFrame && !ratonCapturado;
+            // Modificador para aspirar TODO indiscriminadamente (limpiar destrozos):
+            // se comprueba CADA frame, no solo al pulsar, así que se puede activar o
+            // soltar Shift a mitad de una pulsación sin soltar el botón.
+            bool indiscriminado = wantSuck && kb != null && kb.leftShiftKey.isPressed;
 
-            _hasCursor = TryGetCursorCell(out _cursorCell);
+            _hasCursorWorld = TryGetCursorWorld(out _cursorWorld);
+            _hasCursor = _hasCursorWorld && CeldaDesdeCursorMundo(out _cursorCell);
+
+            if (suckJustPressed)
+            {
+                if (indiscriminado) { _hasLockedMaterial = false; _lockedMaterial = MaterialId.Empty; }
+                else if (_hasCursor) BloquearMaterialBajoElCursor(_cursorCell);
+                else { _hasLockedMaterial = false; _lockedMaterial = MaterialId.Empty; }
+            }
+            if (!wantSuck) { _hasLockedMaterial = false; _lockedMaterial = MaterialId.Empty; } // se libera al soltar
+
+            EstaAspirando = wantSuck && _hasCursor;
+            ModoIndiscriminado = indiscriminado;
 
             if (wantDump && _hasCursor)
             {
@@ -261,7 +280,7 @@ namespace Alkahest.Game
             {
                 if (_hasCursor)
                 {
-                    if (wantSuck) TickSuck(_cursorCell);
+                    if (wantSuck) TickSuck(_cursorCell, indiscriminado);
                     else if (wantPour) TickPour(_cursorCell);
                 }
                 _accumulator -= TickDt;
@@ -270,11 +289,13 @@ namespace Alkahest.Game
             if (_accumulator > TickDt * MaxStepsPerFrame) _accumulator = TickDt * MaxStepsPerFrame;
 
             UpdateCarryVisual();
+            UpdateWorldVisuals(wantSuck, wantPour);
         }
 
-        private bool TryGetCursorCell(out Vector2Int cell)
+        /// <summary>Raycast puro cámara-&gt;plano de mundo (z=0), sin comprobar límites de la grilla: lo usan tanto el aspirado/vertido (que sí necesita la celda) como el haz/anillo (que necesitan el punto aunque caiga fuera de la grilla, p.ej. cursor en el borde de pantalla).</summary>
+        private bool TryGetCursorWorld(out Vector3 world)
         {
-            cell = default;
+            world = default;
             var mouse = Mouse.current;
             var cam = Camera.main;
             if (mouse == null || cam == null) return false;
@@ -284,15 +305,84 @@ namespace Alkahest.Game
             var groundPlane = new Plane(Vector3.forward, Vector3.zero);
             if (!groundPlane.Raycast(ray, out float enter)) return false;
 
-            Vector3 world = ray.GetPoint(enter);
-            cell = _sim.WorldToCell(world);
+            world = ray.GetPoint(enter);
+            return true;
+        }
+
+        /// <summary>Convierte <see cref="_cursorWorld"/> (ya calculado este frame) a celda de grilla, comprobando límites.</summary>
+        private bool CeldaDesdeCursorMundo(out Vector2Int cell)
+        {
+            cell = _sim.WorldToCell(_cursorWorld);
             return CellGrid.InBounds(cell.x, cell.y);
+        }
+
+        // ---------------------------------------------------------------------------------
+        // Bloqueo de material (fix playtest 10, reporte 8). Ver doc de clase.
+        // ---------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Al pulsar aspirar: fija qué material entra en el frasco durante TODA
+        /// la pulsación. Si bajo el cursor no hay nada aspirable, busca el
+        /// aspirable más cercano dentro del alcance con el mismo recorrido en
+        /// anillos crecientes que usa <see cref="TickSuck"/> (misma sensación de
+        /// "lo más próximo primero"). Si tampoco encuentra nada, no bloquea nada
+        /// y esta pulsación no aspira — mismo silencio que ya tenía apuntar a una
+        /// celda vacía sin nada alrededor, no hace falta inventar un aviso nuevo.
+        /// </summary>
+        private void BloquearMaterialBajoElCursor(Vector2Int cursor)
+        {
+            byte bajoElCursor = (byte)_sim.SampleMaterial(cursor.x, cursor.y);
+            if (EsAspirable(bajoElCursor))
+            {
+                _lockedMaterial = bajoElCursor;
+                _hasLockedMaterial = true;
+                return;
+            }
+
+            Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
+            float reachCellsSq = ReachCellsSq();
+
+            for (int r = 0; r <= SuckRadius; r++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    int y = cursor.y + dy;
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Mathf.RoundToInt(Mathf.Sqrt(dx * dx + dy * dy)) != r) continue;
+
+                        int x = cursor.x + dx;
+                        if (!CellGrid.InBounds(x, y)) continue;
+
+                        int cdx = x - apprenticeCell.x, cdy = y - apprenticeCell.y;
+                        if (cdx * cdx + cdy * cdy > reachCellsSq) continue;
+
+                        byte m = (byte)_sim.SampleMaterial(x, y);
+                        if (!EsAspirable(m)) continue;
+
+                        _lockedMaterial = m;
+                        _hasLockedMaterial = true;
+                        return;
+                    }
+                }
+            }
+
+            _hasLockedMaterial = false;
+            _lockedMaterial = MaterialId.Empty;
+        }
+
+        /// <summary>¿Es este material aspirable? Centraliza el MISMO filtro que ya aplicaba TickSuck (piedra nunca — es la arquitectura del taller; fuego nunca — quemaría el frasco) para que el bloqueo y el aspirado real jamás discrepen.</summary>
+        private bool EsAspirable(byte matId)
+        {
+            if (matId == MaterialId.Empty || matId == MaterialId.Stone) return false;
+            if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire) return false;
+            return true;
         }
 
         // ---------------------------------------------------------------------------------
         // Aspirar (LMB mantenido).
         // ---------------------------------------------------------------------------------
-        private void TickSuck(Vector2Int cursor)
+        private void TickSuck(Vector2Int cursor, bool indiscriminado)
         {
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
@@ -310,6 +400,11 @@ namespace Alkahest.Game
                 SetFeedback("frasco lleno — vierte (clic der.) o vacía (Q)");
                 return;
             }
+
+            // Sin Shift, si esta pulsación no bloqueó ningún material (nada
+            // aspirable bajo el cursor ni cerca al pulsar) no hay nada que
+            // discriminar todavía: no se aspira nada este tick.
+            if (!indiscriminado && !_hasLockedMaterial) return;
 
             int budget = SuckRatePerTick;
 
@@ -352,6 +447,13 @@ namespace Alkahest.Game
                             SetFeedback("¡el fuego te quemaría el frasco!");
                             continue;
                         }
+
+                        // BLOQUEO DE MATERIAL (fix playtest 10, reporte 8): sin
+                        // Shift, solo entra al frasco el material que quedó fijado
+                        // al pulsar (ver BloquearMaterialBajoElCursor) — así
+                        // "aspirar agua" ya no se lleva de paso unas pocas celdas
+                        // de arena vecina sin querer.
+                        if (!indiscriminado && matId != _lockedMaterial) continue;
 
                         // El frasco se lleva la TEMPERATURA con la materia (ver
                         // doc de la clase): es lo que hace posibles los encargos
@@ -502,6 +604,262 @@ namespace Alkahest.Game
                 b += col.b / 255f * wgt;
             }
             _carryVisual.color = new Color(r, g, b, 0.9f);
+        }
+
+        // ===================================================================
+        // EL HAZ + EL ANILLO DE ALCANCE (fix playtest 10, reportes 7+8).
+        // Ver doc de clase para el porqué de este diseño. Todo generado por
+        // código, cero Shader.Find (solo SpriteRenderer), creado UNA vez en
+        // Build*Visual() — Update() solo mueve/rota/escala/tiñe lo ya creado.
+        // ===================================================================
+
+        private const int BeamSortingOrder = 40;   // por debajo del Cuerpo del aprendiz (50) y de sus alas (47-49): nunca lo tapa.
+        private const int RingSortingOrder = 20;   // por debajo de todo lo demás salvo el propio suelo de materia (-5).
+
+        private const float BeamThicknessWorld = 0.045f;
+        private const float BeamAlpha = 0.34f;      // "alfa bajo": es una guía, no un rayo láser.
+        private const float PulseAlpha = 0.85f;
+        private const float PulseSizeWorld = 0.09f;
+        private const float PulseSpeed = 1.6f;      // ciclos/segundo que recorre el haz.
+
+        // Latón tenue de mundo (NO UiStyles.Oro, que es color de UI): mismo
+        // tono que pide el diseño para el anillo, reutilizado en el haz cuando
+        // no hay un material que lo tiña (Shift/indiscriminado).
+        private static readonly Color32 BrassBase = new Color32(168, 126, 58, 255);
+        private static readonly Color32 BrassLight = new Color32(214, 176, 96, 255);
+        private static readonly Color32 BrassShadow = new Color32(86, 62, 28, 255);
+        private static readonly Color32 BeamColorAviso = new Color32(219, 84, 71, 255); // fuera de alcance: tono de aviso cálido-rojo, mundo (no UiStyles.Peligro, que es de UI).
+
+        private Transform _beamRoot;
+        private SpriteRenderer _beamLineSr;
+        private Transform _beamPulseTr;
+        private SpriteRenderer _beamPulseSr;
+
+        private const float RingRestAlpha = 0.05f;   // casi invisible en reposo.
+        private const float RingMaxAlpha = 0.60f;
+        private const float RingProximityStartFrac = 0.55f; // empieza a encenderse a partir del 55% del alcance.
+        private const float RingProximityFullFrac = 1.05f;  // totalmente encendido justo al cruzar el borde.
+        private const float RingAlphaSmooth = 9f;
+
+        private SpriteRenderer _ringSr;
+        private float _ringAlpha;
+
+        private void BuildBeamVisual()
+        {
+            var lineaSprite = CrearSpriteBlanco1x1("AlkahestFlaskHazLinea", new Vector2(0f, 0.5f));
+            var pulsoSprite = CrearSpritePulso();
+
+            var rootGo = new GameObject("FlaskHaz");
+            rootGo.transform.SetParent(transform, false);
+            _beamRoot = rootGo.transform;
+
+            var lineaGo = new GameObject("Linea");
+            lineaGo.transform.SetParent(_beamRoot, false);
+            _beamLineSr = lineaGo.AddComponent<SpriteRenderer>();
+            _beamLineSr.sprite = lineaSprite;
+            _beamLineSr.sortingOrder = BeamSortingOrder;
+            _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
+
+            var pulsoGo = new GameObject("Pulso");
+            pulsoGo.transform.SetParent(_beamRoot, false);
+            _beamPulseTr = pulsoGo.transform;
+            _beamPulseSr = pulsoGo.AddComponent<SpriteRenderer>();
+            _beamPulseSr.sprite = pulsoSprite;
+            _beamPulseSr.sortingOrder = BeamSortingOrder + 1;
+            _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+        }
+
+        private void BuildRingVisual()
+        {
+            var sprite = CrearSpriteAnillo();
+            var go = new GameObject("FlaskAlcanceAnillo");
+            go.transform.SetParent(transform, false);
+            _ringSr = go.AddComponent<SpriteRenderer>();
+            _ringSr.sprite = sprite;
+            _ringSr.sortingOrder = RingSortingOrder;
+            _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, 0f);
+            // El sprite nace 1x1 unidad de mundo (ver CrearSpriteAnillo). Se
+            // escala UNA vez al diámetro real del alcance: ReachWorld es una
+            // constante, así que esto no hay que tocarlo nunca en Update.
+            go.transform.localScale = Vector3.one * (ReachWorld * 2f);
+        }
+
+        private static Sprite CrearSpriteBlanco1x1(string nombre, Vector2 pivot01)
+        {
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = nombre };
+            tex.SetPixel(0, 0, Color.white);
+            tex.Apply(false, false);
+            return Sprite.Create(tex, new Rect(0, 0, 1, 1), pivot01, 1f);
+        }
+
+        /// <summary>Punto suave (gradiente radial) para la "cuenta" que recorre el haz insinuando la dirección del flujo. Bilinear a propósito: es un brillo difuso, no una silueta que deba leerse nítida (a diferencia del anillo).</summary>
+        private static Sprite CrearSpritePulso()
+        {
+            const int n = 16;
+            var px = new Color32[n * n];
+            float c = (n - 1) * 0.5f;
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x - c) / c, dy = (y - c) / c;
+                    float d = Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy));
+                    float a = 1f - d;
+                    a *= a; // caída más suave hacia el borde.
+                    px[y * n + x] = new Color(1f, 1f, 1f, a);
+                }
+            }
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "AlkahestFlaskHazPulso" };
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
+        }
+
+        /// <summary>
+        /// Anillo de alcance: aro fino cerca del borde exterior del sprite (para
+        /// leerse como "límite", no como disco relleno), con degradado suave de
+        /// alfa en ambos cantos y un ligero tinte luz-arriba/sombra-abajo.
+        /// FilterMode.Point: coherencia de estilo pixel-art con el resto del
+        /// proyecto (MaquinariaSprites, ApprenticeController), no una elección
+        /// suelta aquí.
+        /// </summary>
+        private static Sprite CrearSpriteAnillo()
+        {
+            const int n = 128;
+            var px = new Color32[n * n];
+            float c = (n - 1) * 0.5f;
+            const float rOuter = 0.97f, rInner = 0.82f, feather = 0.035f;
+
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x - c) / c, dy = (y - c) / c; // -1..1, con 1 = borde del sprite.
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d < rInner - feather || d > rOuter + feather) continue;
+
+                    float alpha;
+                    if (d < rInner) alpha = Mathf.InverseLerp(rInner - feather, rInner, d);
+                    else if (d > rOuter) alpha = 1f - Mathf.InverseLerp(rOuter, rOuter + feather, d);
+                    else alpha = 1f;
+
+                    float luzY = y / (float)(n - 1); // 0 abajo, 1 arriba.
+                    Color32 tinte = luzY > 0.6f ? BrassLight : (luzY < 0.35f ? BrassShadow : BrassBase);
+                    px[y * n + x] = new Color32(tinte.r, tinte.g, tinte.b, (byte)(alpha * 255f));
+                }
+            }
+
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
+            {
+                name = "AlkahestFlaskAnillo",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
+        }
+
+        /// <summary>Apaga el haz de golpe y relaja el anillo hacia su reposo. Se llama en los primeros `return` de Update (título/paleta dev/escribiendo texto) para que ningún visual de mundo se quede "pegado" en pantalla mientras el frasco no actúa.</summary>
+        private void OcultarVisualesDeMundo()
+        {
+            if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
+            if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+            if (_ringSr != null)
+            {
+                _ringAlpha = Mathf.Lerp(_ringAlpha, RingRestAlpha, 1f - Mathf.Exp(-RingAlphaSmooth * Time.deltaTime));
+                _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, _ringAlpha);
+            }
+        }
+
+        private void UpdateWorldVisuals(bool wantSuck, bool wantPour)
+        {
+            // --- Anillo: reacciona SIEMPRE a la proximidad del cursor, no solo
+            // mientras se aspira/vierte -- es la única forma de que el jugador
+            // aprenda dónde está el límite ANTES de chocar con él y leer
+            // "demasiado lejos" (ver doc de clase, punto 3). ---
+            float proximidad = 0f;
+            if (_hasCursorWorld)
+            {
+                float distReach = Vector3.Distance(transform.position, _cursorWorld);
+                proximidad = Mathf.InverseLerp(ReachWorld * RingProximityStartFrac, ReachWorld * RingProximityFullFrac, distReach);
+            }
+            float ringAlphaObjetivo = Mathf.Lerp(RingRestAlpha, RingMaxAlpha, proximidad);
+            _ringAlpha = Mathf.Lerp(_ringAlpha, ringAlphaObjetivo, 1f - Mathf.Exp(-RingAlphaSmooth * Time.deltaTime));
+            if (_ringSr != null)
+            {
+                _ringSr.color = new Color(BrassBase.r / 255f, BrassBase.g / 255f, BrassBase.b / 255f, _ringAlpha);
+            }
+
+            // --- Haz: solo existe mientras se aspira/vierte DE VERDAD (ver doc de
+            // clase, punto 2) -- fuera de esos momentos sería justo el ruido
+            // visual permanente del que ya se quejó el jugador en otro playtest. ---
+            bool aspirando = wantSuck && _hasCursorWorld;
+            bool virtiendo = wantPour && _hasCursorWorld && _total > 0;
+            bool hazActivo = (aspirando && (ModoIndiscriminado || _hasLockedMaterial)) || virtiendo;
+
+            if (!hazActivo || _apprentice == null || _beamRoot == null)
+            {
+                if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
+                if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+                return;
+            }
+
+            Vector3 origen = _apprentice.CarryAnchor;
+            Vector3 alcanceOrigen = transform.position;
+            Vector3 delta = _cursorWorld - alcanceOrigen; delta.z = 0f;
+            float distDesdeAprendiz = delta.magnitude;
+            bool fueraDeAlcance = distDesdeAprendiz > ReachWorld;
+
+            // El haz se CORTA en el borde del alcance en vez de seguir hasta el
+            // cursor: así "fuera de alcance" se nota en el propio gesto de
+            // apuntar, no solo al soltar el botón sin que pasara nada.
+            Vector3 destino = fueraDeAlcance
+                ? alcanceOrigen + delta.normalized * ReachWorld
+                : _cursorWorld;
+
+            Vector3 tramo = destino - origen; tramo.z = 0f;
+            float largo = tramo.magnitude;
+            if (largo < 0.0005f)
+            {
+                if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
+                if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+                return;
+            }
+
+            float anguloDeg = Mathf.Atan2(tramo.y, tramo.x) * Mathf.Rad2Deg;
+            _beamRoot.position = origen;
+            _beamRoot.rotation = Quaternion.Euler(0f, 0f, anguloDeg);
+            _beamLineSr.transform.localScale = new Vector3(largo, BeamThicknessWorld, 1f);
+
+            Color32 colorBase = fueraDeAlcance ? BeamColorAviso : ColorDelHaz(aspirando);
+            _beamLineSr.color = new Color(colorBase.r / 255f, colorBase.g / 255f, colorBase.b / 255f, BeamAlpha);
+
+            // Pulso: recorre el haz insinuando la dirección del flujo -- HACIA
+            // el frasco al aspirar, HACIA fuera al verter (ver doc de clase).
+            float ciclo = Mathf.Repeat(Time.time * PulseSpeed, 1f);
+            float t = aspirando ? 1f - ciclo : ciclo;
+            _beamPulseTr.localPosition = new Vector3(t * largo, 0f, -0.01f);
+            _beamPulseTr.localScale = Vector3.one * PulseSizeWorld;
+            _beamPulseSr.color = new Color(colorBase.r / 255f, colorBase.g / 255f, colorBase.b / 255f, PulseAlpha);
+        }
+
+        /// <summary>Color del haz: el material bloqueado al aspirar, el dominante del frasco al verter, o el latón neutro de mundo si no hay ninguno concreto que mostrar (Shift/frasco vacío de un color puro).</summary>
+        private Color32 ColorDelHaz(bool aspirando)
+        {
+            if (aspirando)
+            {
+                // ModoIndiscriminado (Shift) se comprueba PRIMERO: si a mitad de
+                // una pulsación con material bloqueado el jugador mantiene Shift,
+                // TickSuck ya ignora el bloqueo (aspira todo) -- el haz debe
+                // reflejar eso, no seguir tiñéndose del material que se dejó de
+                // discriminar.
+                if (ModoIndiscriminado) return BrassBase;
+                if (_hasLockedMaterial) return _sim.Universe.Get(_lockedMaterial).baseColor;
+                return BrassBase;
+            }
+            byte dominante = MaterialDominante();
+            return dominante != MaterialId.Empty ? _sim.Universe.Get(dominante).baseColor : BrassBase;
         }
     }
 }

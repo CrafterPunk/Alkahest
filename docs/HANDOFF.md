@@ -30,24 +30,26 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 9)
+## Backlog priorizado (actualizado tras playtest 10)
 1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con todos los fixes
-   del playtest 9 (ver esa sección) — sigue sin probarse en editor.
-2. **Comprobar que el texto largo del Maestro cabe en el panel de la jornada 2**: `MasterSupplies.
-   TextoEntrega` pasó de ~155 a ~330 caracteres dentro de un panel de altura fija (490 px, ver
-   `DayCycle.AbrirPanel`); usa `GUILayout.FlexibleSpace()` antes del botón así que debería
-   absorberlo, pero hay que jugarlo para confirmarlo.
-3. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
+   del playtest 10 (ver esa sección) — sigue sin probarse en editor.
+2. **Confirmar con una captura nueva que el rótulo del frío quedó bien** (`ChillStone`, playtest
+   10 §5): el análisis de código dice que el anclaje ya era correcto, pero el jugador no lo ha
+   vuelto a ver.
+3. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
+   (`JournalHud`): la API ya existe, escrita en paralelo esta misma ronda, pero nadie la consume
+   todavía (playtest 10 §2).
+4. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
    `DirectorDeAudio`? Depende de feedback de Cesar.
-4. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
+5. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
    (playtest 4) ni con M5 (audio + aprendiz) encima. Menú ya existe (`AlkahestBuildTools`, ver
    stint M5-parcial) — falta EJECUTARLO y probar el .exe.
-5. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
+6. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
    es ChaosAlchemy; los namespaces `Alkahest.*` se quedan — decisión registrada).
-6. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
+7. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
    accesibles, para levantar el gameplay de reacciones/experimentación.
-7. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
-8. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
+8. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
+9. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
    - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
    - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
      tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
@@ -55,8 +57,8 @@ en el proyecto pero no integrado con la sim.
      por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
    - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
      habla con él. NO rediseñar el template.
-9. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
-   NO para taller de una pantalla — ver DECISIONS §17).
+10. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+    NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
 - El puente Cowork NO puede borrar archivos ni tocar refs de git en el FS montado → scripts .cmd.
@@ -66,6 +68,159 @@ en el proyecto pero no integrado con la sim.
 - SetPixels32 por chunks: hay UN buffer scratch preasignado de 16x16 y el render asume que CHUNK
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
+
+## Playtest 10 → LA FANTASÍA DE BAUTIZAR RECUPERADA, EL DIARIO ES UN LIBRO,
+## BLOQUEO DE MATERIAL + HAZ + ANILLO DEL FRASCO, y barrido de atajos — SIN VERIFICAR EN EDITOR
+Ronda dirigida por Opus 5 (diagnóstico de los hallazgos de Cesar, especificación de 4 encargos
+con propiedad de archivos disjunta, revisión de compilación); Sonnet 5 escribió TODO el código.
+
+**1. LA FANTASÍA DE BAUTIZAR, RECUPERADA (el hallazgo de diseño de la ronda).** Cesar: *"No
+entendí por qué etiquetar de vivium algo que el juego ya le llama así. ¿Por qué le pondría otro
+nombre? Se perdió algo ahí de la idea inicial."* Tenía razón: el juego presentaba todo ya
+clasificado, así que bautizar era un trámite vacío. `SubstanceKnowledge` reparte ahora el roster
+en dos clases (tabla escrita en el comentario de la clase):
+- **VOCABULARIO DEL TALLER** (nombre desde el día 1, `NombreComun` no devuelve null): Stone,
+  Sand, Water, Oil, Nutrient (grifos del banco) y los fenómenos mundanos Steam, Smoke, Fire, Ash,
+  Ice. Criterio: nadie bautiza el agua.
+- **LO INNOMINADO** (`NombreComun` devuelve null -> "???" hasta bautizar): Azoth (sale de un
+  grifo, pero es la reserva que "tampoco sabe qué es"), CrystalSeed, Crystal (Azoth+semilla en
+  frío), Vivium, Slime (solo nace de Ácido+Agua) y Acid (sin grifo en esta build).
+Los encargos (`OrderSystem`) describen ahora por EFECTO/ORIGEN mientras el material objetivo siga
+sin nombre, y pasan a usar el nombre del jugador en cuanto se bautiza: `DescribirGrows` ("...de lo
+que crece solo, sin que lo alimenten a mano" → "...de lo que llamáis \"musgo hambriento\"") y
+`DescribirCrystalSolid` ("la piedra que crece en la bandeja fría", deliberadamente sin mencionar
+Azoth, también innominado, para no repetir la circularidad). El recálculo lo dispara
+`SubstanceKnowledge.NamingVersion` en `Update()`: como `Order.Descripcion` es readonly (Game/
+Order.cs), `RefreshDescripciones()` sustituye la instancia `Order` entera cuando cambia la
+versión, nunca construye strings en `OnGUI`.
+`Dispenser` y `MasterSupplies` se corrigieron en el mismo barrido para no contradecir la
+reclasificación: `Dispenser.ResolverNombre()` resuelve el nombre vía `SubstanceKnowledge`
+(`FindAnyObjectByType` en `Init` — no se pudo cambiar la firma de `Init` sin tocar
+`AlkahestGameBootstrap`, fuera de alcance) en vez de caer en el `devName` interno en inglés; antes
+el grifo de Azoth decía literalmente "Azoth" para siempre. `MasterSupplies.TextoEntrega` (jornada
+2, 352 caracteres, antes 330) describe las tres semillas por ORIGEN ("el líquido del grifo alto",
+"el retoño de la cuba", "la semilla de la bandeja fría"), abriendo con *"El Maestro os deja tres
+semillas SIN NOMBRE: ni él sabe qué son, y espera que vosotros les pongáis uno."* El panel de
+`DayCycle.DrawDayIntro` (vía `AbrirPanel`) se subió de 490 a 510 px de alto para la jornada 2 como
+margen de seguridad (usa `GUILayout.FlexibleSpace()`, así que 490 ya sobraba, pero sin confirmar
+jugando).
+
+**2. EL DIARIO ES UN LIBRO.** Cesar: *"la presentación gráfica es muy pobre, además de incómodo
+de leer. No siento que sea tan necesario que vea todo el resto de la pantalla mientras quiero leer
+mi libro"* y, sobre las pistas, *"las indicaciones son súper largas... no sentí que tenía que
+descubrirlo como algo divertido sino que tengo que descubrirlo porque no tomé una captura de
+pantalla"*. `JournalHud` reescrito (866 líneas): velo a pantalla completa (alfa 0.86) + libro de
+dos páginas de pergamino apagado (marrón 0.30/0.24/0.18, NO blanco puro) con lomo, márgenes por
+`UiStyles.S()`, tres niveles tipográficos y aire generoso entre entradas. `GUI.depth = -1000` lo
+pone delante de todo (en IMGUI gana el depth MÁS BAJO). Tres secciones con pestañas clicables:
+**LEYES** (con `★ SE PROPAGA` destacado), **SUSTANCIAS**, y la nueva **PROCEDIMIENTOS** (recetas
+paso a paso sintetizadas desde `Universe.Reactions` + la ley de crecimiento del Vivium, con el
+paso que siempre se olvida explícito: "★ SE PROPAGA — el X no se gasta, repite el paso 2").
+Paginación real con "página N de M" y botones "anterior"/"siguiente" (se evitan los glifos
+◀/▶ y ⟳, sin uso previo comprobado en la fuente IMGUI real del proyecto — solo ·/—/★). Abre y
+cierra con **J**, y también cierra con **ESC**. Expone `public static bool Abierto`.
+Caché: una sola firma (`CountDiscovered()*1000003 + NamingVersion`) reconstruye las tres listas de
+`Entrada`; la paginación (`ComputePages`/`FillColumn`) se mide cada `OnGUI` sobre los strings ya
+cacheados, con `UiStyles.Alto` (word-wrap real, sin asignaciones).
+**Pistas de `HintSystem` recortadas a una línea ejecutable cada una** (jornada 1: 12 líneas;
+jornada 2: 9, con los procedimientos de cristal y vivium partidos en pasos sueltos; jornada 3: 6).
+La duración de la tanda sale ahora de `pistas × segundos-por-pista` (antes al revés: una duración
+fija repartida entre las pistas que hubiera). El detalle largo vive en el diario, no en el aviso
+flotante.
+**PENDIENTE ANOTADO EN EL CÓDIGO**: `HintSystem` expone ya `public static IReadOnlyList<string>
+PistasMostradas`, pensada para que `JournalHud` archivase literalmente las pistas ya vistas, pero
+**`JournalHud` todavía NO la consume** — ambos archivos se escribieron en paralelo en la misma
+ronda y `JournalHud` no pudo depender de una API que `HintSystem` aún no tenía. `JournalHud`
+sintetiza en su lugar la sección PROCEDIMIENTOS desde `Universe.Reactions` (misma fuente que
+LEYES). Enganchar `PistasMostradas` en el diario queda para la próxima ronda.
+
+**3. EL FRASCO: BLOQUEO DE MATERIAL, HAZ Y ANILLO DE ALCANCE.** Dos reportes que eran el mismo
+problema. *"El tener el cursor y el personaje como dos opciones para controlar el movimiento se
+siente antinatural"* y *"al absorber materiales a veces te llevas unas pocas unidades de otro...
+¿cómo lo manejarías tú?"*.
+- **Bloqueo de material** (`Flask.BloquearMaterialBajoElCursor`): al PULSAR aspirar se muestrea el
+  material bajo el cursor y queda fijado para toda la pulsación; solo entran al frasco celdas de
+  ESE material (`TickSuck`). Si bajo el cursor no hay nada aspirable, busca en anillos crecientes
+  (mismo recorrido que `TickSuck`) el aspirable más cercano dentro del alcance; si no hay ninguno,
+  no bloquea ni aspira. Filtro centralizado en `Flask.EsAspirable` (no Empty, no Stone, no
+  arquetipo Fire) para que nunca diverja del que ya usaba `TickSuck`. **Shift**
+  (`leftShiftKey.isPressed`, comprobado cada frame, no solo al pulsar) aspira todo
+  indiscriminadamente: el comportamiento viejo sigue disponible para limpiar destrozos.
+  Motivo escrito en el código de por qué NO se hizo el zoom que pedía el jugador: pelearía con
+  `SimRenderer.FitMainCamera` (recuadrar la cámara fue un bug recurrente en los playtests 5 y 6),
+  obligaría a navegar además de a apuntar, y no resuelve el problema de fondo — que la herramienta
+  no discrimina.
+- **El haz** (`UpdateWorldVisuals`): línea (`SpriteRenderer` 1x1 estirado y rotado, cero assets)
+  del `CarryAnchor` al cursor mientras se aspira o vierte, coloreada por el material bloqueado o el
+  dominante del frasco (`ColorDelHaz`), con un punto de luz (`_beamPulseSr`) recorriéndola en la
+  dirección del flujo. Se CORTA en el borde de `ReachWorld` y cambia a `BeamColorAviso` (tono
+  rojizo) si el cursor está fuera de alcance.
+- **El anillo de alcance** (`BuildRingVisual`/`UpdateWorldVisuals`): aro tenue alrededor del
+  aprendiz con el radio real de `ReachWorld`, alfa 0.05 en reposo (`RingRestAlpha`) y encendiéndose
+  (hasta `RingMaxAlpha=0.60`) por proximidad del cursor al borde.
+- `sortingOrder`: anillo 20, haz 40/41 — entre el sim (-5) y el aprendiz (cola -3, ala trasera -2,
+  ala delantera -1, cuerpo 0, base 50; ver playtest 9).
+- `FlaskHud` muestra un chip discreto junto al cursor con el material bloqueado, solo mientras se
+  aspira, y "todo (Mayús.)" si Shift lo anula.
+
+**4. BARRIDO DE ATAJOS: `UiStyles.EscribiendoTexto` y `JournalHud.Abierto`.** Cesar: *"Al escribir
+una etiqueta, si usas la tecla M interfiere con el sonido (muteándolo). No deberían pisarse."* Un
+campo de texto IMGUI se come TODAS las letras, así que el bug existía para cada atajo de una
+tecla: la "h" ocultaba las pistas y la "t" cerraba el propio diálogo de bautizar a media palabra.
+Infraestructura nueva: `UiStyles.EscribiendoTexto` (propiedad estática que además sigue
+devolviendo true durante UN FRAME EXTRA tras cerrarse, para que el atajo tampoco se dispare en el
+mismo frame en que se confirma con Enter; la levanta y la baja `NamingUi`, incluido el cierre
+forzado por `DayCycle.InputLocked`) y `JournalHud.Abierto`.
+**REGLA DEL PROYECTO (ver también CLAUDE.md): todo atajo de una sola tecla debe comprobar
+`UiStyles.EscribiendoTexto`, sin excepción. Los atajos del MUNDO deben comprobar además
+`JournalHud.Abierto`; los del propio libro y el silenciar del audio (preferencia del jugador) no.**
+Tabla completa de atajos (material de referencia):
+| Tecla | Sistema | Archivo | Guardas |
+|---|---|---|---|
+| M silenciar | Audio | `Audio/DirectorDeAudio` | solo `EscribiendoTexto` (a propósito: preferencia del jugador) |
+| F3 paleta / P pausa / N step / clics de pintar | Dev | `Dev/DevPalette` | ambas |
+| E interactuar | Máquinas | `Game/HeatPlate`, `Game/ChillStone`, `Game/Dispenser` | `InputLocked` + ambas |
+| WASD y flechas | Movimiento | `Game/ApprenticeController` | ambas (la velocidad decae con naturalidad, no se congela en seco) |
+| ENTER cierre anticipado de jornada | Jornada | `Game/DayCycle` | `EscribiendoTexto` |
+| Clics en redomas | Estantería | `Game/StorageRack` | `InputLocked` + `DevPalette.IsOpen` + ambas |
+| T bautizar, ESC | Bautizar | `Game/NamingUi` | ESC deliberadamente SIN la guarda (es universal) |
+| J / ESC / Re Pág / Av Pág | Diario | `Game/JournalHud` | — (es el propio libro) |
+| H pistas | Pistas | `Game/HintSystem` | `EscribiendoTexto` |
+| Q vaciar, clics de aspirar/verter, Shift | Frasco | `Game/Flask` | todas las guardas |
+El pase de revisión cazó DOS huecos más del mismo tipo, buen ejemplo de por qué hace falta el
+pase: (a) la T abría el diálogo de bautizar DETRÁS del libro (que fuerza `GUI.depth=-1000`) y le
+robaba el foco de teclado — el jugador podía escribir en un campo invisible; (b) `StorageRack`
+comprobaba `JournalHud.Abierto` pero no `EscribiendoTexto`, así que se podía seguir haciendo clic
+en las redomas mientras se escribía un nombre (el mismo conflicto, colado por un clic de ratón en
+vez de por una letra). Ambos corregidos en esta ronda.
+`ApprenticeController` **NO comprueba `DayCycle.InputLocked`** — hueco preexistente, anotado en el
+código, NO corregido en esta ronda (fuera del alcance de los 4 encargos).
+
+**5. Menor: el rótulo del frío.** Cesar: *"La etiqueta HELANDO y los grados aparece por encima de
+la plataforma y no por debajo, como en las placas de fuego."* Al investigarlo, `ChillStone` YA
+usaba el mismo signo (negativo = abajo) y la misma fórmula de anclaje (`_centroBloque`) que
+`HeatPlate` (`_centroChasis`). Medición dejada en comentario en `ChillStone.cs`: el bloque gélido
+ocupa las filas 88-90 (`ChillTrayY0=88` + `WallThickness`), la bandeja está ENCIMA (interior filas
+91-96), y bajo el bloque hay 48 celdas libres bajo la meseta del banco (filas 40-87, en x=62,
+`BenchX0..BenchX1=1..64`, techo `BenchTopY=39`) y 34 en el punto más estrecho bajo el muro de la
+Cuba A (filas 54-87, `VatAX0=72`, `VatInteriorY1=53`), contra un desplazamiento de 3.4-6.8 celdas
+(`S(17f)`/`S(34f)`). NO se cambiaron números — el análisis dice que el anclaje ya era correcto.
+**QUEDA PENDIENTE DE CONFIRMAR con una captura nueva**: si el rótulo sigue leyéndose mal, el punto
+de anclaje del bloque no es el que se supone y hay que revisarlo de nuevo con otros ojos.
+
+**6. Validado por el jugador (no tocar).** *"El momento de la ley descubierta sí se sintió muy
+bien."* — el momento LEY DESCUBIERTA del playtest 9 funciona; también validó la lectura de grados,
+la navegación de pistas con flechas y el ocultar con H.
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo: verificar en Unity que
+compila y jugar las 3 jornadas; confirmar con captura el rótulo del frío; enganchar
+`HintSystem.PistasMostradas` en PROCEDIMIENTOS del diario; decidir el destino del audio; build
+Windows limpia; renombrar repo; replantear redomas; resto de M5; multiplayer).
+Preguntas abiertas para el próximo playtest: ¿el bloqueo de material resuelve la precisión sin
+necesidad de zoom? ¿el haz y el anillo hacen que cursor y personaje se sientan una sola
+herramienta, o hay que probar que el imp se mueva hacia el cursor? ¿el diario se lee ya cómodo?
+¿bautizar se siente ahora como un descubrimiento?
+
 
 ## Historial de modelos (para el informe final al usuario)
 - **Fable** (orquestador): visión y DECISIONS.md, arquitectura de la sim y del loop, specs de los
@@ -81,6 +236,11 @@ en el proyecto pero no integrado con la sim.
 - **Playtest 9**: mismo reparto — **Opus 5 dirigió** (diagnóstico de los siete hallazgos de Cesar,
   especificación de 4 encargos paralelos con propiedad de archivos disjunta y revisión);
   **Sonnet 5 escribió todo el código** en esos 4 encargos, más 1 pase de revisión de compilación.
+- **Playtest 10**: mismo reparto — **Opus 5 dirigió** (diagnóstico de los hallazgos de Cesar,
+  especificación de 4 encargos paralelos con propiedad de archivos disjunta y revisión);
+  **Sonnet 5 escribió todo el código** en esos 4 encargos, más 1 pase de revisión de compilación
+  que encontró 2 defectos reales de integración (T detrás del libro, `StorageRack` sin la guarda
+  `EscribiendoTexto`).
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no

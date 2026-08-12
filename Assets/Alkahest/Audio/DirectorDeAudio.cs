@@ -470,6 +470,15 @@ namespace Alkahest.Audio
             var kb = Keyboard.current;
             if (kb == null) return;
             if (!kb.mKey.wasPressedThisFrame) return;
+            // (fix playtest 10) EL BUG ORIGINAL DE ESTE ENCARGO: al escribir una etiqueta que
+            // contuviera una "m", el campo de texto y este atajo global leían la MISMA
+            // pulsación a la vez -- silenciaba el juego a mitad de bautizo. Única excepción de
+            // toda la barrida de atajos (ver UiStyles.EscribiendoTexto): M SIGUE sonando con
+            // JournalHud.Abierto (silenciar es una preferencia del jugador, no una reacción al
+            // mundo -- no debe apagarse solo porque el libro esté abierto), y sigue sonando con
+            // DayCycle.InputLocked (ver Update, esta llamada va ANTES de ese corte). Lo único
+            // que la calla es estar escribiendo un nombre.
+            if (UiStyles.EscribiendoTexto) return;
 
             _silenciado = !_silenciado;
             PlayerPrefs.SetInt(PrefKeySilenciado, _silenciado ? 1 : 0);

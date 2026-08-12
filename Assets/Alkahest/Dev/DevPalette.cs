@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
+using Alkahest.Game;
 
 namespace Alkahest.Dev
 {
@@ -64,14 +65,25 @@ namespace Alkahest.Dev
             var kb = Keyboard.current;
             if (kb != null)
             {
-                if (kb.f3Key.wasPressedThisFrame)
+                // (fix playtest 10) F3/P/N son atajos de una sola tecla como cualquier otro
+                // del proyecto: no pueden robarle letras al campo de bautizar
+                // (UiStyles.EscribiendoTexto), y son atajos del MUNDO -- con el diario abierto
+                // a pantalla completa (JournalHud.Abierto) tampoco tiene sentido abrir/cerrar
+                // la paleta ni pausar/step-ear la sim por debajo del libro. IsOpen se sigue
+                // actualizando fuera del guard: solo refleja _visible, que no cambia mientras
+                // el toggle está callado.
+                bool bloqueado = UiStyles.EscribiendoTexto || JournalHud.Abierto;
+                if (!bloqueado)
                 {
-                    _visible = !_visible;
-                    PlayerPrefs.SetInt(PrefKey, _visible ? 1 : 0);
+                    if (kb.f3Key.wasPressedThisFrame)
+                    {
+                        _visible = !_visible;
+                        PlayerPrefs.SetInt(PrefKey, _visible ? 1 : 0);
+                    }
+                    if (kb.pKey.wasPressedThisFrame) TogglePause();
+                    if (kb.nKey.wasPressedThisFrame) _sim.StepOnce();
                 }
                 IsOpen = _visible && IsDevBuild();
-                if (kb.pKey.wasPressedThisFrame) TogglePause();
-                if (kb.nKey.wasPressedThisFrame) _sim.StepOnce();
             }
 
             UpdateHoverAndPaint();
@@ -102,6 +114,11 @@ namespace Alkahest.Dev
             // mundo") y el clic derecho borraba celdas mientras se vertía. Con la
             // paleta cerrada el pincel no existe: ni pinta, ni borra, ni hace hover.
             if (!_visible) return;
+
+            // (fix playtest 10) El pincel de dev también es input del MUNDO: se calla
+            // mientras se escribe un nombre o con el diario abierto a pantalla completa
+            // (mismo criterio que arriba en Update, ver su comentario).
+            if (UiStyles.EscribiendoTexto || JournalHud.Abierto) return;
 
             var mouse = Mouse.current;
             var cam = Camera.main;

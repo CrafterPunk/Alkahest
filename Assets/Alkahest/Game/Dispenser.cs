@@ -29,56 +29,15 @@ namespace Alkahest.Game
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
-        /// <summary>Radio de interacción con E (fix playtest 6: bajado de 3.6 a 2.8, misma escala que ChillStone/HeatPlate).</summary>
-        private const float ProximityRange = 2.8f;
-
-        // ---------------------------------------------------------------
-        // ESCALA COMPARTIDA DE CERCANÍA DEL TALLER (fix playtest 6). Los
-        // MISMOS valores viven, duplicados a propósito, en ChillStone y
-        // HeatPlate: un único criterio de "cerca" para todo el taller.
-        // Sustituye al viejo RangoVisible=7f (playtest 5: "no pude acceder a
-        // los grifos" — un radio fijo enorme para que no fueran invisibles).
-        // Se compensa así en vez de reintroducir un radio grande: un grifo
-        // ABIERTO se anuncia desde RangoEstado (igual que una placa
-        // encendida), y los cinco grifos están en columna, así que acercarse
-        // a cualquiera revela ya a sus vecinos cerrados.
-        //  · RangoEstado: de lejos, SOLO el estado (abierto/rebosa/sellado).
-        //  · RangoNombre: de cerca, además el nombre del material.
-        // (fix playtest 7: estos dos anillos de PlacaMundo -desplazamiento
-        // VERTICAL- eran justo la causa del bug del jugador y se sustituyen
-        // por la chapa lateral única de abajo; ver ChapaCercaniaPleno/Lejos.)
-        // ---------------------------------------------------------------
-
-        // ---------------------------------------------------------------
-        // CHAPA PERMANENTE POR CARRIL (fix playtest 7): "'cerrar' del agua
-        // está escrito sobre el grifo de arena". Los cinco grifos están en
-        // columna a solo 1 unidad de mundo unos de otros, así que CUALQUIER
-        // rótulo con desplazamiento VERTICAL desde el ancla de un grifo cae
-        // sobre el cuerpo del vecino de arriba o abajo. La solución no es
-        // desplazar más (a esa distancia ya no hay margen: 1 unidad = ~55px
-        // a 720p, y una chapa mide ~20px de alto) sino no desplazar en
-        // vertical NUNCA: la chapa vive a la DERECHA del propio grifo, a SU
-        // misma altura (desplazarYPx = 0). Con eso cada grifo tiene su
-        // propio carril horizontal y dos chapas de grifos vecinos jamás se
-        // cruzan verticalmente por diseño, sin depender de que quede hueco
-        // arriba o abajo.
-        //
-        // El jugador sugirió ponerla en la pared IZQUIERDA (donde vive la
-        // columna de grifos). No cabe: el pilar ocupa las columnas de mundo
-        // x=1..8, pegado al borde izquierdo de la pantalla (ver
-        // Sim/SimLevelBuilder.cs) — cualquier chapa a la izquierda del caño
-        // se saldría de cuadro. A la derecha del caño, en cambio, hay pared
-        // vacía de sobra. El objetivo real del jugador (que cada grifo
-        // tenga SU rótulo fijo en SU sitio, sin pisar al vecino) se cumple
-        // igual poniendo la chapa en la fila de su propio grifo.
-        // (medidas "de diseño" a 720p; se escalan con UiStyles.S() en cada
-        // llamada, igual que el resto del HUD -- ver UiStyles.S).
-        private const float ChapaSeparacionPx = 16f;
-        private const float PromptDesplazarYPx = -15f;
-        /// <summary>Cercanía a la que la chapa en reposo pasa de discreta (0.45) a plena (1.0). Ver OnGUI.</summary>
-        private const float ChapaCercaniaPleno = 2.6f;
-        private const float ChapaCercaniaLejos = 5.5f;
-
+        private const float ProximityRange = 3.6f;
+        /// <summary>
+        /// Radio (más generoso que el de interacción) dentro del cual el grifo
+        /// enseña su chapa aunque NO sea el aparato enfocado. Sin esto, un grifo
+        /// cerrado era invisible hasta estar justo encima de él: en el playtest 5
+        /// Cesar directamente "no pudo acceder a los grifos" porque no los
+        /// encontraba.
+        /// </summary>
+        private const float RangoVisible = 7f;
         private const int EmitRatePerTick = 12;
         private const int SpoutRadius = 1;
         /// <summary>
@@ -94,22 +53,24 @@ namespace Alkahest.Game
         /// <summary>Celdas que se miran hacia arriba buscando la superficie del charco cuando el caño queda sumergido.</summary>
         private const int OverflowSearchUp = 8;
 
-        // Textos fijos del rótulo (fix playtest 6: "no hace falta que la
-        // nomenclatura incluya la palabra grifo" — el jugador ya lo ve, es un
-        // caño; el nombre del material basta). Los Debug.Log internos siguen
-        // diciendo "grifo", esos no son cara al jugador.
-        // (fix playtest 7): "SELLADO" a secas — es el texto de la chapa
-        // PERMANENTE ahora (ver sección 1 de la clase), no un aviso puntual.
-        private const string ChapaSellada = "SELLADO";
-        private const string AvisoSinFavor = "¡sin Favor suficiente!";
-        private const string AvisoBloqueo = "el Maestro aún no os confía esto";
-
         [Tooltip("Coste en Favor de encender este grifo (una sola vez por activación). 0 = gratis.")]
         [SerializeField] private int favorCostPerActivation = 0;
 
         private AlkahestSim _sim;
         private Transform _player;
         private OrderSystem _orderSystem;
+        /// <summary>
+        /// (fix reclasificación de sustancias) Necesario para resolver el NOMBRE de verdad
+        /// del material que dispensa este grifo -- ver ResolverNombre. No llega por Init()
+        /// (cambiar esa firma exigiría tocar Game/AlkahestGameBootstrap.cs, fuera de las
+        /// ARCHIVOS MODIFICABLES de este encargo), así que se resuelve con
+        /// FindAnyObjectByType UNA sola vez en Init (nunca en Update/OnGUI): mismo patrón ya
+        /// endorsado por el proyecto para localizar dependencias de escena (ver
+        /// AlkahestGameBootstrap.Start, que hace lo mismo con AlkahestSim). Para cuando
+        /// SpawnDispensers() corre, SubstanceKnowledge ya vive en el aprendiz (creado antes
+        /// en TrySpawn), así que esto nunca falla en el flujo normal del juego.
+        /// </summary>
+        private SubstanceKnowledge _knowledge;
         private int _spoutX, _spoutY;
         private byte _matId;
         private bool _on;
@@ -124,25 +85,6 @@ namespace Alkahest.Game
         private Transform _gotaTr;
         private Color _matColor = Color.white;
         private Vector3 _anclaRotulo;
-
-        /// <summary>
-        /// (fix playtest 7) Capa de RESALTE: una copia agrandada y teñida de
-        /// oro del mismo sprite del caño, dibujada DETRÁS de él (sortingOrder
-        /// menor), que asoma por los bordes como un halo. Sustituye al prompt
-        /// "E — ..." permanente como señal de "estás lo bastante cerca para
-        /// actuar aquí": se ve desde el otro lado del taller sin ocupar texto
-        /// en pantalla ni parpadear (ver <see cref="_haloAlfaActual"/>).
-        /// </summary>
-        private SpriteRenderer _halo;
-        private float _haloAlfaActual;
-
-        // Chapas del rótulo, cacheadas: el material y el coste de Favor son
-        // fijos tras Init, así que se construyen UNA vez en BuildVisual y OnGUI
-        // solo elige cuál mostrar (cero asignaciones de string por frame).
-        private string _chapaCerrado;   // "AGUA" o "ACEITE  3★" - chapa permanente en reposo.
-        private string _chapaAbierto;   // "AGUA · abierto" - chapa permanente, grifo ON.
-        private string _chapaRebosando; // "AGUA · rebosa" - chapa permanente, rebosando.
-        private string _promptAbrir;    // "E — abrir" o "E — abrir (N Favor)".
 
         /// <summary>Sellado por el Maestro: no se puede abrir todavía. Ver doc de la clase.</summary>
         public bool Bloqueado { get; private set; }
@@ -168,6 +110,7 @@ namespace Alkahest.Game
             _orderSystem = orderSystem;
             favorCostPerActivation = favorCost;
             Bloqueado = bloqueado;
+            _knowledge = FindAnyObjectByType<SubstanceKnowledge>(); // ver doc del campo.
 
             BuildVisual(mountCellX, mountCellY);
             MachineFocus.Registrar(this);
@@ -175,13 +118,26 @@ namespace Alkahest.Game
 
         private void OnDestroy() => MachineFocus.Olvidar(this);
 
+        /// <summary>
+        /// Nombre de verdad de lo que da este grifo: bautizado &gt; común de taller &gt; "???"
+        /// (fix reclasificación de sustancias). ANTES caía en `_sim.Universe.Get(_matId).devName`
+        /// cuando NombreComun devolvía null, así que el grifo de Azoth mostraba literalmente
+        /// "Azoth" -- el nombre INTERNO en inglés del devName -- para siempre, sin importar si
+        /// el jugador ya lo había bautizado. Azoth es justo uno de los materiales reclasificados
+        /// como "innominado" (ver Game/SubstanceKnowledge.cs): su chapa tiene que decir "???"
+        /// hasta que se bautice, exactamente como el resto del HUD.
+        /// </summary>
+        private string ResolverNombre() => _knowledge != null
+            ? _knowledge.NombreParaHud(_matId)
+            : (SubstanceKnowledge.NombreComun(_matId) ?? "???"); // defensivo: nunca debería faltar en el flujo normal.
+
         /// <summary>Rompe el sello del Maestro: el grifo pasa a ser usable (jornada 2).</summary>
         public void Desbloquear()
         {
             if (!Bloqueado) return;
             Bloqueado = false;
             UpdateVisual();
-            Debug.Log($"[ChaosAlchemy] El Maestro abre el grifo de {SubstanceKnowledge.NombreComun(_matId) ?? _sim.Universe.Get(_matId).devName}.");
+            Debug.Log($"[ChaosAlchemy] El Maestro abre el grifo de {ResolverNombre()}.");
         }
 
         private void BuildVisual(int mountCellX, int mountCellY)
@@ -202,20 +158,6 @@ namespace Alkahest.Game
                 8f * celda, 5f * celda);
             _cano.transform.localPosition = new Vector3(2.5f * celda, 0f, 0f);
 
-            // (fix playtest 7) HALO de resalte: la misma silueta del caño,
-            // ~1.22x más grande y DETRÁS de todo (sortingOrder 15 < 19 del
-            // propio caño), teñida de oro. Al ser una copia más grande detrás
-            // de la real, asoma por los bordes como un contorno luminoso.
-            // Nace invisible (alfa 0); Update()/UpdateHalo() la enciende SOLO
-            // cuando este grifo es el foco, con un latido suave. Sustituye al
-            // prompt "E — ..." permanente (que "estorba" según el jugador)
-            // como señal de "estás lo bastante cerca para actuar aquí": se
-            // lee desde el otro lado del taller sin ocupar texto en pantalla.
-            _halo = MaquinariaSprites.CrearCapa(transform, "Halo", MaquinariaSprites.CanoGrifo(), 15,
-                8f * celda * 1.22f, 5f * celda * 1.22f);
-            _halo.transform.localPosition = _cano.transform.localPosition;
-            _halo.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
-
             // Gota de color: es lo que permite saber de un vistazo (y desde lejos)
             // qué da cada grifo y cuál está abierto -- ver UpdateVisual.
             var gotaGO = new GameObject("Gota");
@@ -231,34 +173,10 @@ namespace Alkahest.Game
             _matColor = _sim.Universe.Get(_matId).baseColor;
             _gota.color = _matColor;
 
-            // (fix playtest 7) El ancla de la chapa (y del punto de foco) ya
-            // NO va por encima del caño (eso era lo que hacía que el rótulo
-            // de un grifo cayera sobre el vecino de la columna, a solo 1
-            // unidad de mundo de distancia vertical). Va junto al borde
-            // DERECHO del cuerpo del caño —localPosition.x=2.5*celda más la
-            // mitad del ancho del sprite (8*celda/2=4*celda) = 6.5*celda— a
-            // la MISMA altura que el propio caño (y=0, el mount). Con esto la
-            // chapa se dibuja SIEMPRE en el carril horizontal de su propio
-            // grifo (ver PlacaMundoLateral en OnGUI) y dos chapas de grifos
-            // vecinos jamás se cruzan, sin depender de cuánto hueco quede
-            // libre arriba o abajo.
-            _anclaRotulo = transform.position + new Vector3(6.5f * celda, 0f, 0f);
-
-            // Chapas cacheadas (fix playtest 6/7): material, coste de Favor y
-            // el sufijo de coste son fijos tras Init, así que se construyen
-            // aquí UNA sola vez, nunca dentro de OnGUI. Nombre en MAYÚSCULAS y
-            // sin la palabra "grifo" (playtest 6: "no hace falta que la
-            // nomenclatura incluya la palabra grifo").
-            string nombreCorto = (SubstanceKnowledge.NombreComun(_matId) ?? _sim.Universe.Get(_matId).devName).ToUpperInvariant();
-            // (fix playtest 7) La chapa en reposo también informa del coste en
-            // Favor de encenderlo, para que el jugador no lo descubra a
-            // ciegas pulsando E: "ACEITE  3★".
-            string sufijoCoste = favorCostPerActivation > 0 ? $"  {favorCostPerActivation}★" : "";
-            _chapaCerrado = nombreCorto + sufijoCoste;
-            _chapaAbierto = nombreCorto + " · abierto";
-            _chapaRebosando = nombreCorto + " · rebosa";
-            _promptAbrir = favorCostPerActivation > 0 ? $"E — abrir ({favorCostPerActivation} Favor)" : "E — abrir";
-
+            // El rótulo (y el punto de foco) van sobre el cuerpo del caño, no
+            // pegados al muro: así la chapa se lee fuera de la piedra y la
+            // distancia de interacción se mide desde el aparato de verdad.
+            _anclaRotulo = transform.position + new Vector3(2.5f * celda, 3.4f * celda, 0f);
             UpdateVisual();
         }
 
@@ -278,14 +196,7 @@ namespace Alkahest.Game
                 return;
             }
 
-            // (fix playtest 7) Brillo extra en el propio caño cuando es el
-            // foco: un pequeño empujón hacia el dorado, además del halo
-            // detrás. Ni Shader.Find ni material nuevo, solo el tinte del
-            // SpriteRenderer (regla de oro del repo: solo SpriteRenderer).
-            if (_cano != null)
-            {
-                _cano.color = EstaEnfocado() ? Color.Lerp(Color.white, UiStyles.Oro, 0.18f) : Color.white;
-            }
+            if (_cano != null) _cano.color = Color.white;
 
             if (_on)
             {
@@ -308,7 +219,12 @@ namespace Alkahest.Game
             if (_sim == null || _sim.Grid == null) return;
             if (DayCycle.InputLocked) return; // M4: título/intro/fin de día/pantalla final congelan el grifo.
 
-            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame && EstaEnfocado())
+            // (fix playtest 10) E es un atajo de una sola tecla: no puede robarle letras al
+            // campo de bautizar ni competir con el diario a pantalla completa (ver el mismo
+            // comentario en Game/ChillStone.cs/HeatPlate.cs). El caudal ya abierto sigue
+            // emitiendo igual con el libro abierto -- solo se calla el toggle ON/OFF.
+            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
+                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocado())
             {
                 ToggleRequested();
             }
@@ -330,25 +246,6 @@ namespace Alkahest.Game
             }
 
             UpdateVisual();
-            UpdateHalo();
-        }
-
-        /// <summary>
-        /// (fix playtest 7) Latido del halo de resalte: sube a un pulso
-        /// suave (0.45..0.85) mientras el grifo es el foco, y baja a 0 en
-        /// cuanto deja de serlo. SIEMPRE a través de MoveTowards (no un
-        /// salto directo al valor objetivo) para que la entrada/salida del
-        /// foco sea un fundido y no un parpadeo. Cero asignaciones por
-        /// frame más allá del Color struct (no es un alloc de heap).
-        /// </summary>
-        private void UpdateHalo()
-        {
-            if (_halo == null) return;
-
-            bool enfocado = !Bloqueado && EstaEnfocado();
-            float objetivo = enfocado ? 0.65f + 0.20f * Mathf.Sin(Time.time * 4f) : 0f;
-            _haloAlfaActual = Mathf.MoveTowards(_haloAlfaActual, objetivo, 6f * Time.deltaTime);
-            _halo.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, _haloAlfaActual);
         }
 
         private void ToggleRequested()
@@ -363,9 +260,6 @@ namespace Alkahest.Game
             {
                 _on = false;
                 _rebosando = false;
-                // (fix playtest 7) Cuenta como "uso enseñado" de la E: apagar
-                // el grifo es una acción con efecto, igual que encenderlo.
-                MachineFocus.RegistrarUsoE();
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> OFF");
                 return;
             }
@@ -373,13 +267,10 @@ namespace Alkahest.Game
             if (TryPayActivationCost())
             {
                 _on = true;
-                MachineFocus.RegistrarUsoE();
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> ON (coste {favorCostPerActivation} Favor).");
             }
             else
             {
-                // (fix playtest 7) NO se registra uso: un intento fallido por
-                // falta de Favor no enseña nada sobre cómo usar la E.
                 _insufficientFavorTimer = InsufficientFavorFlashSeconds;
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName}: sin Favor suficiente ({favorCostPerActivation} requerido).");
             }
@@ -394,6 +285,13 @@ namespace Alkahest.Game
 
         /// <summary>¿Es ESTE el grifo que el aprendiz tiene delante? (ver Game/MachineFocus.cs)</summary>
         private bool EstaEnfocado() => MachineFocus.EsFoco(this, _player);
+
+        /// <summary>¿Está el aprendiz lo bastante cerca como para que valga la pena anunciarse (aunque no sea el grifo enfocado)?</summary>
+        private bool JugadorAlaVista()
+        {
+            if (_player == null) return false;
+            return (_player.position - _anclaRotulo).sqrMagnitude <= RangoVisible * RangoVisible;
+        }
 
         /// <summary>
         /// (playtest 3: "el grifo de agua deja de funcionar cuando se llena")
@@ -441,86 +339,51 @@ namespace Alkahest.Game
             _rebosando = true;
         }
 
-        /// <summary>
-        /// (fix playtest 7) Reescrito por completo. Antes esta clase dibujaba
-        /// dos "anillos" (estado/nombre) con <see cref="UiStyles.PlacaMundo"/>,
-        /// que ancla el rótulo ENCIMA del punto con un desplazamiento
-        /// vertical — con los cinco grifos en columna a 1 unidad de mundo
-        /// unos de otros, ese desplazamiento vertical caía sistemáticamente
-        /// sobre el caño vecino ("'cerrar' del agua está escrito sobre el
-        /// grifo de arena"). Ahora hay UNA sola chapa PERMANENTE por grifo,
-        /// anclada al LADO (nunca encima, ver <see cref="UiStyles.PlacaMundoLateral"/>)
-        /// en el carril horizontal de su propio caño, así que dos chapas de
-        /// grifos vecinos son geométricamente incapaces de solaparse. El
-        /// prompt "E — ..." ya no es permanente (MachineFocus.MostrarPromptE
-        /// lo apaga tras las dos primeras veces del taller entero) y el
-        /// resalte del foco lo asume el halo dorado (ver UpdateHalo).
-        /// </summary>
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked) return;
 
+            bool cerca = EstaEnfocado();
+            bool visible = cerca || _on || JugadorAlaVista();
+            if (!visible) return;
+
             UiStyles.Preparar();
 
-            // Cercanía de la chapa en reposo: discreta de lejos (0.45), plena
-            // de cerca (1.0). PlacaMundoLateral ya descarta barato el dibujo
-            // si alfa<=0.02 o si el punto queda detrás de cámara, así que no
-            // hace falta una salida temprana propia aquí.
-            float cercania = UiStyles.Cercania(_anclaRotulo, _player, ChapaCercaniaPleno, ChapaCercaniaLejos);
+            // (fix reclasificación de sustancias) Nombre RESUELTO (bautizado > común de taller >
+            // "???"), nunca el devName interno en inglés -- ver ResolverNombre. Antes caía en
+            // devName para lo innominado y el grifo de Azoth decía "Azoth" para siempre.
+            string nombre = ResolverNombre();
 
-            // Contenido de la chapa PERMANENTE, por prioridad (solo una línea
-            // a la vez, igual que hacía el viejo "anillo de estado"). Los
-            // avisos puntuales (Favor insuficiente / intento sobre un grifo
-            // sellado) ocupan el MISMO carril lateral en vez de un rótulo
-            // aparte con su propio desplazamiento — si tuvieran uno propio
-            // reintroducirían el mismo bug de solape que motiva este fix.
-            string texto;
+            // 1) CHAPA FIJA sobre el caño (fuera de la pila de recogida, que es
+            //    donde el jugador aspira): qué da y en qué estado está.
+            string chapa;
             Color color;
-            float alfa;
-
-            if (_insufficientFavorTimer > 0f)
+            if (Bloqueado)
             {
-                texto = AvisoSinFavor;
-                color = UiStyles.Peligro;
-                alfa = 1f; // el jugador acaba de pulsar E aquí mismo: siempre cerca.
-            }
-            else if (_bloqueoAvisoTimer > 0f)
-            {
-                texto = AvisoBloqueo;
-                color = UiStyles.Peligro;
-                alfa = 1f;
-            }
-            else if (Bloqueado)
-            {
-                texto = ChapaSellada;
+                chapa = "grifo sellado por el Maestro";
                 color = UiStyles.TextoTenue;
-                alfa = 0.45f + 0.55f * cercania;
             }
             else if (_on)
             {
-                texto = _rebosando ? _chapaRebosando : _chapaAbierto;
+                chapa = _rebosando ? nombre + " · rebosando" : nombre + " · ABIERTO";
                 color = _rebosando ? UiStyles.Aviso : UiStyles.Oro;
-                alfa = 1f; // un grifo abierto es información urgente a cualquier distancia.
             }
             else
             {
-                texto = _chapaCerrado;
+                chapa = "grifo de " + nombre;
                 color = UiStyles.TextoTenue;
-                alfa = 0.45f + 0.55f * cercania;
             }
+            if (_insufficientFavorTimer > 0f) { chapa = "¡sin Favor suficiente!"; color = UiStyles.Peligro; }
+            else if (_bloqueoAvisoTimer > 0f) { chapa = "el Maestro aún no os confía esto"; color = UiStyles.Peligro; }
 
-            UiStyles.PlacaMundoLateral(_anclaRotulo, texto, color, UiStyles.S(ChapaSeparacionPx), 0f, alfa, aLaIzquierda: false);
+            UiStyles.PlacaMundo(_anclaRotulo, chapa, color, UiStyles.S(6f));
 
-            // PROMPT "E — ...": solo mientras el taller aún lo está enseñando
-            // (MachineFocus.MostrarPromptE), solo sobre el caño enfocado y
-            // solo con las manos libres. Va DEBAJO de la chapa, en el MISMO
-            // carril lateral (misma separación horizontal, desplazamiento en
-            // Y pequeño hacia abajo) — nunca centrado sobre el aparato.
-            if (!Bloqueado && MachineFocus.MostrarPromptE && EstaEnfocado() && !UiStyles.RatonOcupado)
+            // 2) PROMPT: solo cerca y con las manos libres (playtest 4).
+            if (cerca && !Bloqueado && !UiStyles.RatonOcupado)
             {
-                string prompt = _on ? "E — cerrar" : _promptAbrir;
-                UiStyles.PlacaMundoLateral(_anclaRotulo, prompt, UiStyles.Oro,
-                    UiStyles.S(ChapaSeparacionPx), UiStyles.S(PromptDesplazarYPx), 1f, aLaIzquierda: false);
+                string prompt = _on ? "E — cerrar" : "E — abrir";
+                if (!_on && favorCostPerActivation > 0) prompt += " (" + favorCostPerActivation + " Favor)";
+                UiStyles.PlacaMundo(_anclaRotulo, prompt, UiStyles.Oro, UiStyles.S(23f));
             }
         }
     }

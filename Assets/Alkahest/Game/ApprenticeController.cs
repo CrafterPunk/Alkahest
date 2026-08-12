@@ -178,7 +178,15 @@ namespace Alkahest.Game
         {
             var kb = Keyboard.current;
             Vector2 input = Vector2.zero;
-            if (kb != null)
+            // (fix playtest 10) WASD/flechas son un atajo de teclado como cualquier otro del
+            // proyecto: mientras se ESCRIBE un nombre (UiStyles.EscribiendoTexto) esas mismas
+            // letras no deben mover al aprendiz a la vez que rellenan el campo, y con el
+            // diario abierto a pantalla completa (JournalHud.Abierto) el aprendiz no debe
+            // salir volando porque el jugador toque una flecha pensando en pasar de página.
+            // Se ignora el input (no se "congela" en seco): la velocidad ya acumulada decae
+            // con la MISMA física de siempre unas líneas más abajo, así que el personaje
+            // frena con naturalidad en vez de detenerse en un frame.
+            if (kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
             {
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) input.x -= 1f;
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) input.x += 1f;

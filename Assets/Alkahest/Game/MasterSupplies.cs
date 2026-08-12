@@ -69,14 +69,34 @@ namespace Alkahest.Game
         /// y "no se gasta" explícitamente, y responde de frente a la pregunta del jugador --
         /// el encargo de hoy pide 120 celdas de vivium y solo se entregan ~81: A PROPÓSITO,
         /// porque no se puede entregar la muestra tal cual, hay que cultivarla.
+        ///
+        /// (fix playtest 10, reclasificación de sustancias) REESCRITO DE NUEVO: otro agente
+        /// reclasificó Azoth/CrystalSeed/Crystal/Vivium como "innominados" (ver Game/
+        /// SubstanceKnowledge.cs, NombreComun) -- el HUD entero ahora los muestra como "???"
+        /// hasta que el jugador los bautiza, pero este texto seguía nombrándolos "Azoth",
+        /// "vivium" y "semilla de cristal" en plata, contradiciendo al propio juego el mismo
+        /// día en que aparecen por primera vez. No tiene sentido resolver el nombre vía
+        /// SubstanceKnowledge aquí (NombreParaHud daría "???" las tres veces sin excepción --
+        /// nadie ha visto ni tocado estas semillas todavía cuando se lee este texto, ver
+        /// EnterDayIntro: AlEmpezarJornada se llama ANTES de que exista ninguna oportunidad de
+        /// bautizar nada), así que se describen por ORIGEN/procedimiento -- el mismo
+        /// vocabulario que ya usan Game/HintSystem.cs (Jornada 2) y los banners de "LEY
+        /// DESCUBIERTA" de SubstanceKnowledge ("el líquido del grifo alto", "la semilla de la
+        /// bandeja fría", "el retoño de la cuba") -- nunca la identidad interna del material.
+        /// Y de paso la ficción encaja MEJOR que antes, no peor: el Maestro entrega estas tres
+        /// semillas precisamente PORQUE él tampoco sabe qué son, y espera que seáis vosotros
+        /// quienes les pongáis nombre -- se dice así, explícito, en la primera frase.
+        /// 352 caracteres (antes 330; el panel de DayCycle.DrawDayIntro se comprobó/ajustó
+        /// para este tamaño, ver AbrirPanel allí).
         /// </summary>
         public static string TextoEntrega(int dia)
         {
             if (dia != 2) return null;
-            return "El Maestro os deja tres SEMILLAS, no ingredientes: no se gastan, se ALIMENTAN. " +
-                   "Azoth infinito en el grifo nuevo del banco; un retoño de vivium en la cuba derecha " +
-                   "(dale nutriente y calor templado); semilla de cristal en la bandeja fría (riégala con " +
-                   "azoth helado). Son pocas celdas a propósito: no se entregan tal cual, se cultivan.";
+            return "El Maestro os deja tres semillas SIN NOMBRE: ni él sabe qué son, y espera que " +
+                   "vosotros les pongáis uno. No se gastan, se ALIMENTAN -- el líquido del grifo alto " +
+                   "es infinito, el retoño de la cuba crece con nutriente y calor templado, y la " +
+                   "semilla de la bandeja fría se riega con ese mismo líquido helado. Pocas celdas: " +
+                   "se cultivan, no se entregan hechas.";
         }
 
         /// <summary>Llamado por Game/DayCycle.cs al entrar en la intro de cada jornada.</summary>

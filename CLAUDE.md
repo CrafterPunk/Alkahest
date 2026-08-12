@@ -15,13 +15,17 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   Mundo = 25.6 x 14.4 unidades; cámara ortográfica centrada en (12.8, 7.2) con size 7.2 —
   el `AlkahestSceneBuilder` lo deriva de `CellGrid.W/H`, nunca hardcodeado.
 - `Game/` — capa jugable: `ApprenticeController` (imp volador), `Flask` (aspirar/verter, conserva
-  la TEMPERATURA de lo aspirado; TODA mutación del grid vía `AlkahestSim.Paint`/`PaintCell`),
-  máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
+  la TEMPERATURA de lo aspirado; TODA mutación del grid vía `AlkahestSim.Paint`/`PaintCell`;
+  BLOQUEO DE MATERIAL al pulsar aspirar, más el haz y el anillo de alcance de mundo, ver playtest
+  10), máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
   `MaquinariaSprites` y foco de interacción arbitrado por `MachineFocus` (solo el aparato más
-  cercano responde a E), `SubstanceKnowledge` (descubrir/bautizar/observaciones),
-  `OrderSystem`+`DeliveryChute` (pedidos por EFECTO, Favor), `MasterSupplies` (muestras de la
-  jornada 2: azoth/vivium/semilla), `HintSystem` (pistas por jornada),
-  `DayCycle` (Título→3 jornadas→final, seed vía `AlkahestSim.NextRunSeed`).
+  cercano responde a E), `SubstanceKnowledge` (descubrir/bautizar/observaciones; dos clases de
+  material, ver regla 12), `OrderSystem`+`DeliveryChute` (pedidos por EFECTO, Favor),
+  `MasterSupplies` (muestras de la jornada 2: azoth/vivium/semilla), `HintSystem` (pistas por
+  jornada, una línea ejecutable cada una), `JournalHud` (el diario: libro a pantalla completa,
+  `GUI.depth = -1000`, propiedad `Abierto`), `UiStyles` (estilo IMGUI compartido; propiedad
+  `EscribiendoTexto`, ver regla 12), `DayCycle` (Título→3 jornadas→final, seed vía
+  `AlkahestSim.NextRunSeed`).
 - `Audio/` — `SintetizadorSfx` (fábrica estática de `AudioClip` por código, cero assets: ruido,
   filtros, ondas, envolventes) y `DirectorDeAudio` (MonoBehaviour: pool fijo de voces, limitador
   de ritmo por tipo de evento, tecla M para silenciar, interruptor `SistemaActivo`).
@@ -64,23 +68,45 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 11. **Al reescribir `DayCycle`**, verificar que sigue vivo el cierre anticipado de jornada
     (`UpdateAllOrdersDoneEarlyClose`, disparado por `OrderSystem.AllOrdersCompleted()`) — ya se
     perdió una vez al introducir los cuatro desenlaces (playtest 8→9).
+12. **REGLA DE ATAJOS (playtest 10)**: un campo de texto IMGUI se come TODAS las letras. Todo
+    atajo de una sola tecla debe comprobar `UiStyles.EscribiendoTexto` (propiedad estática, la
+    sube/baja `NamingUi`; sigue en `true` un frame extra tras cerrarse para que el atajo tampoco
+    dispare en el frame en que se confirma con Enter). Los atajos del MUNDO (E, WASD/flechas, Q,
+    clics de aspirar/verter/redomas, F3/P/N) deben comprobar ADEMÁS `JournalHud.Abierto`. Las dos
+    únicas excepciones deliberadas: **M** (silenciar, `Audio/DirectorDeAudio`, solo
+    `EscribiendoTexto` — es una preferencia del jugador, no una acción de juego) y **ESC** (cierra
+    lo que esté abierto, es universal). Tabla completa de atajos y archivos: `docs/HANDOFF.md`
+    sección "Playtest 10". `ApprenticeController` es la ÚNICA excepción NO deliberada: no
+    comprueba `DayCycle.InputLocked` (hueco preexistente, anotado, sin corregir).
+13. **DOS CLASES DE MATERIAL (playtest 10)**: `SubstanceKnowledge.NombreComun` es la única fuente
+    de verdad. VOCABULARIO DEL TALLER (Stone/Sand/Water/Oil/Nutrient + fenómenos mundanos
+    Steam/Smoke/Fire/Ash/Ice) tiene nombre desde el día 1 — nadie lo bautiza. LO INNOMINADO
+    (Azoth/CrystalSeed/Crystal/Vivium/Slime/Acid) enseña "???" hasta que el jugador lo bautiza.
+    **Los encargos (`OrderSystem`) describen por EFECTO/ORIGEN mientras el material siga
+    innominado y pasan a usar el nombre del jugador al bautizar**: el recálculo lo dispara
+    `SubstanceKnowledge.NamingVersion` en `Update()`; como `Order.Descripcion` es readonly, se
+    sustituye la instancia `Order` entera, nunca se construyen strings en `OnGUI`. Mismo criterio
+    en pistas, banners de "LEY DESCUBIERTA" y texto del Maestro: describir por origen/lugar, nunca
+    revelar la identidad interna de algo que el HUD todavía enseña como "???" (la misma
+    circularidad que ya se corrigió una vez, no reintroducirla).
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 9 (Opus 5 dirige, Sonnet 5 escribe en 4 encargos paralelos):
-enseñanza de "las muestras del Maestro son SEMILLAS que no se gastan, no ingredientes" (momento
-LEY DESCUBIERTA + sección LEYES del diario, ver reglas 8/9 arriba... y HANDOFF); dos bugs de
-aritmética en la difusión de temperatura que hacían el frío "infinito" (regla 9 arriba); camino
-placa→aceite→fuego reparado (no había autoignición por temperatura) y fuego pintado con F3 ya no
-se ve gris; Favor SOLO por completar encargos, sin "chatarra" paralela (regla 10 arriba,
-`OrderSystem.DeliveryOutcome`); restaurado el cierre anticipado de jornada que se había perdido
-(regla 11 arriba); limpieza de audio (popeo por costura de bucle/DC offset/saturación/salto de M,
-timbre del agua y del fuego corregidos); ala delantera del aprendiz ya no tapa el cuerpo.
+VERIFICAR en editor. Playtest 10 (Opus 5 dirige, Sonnet 5 escribe en 4 encargos paralelos):
+la fantasía de bautizar recuperada (dos clases de material, regla 13 arriba; encargos por
+efecto/origen hasta bautizar); el diario reescrito como libro a pantalla completa con sección
+PROCEDIMIENTOS nueva; el frasco con bloqueo de material + haz + anillo de alcance (responde a
+"cursor y personaje se sienten dos herramientas" y "aspiro restos de otro material sin querer");
+barrido de atajos con la regla nueva del proyecto (regla 12 arriba, `UiStyles.EscribiendoTexto` +
+`JournalHud.Abierto`), el pase de revisión encontró 2 huecos más del mismo tipo; investigación
+(sin cambios) del rótulo del frío en `ChillStone`, pendiente de confirmar con captura.
 PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas; 2)
-comprobar que el texto largo del Maestro cabe en el panel de la jornada 2; 3) decidir si el audio
-se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 4) build Windows limpia (nunca verificada
-desde el rediseño del espacio); 5) renombrar repo GitHub `Alkahest`→`ChaosAlchemy`; 6) replantear
-las redomas (`StorageRack`, sugerencia de Cesar); 7) resto de M5 (glow, agua con más cuerpo);
-8) multiplayer: sim solo-host + deltas RLE por chunks despiertos a 10-15Hz — MEDIR antes de
-decidir (plan en HANDOFF). Detalle completo de la ronda 9: `docs/HANDOFF.md` sección "Playtest 9".
+confirmar con captura que el rótulo del frío quedó bien; 3) enganchar
+`HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya existe, sin
+consumidor); 4) decidir si el audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 5)
+build Windows limpia (nunca verificada desde el rediseño del espacio); 6) renombrar repo GitHub
+`Alkahest`→`ChaosAlchemy`; 7) replantear las redomas (`StorageRack`, sugerencia de Cesar); 8) resto
+de M5 (glow, agua con más cuerpo); 9) multiplayer: sim solo-host + deltas RLE por chunks despiertos
+a 10-15Hz — MEDIR antes de decidir (plan en HANDOFF). Detalle completo de la ronda 10:
+`docs/HANDOFF.md` sección "Playtest 10".

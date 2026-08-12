@@ -34,6 +34,51 @@ namespace Alkahest.Game
     /// material FUENTE del evento. Nota: "dentro de la vista de cámara" es
     /// trivialmente cierto siempre en esta build (una única cámara fija
     /// ortográfica que encuadra todo el nivel), así que no se comprueba.
+    ///
+    /// =====================================================================
+    /// (fix playtest 10) "¿POR QUÉ BAUTIZARÍA VIVIUM SI EL JUEGO YA LE LLAMA
+    /// ASÍ?" -- el reporte tenía razón: la fantasía (docs/DECISIONS.md §2/§11/
+    /// §12, "no haces pociones: aprendes física alienígena... y le pones
+    /// nombre") se rompía porque casi todo llegaba YA bautizado por el
+    /// juego. Aquí se reparte el roster en dos clases y <see cref="NombreComun"/>
+    /// es la ÚNICA fuente de verdad de a cuál pertenece cada material (null
+    /// = lo innominado, hay que descubrirlo y bautizarlo).
+    ///
+    ///   VOCABULARIO DEL TALLER (nombre común desde la celda 1, el Maestro ya
+    ///   os lo enseñó -- nadie bautiza el agua):
+    ///     Stone     "piedra"     -- arquitectura del taller (muros/cubas), no es una sustancia que se descubra.
+    ///     Sand      "arena"      -- grifo del banco.
+    ///     Water     "agua"       -- grifo del banco.
+    ///     Oil       "aceite"     -- grifo del banco.
+    ///     Nutrient  "nutriente"  -- grifo del banco.
+    ///     Steam     "vapor"      -- fase mundana del agua al hervir, cualquiera la reconoce.
+    ///     Smoke     "humo"       -- fase mundana de la combustión, cualquiera la reconoce.
+    ///     Fire      "fuego"      -- fenómeno mundano, cualquiera lo reconoce (aunque en este taller se FABRIQUE, no se compre).
+    ///     Ash       "ceniza"     -- residuo mundano de arder, cualquiera lo reconoce.
+    ///     Ice       "hielo"      -- fase mundana del agua al congelarse, cualquiera lo reconoce.
+    ///
+    ///   LO INNOMINADO (NombreComun devuelve null -&gt; "???" hasta bautizar;
+    ///   nadie, ni el Maestro, tiene un nombre para esto):
+    ///     Azoth        -- líquido de la reserva del Maestro: SÍ sale de un grifo (el quinto, sellado
+    ///                     hasta la jornada 2), pero es justo lo que "él tampoco sabe qué es" -- por
+    ///                     eso lo guarda aparte y lo suelta como muestra, no como básico de taller.
+    ///     CrystalSeed  -- semilla rara que el Maestro os entrega SIN nombre (ver Game/MasterSupplies.cs):
+    ///                     es la definición misma de "lo innominado" del diseño.
+    ///     Crystal      -- producto de una reacción exótica de este universo (Azoth+semilla en frío,
+    ///                     ver Sim/Universe.cs), nadie lo ha clasificado todavía.
+    ///     Vivium       -- semilla orgánica que el Maestro entrega sin nombre; el mínimo exigido por
+    ///                     el diseño y el ejemplo textual del reporte que originó este cambio.
+    ///     Slime        -- sin grifo propio; solo aparece al neutralizar Ácido con Agua (reacción de
+    ///                     Sim/Universe.cs) -- un subproducto exótico de una reacción, de libro.
+    ///     Acid         -- sin grifo propio; no hay fuente normal de partida en esta build (roster
+    ///                     reservado para extensiones futuras/paleta dev F3) -- por eso mismo nunca
+    ///                     puede ser "vocabulario de taller": nadie del taller lo usa todavía.
+    ///
+    ///   NOTA DE ALCANCE: Game/MasterSupplies.cs y Game/Dispenser.cs son de SOLO LECTURA en esta
+    ///   ronda y siguen nombrando "Azoth" en su diálogo/chapa de grifo -- es una inconsistencia
+    ///   residual conocida (ver informe de esta ronda), no un descuido: arreglarla exige tocar esos
+    ///   dos archivos, fuera del alcance permitido aquí.
+    /// =====================================================================
     /// </summary>
     public sealed class SubstanceKnowledge : MonoBehaviour
     {
@@ -77,13 +122,37 @@ namespace Alkahest.Game
         // Estado de la ley "descubierta" (ver doc arriba): dos banderas de una sola vez
         // (Cristalizar, Crecer) más una cola FIFO fija de textos ya construidos (se
         // construyen una única vez, al disparar el evento -- nunca en OnGUI/Update).
+        // _leyBannerColaMat es paralelo a _leyBannerCola: guarda el matId PRODUCTO de
+        // cada ley (Crystal / Vivium) para poder encadenar el aviso de bautizo justo
+        // cuando el banner de esa ley termina (fix playtest 10, ver
+        // DispararAvisoBautizoTrasLey).
         private bool _leyCristalDescubierta;
         private bool _leyVivumDescubierta;
         private readonly string[] _leyBannerCola = new string[LeyBannerCapacidad];
+        private readonly byte[] _leyBannerColaMat = new byte[LeyBannerCapacidad];
         private int _leyBannerColaCount;
         private int _leyBannerColaLeidos;
         private string _leyBannerActual;
+        private byte _leyBannerActualMat;
         private float _leyBannerHasta;
+
+        // ---------------------------------------------------------------------------------
+        // (fix playtest 10) INVITACIÓN A BAUTIZAR: "esto no tiene nombre — T para
+        // bautizarlo". Mismo criterio de "avisar y luego callar" que ya usa
+        // Game/DeliveryChute.cs con su chatarra (_scrapWarned: un bool por material, el
+        // aviso completo sale UNA vez por material y no vuelve a repetirse para ESE
+        // material) -- aquí con el mismo patrón: un aviso por cada sustancia innominada
+        // distinta que el jugador llegue a apuntar/cargar, nunca más de una vez cada
+        // una. Con 6 sustancias innominadas en el roster (ver tabla de arriba) esto da,
+        // de forma natural, "las primeras veces y calla" sin inventar un contador nuevo.
+        // Se dispara desde dos sitios: ActualizarAvisoBautizo (apuntar/cargar) y
+        // DispararAvisoBautizoTrasLey (encadenado al final del banner "LEY
+        // DESCUBIERTA", para que descubrir la ley y la invitación a nombrar su
+        // producto se sientan un mismo momento, no dos).
+        // ---------------------------------------------------------------------------------
+        private const float AvisoBautizoDuracionSeg = 3.5f;
+        private readonly bool[] _avisoBautizoMostrado = new bool[MaterialId.Count];
+        private float _avisoBautizoHasta;
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Flask flask)
@@ -102,11 +171,23 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// Nombre "de taller" en español de los materiales mundanos: los que
-        /// salen de los grifos y sus derivados obvios. El Maestro ya los tiene
-        /// catalogados, así que mostrarlos no rompe la fantasía de descubrir.
-        /// Devuelve null para las sustancias exóticas (Slime, Azoth, Vivium,
-        /// Cristal, Ácido...): esas hay que descubrirlas y bautizarlas.
+        /// Nombre "de taller" en español de los materiales MUNDANOS -- los que
+        /// salen de los grifos básicos o son fenómenos que cualquiera reconoce
+        /// (ver la tabla de clasificación completa en el doc-comment de la
+        /// clase). El Maestro ya los tiene catalogados, así que mostrarlos no
+        /// rompe la fantasía de descubrir.
+        ///
+        /// Devuelve null para TODO lo innominado (Slime, Azoth, CrystalSeed,
+        /// Crystal, Vivium, Acid): esas hay que descubrirlas y bautizarlas --
+        /// es el contrato que usa el resto del HUD (frasco, redomas, diario,
+        /// tolva, encargos) para decidir cuándo enseñar "???".
+        ///
+        /// (fix playtest 10) Azoth y CrystalSeed SALÍAN de aquí antes ("el
+        /// Maestro os las entrega en mano, así que ya las conocéis"): el
+        /// reporte que motiva este cambio señaló justo el problema de fondo
+        /// -- si todo llega bautizado, bautizar es un trámite vacío. El
+        /// Maestro las entrega precisamente PORQUE tampoco sabe qué son (ver
+        /// MasterSupplies.TextoEntrega); aquí vuelven a ser innominadas.
         ///
         /// Existe para que la UI NUNCA enseñe los devName internos en inglés
         /// ("Water", "Nutrient"), que era lo que hacían el HUD del frasco y los
@@ -126,14 +207,7 @@ namespace Alkahest.Game
                 case MaterialId.Fire: return "fuego";
                 case MaterialId.Ash: return "ceniza";
                 case MaterialId.Ice: return "hielo";
-                // El Maestro entrega estos dos EN MANO y por su nombre al empezar
-                // la jornada 2 (ver Game/MasterSupplies.cs y la intro de jornada),
-                // así que ocultarlos tras "???" en el grifo y en las redomas sería
-                // absurdo. Lo verdaderamente desconocido (vivium, cristal, limo,
-                // ácido) sigue sin nombre hasta que lo bauticéis.
-                case MaterialId.Azoth: return "azoth";
-                case MaterialId.CrystalSeed: return "semilla de cristal";
-                default: return null;
+                default: return null; // lo innominado: Slime, Azoth, CrystalSeed, Vivium, Crystal, Acid.
             }
         }
 
@@ -146,6 +220,22 @@ namespace Alkahest.Game
             return NombreComun(matId) ?? "???";
         }
 
+        /// <summary>
+        /// True si `matId` es de "lo innominado" (ver tabla de clasificación
+        /// en el doc-comment de la clase) Y todavía nadie le ha puesto
+        /// nombre -- es decir, si de verdad hace falta invitar a bautizarlo
+        /// (fix playtest 10, invitación "T para bautizarlo" de
+        /// <see cref="ActualizarAvisoBautizo"/>). Falso para el vocabulario
+        /// del taller (nunca hace falta bautizar el agua) y falso en cuanto
+        /// ya tiene nombre propio.
+        /// </summary>
+        private bool NecesitaBautizo(byte matId)
+        {
+            if (matId == MaterialId.Empty || matId >= MaterialId.Count) return false;
+            if (NombreComun(matId) != null) return false;
+            return string.IsNullOrEmpty(_playerName[matId]);
+        }
+
         /// <summary>Pone/quita el nombre de un material. Nombre vacío o solo espacios equivale a "olvidarlo" (vuelve a mostrar "???").</summary>
         public void Bautizar(byte matId, string nombre)
         {
@@ -155,13 +245,29 @@ namespace Alkahest.Game
             NamingVersion++; // ver doc de la clase: JournalHud detecta re-bautizos con esto.
         }
 
-        /// <summary>Nombre "de ley": como NombreParaHud, pero con un genérico en minúscula (nunca "???") para materiales aún sin bautizar -- las leyes del diario/el aviso de descubrimiento tienen que leerse aunque el jugador no haya puesto nombre todavía.</summary>
-        private string NombreLey(byte matId, string generico)
+        /// <summary>
+        /// Nombre "de ley": como NombreParaHud, pero con una descripción de
+        /// respaldo (nunca "???") para materiales aún sin bautizar -- las
+        /// leyes del diario/el aviso de descubrimiento tienen que leerse
+        /// aunque el jugador no haya puesto nombre todavía.
+        ///
+        /// (fix playtest 10) `respaldo` YA NO puede ser el nombre genérico
+        /// interno ("azoth", "semilla de cristal"...): con la reclasificación
+        /// de arriba esos materiales son innominados de verdad, así que
+        /// escribir su identidad aquí sería la MISMA circularidad que se
+        /// acaba de arreglar en las pistas (un texto dice "Vivium" y el HUD
+        /// enseña "???" al lado). El llamante pasa una descripción de
+        /// ORIGEN/efecto en su lugar (ver ConstruirTextoLey*): esta función
+        /// solo decide EN QUÉ ORDEN de prioridad se usa (nombre propio &gt;
+        /// nombre común de taller -- ninguno de los dos es circular -- &gt;
+        /// descripción de respaldo).
+        /// </summary>
+        private string NombreLey(byte matId, string respaldo)
         {
-            if (matId >= MaterialId.Count) return generico;
+            if (matId >= MaterialId.Count) return respaldo;
             string propio = _playerName[matId];
             if (!string.IsNullOrEmpty(propio)) return propio;
-            return NombreComun(matId) ?? generico;
+            return NombreComun(matId) ?? respaldo;
         }
 
         public WitnessFlags WitnessOf(byte matId) => matId < MaterialId.Count ? _witness[matId] : WitnessFlags.None;
@@ -190,6 +296,43 @@ namespace Alkahest.Game
             PollHover();
             ConsumeEvents();
             ActualizarBannerLey();
+            if (!DayCycle.InputLocked) ActualizarAvisoBautizo();
+        }
+
+        /// <summary>
+        /// (fix playtest 10) Si lo que el jugador tiene apuntado o cargado en el frasco
+        /// ahora mismo (mismo criterio que <see cref="NamingUi.ResolveTarget"/>: cursor
+        /// primero, frasco de respaldo -- así el aviso siempre coincide con lo que T
+        /// abriría) es innominado y sin bautizar, y es la PRIMERA vez que esta sustancia
+        /// concreta dispara el aviso, lo enciende. Nunca construye el texto aquí (es
+        /// literal, ver DrawAvisoBautizo): solo decide CUÁNDO mostrarlo.
+        /// </summary>
+        private void ActualizarAvisoBautizo()
+        {
+            byte objetivo = NamingUi.ResolveTarget(_sim, _flask);
+            if (objetivo == MaterialId.Empty) return;
+            if (!NecesitaBautizo(objetivo)) return;
+            if (_avisoBautizoMostrado[objetivo]) return;
+
+            _avisoBautizoMostrado[objetivo] = true;
+            _avisoBautizoHasta = Time.time + AvisoBautizoDuracionSeg;
+        }
+
+        /// <summary>
+        /// (fix playtest 10) "Descubrir la ley y nombrar a su producto deberían
+        /// encadenarse de forma natural": se llama justo cuando el banner "LEY
+        /// DESCUBIERTA" de <paramref name="matId"/> termina de mostrarse. Si ese
+        /// material sigue innominado, encadena la invitación a bautizar (respetando el
+        /// mismo "una vez por material" que el resto del sistema -- si el jugador ya lo
+        /// vio por otra vía, p.ej. lo apuntó mientras esperaba el banner, no se repite).
+        /// </summary>
+        private void DispararAvisoBautizoTrasLey(byte matId)
+        {
+            if (!NecesitaBautizo(matId)) return;
+            if (_avisoBautizoMostrado[matId]) return;
+
+            _avisoBautizoMostrado[matId] = true;
+            _avisoBautizoHasta = Time.time + AvisoBautizoDuracionSeg;
         }
 
         private void PollFlask()
@@ -298,37 +441,53 @@ namespace Alkahest.Game
             if (type == SimEventType.Crystallize && !_leyCristalDescubierta)
             {
                 _leyCristalDescubierta = true;
-                EncolarLeyBanner(ConstruirTextoLeyCristal());
+                EncolarLeyBanner(ConstruirTextoLeyCristal(), MaterialId.Crystal);
             }
             else if (type == SimEventType.Grow && !_leyVivumDescubierta)
             {
                 _leyVivumDescubierta = true;
-                EncolarLeyBanner(ConstruirTextoLeyVivium());
+                EncolarLeyBanner(ConstruirTextoLeyVivium(), MaterialId.Vivium);
             }
         }
 
-        private void EncolarLeyBanner(string texto)
+        private void EncolarLeyBanner(string texto, byte matId)
         {
             if (_leyBannerColaCount >= LeyBannerCapacidad) return; // defensivo: no debería pasar (solo 2 leyes de este tipo existen).
-            _leyBannerCola[_leyBannerColaCount++] = texto;
+            _leyBannerCola[_leyBannerColaCount] = texto;
+            _leyBannerColaMat[_leyBannerColaCount] = matId;
+            _leyBannerColaCount++;
         }
 
-        /// <summary>Construido UNA vez, al disparar el evento (ver ApplyWitness) -- nunca en Update/OnGUI. Usa los nombres bautizados si los hay (ver NombreLey).</summary>
+        /// <summary>
+        /// Construido UNA vez, al disparar el evento (ver ApplyWitness) -- nunca en
+        /// Update/OnGUI. Usa los nombres bautizados o comunes de taller si los hay
+        /// (ver NombreLey); si no, una descripción de ORIGEN -- nunca la identidad
+        /// interna del material (fix playtest 10: eso sería la misma circularidad
+        /// que rompía las pistas, ver doc de NombreLey).
+        /// </summary>
         private string ConstruirTextoLeyCristal()
         {
-            string azoth = NombreLey(MaterialId.Azoth, "azoth").ToUpperInvariant();
-            string semilla = NombreLey(MaterialId.CrystalSeed, "semilla de cristal").ToUpperInvariant();
-            string cristal = NombreLey(MaterialId.Crystal, "cristal").ToUpperInvariant();
-            return $"LEY DESCUBIERTA — El {azoth} que toca {semilla} (o {cristal} ya formado) se vuelve {cristal}. " +
+            string azoth = NombreLey(MaterialId.Azoth, "el líquido reservado del Maestro");
+            string semilla = NombreLey(MaterialId.CrystalSeed, "su semilla sin nombre");
+            string cristal = NombreLey(MaterialId.Crystal, "la piedra que nace del frío");
+            // "que ya haya cuajado" en vez de un adjetivo con género (crecido/a): el
+            // nombre bautizado puede ser cualquier palabra y no sabemos su género.
+            return $"LEY DESCUBIERTA — En frío, {azoth} se vuelve {cristal} al tocar {semilla} o al tocar {cristal} que ya haya cuajado. " +
                    "La semilla no se gasta: siembra una y aliméntala.";
         }
 
         private string ConstruirTextoLeyVivium()
         {
-            string vivium = NombreLey(MaterialId.Vivium, "vivium").ToUpperInvariant();
-            string nutriente = NombreLey(MaterialId.Nutrient, "nutriente").ToUpperInvariant();
-            return $"LEY DESCUBIERTA — El {vivium} asentado, con {nutriente} al lado y calor TEMPLADO, crea {vivium} nuevo. " +
+            string vivium = MayusculaInicial(NombreLey(MaterialId.Vivium, "lo vivo que os dejó el Maestro"));
+            string nutriente = NombreLey(MaterialId.Nutrient, "nutriente");
+            return $"LEY DESCUBIERTA — {vivium}, asentado, con {nutriente} al lado y calor TEMPLADO, crea más de sí mismo. " +
                    "No se consume: cada célula que nace es otra semilla.";
+        }
+
+        private static string MayusculaInicial(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return char.ToUpperInvariant(s[0]) + s.Substring(1);
         }
 
         /// <summary>Avanza la cola FIFO de leyes pendientes cuando la actual caduca o no hay ninguna mostrándose todavía.</summary>
@@ -337,19 +496,35 @@ namespace Alkahest.Game
             if (_leyBannerActual != null)
             {
                 if (Time.time < _leyBannerHasta) return;
+                // (fix playtest 10) El banner que acaba de terminar YA enseñó la ley:
+                // este es el momento justo para encadenar "¿cómo lo llamáis?" -- ver
+                // doc de DispararAvisoBautizoTrasLey.
+                DispararAvisoBautizoTrasLey(_leyBannerActualMat);
                 _leyBannerActual = null;
             }
             if (_leyBannerColaLeidos >= _leyBannerColaCount) return;
 
-            _leyBannerActual = _leyBannerCola[_leyBannerColaLeidos++];
+            _leyBannerActual = _leyBannerCola[_leyBannerColaLeidos];
+            _leyBannerActualMat = _leyBannerColaMat[_leyBannerColaLeidos];
+            _leyBannerColaLeidos++;
             _leyBannerHasta = Time.time + LeyBannerDuracionSeg;
         }
 
         private void OnGUI()
         {
-            if (_leyBannerActual == null || DayCycle.InputLocked) return;
+            if (DayCycle.InputLocked) return;
+
+            bool hayLey = _leyBannerActual != null;
+            // El aviso de bautizo nunca compite por atención con el banner de ley (que
+            // ya cubre el mismo centro-superior de pantalla) ni con el campo de texto
+            // abierto -- reaparecerá solo (DispararAvisoBautizoTrasLey) en cuanto el
+            // banner de ley termine, si sigue haciendo falta.
+            bool hayAviso = !hayLey && !UiStyles.EscribiendoTexto && Time.time < _avisoBautizoHasta;
+            if (!hayLey && !hayAviso) return;
+
             UiStyles.Preparar();
-            DrawLeyBanner();
+            if (hayLey) DrawLeyBanner();
+            if (hayAviso) DrawAvisoBautizo();
         }
 
         /// <summary>
@@ -381,6 +556,24 @@ namespace Alkahest.Game
 
             GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTitulo), titulo, UiStyles.Alerta);
             GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoCuerpo, interior, altoCuerpo), texto, UiStyles.CuerpoCentrado);
+        }
+
+        /// <summary>Texto de la invitación: literal, no se construye nunca por frame (regla del proyecto: nada de strings en OnGUI).</summary>
+        private const string TextoAvisoBautizo = "esto no tiene nombre — T para bautizarlo";
+
+        /// <summary>
+        /// (fix playtest 10) Globo breve y discreto junto al cursor, mismo widget que ya
+        /// usa FlaskHud para su feedback ("frasco vacío", "demasiado lejos") -- ningún
+        /// HUD nuevo, solo otro uso del mismo <see cref="UiStyles.Globo"/>.
+        /// </summary>
+        private void DrawAvisoBautizo()
+        {
+            var mouse = Mouse.current;
+            if (mouse == null) return;
+
+            Vector2 screenPos = mouse.position.ReadValue();
+            var gui = new Vector2(screenPos.x, Screen.height - screenPos.y - UiStyles.S(34f));
+            UiStyles.Globo(gui, TextoAvisoBautizo, UiStyles.Oro);
         }
 
         /// <summary>Chip corto en español para una única flag de presenciado (usado por JournalHud).</summary>
