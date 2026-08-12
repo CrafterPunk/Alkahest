@@ -50,21 +50,37 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 7. **`StaticSolid` no cae**: `SimStepper` no le aplica gravedad (Cristal, Hielo). Toda mecánica
    que dependa de que la materia baje sola tiene que arrastrarla ella misma (ver
    `DeliveryChute.ArrastreTick`, playtest 8).
-8. El ring buffer de eventos de `SimStepper` (`Events`/`EventHead`) se lee de forma **NO
-   destructiva**: cada consumidor mantiene su propio índice (`SubstanceKnowledge`,
-   `DirectorDeAudio`). Nunca avanzar una cabeza compartida.
+8. El ring buffer de eventos de `SimStepper` (`Events`/`EventHead`) lo consumen ya TRES clases,
+   cada una de forma **NO destructiva** con su propio índice (`SubstanceKnowledge`,
+   `Audio/DirectorDeAudio`, y la lógica de "LEY DESCUBIERTA" dentro de `SubstanceKnowledge`, ver
+   playtest 9). Nunca avanzar una cabeza compartida.
+9. **Al tocar la difusión de temperatura** (`SimStepper.DiffuseTemperature`), comprobar SIEMPRE que
+   la guarda del tirón hacia ambiente cubre el 100% de las celdas (no solo un offset fijo) y que el
+   redondeo es simétrico en signo (`diff / 4`, NUNCA `diff >> 2` con posibles negativos) — dos bugs
+   de deriva de temperatura sin límite salieron justo de ahí (playtest 9).
+10. **`OrderSystem.TryDeliverCell` devuelve `DeliveryOutcome`** (`Progressed`/`OrderAlreadyComplete`/
+    `NoMatch`), no `bool`. **El Favor solo se gana completando encargos**; el único gasto es
+    `Dispenser.favorCostPerActivation`. No reintroducir Favor por "chatarra" (ver playtest 9).
+11. **Al reescribir `DayCycle`**, verificar que sigue vivo el cierre anticipado de jornada
+    (`UpdateAllOrdersDoneEarlyClose`, disparado por `OrderSystem.AllOrdersCompleted()`) — ya se
+    perdió una vez al introducir los cuatro desenlaces (playtest 8→9).
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
-M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp) recién
-añadidos, SIN VERIFICAR en editor. Playtest 8 (Opus 5 dirige, Sonnet 5 escribe en 4 encargos
-paralelos): corregida regresión del playtest 7 (sólidos no caían/no se entregaban en la Tolva,
-ver regla 7 arriba) y rebalanceado el día 3 + los cuatro desenlaces de partida (`OrderSystem.
-Desenlace`: despedido/aprendiz/oficial/maestro — ver HANDOFF para la tabla de tasas medidas).
-PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas con el
-balance nuevo; 2) decidir si el audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`);
-3) build Windows limpia (nunca verificada desde el rediseño del espacio); 4) renombrar repo
-GitHub `Alkahest`→`ChaosAlchemy`; 5) replantear las redomas (`StorageRack`, sugerencia de Cesar);
-6) resto de M5 (glow, agua con más cuerpo); 7) multiplayer: sim solo-host + deltas RLE por chunks
-despiertos a 10-15Hz — MEDIR antes de decidir (plan en HANDOFF). Detalle completo de la ronda 8:
-`docs/HANDOFF.md` sección "Playtest 8".
+M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
+VERIFICAR en editor. Playtest 9 (Opus 5 dirige, Sonnet 5 escribe en 4 encargos paralelos):
+enseñanza de "las muestras del Maestro son SEMILLAS que no se gastan, no ingredientes" (momento
+LEY DESCUBIERTA + sección LEYES del diario, ver reglas 8/9 arriba... y HANDOFF); dos bugs de
+aritmética en la difusión de temperatura que hacían el frío "infinito" (regla 9 arriba); camino
+placa→aceite→fuego reparado (no había autoignición por temperatura) y fuego pintado con F3 ya no
+se ve gris; Favor SOLO por completar encargos, sin "chatarra" paralela (regla 10 arriba,
+`OrderSystem.DeliveryOutcome`); restaurado el cierre anticipado de jornada que se había perdido
+(regla 11 arriba); limpieza de audio (popeo por costura de bucle/DC offset/saturación/salto de M,
+timbre del agua y del fuego corregidos); ala delantera del aprendiz ya no tapa el cuerpo.
+PENDIENTE (orden): 1) verificar en Unity que compila y jugar las 3 jornadas completas; 2)
+comprobar que el texto largo del Maestro cabe en el panel de la jornada 2; 3) decidir si el audio
+se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 4) build Windows limpia (nunca verificada
+desde el rediseño del espacio); 5) renombrar repo GitHub `Alkahest`→`ChaosAlchemy`; 6) replantear
+las redomas (`StorageRack`, sugerencia de Cesar); 7) resto de M5 (glow, agua con más cuerpo);
+8) multiplayer: sim solo-host + deltas RLE por chunks despiertos a 10-15Hz — MEDIR antes de
+decidir (plan en HANDOFF). Detalle completo de la ronda 9: `docs/HANDOFF.md` sección "Playtest 9".

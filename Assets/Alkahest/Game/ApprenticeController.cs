@@ -298,26 +298,39 @@ namespace Alkahest.Game
             _tiltPivot = tiltGo.transform;
 
             // Orden de dibujo (todo en el mismo plano; la "profundidad" la da
-            // sortingOrder, no la Z): cola detrás, ala trasera, cuerpo, ala
-            // delantera — un poco de capas para que el aleteo lea con volumen.
+            // sortingOrder, no la Z).
+            //
+            // (fix playtest 9) "el ala del nuevo personaje está por encima del resto del
+            // cuerpo": AlaDelantera vivía en sortingOrder+1, POR ENCIMA del cuerpo
+            // (sortingOrder) -- en cada aleteo el ala delantera tapaba la cara/torso del
+            // imp. Vista de perfil, las DOS alas nacen del lomo (ninguna sale "por
+            // delante" de la cara): ambas van DETRÁS del cuerpo. Orden final, de más
+            // atrás a más adelante: Cola < AlaTrasera < AlaDelantera < Cuerpo. Entre las
+            // dos alas, la delantera queda un pelín más cerca del cuerpo que la trasera
+            // (para no perder sensación de profundidad al ponerlas ambas detrás), y ya
+            // se distinguían por tono (AlaTrasera apagada) y por el desfase de fase del
+            // aleteo (ver HandleVisual: flapBack usa fase y amplitud distintas) -- eso no
+            // se toca.
             var tailSprite = CrearSprite(GenerateTailTexture(), new Vector2(TailHingePx.x / TailTexW, TailHingePx.y / TailTexH));
-            _tailSr = CrearCapa(_tiltPivot, "Cola", tailSprite, sortingOrder - 2);
+            _tailSr = CrearCapa(_tiltPivot, "Cola", tailSprite, sortingOrder - 3);
             _tailTr = _tailSr.transform;
 
             var wingSprite = CrearSprite(GenerateWingTexture(), new Vector2(WingHingePx.x / WingTexW, WingHingePx.y / WingTexH));
-            _wingBackSr = CrearCapa(_tiltPivot, "AlaTrasera", wingSprite, sortingOrder - 1);
+            _wingBackSr = CrearCapa(_tiltPivot, "AlaTrasera", wingSprite, sortingOrder - 2);
             _wingBackTr = _wingBackSr.transform;
-            _wingBackSr.color = new Color(0.74f, 0.70f, 0.82f, 1f); // un pelín más apagada: queda detrás.
+            _wingBackSr.color = new Color(0.74f, 0.70f, 0.82f, 1f); // un pelín más apagada: queda más atrás que la otra ala.
+
+            // Misma textura que la trasera: dos instancias de UN sprite, sin
+            // duplicar la generación (dos SpriteRenderer distintos, un solo
+            // Texture2D/Sprite compartido). sortingOrder-1: por delante de
+            // AlaTrasera (más cerca del cuerpo, para no perder profundidad),
+            // pero SIEMPRE por detrás del Cuerpo (sortingOrder).
+            _wingFrontSr = CrearCapa(_tiltPivot, "AlaDelantera", wingSprite, sortingOrder - 1);
+            _wingFrontTr = _wingFrontSr.transform;
 
             _bodySpriteOpen = CrearSprite(GenerateBodyTexture(false), new Vector2(0.5f, 0.5f));
             _bodySpriteClosed = CrearSprite(GenerateBodyTexture(true), new Vector2(0.5f, 0.5f));
             _bodySr = CrearCapa(_tiltPivot, "Cuerpo", _bodySpriteOpen, sortingOrder);
-
-            // Misma textura que la trasera: dos instancias de UN sprite, sin
-            // duplicar la generación (dos SpriteRenderer distintos, un solo
-            // Texture2D/Sprite compartido).
-            _wingFrontSr = CrearCapa(_tiltPivot, "AlaDelantera", wingSprite, sortingOrder + 1);
-            _wingFrontTr = _wingFrontSr.transform;
 
             var flaskSprite = CrearSprite(GenerateCarriedFlaskTexture(), new Vector2(0.5f, 0.5f));
             // El tarro cargado cuelga del aprendiz DIRECTAMENTE (no del nodo

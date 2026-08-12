@@ -30,21 +30,24 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 8)
-1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con el balance del
-   día 3 y los cuatro desenlaces del playtest 8 (ver esa sección) — nada de esto se ha probado en
-   editor todavía.
-2. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
+## Backlog priorizado (actualizado tras playtest 9)
+1. **Verificar en Unity que compila y jugar la partida entera de 3 jornadas** con todos los fixes
+   del playtest 9 (ver esa sección) — sigue sin probarse en editor.
+2. **Comprobar que el texto largo del Maestro cabe en el panel de la jornada 2**: `MasterSupplies.
+   TextoEntrega` pasó de ~155 a ~330 caracteres dentro de un panel de altura fija (490 px, ver
+   `DayCycle.AbrirPanel`); usa `GUILayout.FlexibleSpace()` antes del botón así que debería
+   absorberlo, pero hay que jugarlo para confirmarlo.
+3. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
    `DirectorDeAudio`? Depende de feedback de Cesar.
-3. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
+4. **Build Windows limpia**: nunca se ha verificado una desde la reingeniería del espacio
    (playtest 4) ni con M5 (audio + aprendiz) encima. Menú ya existe (`AlkahestBuildTools`, ver
    stint M5-parcial) — falta EJECUTARLO y probar el .exe.
-4. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
+5. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` (el productName ya
    es ChaosAlchemy; los namespaces `Alkahest.*` se quedan — decisión registrada).
-5. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
+6. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
    accesibles, para levantar el gameplay de reacciones/experimentación.
-6. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
-7. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
+7. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
+8. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado:
    - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
    - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
      tick), 10-15 Hz, ~5-30 KB/s estimado — MEDIR con `NetDiagnostics` del template antes de
@@ -52,7 +55,7 @@ en el proyecto pero no integrado con la sim.
      por (tick,x,y), sin flotantes en lógica) — requiere snapshot+replay para joins.
    - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
      habla con él. NO rediseñar el template.
-8. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+9. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
    NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
@@ -75,6 +78,9 @@ en el proyecto pero no integrado con la sim.
   balance y de dirección de sonido y de arte, especificación de los 4 encargos y revisión);
   **Sonnet 5 escribió todo el código** en 4 encargos paralelos con propiedad de archivos disjunta,
   más 1 pase de revisión de compilación.
+- **Playtest 9**: mismo reparto — **Opus 5 dirigió** (diagnóstico de los siete hallazgos de Cesar,
+  especificación de 4 encargos paralelos con propiedad de archivos disjunta y revisión);
+  **Sonnet 5 escribió todo el código** en esos 4 encargos, más 1 pase de revisión de compilación.
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no
@@ -331,3 +337,150 @@ a 10-15 Hz, MEDIR antes de decidir — sección Backlog).
 Preguntas abiertas para el próximo playtest: ¿el audio funciona o hay que apagarlo? ¿el día 3 se
 siente jugable con 290 celdas? ¿los cuatro desenlaces dan razón para seguir jugando pasada la
 meta? ¿el imp se lee bien en movimiento sobre materia saturada?
+
+
+## Playtest 9 → LA LEY DE LAS SEMILLAS, dos bugs de difusión de temperatura, el camino del fuego,
+## Favor solo por encargos, regresión del cierre de jornada, y limpieza de audio — SIN VERIFICAR EN EDITOR
+Ronda dirigida por Opus 5 (diagnóstico de los siete hallazgos de Cesar, especificación de 4
+encargos con propiedad de archivos disjunta, revisión de compilación); Sonnet 5 escribió TODO el
+código.
+
+**1. LA LEY DE LAS SEMILLAS — el problema más importante de la ronda.** Cesar, tras horas de
+juego: *"Aún no descifro cómo hacer crecer cristal o vivium; por más que hago combinaciones no he
+conseguido multiplicar la cantidad del producto. Está raro que me den ingredientes que también son
+la meta."* Lo entendía bien: era un fallo de ENSEÑANZA, no de balance ni de simulación. Diagnóstico
+reutilizable: **el jugador creía que las muestras del Maestro eran INGREDIENTES que se gastan; son
+SEMILLAS, catalizadores que no se consumen.**
+Leyes verificadas en el código (referencia futura): Cristal — `Universe.Create` hornea
+`Reaction(Azoth,Crystal,Crystal,Crystal)` y `Reaction(Azoth,CrystalSeed,Crystal,CrystalSeed)`; como
+`ReactionEngine`/`SimStepper.TryReactNeighbor` solo transforma la celda cuyo producto difiere del
+original, **la semilla no se consume**. 12%/comprobación (27% con el Edicto de Frío Fértil), con el
+AZOTH a ≤5 °C (≤20 °C con el Edicto) — se comprueba la temperatura de la celda de Azoth porque el
+Cristal es `StaticSolid` y nunca dispara `MaybeReact`. Vivium (`SimStepper.GrowthTick`): una célula
+asentada busca Nutrient ortogonal; si SU PROPIA temperatura cae en `[VivGrowMinRaw,VivGrowMaxRaw]`
+(30-60 °C ±15 de jitter por seed; -20 con Frío Fértil), consume ese Nutrient y con
+`VivGrowChancePct=60%` fijo crea Vivium nuevo — la madre NUNCA se transforma. 1 intento cada 4
+ticks por célula, máx. 1 Nutrient por célula y tick. Fuera de banda no muere, se marca dormida
+(`OrganicDormantAux`); solo muere por encima de 120 °C (`boilsAt→Ash`). Grifos: caudal infinito,
+sin reservas; jornada 1 Agua/Arena gratis, Aceite 2 Favor, Nutriente 5; Azoth (4) nace sellado y lo
+abre `MasterSupplies` al empezar la jornada 2.
+Qué se hizo: (a) `SubstanceKnowledge` añade el momento **LEY DESCUBIERTA**: engancha el ring buffer
+de `SimStepper` con su propio índice (mismo patrón no destructivo que `DirectorDeAudio`), dispara
+una sola vez por partida en el primer `Crystallize` y el primer `Grow`, texto construido una vez
+(nunca en OnGUI) con los nombres bautizados si existen, panel cálido de 7 s con cola FIFO de 2. (b)
+`JournalHud` añade una sección **LEYES**: recorre `Universe.Reactions.TryGet` para todos los pares
+(más la ley de crecimiento del Vivium a mano, que no vive en esa tabla) — sigue siendo correcta si
+las leyes cambian por seed; marca `★ SE PROPAGA` con la regla genérica `(productA==a) != (productB
+==b)`; cacheada por `CountDiscovered()` + la propiedad nueva `SubstanceKnowledge.NamingVersion`
+(necesaria porque `CountNamed()` no detecta un re-bautizo). (c) Pistas de jornadas 2 y 3
+reescritas como procedimientos con ubicaciones reales de `SimLevelBuilder`. (d)
+`MasterSupplies.TextoEntrega` reescrito: "tres SEMILLAS, no ingredientes: no se gastan, se
+ALIMENTAN...". RIESGO ANOTADO en el backlog: el texto pasó de ~155 a ~330 caracteres dentro de un
+panel de altura fija (490 px, `DayCycle.AbrirPanel`); usa `GUILayout.FlexibleSpace()` antes del
+botón así que debería absorberlo, pero falta verificarlo jugando la jornada 2.
+
+**2. DOS BUGS DE ARITMÉTICA EN LA DIFUSIÓN DE TEMPERATURA (el frío desbocado).** Reporte: *"la
+congelación con el tiempo parece que irradia infinito; después de un rato ya no puedo ni abrir el
+caño de agua porque sale una tirita de hielo y se tapa."* No era `ChillStone` (verificado: apaga
+bien, acotada a la bandeja, piso `ColdRaw=20`). Eran dos fallos en `SimStepper.DiffuseTemperature`:
+- **Trinquete colapsado a 1/8 de la grilla**: el tirón hacia ambiente estaba guardado por
+  `if ((_tick & 7u) == 0u)` DENTRO del bucle `for (i=offset; i<n; i+=8)` con `offset=tick%8`. Como
+  `offset` ES `tick%8`, la condición solo puede cumplirse en la pasada donde `offset==0`: solo las
+  celdas con `i%8==0` recibían el tirón; el resto de la grilla (7/8) NUNCA lo recibía. La difusión
+  entre vecinos sí corría en toda la grilla y paseaba el frío por el taller, sin nada que lo
+  devolviera a 20 °C. Mismo patrón de trinquete que el bug del hielo del playtest 1, reencarnado
+  en la aritmética. Fix: condición basada en `(_tick>>3)&3u` (cuenta las difusiones de cada celda,
+  no el offset), así el tirón alcanza toda la grilla cada ~32 ticks.
+- **Redondeo sesgado hacia el frío**: `diff>>2` es desplazamiento aritmético y en C# equivale a
+  `floor(diff/4)` para negativos: `+5>>2=+1` pero `-5>>2=-2`. Enfriarse iba al doble de velocidad
+  que calentarse, 30 veces por segundo, en toda la grilla, con o sin piedra encendida. Fix:
+  `diff/4`, que trunca hacia cero simétricamente.
+LECCIÓN GENERAL: en un campo que se actualiza a 30 Hz, cualquier asimetría de redondeo o guarda que
+no cubra todas las celdas se convierte en deriva garantizada. Al tocar la difusión, comprobar
+SIEMPRE que la guarda cubre el 100% de las celdas y que el redondeo es simétrico en signo.
+
+**3. EL CAMINO PARA CONSEGUIR FUEGO NO EXISTÍA.** Reportes: *"no sé si la idea es que luego me den
+un caño de fuego"* + *"el fuego en el aire sigue siendo gris"* + *"la reacción [del aceite] es muy
+rápida"*.
+- **Autoignición ausente**: `TryIgnite` (con su comprobación de `ignitionTemp`) solo se llamaba
+  desde `ProcessFire`, es decir, hacía falta una celda de Fuego vecina — no había autoignición
+  espontánea por temperatura, así que aceite sobrecalentado sin llama cerca NUNCA prendía: el único
+  camino legal para obtener fuego (placa ARDIENTE bajo aceite) estaba roto. Los números sí daban:
+  placa Ardiente = raw 220 (320 °C), `ignitionTemp` del aceite ~208-312 °C según seed (raw ~164-
+  216). Fix: rama genérica de autoignición en `ApplyPhase` (junto a fusión/ebullición/condensación,
+  mutuamente excluyentes) para cualquier material `flammable` con `ignitionTemp` finito.
+- **Fuego pintado con F3 = gris**: `AlkahestSim.Paint`→`CellGrid.SetCell` pone `aux=0` sin pasar
+  por `Transform`, así que la celda llegaba a `ProcessFire` con `life=0` y sin combustible cerca se
+  convertía en Humo/Ceniza en el primer tick — el jugador nunca veía la llama, veía humo. Fix:
+  `life==0` a la entrada se interpreta ahora como "recién creada" (nunca puede serlo por expiración,
+  que siempre transforma la celda el mismo tick) y se siembra con ~16±3 ticks (~0,5 s), corta frente
+  a los ~80 del fuego alimentado; más un tramo de decaimiento a media velocidad por debajo de 6 de
+  vida para que se apague desvaneciéndose. La PALETA de la llama en `SimRenderer` no se tocó
+  (validada por el jugador).
+- **Combustión del aceite**: probabilidad por tick en `TryIgnite` de **50% → 12%** (con 50% un
+  charco conectado prendía entero en 1-2 ticks; con 12% el frente avanza ~1 celda cada 8 ticks,
+  ~0,27 s: observable y utilizable).
+
+**4. FAVOR: FUERA LA PUNTUACIÓN PARALELA.** Reporte: *"me suben los puntos aunque le agregue
+cualquier cosa a la tolva y esta me diga que no lo necesita... o solo nos quedamos con el de las
+misiones si te parece bien."* Se eligió su segunda opción. Eliminados `ScrapPerFavor`, el contador
+`_scrap` y la llamada `AddFavor(1)` de `DeliveryChute` — era la única fuente de Favor que no fuera
+completar un encargo. Razones: incoherente con la ficción (el Maestro paga lo que encargó), rompía
+los cuatro desenlaces (si cualquier basura suma, los umbrales no miden nada), y el juego se
+contradecía a sí mismo (decía "esto no lo necesito" y acto seguido pagaba). La materia que no
+cuenta se sigue consumiendo (engullir sigue siendo el verbo de la Tolva) pero sin pagar.
+`OrderSystem.TryDeliverCell` pasa de `bool` a `enum DeliveryOutcome { Progressed,
+OrderAlreadyComplete, NoMatch }` para distinguir "material equivocado" de "ese encargo ya está
+completo" — el segundo caso importa porque significa que el jugador está desperdiciando trabajo.
+Aviso una-vez-por-material reutilizando `_scrapWarned`.
+Consecuencia de balance: antes el máximo de Favor era ILIMITADO (la chatarra sumaba sin tope);
+ahora **305 ★ es el techo real y exacto** de una partida perfecta (20 inicial + 50 día 1 + 105 día
+2 + 130 día 3, menos lo gastado en grifos). Los umbrales 120/180/260 no cambian. Única fuente de
+Favor: completar encargos. Único gasto: `Dispenser.favorCostPerActivation` (Agua/Arena 0, Aceite 2,
+Nutriente 5, Azoth 4).
+
+**5. REGRESIÓN: el cierre anticipado de jornada se había perdido.** El aviso "todos los encargos
+entregados · pulsa ENTER" del playtest 6 desapareció en la reescritura de `DayCycle` del playtest 8
+(sistema de cuatro desenlaces). Restaurado como `UpdateAllOrdersDoneEarlyClose()`: se dispara con
+`AllOrdersCompleted()`, 12 s de cuenta atrás (`DayEndAutoCloseSeconds`) acotada cada frame a
+`_timeRemaining`, ENTER la corta, y usa el MISMO `EnterDayEnd()` que el fin por temporizador. Cierra
+la JORNADA, no la partida: la partida sigue durando siempre tres jornadas. LECCIÓN: al reescribir
+`DayCycle` hay que comprobar que este cierre sigue vivo — ya se perdió una vez.
+
+**6. AUDIO: cuatro causas del popeo, y dos timbres mal.** Reportes: *"el sonido ambiental popea,
+sobre todo cuando cruza con otra cosa que tenga sonido"*, *"el agua parece más arena que agua"*,
+*"tampoco suena como fuego"*.
+- **Costura del bucle**: `SuavizarBucle` mezclaba cabeza Y cola al mismo valor, lo que DESPLAZABA
+  el salto al borde de la ventana de crossfade en vez de eliminarlo. Reescrito para tocar solo la
+  cola, arrastrándola hacia la cabeza con peso smoothstep (derivada cero en los bordes). El bucle
+  ambiental se construye ahora en muestras exactas (525×189=99225) para que el zumbido de 42/84 Hz
+  cierre en fase.
+- **DC offset**: `PasoAltoDC` (~20 Hz) aplicado a los 5 bucles largos antes de normalizar y coser.
+- **Saturación al sumar** (la causa que describía el jugador): Unity suma las voces y recorta a
+  1.0. Presupuesto de mezcla documentado en `DirectorDeAudio`: ambiente de pico 0.5→0.28 y volumen
+  0.55→0.30, fuego y grifos recortados, más ducking sencillo (cada one-shot agacha los bucles a
+  0.55× durante ~300 ms). Suma de picos ≈0.57 típico y ≈0.78 en avalancha, bajo el tope de 0.8.
+- **Cambio de volumen en seco**: la tecla M saltaba 0↔0.5 de golpe sobre fuentes que seguían
+  sonando. Ahora `_factorMaestroSuavizado` rampa en ~60-70 ms.
+- **El agua sonaba a arena porque era la misma receta**: ruido con TRÉMOLO DE AMPLITUD, la firma
+  acústica de un árido. Ahora: base grave (corte ~170-350 Hz) con el CORTE del filtro modulado en
+  vez de la amplitud, más `AnadirBurbujas` — senos de 20-40 ms con barrido ascendente de 350 a
+  1000 Hz, ~4-5/s. Ese barrido ascendente es lo que el oído reconoce como agua. Regla de sonido a
+  respetar: modular el corte = líquido; modular la amplitud = árido.
+- **El fuego no sonaba**: 220 sondas sobre 36.864 celdas, con el fuego sin combustible apagándose
+  en 1 tick, exigían ~3.300 celdas ardiendo a la vez para saturar. Fix: ataque instantáneo con piso
+  audible (0.42) en cuanto se detecta una celda, liberación lenta (2 s), 700 sondas, saturación de
+  20→5. Y el timbre: los chasquidos se sumaban al rugido ANTES de un segundo paso-bajo que se los
+  comía, dejando viento. Separados en dos capas: rugido grave continuo (380 Hz) y chasquidos
+  brillantes (4-9 ms, corte a 7500 Hz solo anti-aliasing).
+
+**7. Menor: el ala del aprendiz tapaba el cuerpo.** `AlaDelantera` estaba en `sortingOrder+1`.
+Nuevo orden de atrás a delante: `Cola(-3) < AlaTrasera(-2) < AlaDelantera(-1) < Cuerpo(0)`, base
+50 — ambas alas detrás del cuerpo, coherente con una criatura de perfil (las dos nacen del lomo).
+La profundidad entre ellas se conserva por el tono atenuado del ala trasera y el desfase de
+aleteo. `CarryAnchor`, física y tamaño de mundo intactos.
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo).
+Preguntas abiertas para el próximo playtest: ¿el momento "LEY DESCUBIERTA" desbloquea de verdad la
+comprensión del motor? ¿quedó limpio el audio? ¿el fuego se lee ya como fuego y el camino
+placa→aceite se encuentra solo? ¿el frío se comporta como un charco local estable?

@@ -9,9 +9,29 @@ namespace Alkahest.Game
     /// que es la única fuente de verdad de dónde está la boca). Solo se CONSUME
     /// en las filas del fondo del pozo (el "sillar", <see cref="ChuteSillRows"/>
     /// filas junto al suelo de piedra) y se evalúa contra los encargos activos
-    /// de <see cref="OrderSystem"/>; lo que no encaja cuenta como "chatarra" y
-    /// da 1 de Favor cada <see cref="ScrapPerFavor"/> celdas, para que
-    /// experimentar nunca sea del todo inútil.
+    /// de <see cref="OrderSystem"/>.
+    ///
+    /// FAVOR SOLO POR ENCARGOS (fix playtest 9): antes, lo que no encajaba con
+    /// ningún encargo incompleto se contaba como "chatarra" y daba 1 Favor
+    /// cada <c>ScrapPerFavor</c> celdas -- "para que experimentar nunca fuera
+    /// del todo inútil". Eliminado por completo (constante, contador y
+    /// llamada a AddFavor incluidos): el reporte del playtest 9 fue literal
+    /// -- "me suben los puntos aunque le agregue cualquier cosa a la tolva y
+    /// esta me diga que no lo necesita". Un mensaje ("esto no lo necesito") y
+    /// una recompensa (+Favor) contradictorios en el mismo gesto enseñan a
+    /// ignorar los dos. Decisión de dirección: SOLO los encargos dan Favor
+    /// (ver OrderSystem.TryDeliverCell). La materia vertida que no cuenta
+    /// SIGUE consumiéndose igual -- "engullir" sigue siendo el verbo de la
+    /// Tolva, ver el bloque LA GARGANTA ARRASTRA más abajo -- pero ya no paga
+    /// por ello; en su lugar se avisa CLARO y BREVE de por qué no contó,
+    /// distinguiendo los dos motivos posibles (ver ConsumeTick):
+    ///  · "material equivocado" -- ningún encargo activo pide esto.
+    ///  · "encargo ya completo" -- el material SÍ era el correcto, pero ese
+    ///    encargo concreto ya se cumplió; importa que el jugador se entere,
+    ///    porque significa que está desperdiciando trabajo (verter más de lo
+    ///    que ya se pidió no sirve de nada, a diferencia de antes).
+    /// Reutiliza el mismo sistema de aviso "una vez por material" que ya
+    /// existía (<see cref="_scrapWarned"/>) -- no se ha añadido HUD nuevo.
     ///
     /// LA GARGANTA ARRASTRA (fix playtest 8: "aún hay algún problema para
     /// entregar sólidos en la tolva, los que resultan de combinaciones raras").
@@ -47,7 +67,7 @@ namespace Alkahest.Game
     ///  2. Un MARCO DORADO grueso (jambas + labio) alrededor de la boca.
     ///  3. Una FLECHA que flota sobre la boca, cabeceando hacia ella.
     ///  4. Un PULSO de alfa en el labio + rótulo con fondo oscuro; al tragar
-    ///     algo, destello verde ("entrega aceptada") o ámbar ("chatarra").
+    ///     algo, destello verde ("entrega aceptada") o ámbar (no contó).
     ///
     /// LIMITACIÓN: lee _sim.Grid.temp[] directamente para evaluar los encargos
     /// Hot/Cold (mismo patrón que HeatPlate/ChillStone).
@@ -57,16 +77,17 @@ namespace Alkahest.Game
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
-        private const int ScrapPerFavor = 10;
 
         private const float FlashSeconds = 0.5f;
 
         /// <summary>
-        /// Cuánto tiempo se muestra el aviso "esto no cuenta para nada" la
-        /// PRIMERA vez que se entrega un material que no encaja en ningún
-        /// encargo (fix playtest 8, ver "Además" del reporte). Más largo que
-        /// FlashSeconds a propósito: es la única vez que se lee el nombre del
-        /// material, así que necesita tiempo de lectura, no solo de pulso.
+        /// Cuánto tiempo se muestra el aviso "esto no cuenta" la PRIMERA vez
+        /// que se entrega un material en cada uno de los dos motivos posibles
+        /// (fix playtest 8, ampliado en playtest 9 para distinguir "material
+        /// equivocado" de "encargo ya completo" -- ver docblock de la clase).
+        /// Más largo que FlashSeconds a propósito: es la única vez que se lee
+        /// el nombre del material y el motivo completo, así que necesita
+        /// tiempo de lectura, no solo de pulso.
         /// </summary>
         private const float ScrapEducationSeconds = 2.5f;
 
@@ -93,14 +114,22 @@ namespace Alkahest.Game
         private AlkahestSim _sim;
         private OrderSystem _orderSystem;
         private float _accumulator;
-        private int _scrap;
 
         // Aviso educativo "una vez por material" (fix playtest 8, ver
-        // "Además"): un array plano indexado por MaterialId, sin listas ni
-        // asignaciones en el hot path de ConsumeTick.
+        // "Además"; ampliado en playtest 9 para llevar también el MOTIVO):
+        // un array plano indexado por MaterialId, sin listas ni asignaciones
+        // en el hot path de ConsumeTick. Ya no cuenta celdas para dar Favor
+        // (eso desapareció, ver docblock de la clase) -- solo decide cuándo
+        // mostrar el mensaje largo una única vez por material.
         private readonly bool[] _scrapWarned = new bool[MaterialId.Count];
         private string _scrapMsg;
         private float _scrapMsgHasta;
+
+        // Motivo del último desajuste (fix playtest 9): alimenta tanto el
+        // mensaje educativo largo como el destello ámbar corto/recurrente de
+        // OnGUI, para que incluso las entregas 2ª, 3ª... de un material ya
+        // avisado sigan mostrando el motivo correcto en el rótulo breve.
+        private bool _lastMismatchWasCompletedOrder;
 
         private SpriteRenderer _jambaIzq;
         private SpriteRenderer _jambaDer;
@@ -297,34 +326,40 @@ namespace Alkahest.Game
                     if (matId == MaterialId.Stone) continue;
 
                     byte tempRaw = _sim.Grid.temp[CellGrid.Idx(x, y)];
-                    bool matched = _orderSystem.TryDeliverCell(_sim.Universe, matId, tempRaw);
+                    var outcome = _orderSystem.TryDeliverCell(_sim.Universe, matId, tempRaw);
+                    bool matched = outcome == OrderSystem.DeliveryOutcome.Progressed;
                     if (!matched)
                     {
-                        _scrap++;
-                        if (_scrap >= ScrapPerFavor)
-                        {
-                            _scrap -= ScrapPerFavor;
-                            _orderSystem.AddFavor(1);
-                        }
+                        // (fix playtest 9) Ya NO se acumula "chatarra" para
+                        // pagar Favor -- ver docblock de la clase. Lo único
+                        // que queda es avisar de POR QUÉ esta celda no contó,
+                        // distinguiendo los dos motivos: la Tolva ya no dice
+                        // una cosa y hace la contraria.
+                        _lastMismatchWasCompletedOrder = outcome == OrderSystem.DeliveryOutcome.OrderAlreadyComplete;
 
-                        // (fix playtest 8, "Además") Primera vez que ESTE
-                        // material concreto sale como chatarra: se lo decimos
-                        // por su nombre, una sola vez -- reutilizando el mismo
-                        // rótulo de mundo que ya usa el resto de la Tolva, no
-                        // un sistema de mensajes nuevo. Las siguientes veces
-                        // vuelve al "no encaja (chatarra)" genérico de abajo:
-                        // ya lo sabe, no hace falta repetírselo cada entrega.
+                        // (fix playtest 8, "Además"; motivo añadido en
+                        // playtest 9) Primera vez que ESTE material concreto
+                        // sale como no-contado: se lo decimos por su nombre Y
+                        // por el motivo, una sola vez -- reutilizando el
+                        // mismo rótulo de mundo que ya usa el resto de la
+                        // Tolva, no un sistema de mensajes nuevo. Las
+                        // siguientes veces vuelve al aviso corto genérico de
+                        // OnGUI (que también respeta el motivo, ver
+                        // _lastMismatchWasCompletedOrder): ya lo sabe, no
+                        // hace falta repetirle la frase larga cada entrega.
                         if (!_scrapWarned[matId])
                         {
                             _scrapWarned[matId] = true;
                             string nombre = _orderSystem.NombreParaMensaje(matId);
-                            _scrapMsg = $"\"{nombre}\" no cuenta para ningún encargo activo -- queda como chatarra (Favor cada {ScrapPerFavor} celdas).";
+                            _scrapMsg = _lastMismatchWasCompletedOrder
+                                ? $"\"{nombre}\" ya no hace falta -- ese encargo está completo. Se traga igual, pero no suma Favor."
+                                : $"\"{nombre}\" no lo pide ningún encargo activo. Se traga igual, pero no suma Favor.";
                             _scrapMsgHasta = Time.time + ScrapEducationSeconds;
                         }
                     }
 
                     // Prioridad al verde: si en el mismo chorro entra algo que SÍ
-                    // encaja, el jugador ve "aceptado" y no "chatarra".
+                    // encaja, el jugador ve "aceptado" y no el aviso de descarte.
                     if (matched) _flashAceptado = true;
                     else if (Time.time >= _flashHasta) _flashAceptado = false;
                     _flashHasta = Time.time + FlashSeconds;
@@ -398,13 +433,18 @@ namespace Alkahest.Game
                 // pisa al destello normal mientras dura: es más largo a
                 // propósito (ver ScrapEducationSeconds) y solo se dispara una
                 // vez por material, así que merece prioridad sobre el pulso
-                // genérico de aceptado/chatarra.
+                // genérico de aceptado/descarte.
                 texto = _scrapMsg;
                 color = UiStyles.Aviso;
             }
             else if (Time.time < _flashHasta)
             {
-                texto = _flashAceptado ? "¡ENTREGA ACEPTADA!" : "no encaja en ningún encargo (chatarra)";
+                // (fix playtest 9) El destello corto y recurrente (toda
+                // entrega, no solo la primera por material) también respeta
+                // el motivo -- literales fijos, sin concatenar cada frame.
+                texto = _flashAceptado ? "¡ENTREGA ACEPTADA!"
+                    : _lastMismatchWasCompletedOrder ? "ese encargo ya está completo"
+                    : "material equivocado (ningún encargo lo pide)";
                 color = _flashAceptado ? UiStyles.Exito : UiStyles.Aviso;
             }
             else

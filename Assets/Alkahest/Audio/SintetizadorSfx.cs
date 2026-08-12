@@ -79,6 +79,16 @@ namespace Alkahest.Audio
             return new float[Mathf.Max(1, Mathf.RoundToInt(segundos * sampleRate))];
         }
 
+        /// <summary>Como <see cref="NuevoBuffer"/> pero directamente en MUESTRAS: lo usa
+        /// <see cref="ConstruirLechoAmbiental"/> para fijar la longitud del bucle a un
+        /// múltiplo entero EXACTO del periodo del zumbido de fragua (ver ese método) --
+        /// pedir la duración "en segundos" y redondear habría podido dejar un resto de
+        /// muestra suelta y reintroducir el salto de fase que este fix elimina (playtest 9, causa 1a).</summary>
+        private static float[] NuevoBufferMuestras(int muestras)
+        {
+            return new float[Mathf.Max(1, muestras)];
+        }
+
         /// <summary>Ruido blanco crudo en [-1,1]. NUNCA se expone tal cual a un AudioClip final -- ver doc de la clase: siempre pasa por PasoBajo/PasoBajoBarrido antes de sonar.</summary>
         private static void Ruido(float[] buffer)
         {
@@ -111,6 +121,56 @@ namespace Alkahest.Audio
                 float t = n > 1 ? i / (float)(n - 1) : 0f;
                 float cutoff = Mathf.Lerp(cutoffInicioHz, cutoffFinHz, t);
                 float rc = 1f / (2f * Mathf.PI * Mathf.Max(1f, cutoff));
+                float alpha = dt / (rc + dt);
+                y += alpha * (buffer[i] - y);
+                buffer[i] = y;
+            }
+        }
+
+        /// <summary>
+        /// Filtro paso-ALTO de un polo, muy suave (cutoffHz típico ~20Hz): quita la
+        /// componente continua (DC) que el paso-bajo de fuga acumula al integrar ruido
+        /// -- un bucle largo que no empieza y acaba en 0 exacto da un "golpe" audible en
+        /// cada vuelta, sobre todo sumado a otras voces (playtest 9, causa 1b). 20Hz está
+        /// muy por debajo de cualquier parcial audible que usemos (el más grave es el
+        /// zumbido de fragua a 42Hz), así que no muerde el cuerpo del sonido, solo la deriva.
+        /// </summary>
+        private static void PasoAltoDC(float[] buffer, int sampleRate, float cutoffHz)
+        {
+            float rc = 1f / (2f * Mathf.PI * Mathf.Max(1f, cutoffHz));
+            float dt = 1f / sampleRate;
+            float alpha = rc / (rc + dt);
+            float xPrev = buffer.Length > 0 ? buffer[0] : 0f;
+            float yPrev = 0f;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                float x = buffer[i];
+                float y = alpha * (yPrev + x - xPrev);
+                buffer[i] = y;
+                xPrev = x;
+                yPrev = y;
+            }
+        }
+
+        /// <summary>
+        /// Paso-bajo de un polo con el CORTE modulado por un LFO lento alrededor de un
+        /// centro (nunca la amplitud): abre y cierra el timbre suavemente, como el
+        /// "gluglú" de un chorro real de agua. Se diferencia a propósito de
+        /// <see cref="Tremolo"/> (que modula VOLUMEN) porque un trémolo de amplitud sobre
+        /// ruido filtrado es justo la receta de "chorro de arena" que reportó el jugador
+        /// (playtest 9, causa 2) -- modular la banda en vez del volumen mantiene el chorro
+        /// continuo y grave mientras varía su color.
+        /// </summary>
+        private static void PasoBajoConCorteModulado(float[] buffer, int sampleRate, float cutoffCentroHz, float profundidadHz, float lfoHz)
+        {
+            float dt = 1f / sampleRate;
+            float y = 0f;
+            int n = buffer.Length;
+            for (int i = 0; i < n; i++)
+            {
+                float lfo = Mathf.Sin(2f * Mathf.PI * lfoHz * i / sampleRate);
+                float cutoff = Mathf.Max(30f, cutoffCentroHz + profundidadHz * lfo);
+                float rc = 1f / (2f * Mathf.PI * cutoff);
                 float alpha = dt / (rc + dt);
                 y += alpha * (buffer[i] - y);
                 buffer[i] = y;
@@ -197,6 +257,40 @@ namespace Alkahest.Audio
                     float env = Mathf.Sin(Mathf.PI * t); // arco suave: 0 -> 1 -> 0, sin clics en los bordes del grano.
                     float muestra = ((float)_rng.NextDouble() * 2f - 1f) * amplitud * env;
                     buffer[idx] += muestra;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Añade `numBurbujas` burbujas de agua: senos CORTOS (20-40ms) con la
+        /// frecuencia SUBIENDO rápido (~350-500Hz -&gt; ~750-1000Hz) y envolvente en
+        /// arco, en posiciones y frecuencias aleatorias -- es la pista tímbrica que el
+        /// oído asocia inequívocamente con líquido; sin este barrido ascendente, ruido
+        /// filtrado con trémolo suena a arena, no a agua (playtest 9, causa 2). Cada
+        /// burbuja cabe entera dentro del buffer (igual que <see cref="AnadirGranulos"/>),
+        /// así que ninguna se corta en seco contra el final del clip.
+        /// </summary>
+        private static void AnadirBurbujas(float[] buffer, int sampleRate, int numBurbujas, float amplitud)
+        {
+            int n = buffer.Length;
+            for (int b = 0; b < numBurbujas; b++)
+            {
+                float duracionSeg = 0.020f + (float)_rng.NextDouble() * 0.020f; // 20-40ms.
+                int burbN = Mathf.Max(2, Mathf.RoundToInt(duracionSeg * sampleRate));
+                int maxInicio = Mathf.Max(1, n - burbN);
+                int inicio = _rng.Next(0, maxInicio);
+                float freqInicio = 350f + (float)_rng.NextDouble() * 150f; // ~350-500Hz.
+                float freqFin = 750f + (float)_rng.NextDouble() * 250f;    // ~750-1000Hz: siempre SUBIENDO.
+                double fase = 0.0;
+                for (int i = 0; i < burbN; i++)
+                {
+                    int idx = inicio + i;
+                    if (idx >= n) break;
+                    float t = burbN > 1 ? i / (float)(burbN - 1) : 0f;
+                    float freq = Mathf.Lerp(freqInicio, freqFin, t);
+                    fase += 2.0 * System.Math.PI * freq / sampleRate;
+                    float env = Mathf.Sin(Mathf.PI * t); // arco: nace y muere en silencio, sin clics.
+                    buffer[idx] += amplitud * env * (float)System.Math.Sin(fase);
                 }
             }
         }
@@ -295,10 +389,26 @@ namespace Alkahest.Audio
         }
 
         /// <summary>
-        /// Suaviza el punto de bucle de un buffer de ruido: mezcla las últimas
-        /// `crossfadeSamples` muestras (lo que sonaría justo ANTES de volver al
-        /// principio) con las primeras, para que el salto de bucle no se oiga
-        /// como un clic. Técnica estándar de bucles de ruido.
+        /// Suaviza el punto de bucle de un buffer de ruido arrastrando SOLO la COLA
+        /// hacia el valor que va a sonar justo después al reiniciar el bucle (la
+        /// CABEZA, `buffer[0..crossfadeSamples)`), en vez de mezclar y sobrescribir
+        /// los dos lados a la vez.
+        ///
+        /// (fix playtest 9, causa 1a) La versión anterior igualaba `buffer[i]` y
+        /// `buffer[colaInicio+i]` al MISMO valor mezclado -- eso desplazaba también la
+        /// cabeza real del clip, y el desplazamiento paraba en seco justo en el borde
+        /// de la ventana de crossfade (`buffer[crossfadeSamples]`, la primera muestra
+        /// SIN tocar), clavando un salto nuevo ahí que no existía antes de "arreglar"
+        /// la costura -- exactamente el tipo de clic que el jugador describe como más
+        /// audible al solaparse con otro sonido (más energía de alta frecuencia sumada
+        /// a la mezcla). Dejando la cabeza intacta, el único punto que cambia de
+        /// comportamiento es la propia costura (última muestra -> primera al hacer
+        /// wrap), que es justo lo que hay que suavizar.
+        ///
+        /// El peso usa un smoothstep (3w²-2w³) en vez de una rampa lineal: su derivada
+        /// es CERO en los dos extremos de la ventana, así que tampoco crea un
+        /// escalón de pendiente ni al empezar la mezcla ni al terminarla (coincide con
+        /// la muestra original con pendiente 0 en ambos bordes de la ventana).
         /// </summary>
         private static void SuavizarBucle(float[] buffer, int crossfadeSamples)
         {
@@ -307,10 +417,9 @@ namespace Alkahest.Audio
             int colaInicio = n - crossfadeSamples;
             for (int i = 0; i < crossfadeSamples; i++)
             {
-                float w = (i + 1) / (float)(crossfadeSamples + 1); // 0..1
-                float mezcla = buffer[colaInicio + i] * (1f - w) + buffer[i] * w;
-                buffer[i] = mezcla;
-                buffer[colaInicio + i] = mezcla;
+                float t = (i + 1) / (float)(crossfadeSamples + 1); // 0..1
+                float w = t * t * (3f - 2f * t); // smoothstep.
+                buffer[colaInicio + i] = Mathf.Lerp(buffer[colaInicio + i], buffer[i], w);
             }
         }
 
@@ -325,50 +434,123 @@ namespace Alkahest.Audio
         // CONSTRUCTORES DE CLIP (uno por sonido pedido en el encargo)
         // ===================================================================
 
-        /// <summary>1) Lecho ambiental (bucle, muy bajo): ruido marrón muy filtrado (dos pasadas de paso-bajo) + zumbido grave de fragua (fundamental + un armónico débil). Es la sala, no un efecto.</summary>
+        /// <summary>
+        /// 1) Lecho ambiental (bucle, casi subliminal -- ver PRESUPUESTO DE MEZCLA en
+        /// DirectorDeAudio.cs): ruido marrón muy filtrado (dos pasadas de paso-bajo) +
+        /// zumbido grave de fragua (fundamental + un armónico débil). Es la sala, no un
+        /// efecto -- pico bajado a 0.28 (antes 0.5) porque un ambiente que compite en
+        /// volumen con el resto de voces es justo lo que agota el presupuesto de mezcla
+        /// y hace saltar el recorte de Unity al sumar voces (playtest 9, causa 1c).
+        ///
+        /// LONGITUD DE BUCLE (playtest 9, causa 1a): el zumbido tiene un fundamental a
+        /// 42Hz y un armónico a 84Hz -- si la longitud del bucle no es un múltiplo
+        /// entero EXACTO de su periodo, la fase salta en cada vuelta por mucho
+        /// crossfade que se aplique (el crossfade suaviza el RUIDO, no repara un tono
+        /// que no cierra en fase). A SR_LOOP=22050, el periodo de 42Hz son
+        /// exactamente 525 muestras (22050/42); se fija el bucle a un número entero de
+        /// esos ciclos (189 -> 99225 muestras, ~4.5s) en vez de pedir "4.5 segundos" y
+        /// dejar que el redondeo a muestras decida por su cuenta.
+        /// </summary>
         private static AudioClip ConstruirLechoAmbiental()
         {
-            var buf = NuevoBuffer(4.5f, SR_LOOP);
+            const int periodoMuestras = 525; // SR_LOOP(22050) / 42Hz, exacto.
+            const int ciclos = 189;           // 189*525 = 99225 muestras ~= 4.5s.
+            const int totalMuestras = periodoMuestras * ciclos;
+
+            var buf = NuevoBufferMuestras(totalMuestras);
             Ruido(buf);
             PasoBajo(buf, SR_LOOP, 220f);
             PasoBajo(buf, SR_LOOP, 130f); // segunda pasada: opaco de piedra, no aire.
 
-            var zumbido = NuevoBuffer(4.5f, SR_LOOP);
+            var zumbido = NuevoBufferMuestras(totalMuestras);
             Seno(zumbido, SR_LOOP, 42f, 1f);
-            Seno(zumbido, SR_LOOP, 84f, 0.30f); // armónico débil: evita que suene a tono de laboratorio puro.
+            Seno(zumbido, SR_LOOP, 84f, 0.30f); // armónico débil (84Hz = 378 ciclos exactos en el mismo buffer): evita que suene a tono de laboratorio puro sin romper el cierre de fase.
             Sumar(buf, zumbido, 0.045f);
 
-            Normalizar(buf, 0.5f);
-            SuavizarBucle(buf, Mathf.RoundToInt(0.18f * SR_LOOP));
+            // Quita la DC que acumulan las dos pasadas de paso-bajo antes de normalizar
+            // y coser -- sin esto, cabeza y cola del bucle no arrancan/acaban en 0 y se
+            // oye un golpe en cada vuelta, más aún sumado a otra voz (playtest 9, causa 1b).
+            PasoAltoDC(buf, SR_LOOP, 20f);
+
+            Normalizar(buf, 0.28f); // ver comentario de clase: presupuesto de mezcla, "casi subliminal".
+            SuavizarBucle(buf, Mathf.RoundToInt(0.22f * SR_LOOP)); // ventana algo más larga que antes (180ms->220ms): margen extra para el ruido muy filtrado (autocorrelación larga tras dos pasadas de paso-bajo a 130Hz).
             return CrearClip("ChaosAlchemy_LechoAmbiental", buf, SR_LOOP);
         }
 
-        /// <summary>3) Fuego (bucle): ruido filtrado + estallidos de amplitud de baja frecuencia (granos), otra pasada de paso-bajo para que los granos no arañen. Volumen/filtro real se automatizan en DirectorDeAudio según cuánto fuego hay.</summary>
+        /// <summary>
+        /// 3) Fuego (bucle), DOS CAPAS separadas -- el fuego no es ruido continuo, y la
+        /// versión anterior sonaba "a viento" porque las dos capas se mezclaban en el
+        /// MISMO buffer antes del segundo paso-bajo: ese filtro final (puesto ahí "para
+        /// que los granos no arañen") apagaba también el brillo de los chisporroteos,
+        /// dejando solo el rugido grave -- justo lo que el jugador describe (playtest 9,
+        /// causa 3, timbre):
+        ///   · Capa 1, RUGIDO: ruido paso-bajo bien cerrado (380Hz) y continuo. Solo.
+        ///   · Capa 2, CHASQUIDOS: impulsos cortísimos (4-9ms, ver AnadirGranulos) que
+        ///     se filtran por separado con un corte MUY alto (7500Hz, casi transparente,
+        ///     solo quita aliasing) para que conserven el brillo -- sin esto no hay
+        ///     "crepitar", solo un lecho grave indistinguible de viento.
+        /// Volumen/filtro real (AudioLowPassFilter) se automatizan en DirectorDeAudio
+        /// según cuánto fuego hay -- ver ahí el fix de DETECCIÓN (playtest 9, causa 3,
+        /// "si llega a sonar").
+        /// </summary>
         private static AudioClip ConstruirFuegoBucle()
         {
-            var buf = NuevoBuffer(2.2f, SR_LOOP);
-            Ruido(buf);
-            PasoBajo(buf, SR_LOOP, 1400f);
-            AnadirGranulos(buf, SR_LOOP, 26, 0.03f, 0.6f);
-            PasoBajo(buf, SR_LOOP, 3200f);
-            Normalizar(buf, 0.55f);
-            SuavizarBucle(buf, Mathf.RoundToInt(0.12f * SR_LOOP));
+            var buf = NuevoBuffer(2.4f, SR_LOOP);
+
+            var rugido = NuevoBuffer(2.4f, SR_LOOP);
+            Ruido(rugido);
+            PasoBajo(rugido, SR_LOOP, 380f);
+            Sumar(buf, rugido, 0.9f);
+
+            var chasquidos = NuevoBuffer(2.4f, SR_LOOP);
+            AnadirGranulos(chasquidos, SR_LOOP, 20, 0.006f, 1f); // ~8/s, 4-9ms cada uno: chisporroteo, no thump.
+            PasoBajo(chasquidos, SR_LOOP, 7500f); // casi transparente a propósito: solo anti-aliasing, nunca les quita el brillo (contraste deliberado con los 380Hz del rugido).
+            Sumar(buf, chasquidos, 0.5f);
+
+            PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b) quita la DC del rugido muy filtrado.
+            Normalizar(buf, 0.50f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
+            Clamp(buf);
+            SuavizarBucle(buf, Mathf.RoundToInt(0.15f * SR_LOOP));
             return CrearClip("ChaosAlchemy_FuegoBucle", buf, SR_LOOP);
         }
 
-        /// <summary>2a) Grifo de líquido: banda de ruido filtrada de medio, con burbujeo (trémolo lento).</summary>
+        /// <summary>
+        /// 2a) Grifo de líquido -- RECONSTRUIDO (playtest 9, causa 2: "el agua parece
+        /// arena"). La versión anterior era banda de ruido + trémolo de AMPLITUD: eso es
+        /// literalmente la receta de un chorro de arena (pulso de volumen sobre ruido
+        /// agudo-medio), no de agua. El agua es un chorro GRAVE y CONTINUO con burbujas
+        /// discretas encima:
+        ///   · Base: ruido con el corte bastante más cerrado que la arena/gas (poca
+        ///     energía en agudos) y la BANDA modulada suavemente (no la amplitud, ver
+        ///     <see cref="PasoBajoConCorteModulado"/>) -- da el "gluglú" sin pulsar volumen.
+        ///   · Burbujas: <see cref="AnadirBurbujas"/> encima, senos cortos con barrido
+        ///     ASCENDENTE de frecuencia -- es la pista que el oído reconoce como líquido.
+        /// CONTRASTE con los otros dos grifos (deben distinguirse a ciegas):
+        ///   · Líquido (este): grave, continuo, sin pulso de volumen, burbujas puntuales.
+        ///   · Polvo: agudo y GRANULAR (amplitud a saltos, ver AnadirGranulos ahí abajo).
+        ///   · Gas: siseo tenue de banda ancha con un drift de amplitud lento y sutil.
+        /// </summary>
         private static AudioClip ConstruirGrifoLiquido()
         {
-            var buf = NuevoBuffer(1.4f, SR_LOOP);
+            var buf = NuevoBuffer(1.6f, SR_LOOP);
             Ruido(buf);
-            PasoBajo(buf, SR_LOOP, 950f);
-            Tremolo(buf, SR_LOOP, 4.2f, 0.30f);
-            Normalizar(buf, 0.5f);
-            SuavizarBucle(buf, Mathf.RoundToInt(0.10f * SR_LOOP));
+            PasoBajoConCorteModulado(buf, SR_LOOP, 260f, 90f, 0.55f); // corte ~170-350Hz, grave -- nada que ver con los 950Hz de antes.
+            PasoBajo(buf, SR_LOOP, 480f); // segunda pasada: opaca el residuo agudo que deja la modulación de corte.
+
+            AnadirBurbujas(buf, SR_LOOP, 7, 0.55f); // ~4.4 burbujas/s: "unas cuantas por segundo".
+
+            PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
+            Normalizar(buf, 0.42f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
+            SuavizarBucle(buf, Mathf.RoundToInt(0.14f * SR_LOOP));
             return CrearClip("ChaosAlchemy_GrifoLiquido", buf, SR_LOOP);
         }
 
-        /// <summary>2b) Grifo de polvo: más agudo y granular (corte más alto + granos finos).</summary>
+        /// <summary>
+        /// 2b) Grifo de polvo: más agudo y GRANULAR (corte más alto + granos finos con
+        /// amplitud a saltos) -- a propósito lo más lejano posible del agua ahora que
+        /// esta ya no usa trémolo de amplitud (ver comentario de ConstruirGrifoLiquido,
+        /// contraste de los tres grifos).
+        /// </summary>
         private static AudioClip ConstruirGrifoPolvo()
         {
             var buf = NuevoBuffer(1.4f, SR_LOOP);
@@ -376,20 +558,27 @@ namespace Alkahest.Audio
             PasoBajo(buf, SR_LOOP, 2300f);
             AnadirGranulos(buf, SR_LOOP, 40, 0.012f, 0.35f);
             PasoBajo(buf, SR_LOOP, 3800f); // suaviza los granos recién añadidos, sin perder el grano.
+            PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
             Normalizar(buf, 0.45f);
-            SuavizarBucle(buf, Mathf.RoundToInt(0.10f * SR_LOOP));
+            SuavizarBucle(buf, Mathf.RoundToInt(0.13f * SR_LOOP));
             return CrearClip("ChaosAlchemy_GrifoPolvo", buf, SR_LOOP);
         }
 
-        /// <summary>2c) Grifo de gas: un siseo tenue (corte alto pero pico bajo, para que sea discreto por diseño, no solo por volumen de mezcla).</summary>
+        /// <summary>
+        /// 2c) Grifo de gas: un siseo tenue de banda ANCHA (corte alto, sin cerrarse
+        /// nunca como el agua) con un drift de amplitud lento y sutil -- discreto por
+        /// diseño (pico bajo), no solo por volumen de mezcla. Tercer vértice del
+        /// contraste: ni grave-continuo (agua) ni granular (polvo), sino un siseo liso.
+        /// </summary>
         private static AudioClip ConstruirGrifoGas()
         {
             var buf = NuevoBuffer(1.4f, SR_LOOP);
             Ruido(buf);
             PasoBajo(buf, SR_LOOP, 3600f);
             Tremolo(buf, SR_LOOP, 1.3f, 0.15f);
-            Normalizar(buf, 0.30f);
-            SuavizarBucle(buf, Mathf.RoundToInt(0.10f * SR_LOOP));
+            PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
+            Normalizar(buf, 0.26f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
+            SuavizarBucle(buf, Mathf.RoundToInt(0.13f * SR_LOOP));
             return CrearClip("ChaosAlchemy_GrifoGas", buf, SR_LOOP);
         }
 
@@ -431,7 +620,7 @@ namespace Alkahest.Audio
 
             Sumar(buf, golpe, 0.9f);
             Sumar(buf, soplo, 0.35f);
-            Normalizar(buf, 0.7f);
+            Normalizar(buf, 0.62f); // bajado de 0.7 (playtest 9, presupuesto de mezcla en DirectorDeAudio.cs).
             Clamp(buf);
             return CrearClip("ChaosAlchemy_Ignicion", buf, SR_ONESHOT);
         }
@@ -464,7 +653,7 @@ namespace Alkahest.Audio
             }
 
             PasoBajo(buf, SR_ONESHOT, 6500f);
-            Normalizar(buf, 0.55f);
+            Normalizar(buf, 0.42f); // bajado de 0.55 (playtest 9): es el sonido con más riesgo de solapar VARIAS instancias a la vez (avalancha de cristalización, hasta 6/s con cola de ~0.5s cada una), así que su pico individual pesa varias veces en el presupuesto de mezcla -- ver DirectorDeAudio.cs.
             Clamp(buf);
             return CrearClip("ChaosAlchemy_CristalizarCongelar", buf, SR_ONESHOT);
         }
@@ -485,7 +674,7 @@ namespace Alkahest.Audio
             PasoBajo(granos, SR_ONESHOT, 700f);
             Sumar(buf, granos, 0.5f);
 
-            Normalizar(buf, 0.6f);
+            Normalizar(buf, 0.55f); // bajado de 0.6 (playtest 9, presupuesto de mezcla en DirectorDeAudio.cs).
             Clamp(buf);
             return CrearClip("ChaosAlchemy_TolvaTraga", buf, SR_ONESHOT);
         }

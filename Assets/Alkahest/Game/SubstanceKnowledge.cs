@@ -40,6 +40,21 @@ namespace Alkahest.Game
         private const float FlaskPollInterval = 0.5f;
         private const float HoverDiscoverSeconds = 1f;
 
+        // ---------------------------------------------------------------------------------
+        // (fix playtest 9) "LEY DESCUBIERTA": el jugador reportó que llevaba horas sin
+        // entender que las muestras del Maestro son SEMILLAS (catalizadores que no se
+        // gastan), no ingredientes. El malentendido es invisible porque las dos leyes que
+        // lo desmentirían (Azoth->Cristal sin gastar el cristal; Vivium creciendo sin
+        // gastarse) ocurren en celdas diminutas, lejos del cursor, sin ningún aviso: la
+        // primera vez que pasan de verdad, nadie las ve pasar. Aquí se anuncian UNA vez
+        // cada una, la primera vez que el ring buffer de SimStepper reporta el evento
+        // correspondiente (Crystallize/Grow), con la frase ejecutable de la ley, no una
+        // descripción poética. Cola de 2 (como mucho hay 2 leyes de este tipo en el
+        // roster fijo) para que si ambas se disparan el mismo tick no se pisen.
+        // ---------------------------------------------------------------------------------
+        private const float LeyBannerDuracionSeg = 7f;
+        private const int LeyBannerCapacidad = 2;
+
         private AlkahestSim _sim;
         private Flask _flask;
 
@@ -52,6 +67,23 @@ namespace Alkahest.Game
 
         private byte _hoverMatId;
         private float _hoverTimer;
+
+        // Cuántas veces se ha bautizado/renombrado algo (nunca decrece): JournalHud lo usa
+        // como parte de su firma de "¿hay que reconstruir el texto cacheado?" -- CountNamed()
+        // por sí solo no detecta un RE-bautizo (mismo material, nombre nuevo), porque el
+        // conteo de nombrados no cambia.
+        public int NamingVersion { get; private set; }
+
+        // Estado de la ley "descubierta" (ver doc arriba): dos banderas de una sola vez
+        // (Cristalizar, Crecer) más una cola FIFO fija de textos ya construidos (se
+        // construyen una única vez, al disparar el evento -- nunca en OnGUI/Update).
+        private bool _leyCristalDescubierta;
+        private bool _leyVivumDescubierta;
+        private readonly string[] _leyBannerCola = new string[LeyBannerCapacidad];
+        private int _leyBannerColaCount;
+        private int _leyBannerColaLeidos;
+        private string _leyBannerActual;
+        private float _leyBannerHasta;
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Flask flask)
@@ -120,6 +152,16 @@ namespace Alkahest.Game
             if (matId >= MaterialId.Count) return;
             _playerName[matId] = string.IsNullOrWhiteSpace(nombre) ? null : nombre.Trim();
             _discovered[matId] = true; // bautizar implica conocerlo.
+            NamingVersion++; // ver doc de la clase: JournalHud detecta re-bautizos con esto.
+        }
+
+        /// <summary>Nombre "de ley": como NombreParaHud, pero con un genérico en minúscula (nunca "???") para materiales aún sin bautizar -- las leyes del diario/el aviso de descubrimiento tienen que leerse aunque el jugador no haya puesto nombre todavía.</summary>
+        private string NombreLey(byte matId, string generico)
+        {
+            if (matId >= MaterialId.Count) return generico;
+            string propio = _playerName[matId];
+            if (!string.IsNullOrEmpty(propio)) return propio;
+            return NombreComun(matId) ?? generico;
         }
 
         public WitnessFlags WitnessOf(byte matId) => matId < MaterialId.Count ? _witness[matId] : WitnessFlags.None;
@@ -147,6 +189,7 @@ namespace Alkahest.Game
             PollFlask();
             PollHover();
             ConsumeEvents();
+            ActualizarBannerLey();
         }
 
         private void PollFlask()
@@ -246,6 +289,98 @@ namespace Alkahest.Game
             }
 
             _witness[matId] |= flag;
+
+            // (fix playtest 9) Disparo de "LEY DESCUBIERTA": solo la PRIMERA vez que cada
+            // una de las dos leyes de multiplicación ocurre de verdad en la sim. matId de
+            // Crystallize es SIEMPRE Azoth (ver SimStepper.NotifyReactionEvent) y el de
+            // Grow SIEMPRE Vivium (ver SimStepper.GrowthTick) -- no hace falta comprobarlo,
+            // pero se deja explícito por claridad.
+            if (type == SimEventType.Crystallize && !_leyCristalDescubierta)
+            {
+                _leyCristalDescubierta = true;
+                EncolarLeyBanner(ConstruirTextoLeyCristal());
+            }
+            else if (type == SimEventType.Grow && !_leyVivumDescubierta)
+            {
+                _leyVivumDescubierta = true;
+                EncolarLeyBanner(ConstruirTextoLeyVivium());
+            }
+        }
+
+        private void EncolarLeyBanner(string texto)
+        {
+            if (_leyBannerColaCount >= LeyBannerCapacidad) return; // defensivo: no debería pasar (solo 2 leyes de este tipo existen).
+            _leyBannerCola[_leyBannerColaCount++] = texto;
+        }
+
+        /// <summary>Construido UNA vez, al disparar el evento (ver ApplyWitness) -- nunca en Update/OnGUI. Usa los nombres bautizados si los hay (ver NombreLey).</summary>
+        private string ConstruirTextoLeyCristal()
+        {
+            string azoth = NombreLey(MaterialId.Azoth, "azoth").ToUpperInvariant();
+            string semilla = NombreLey(MaterialId.CrystalSeed, "semilla de cristal").ToUpperInvariant();
+            string cristal = NombreLey(MaterialId.Crystal, "cristal").ToUpperInvariant();
+            return $"LEY DESCUBIERTA — El {azoth} que toca {semilla} (o {cristal} ya formado) se vuelve {cristal}. " +
+                   "La semilla no se gasta: siembra una y aliméntala.";
+        }
+
+        private string ConstruirTextoLeyVivium()
+        {
+            string vivium = NombreLey(MaterialId.Vivium, "vivium").ToUpperInvariant();
+            string nutriente = NombreLey(MaterialId.Nutrient, "nutriente").ToUpperInvariant();
+            return $"LEY DESCUBIERTA — El {vivium} asentado, con {nutriente} al lado y calor TEMPLADO, crea {vivium} nuevo. " +
+                   "No se consume: cada célula que nace es otra semilla.";
+        }
+
+        /// <summary>Avanza la cola FIFO de leyes pendientes cuando la actual caduca o no hay ninguna mostrándose todavía.</summary>
+        private void ActualizarBannerLey()
+        {
+            if (_leyBannerActual != null)
+            {
+                if (Time.time < _leyBannerHasta) return;
+                _leyBannerActual = null;
+            }
+            if (_leyBannerColaLeidos >= _leyBannerColaCount) return;
+
+            _leyBannerActual = _leyBannerCola[_leyBannerColaLeidos++];
+            _leyBannerHasta = Time.time + LeyBannerDuracionSeg;
+        }
+
+        private void OnGUI()
+        {
+            if (_leyBannerActual == null || DayCycle.InputLocked) return;
+            UiStyles.Preparar();
+            DrawLeyBanner();
+        }
+
+        /// <summary>
+        /// Aviso cálido y destacado (estilo UiStyles, sin HUD permanente): título en el
+        /// color de aviso del taller + cuerpo centrado con la ley en frase ejecutable.
+        /// El texto ya viene cacheado (ConstruirTextoLey*): aquí solo se mide/dibuja, igual
+        /// que hace Game/HintSystem.cs con su pista activa.
+        /// </summary>
+        private void DrawLeyBanner()
+        {
+            const string titulo = "LEY DESCUBIERTA";
+            string texto = _leyBannerActual;
+
+            float pad = UiStyles.S(14f);
+            float acento = UiStyles.S(4f);
+            float ancho = Mathf.Clamp(Screen.width - UiStyles.S(160f), UiStyles.S(360f), UiStyles.S(640f));
+            float interior = ancho - pad * 2f - acento;
+
+            float altoTitulo = UiStyles.Alto(UiStyles.Alerta, titulo, interior);
+            float altoCuerpo = UiStyles.Alto(UiStyles.CuerpoCentrado, texto, interior);
+            float alto = pad + altoTitulo + UiStyles.S(4f) + altoCuerpo + pad;
+
+            // Zona propia del centro-superior de pantalla: por debajo del reloj/HintSystem
+            // (que vive pegado a S(54f)) y por encima del área de juego habitual, para no
+            // pisar ni el panel de pistas ni los encargos/frasco de los laterales.
+            var panel = new Rect((Screen.width - ancho) * 0.5f, Screen.height * 0.30f, ancho, alto);
+            UiStyles.Panel(panel, UiStyles.TintaFuerte, UiStyles.Oro);
+            UiStyles.Rellenar(new Rect(panel.x, panel.y, acento, panel.height), UiStyles.Oro);
+
+            GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTitulo), titulo, UiStyles.Alerta);
+            GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoCuerpo, interior, altoCuerpo), texto, UiStyles.CuerpoCentrado);
         }
 
         /// <summary>Chip corto en español para una única flag de presenciado (usado por JournalHud).</summary>

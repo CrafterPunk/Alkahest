@@ -90,15 +90,85 @@ namespace Alkahest.Audio
         private const float VolumenMaestroPorDefecto = 0.5f; // (encargo) "Volumen maestro por defecto 0.5".
         private const string PrefKeySilenciado = "ChaosAlchemy_AudioSilenciado";
 
+        // ===================================================================
+        // PRESUPUESTO DE MEZCLA (fix playtest 9, causa 1c del popeo)
+        // ===================================================================
+        // Unity SUMA todas las voces (bucles + one-shots) y recorta a [-1,1]. El
+        // jugador reportó que el popeo "se nota más al cruzar con otro sonido" --
+        // eso es la firma de un recorte por saturación, no (solo) una costura de
+        // bucle. Estas son las cifras reales, PRE-factor-maestro (0.5 por
+        // defecto: margen extra, no parte del presupuesto), de "pico de clip
+        // normalizado (en SintetizadorSfx.cs) × volumen de diseño (aquí)" --
+        // el máximo instantáneo que cada voz puede aportar a la suma:
+        //
+        //   Ambiente (bucle, "la sala")....... 0.28 × VolAmbienteObjetivo 0.30 = 0.084
+        //   Fuego a tope (bucle)............... 0.50 × VolFuegoMax       0.42 = 0.210
+        //   Grifo líquido abierto (bucle)...... 0.42 × VolGrifoBase      0.55 = 0.231
+        //   Grifo gas abierto (bucle).......... 0.26 × VolGrifoBase      0.55 = 0.143
+        //     -- suma de bucles (ambiente + fuego a tope + 2 grifos a la vez,
+        //        el caso realista más cargado) ................................ 0.668
+        //   One-shot típico más fuerte (Ignición, sin avalancha)
+        //     0.62 × volumenBase 0.30 × (hasta ×1.1 de variación) ~........... 0.205
+        //     -- total sin esquivar (ver más abajo) ~0.87: por debajo de 1.0,
+        //        NO satura, pero por encima del margen de 0.8 pedido.
+        //
+        // ESQUIVE (ducking, causa 1c): en vez de bajar aún más los bucles a un
+        // volumen insípido en el caso normal, se agachan solo MIENTRAS suena un
+        // one-shot (ver EsquiveOneShotNivel/_esquiveSuavizado) -- con el esquive
+        // activo, "suma de bucles" baja a 0.668×0.55=0.367, y 0.367+0.205=0.572,
+        // sobra margen incluso frente a una avalancha de 3 Cristalizar/Congelar
+        // solapadas con boost MÁXIMO del limitador (DispararLimitado ya deja el
+        // volumenBase de diseño 0.15 en 0.15×2=0.30 con la avalancha a tope; por
+        // voz: pico 0.42 × volumenBase-ya-boosteado 0.30 × variación ×1.1 ≈
+        // 0.139; tres solapadas ≈ 0.417): 0.367+0.417=0.784, justo bajo el tope
+        // de ~0.8 pedido en el encargo.
+        // ===================================================================
+
         // Volúmenes de diseño (0..1) ANTES del factor maestro/silencio.
-        // Deliberadamente bajos: "muy por debajo del umbral de molestia".
-        private const float VolAmbienteObjetivo = 0.55f;
-        private const float VolFuegoMax = 0.5f;
-        private const float VolGrifoBase = 0.6f;
+        // Deliberadamente bajos: "muy por debajo del umbral de molestia" y,
+        // ahora, dentro del presupuesto de mezcla de arriba.
+        private const float VolAmbienteObjetivo = 0.30f; // (fix playtest 9) bajado de 0.55: "la sala", casi subliminal -- ver presupuesto.
+        private const float VolFuegoMax = 0.42f;          // (fix playtest 9) bajado de 0.5.
+        private const float VolGrifoBase = 0.55f;         // (fix playtest 9) bajado de 0.6.
+
+        // Ducking (esquive) de los BUCLES mientras suena un one-shot (fix
+        // playtest 9, causa 1c "considera además bajar un poco el volumen de los
+        // bucles..."): sin plugins, solo interpolación hacia un nivel objetivo
+        // que se re-arma en cada one-shot. Ver ActualizarEsquive/ReproducirOneShot.
+        private const float EsquiveOneShotNivel = 0.55f;   // cuánto bajan los bucles mientras hay un one-shot reciente.
+        private const float EsquiveOneShotDuracionSeg = 0.30f; // cuánto se mantiene agachado tras el ÚLTIMO one-shot.
+
+        // Rampa compartida (fix playtest 9, causa 1d): tanto el esquive como la
+        // respuesta del factor maestro (tecla M) a los BUCLES se mueven con esta
+        // velocidad en vez de saltar de golpe -- un salto de volumen instantáneo
+        // en una fuente que sigue sonando (nunca se para/arranca en seco, pero
+        // SÍ podía cambiar de volumen en seco) también suena a clic, aunque el
+        // AudioSource nunca se pare. 8f cubre el rango típico (0..1 esquive,
+        // 0..VolumenMaestroPorDefecto factor maestro) en 60-70ms: dentro de la
+        // ventana de 40-80ms pedida en el encargo.
+        private const float RampaVolumenBuclesPorSeg = 8f;
 
         private const float IntervaloSondeo = 1f / 12f; // ~12Hz: barato y suficientemente responsivo para audio.
-        private const int NumSondasFuego = 220;
-        private const float SaturacionFuego = 20f; // nº de sondas-sobre-Fire que ya cuenta como "fuego grande".
+
+        // -----------------------------------------------------------------
+        // Detección de fuego (fix playtest 9, causa 3 "¿llega a sonar?"): con
+        // solo 220 sondas fijas sobre 256x144=36864 celdas, y sabiendo que
+        // Sim/SimStepper.ProcessFire apaga el fuego que no toca combustible en
+        // 1 solo tick (ver CLAUDE.md regla del fuego), la probabilidad de que
+        // CUALQUIER sonda caiga sobre Fire en un instante dado era casi
+        // siempre cero salvo con un incendio literalmente descomunal (para que
+        // SaturacionFuego=20 se cumpliera hacían falta ~3300 celdas en llamas
+        // a la vez, ~9% de la grilla ENTERA) -- por eso "no sonaba a fuego":
+        // no es que el timbre estuviera mal, es que el volumen casi nunca
+        // salía de 0. Subir NumSondasFuego ayuda, pero el fix real es no
+        // exigir tantos impactos (SaturacionFuego mucho más bajo) y no tirar
+        // el objetivo a 0 en cuanto un sondeo puntual no pilla nada (ver
+        // SondearFuego: ataque instantáneo con piso audible + liberación lenta).
+        // -----------------------------------------------------------------
+        private const int NumSondasFuego = 700; // subido de 220: sigue siendo barato (12Hz × 700 lecturas de array = nada).
+        private const float SaturacionFuego = 5f; // (fix playtest 9) bajado de 20: un fuego de tamaño normal ya satura el "extra" por encima del piso audible.
+        private const float PisoAudibleFuego = 0.42f; // (fix playtest 9) en cuanto se detecta AUNQUE SEA una sola celda de Fire, el objetivo salta ya a un nivel audible en vez de arrastrarse desde 0 -- el fuego real casi nunca "crece" para las sondas, o está vivo o no se pilla (ver comentario de arriba).
+        private const float LiberacionFuegoSeg = 2.0f; // tiempo en pasar de objetivo 1 a 0 cuando deja de detectarse -- evita que el volumen parpadee entre sondeos consecutivos que no pillan nada por puro muestreo.
 
         // Réplica de la geometría PRIVADA de Game/Dispenser.cs (archivo de
         // solo lectura para esta tarea): SpoutOffsetCells, SpoutDropCells,
@@ -157,6 +227,14 @@ namespace Alkahest.Audio
         private float _acumuladorSondeo;
 
         private float _volumenAmbienteSuavizado;
+
+        // -----------------------------------------------------------------
+        // Esquive (ducking) de bucles + rampa del factor maestro -- fix
+        // playtest 9, causas 1c/1d. Ver ActualizarEsquive/ReproducirOneShot.
+        // -----------------------------------------------------------------
+        private float _esquiveSuavizado = 1f; // 1 = bucles a su volumen normal; EsquiveOneShotNivel = agachado.
+        private float _esquiveHasta;           // Time.time hasta el que se mantiene agachado (se re-arma en cada one-shot).
+        private float _factorMaestroSuavizado; // arranca en 0 a propósito (fade-in natural al arrancar la partida, coherente con _volumenAmbienteSuavizado).
 
         // -----------------------------------------------------------------
         // Limitador de ritmo por tipo de evento (ver doc de la clase).
@@ -359,6 +437,7 @@ namespace Alkahest.Audio
             // este es el sitio (flanco descendente de InputLocked).
             _entradaBloqueadaAnterior = false;
 
+            ActualizarEsquive();
             ActualizarBucleAmbiente();
             ActualizarPollerFrasco();
             ActualizarPollerBautizar();
@@ -400,10 +479,36 @@ namespace Alkahest.Audio
             _avisoHasta = Time.time + 1.6f;
         }
 
+        /// <summary>
+        /// Rampa el esquive (ducking) de los BUCLES mientras suena un one-shot y la
+        /// respuesta del factor maestro a esos mismos bucles -- fix playtest 9, causas
+        /// 1c/1d. `_esquiveHasta` se re-arma en <see cref="ReproducirOneShot"/> cada vez
+        /// que suena algo, así que una ráfaga de one-shots mantiene el esquive agachado
+        /// de forma continua (nunca sube y baja entre disparos individuales, que sonaría
+        /// a bombeo). Los one-shots en sí NO pasan por este esquive -- ya nacen y mueren
+        /// en silencio por su propia envolvente (ver SintetizadorSfx.cs).
+        /// </summary>
+        private void ActualizarEsquive()
+        {
+            float esquiveObjetivo = Time.time < _esquiveHasta ? EsquiveOneShotNivel : 1f;
+            _esquiveSuavizado = Mathf.MoveTowards(_esquiveSuavizado, esquiveObjetivo, Time.deltaTime * RampaVolumenBuclesPorSeg);
+
+            // (fix playtest 9, causa 1d) la tecla M cambia FactorMaestro de golpe (0<->0.5);
+            // los BUCLES (que nunca se paran, solo bajan a 0) rampan ese cambio en vez de
+            // aplicarlo en seco -- un salto de ganancia instantáneo a mitad de forma de
+            // onda también suena a clic aunque el AudioSource siga "vivo". Los one-shots
+            // siguen usando FactorMaestro sin rampa (ver ReproducirOneShot): son voces
+            // NUEVAS que ya arrancan en silencio, no tienen nada que suavizar.
+            _factorMaestroSuavizado = Mathf.MoveTowards(_factorMaestroSuavizado, FactorMaestro, Time.deltaTime * RampaVolumenBuclesPorSeg);
+        }
+
+        /// <summary>Factor combinado que deben usar TODOS los bucles (ambiente/fuego/grifos): maestro rampado × esquive de one-shot. Ver ActualizarEsquive.</summary>
+        private float FactorBucles => _factorMaestroSuavizado * _esquiveSuavizado;
+
         private void ActualizarBucleAmbiente()
         {
             _volumenAmbienteSuavizado = Mathf.MoveTowards(_volumenAmbienteSuavizado, VolAmbienteObjetivo, Time.deltaTime * 0.30f);
-            if (_fuenteAmbiente != null) _fuenteAmbiente.volume = _volumenAmbienteSuavizado * FactorMaestro;
+            if (_fuenteAmbiente != null) _fuenteAmbiente.volume = _volumenAmbienteSuavizado * FactorBucles;
         }
 
         // -----------------------------------------------------------------
@@ -457,6 +562,18 @@ namespace Alkahest.Audio
             _encargosCompletadosAnterior = completados;
         }
 
+        /// <summary>
+        /// (fix playtest 9, causa 3 "¿llega a sonar?") Con NumSondasFuego sondas fijas
+        /// repartidas sobre las 36.864 celdas de la grilla, y el fuego real muriendo en
+        /// 1 tick en cuanto no toca combustible (Sim/SimStepper.ProcessFire), un sondeo
+        /// puntual puede dar 0 coincidencias mientras hay fuego real ardiendo, por puro
+        /// muestreo -- ANTES esto ponía el objetivo a 0 en cada sondeo así, y el fuego
+        /// casi nunca se oía. Ahora: ATAQUE instantáneo con un piso ya audible en cuanto
+        /// se detecta UNA sola celda (el fuego real "está vivo" o no se pilla, rara vez
+        /// se ve "crecer" gradualmente para tan pocas sondas), y LIBERACIÓN lenta cuando
+        /// un sondeo no encuentra nada (en vez de silencio inmediato) para no parpadear
+        /// entre sondeos consecutivos de un fuego que sigue activo.
+        /// </summary>
         private void SondearFuego()
         {
             if (_sim == null || _sondaX == null) return;
@@ -465,14 +582,23 @@ namespace Alkahest.Audio
             {
                 if (_sim.SampleMaterial(_sondaX[i], _sondaY[i]) == MaterialId.Fire) coincidencias++;
             }
-            _intensidadFuegoObjetivo = Mathf.Clamp01(coincidencias / SaturacionFuego);
+
+            if (coincidencias > 0)
+            {
+                float golpe = PisoAudibleFuego + (1f - PisoAudibleFuego) * Mathf.Clamp01(coincidencias / SaturacionFuego);
+                _intensidadFuegoObjetivo = Mathf.Max(_intensidadFuegoObjetivo, golpe);
+            }
+            else
+            {
+                _intensidadFuegoObjetivo = Mathf.MoveTowards(_intensidadFuegoObjetivo, 0f, IntervaloSondeo / LiberacionFuegoSeg);
+            }
         }
 
         private void ActualizarBucleFuego()
         {
             if (_fuenteFuego == null) return;
             _intensidadFuegoSuavizada = Mathf.MoveTowards(_intensidadFuegoSuavizada, _intensidadFuegoObjetivo, Time.deltaTime * 0.9f);
-            _fuenteFuego.volume = VolFuegoMax * _intensidadFuegoSuavizada * FactorMaestro;
+            _fuenteFuego.volume = VolFuegoMax * _intensidadFuegoSuavizada * FactorBucles;
             if (_filtroFuego != null) _filtroFuego.cutoffFrequency = Mathf.Lerp(700f, 3200f, _intensidadFuegoSuavizada);
         }
 
@@ -515,7 +641,7 @@ namespace Alkahest.Audio
 
                 float objetivo = g.objetivoFluyendo ? volumenPorDistancia : 0f;
                 g.volumenSuavizado = Mathf.MoveTowards(g.volumenSuavizado, objetivo, Time.deltaTime * 3f);
-                g.fuente.volume = g.volumenSuavizado * VolGrifoBase * FactorMaestro;
+                g.fuente.volume = g.volumenSuavizado * VolGrifoBase * FactorBucles;
             }
         }
 
@@ -580,7 +706,7 @@ namespace Alkahest.Audio
             switch (tipo)
             {
                 case SimEventType.Ignite:
-                    DispararLimitado(ref _limIgnicion, SintetizadorSfx.Ignicion, 4f, 0.35f);
+                    DispararLimitado(ref _limIgnicion, SintetizadorSfx.Ignicion, 4f, 0.30f); // (fix playtest 9) bajado de 0.35, ver presupuesto de mezcla.
                     break;
                 case SimEventType.Crystallize:
                 case SimEventType.Freeze:
@@ -590,7 +716,11 @@ namespace Alkahest.Audio
                     // limitadores independientes una racha mixta de ambos
                     // podría sumar hasta 12 campanillas/seg, justo lo que el
                     // limitador existe para evitar.
-                    DispararLimitado(ref _limCristalizarCongelar, SintetizadorSfx.CristalizarCongelar, 6f, 0.22f);
+                    // (fix playtest 9) volumenBase bajado de 0.22 a 0.15: es el sonido con
+                    // más riesgo de solapar VARIAS instancias a la vez (avalancha), así que
+                    // su contribución al presupuesto de mezcla pesa varias veces -- ver
+                    // comentario "PRESUPUESTO DE MEZCLA" junto a las constantes de volumen.
+                    DispararLimitado(ref _limCristalizarCongelar, SintetizadorSfx.CristalizarCongelar, 6f, 0.15f);
                     break;
                 default:
                     // Boil/Grow/Dissolve: sin sonido dedicado en este pase (no
@@ -631,6 +761,13 @@ namespace Alkahest.Audio
         /// (ver encargo). `volumenBase` es un valor de DISEÑO (0..1, antes
         /// del factor maestro/silencio), aplicado aquí de forma centralizada
         /// para que ningún llamador tenga que acordarse de multiplicarlo.
+        ///
+        /// (fix playtest 9, causa 1c) Cada vez que esto suena de verdad, re-arma
+        /// `_esquiveHasta` para que <see cref="ActualizarEsquive"/> agache los
+        /// BUCLES un rato -- es el "ducking sencillo por interpolación" del
+        /// presupuesto de mezcla: el momento en que más voces coinciden (un
+        /// one-shot sonando encima de ambiente+fuego+grifos) es exactamente
+        /// cuando más falta hace bajar el resto un poco.
         /// </summary>
         private void ReproducirOneShot(AudioClip clip, float volumenBase)
         {
@@ -648,6 +785,8 @@ namespace Alkahest.Audio
             fuente.pitch = pitch;
             float vol = Mathf.Clamp01(volumenBase * volVariacion) * factorMaestro;
             fuente.PlayOneShot(clip, vol);
+
+            _esquiveHasta = Time.time + EsquiveOneShotDuracionSeg;
         }
 
         // -----------------------------------------------------------------

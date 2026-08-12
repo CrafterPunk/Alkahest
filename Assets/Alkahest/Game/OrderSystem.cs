@@ -146,6 +146,17 @@ namespace Alkahest.Game
         //    con llegar a Maestro, que es exactamente lo que pedía el
         //    encargo de "Favor como recurso, no solo puntuación" -- sin
         //    tocar Dispenser.cs ni AlkahestGameBootstrap.cs.
+        //
+        //  · (fix playtest 9) El máximo teórico de 305 antes de esta ronda
+        //    NO era un techo real: el Favor por "chatarra" de DeliveryChute
+        //    (ver ScrapPerFavor, eliminado) era ilimitado -- verter agua sin
+        //    parar durante 6 minutos sumaba Favor sin tocar un solo encargo,
+        //    así que 305 era solo "el mínimo para llegar a Maestro jugando
+        //    limpio", no el máximo real alcanzable. Con la chatarra
+        //    eliminada, 305 (menos lo gastado en grifos) SÍ es ahora el
+        //    techo real de toda la partida: el Favor solo puede venir de
+        //    completar encargos, así que los umbrales por fin miden lo que
+        //    dicen medir.
         // =================================================================
         public const int AprendizFavorTarget = 120;
         public const int OficialFavorTarget = 180;
@@ -353,21 +364,73 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// Evalúa una celda consumida en la Tolva del Maestro (ver
-        /// DeliveryChute) contra los encargos activos incompletos, EN EL
-        /// ORDEN en que aparecen en <see cref="ActiveOrders"/>. Si coincide
-        /// con el primero que aplica, avanza su progreso (completándolo y
-        /// otorgando Favor si llega al mínimo). Devuelve true si coincidió
-        /// con algún encargo (para que DeliveryChute no la cuente como
-        /// "chatarra").
+        /// Resultado de intentar entregar una celda en la Tolva (fix playtest 9).
+        /// Antes esto era un bool: "encajó / no encajó (=chatarra, pagaba Favor
+        /// igualmente)". Chatarra desaparece del todo (ver docblock de la
+        /// clase y CHANGELOG en DeliveryChute), así que ahora hace falta
+        /// distinguir DOS motivos de "no cuenta" -- son experiencias muy
+        /// distintas para quien juega: uno dice "te has equivocado de bote",
+        /// el otro dice "ya no hacía falta esto, has malgastado tiempo".
         /// </summary>
-        public bool TryDeliverCell(Universe universe, byte matId, byte tempRaw)
+        public enum DeliveryOutcome
         {
+            /// <summary>La celda hizo avanzar (o completó) un encargo incompleto.</summary>
+            Progressed,
+            /// <summary>El material SÍ es el que pide un encargo, pero ese encargo ya está completo -- el trabajo se ha desperdiciado.</summary>
+            OrderAlreadyComplete,
+            /// <summary>El material no lo pide ningún encargo, completo o no.</summary>
+            NoMatch,
+        }
+
+        /// <summary>
+        /// Evalúa una celda consumida en la Tolva del Maestro (ver
+        /// DeliveryChute) contra TODOS los encargos activos, EN EL ORDEN en
+        /// que aparecen en <see cref="ActiveOrders"/>. Si el primero que
+        /// coincide está incompleto, avanza su progreso (completándolo y
+        /// otorgando Favor si llega al mínimo) y devuelve
+        /// <see cref="DeliveryOutcome.Progressed"/>. Si coincide solo con
+        /// encargos YA completos, devuelve <see cref="DeliveryOutcome.
+        /// OrderAlreadyComplete"/> (el material era correcto, pero sobra). Si
+        /// no coincide con ninguno, <see cref="DeliveryOutcome.NoMatch"/>.
+        ///
+        /// (fix playtest 9) Antes devolvía bool y, si no encajaba con ningún
+        /// encargo INCOMPLETO, DeliveryChute lo contaba como "chatarra" y
+        /// otorgaba 1 Favor cada N celdas -- daba igual que el motivo fuera
+        /// "material equivocado" o "encargo ya cumplido": la Tolva decía "esto
+        /// no lo necesito" y en el mismo gesto pagaba por ello. Eliminado
+        /// (Favor SOLO sale de <see cref="AddOrder"/> al completar un
+        /// encargo, nunca de aquí) porque:
+        ///  1. Rompe la ficción: el Maestro paga por lo que ENCARGÓ, no por
+        ///     escombros que caen en su Tolva.
+        ///  2. Rompía los cuatro desenlaces: si cualquier basura sumaba
+        ///     Favor sin límite, los umbrales de arriba (120/180/260) dejaban
+        ///     de medir "cuánto encargo real completaste" -- medían "cuánto
+        ///     rato llevas vertiendo cosas", que no es lo que el juego quiere
+        ///     puntuar.
+        ///  3. Y sobre todo, contradecía al propio juego: un mensaje ("esto
+        ///     no lo necesito") y una recompensa (+1 Favor) que se llevan la
+        ///     contraria enseñan a ignorar los dos. El jugador dejaba de
+        ///     fiarse tanto del aviso como del contador.
+        /// </summary>
+        public DeliveryOutcome TryDeliverCell(Universe universe, byte matId, byte tempRaw)
+        {
+            bool matchedCompletedOnly = false;
             for (int i = 0; i < ActiveOrders.Count; i++)
             {
                 var order = ActiveOrders[i];
-                if (order.Completado) continue;
                 if (!MatchesOrder(universe, order, matId, tempRaw)) continue;
+
+                if (order.Completado)
+                {
+                    // Material correcto, pero este encargo concreto ya no lo
+                    // necesita -- puede que otro encargo, más abajo en la
+                    // lista, SÍ siga incompleto y también acepte este
+                    // material (p.ej. NamedMaterial ya completo + Flammable
+                    // aún activo con el mismo material inflamable), así que
+                    // no se corta el bucle: se sigue buscando un incompleto.
+                    matchedCompletedOnly = true;
+                    continue;
+                }
 
                 order.Progreso++;
                 if (order.Progreso >= order.MinCells)
@@ -376,9 +439,9 @@ namespace Alkahest.Game
                     AddFavor(order.Recompensa);
                     Debug.Log($"[ChaosAlchemy] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
                 }
-                return true;
+                return DeliveryOutcome.Progressed;
             }
-            return false;
+            return matchedCompletedOnly ? DeliveryOutcome.OrderAlreadyComplete : DeliveryOutcome.NoMatch;
         }
 
         private static bool MatchesOrder(Universe universe, Order order, byte matId, byte tempRaw)

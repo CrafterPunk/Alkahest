@@ -50,12 +50,33 @@ namespace Alkahest.Game
             _grifoAzoth = grifoAzoth;
         }
 
-        /// <summary>Frase que el Maestro dice en la intro de la jornada, o null si ese día no entrega nada.</summary>
+        /// <summary>
+        /// Frase que el Maestro dice en la intro de la jornada, o null si ese día no
+        /// entrega nada.
+        ///
+        /// (fix playtest 9) REESCRITO DE RAÍZ. Reporte literal de un jugador tras varias
+        /// horas de partida: "no consigo multiplicar la cantidad del producto... está raro
+        /// que me den ingredientes que también son la meta". Lo entendía todo bien salvo UNA
+        /// palabra -- el texto viejo decía "os confía" y enumeraba los tres regalos como si
+        /// fueran INGREDIENTES ("toma esto"), que es exactamente el malentendido: el jugador
+        /// los gastaba en la Tolva pensando que así se completaba el encargo, y se quedaba
+        /// sin nada con lo que seguir. Son SEMILLAS -- catalizadores que NO se consumen al
+        /// reaccionar (ver Sim/ReactionEngine.cs: "si un producto es igual al material
+        /// original, esa celda no cambia"; y Sim/SimStepper.cs GrowthTick, donde el vivium
+        /// asentado nunca se transforma, solo el Nutrient vecino). Este texto es LO PRIMERO
+        /// que el jugador lee ese día (ver Game/DayCycle.cs DrawDayIntro): es el sitio de
+        /// mayor impacto de todo este encargo, así que dice la palabra "semilla" tres veces
+        /// y "no se gasta" explícitamente, y responde de frente a la pregunta del jugador --
+        /// el encargo de hoy pide 120 celdas de vivium y solo se entregan ~81: A PROPÓSITO,
+        /// porque no se puede entregar la muestra tal cual, hay que cultivarla.
+        /// </summary>
         public static string TextoEntrega(int dia)
         {
             if (dia != 2) return null;
-            return "El Maestro os confía: azoth del alambique (grifo nuevo en el banco), " +
-                   "un retoño de su cultivo en la cuba derecha y semilla de cristal sobre la bandeja fría.";
+            return "El Maestro os deja tres SEMILLAS, no ingredientes: no se gastan, se ALIMENTAN. " +
+                   "Azoth infinito en el grifo nuevo del banco; un retoño de vivium en la cuba derecha " +
+                   "(dale nutriente y calor templado); semilla de cristal en la bandeja fría (riégala con " +
+                   "azoth helado). Son pocas celdas a propósito: no se entregan tal cual, se cultivan.";
         }
 
         /// <summary>Llamado por Game/DayCycle.cs al entrar en la intro de cada jornada.</summary>

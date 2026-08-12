@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace Alkahest.Game
@@ -22,6 +23,24 @@ namespace Alkahest.Game
     /// de "dos jornadas sin entregar nada" se conserva como advertencia de
     /// sabor (el Maestro pierde la paciencia) pero YA NO fuerza el final
     /// anticipado: solo el Favor acumulado al cierre de la jornada 3 decide.
+    ///
+    /// OJO: esto es el fin de la JORNADA (un día de los tres), no el fin de
+    /// la PARTIDA -- la partida siempre dura las tres jornadas completas
+    /// (párrafo de arriba) y el desenlace se gradúa al terminar la tercera.
+    /// Eso no cambia aquí.
+    ///
+    /// CIERRE ANTICIPADO DE JORNADA (restaurado en playtest 9): si se
+    /// entregan TODOS los encargos del día antes de que se acabe el reloj de
+    /// 6:00, no tiene sentido obligar a esperar sin nada que hacer -- se
+    /// avisa y se puede cerrar ya (ENTER) o se cierra solo a los
+    /// <see cref="DayEndAutoCloseSeconds"/>. Esto se implementó en el
+    /// playtest 6 y se perdió al reescribir esta clase en el playtest 8 para
+    /// el sistema de los cuatro desenlaces (el reporte del playtest 9, "al
+    /// completar las tareas no termino la partida", era justo esta
+    /// regresión). Reutiliza <see cref="EnterDayEnd"/> -- el MISMO camino de
+    /// transición que el fin por temporizador -- para que no haya dos rutas
+    /// de salida de Playing con reglas distintas. Ver
+    /// <see cref="UpdateAllOrdersDoneEarlyClose"/>.
     /// </summary>
     public sealed class DayCycle : MonoBehaviour
     {
@@ -29,6 +48,14 @@ namespace Alkahest.Game
 
         public const int TotalDays = 3;
         private const float DayDurationSeconds = 6f * 60f; // "6:00" en el HUD.
+
+        /// <summary>
+        /// Cuánto tarda en cerrarse SOLA la jornada tras completar todos los
+        /// encargos si el jugador no pulsa ENTER antes (restaurado playtest 9,
+        /// visto originalmente en playtest 6). 12s: tiempo de sobra para leer
+        /// el aviso y decidir, sin dejar la pantalla congelada mucho rato.
+        /// </summary>
+        private const float DayEndAutoCloseSeconds = 12f;
 
         // Nota IMGUI: los overlays de esta clase usan GUILayout.BeginArea
         // (no GUILayout.Window), así que no necesitan un id constante --
@@ -82,6 +109,18 @@ namespace Alkahest.Game
         private int _relojSegundos = -1;
         private string _relojTexto = "";
 
+        // Cierre anticipado de jornada (restaurado playtest 9, ver
+        // UpdateAllOrdersDoneEarlyClose): true en cuanto AllOrdersCompleted()
+        // se detecta durante la jornada actual; se reinicia en EnterPlaying
+        // para que cada día empiece "sin anunciar". La cuenta atrás se
+        // ACOTA cada frame a _timeRemaining (ver el método) para que este
+        // aviso nunca alargue la jornada ni un segundo más de lo que ya
+        // tenía el reloj normal.
+        private bool _allOrdersDoneAnnounced;
+        private float _allOrdersDoneCountdown;
+        private int _cierreSegundos = -1;
+        private string _cierreTexto = "";
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, OrderSystem orderSystem, SubstanceKnowledge knowledge,
             MasterSupplies supplies = null, HintSystem hints = null)
@@ -114,7 +153,41 @@ namespace Alkahest.Game
                 {
                     _timeRemaining = 0f;
                     EnterDayEnd();
+                    return;
                 }
+
+                UpdateAllOrdersDoneEarlyClose();
+            }
+        }
+
+        /// <summary>
+        /// Cierre anticipado de jornada (restaurado playtest 9, ver docblock
+        /// de la clase). Se llama solo mientras _phase == Playing y el reloj
+        /// normal todavía no ha llegado a 0 (ver Update). En cuanto detecta
+        /// que ya no quedan encargos pendientes arma una cuenta atrás de
+        /// <see cref="DayEndAutoCloseSeconds"/>; ENTER la corta antes.
+        /// </summary>
+        private void UpdateAllOrdersDoneEarlyClose()
+        {
+            if (!_allOrdersDoneAnnounced)
+            {
+                if (_orderSystem == null || !_orderSystem.AllOrdersCompleted()) return;
+                _allOrdersDoneAnnounced = true;
+                _allOrdersDoneCountdown = DayEndAutoCloseSeconds;
+            }
+
+            _allOrdersDoneCountdown -= Time.deltaTime;
+            // Acotar SIEMPRE a _timeRemaining: si al último encargo le
+            // quedaban, digamos, 5s de reloj, el aviso de cierre no debe
+            // "prestarle" tiempo extra a la jornada -- nunca debe durar más
+            // que lo que ya le quedaba al día por su propio temporizador.
+            if (_allOrdersDoneCountdown > _timeRemaining) _allOrdersDoneCountdown = _timeRemaining;
+
+            var kb = Keyboard.current;
+            bool enterPulsado = kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame);
+            if (_allOrdersDoneCountdown <= 0f || enterPulsado)
+            {
+                EnterDayEnd();
             }
         }
 
@@ -156,6 +229,11 @@ namespace Alkahest.Game
         private void EnterPlaying()
         {
             _timeRemaining = DayDurationSeconds;
+            // Reinicio del aviso de cierre anticipado (playtest 9): cada
+            // jornada nueva empieza "sin anunciar", aunque la anterior se
+            // cerrase por completar todos los encargos.
+            _allOrdersDoneAnnounced = false;
+            _cierreSegundos = -1;
             _phase = Phase.Playing;
         }
 
@@ -361,6 +439,30 @@ namespace Alkahest.Game
             estilo.normal.textColor = urgente ? UiStyles.Peligro : UiStyles.Texto;
             GUI.Label(r, _relojTexto, estilo);
             estilo.normal.textColor = previo;
+
+            if (_allOrdersDoneAnnounced) DrawAllOrdersDoneBanner(r);
+        }
+
+        /// <summary>
+        /// Aviso de cierre anticipado (restaurado playtest 9), justo debajo
+        /// del reloj: legible desde cualquier punto del taller, con la cuenta
+        /// atrás en vivo. El texto solo se reconstruye cuando cambia el
+        /// segundo entero (mismo patrón que el reloj de arriba).
+        /// </summary>
+        private void DrawAllOrdersDoneBanner(Rect relojRect)
+        {
+            int segundos = Mathf.CeilToInt(Mathf.Max(0f, _allOrdersDoneCountdown));
+            if (segundos != _cierreSegundos)
+            {
+                _cierreSegundos = segundos;
+                _cierreTexto = "Todos los encargos entregados -- ENTER para cerrar la jornada (" + segundos + "s)";
+            }
+
+            float w = UiStyles.S(380f), h = UiStyles.S(28f);
+            var r = new Rect((Screen.width - w) * 0.5f, relojRect.yMax + UiStyles.S(6f), w, h);
+
+            UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.Exito);
+            GUI.Label(r, _cierreTexto, UiStyles.CuerpoCentrado);
         }
 
         private void DrawDayEnd()

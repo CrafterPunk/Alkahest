@@ -279,6 +279,23 @@ namespace Alkahest.Sim
             {
                 Transform(idx, def.condensesInto);
             }
+            // (fix playtest 9) AUTOIGNICIÓN POR TEMPERATURA. Antes un material inflamable
+            // SOLO ardía si un vecino YA era Fuego -- TryIgnite (más abajo) solo se llama
+            // desde ProcessFire, es decir, desde una celda que YA está ardiendo. Pero la
+            // única forma "legal" de CONSEGUIR fuego en el juego es la Placa ígnea en
+            // ARDIENTE bajo aceite (no hay grifo de fuego, a propósito): sin esta rama, el
+            // aceite podía superar de sobra su ignitionTemp y NUNCA prendía, porque no
+            // había ninguna llama alrededor que disparase TryIgnite. Genérica igual que
+            // melt/freeze/boil/condense de arriba: cualquier MaterialDef con `flammable` +
+            // `ignitionTemp` finito autoenciende al cruzar el umbral, sin necesitar contacto.
+            // Placa Ardiente = raw 220 (320 °C); ignitionTemp del aceite varía por seed en
+            // ~208..312 °C (raw ~164..216) -- 220 la supera SIEMPRE, así que el camino
+            // placa->aceite->fuego ahora sí funciona para cualquier seed.
+            else if (def.flammable && def.ignitionTemp != short.MaxValue && t > def.ignitionTemp)
+            {
+                PushEvent(SimEventType.Ignite, m, idx % W, idx / W);
+                Transform(idx, def.burnsInto);
+            }
         }
 
         /// <summary>Convierte la celda en otro material, inicializando aux según el arquetipo destino (vida de gas/fuego).</summary>
@@ -552,6 +569,17 @@ namespace Alkahest.Sim
         // ---------------------------------------------------------------------------------
         // Fire
         // ---------------------------------------------------------------------------------
+        // (fix playtest 9) Vida corta pero VISIBLE para fuego recién creado sin combustible
+        // (pintado con F3, o nacido de una reacción que no sembró aux): ~16 ticks (0.53 s)
+        // ±3, deliberadamente mucho más corta que la vida de un fuego alimentado
+        // (Universe.fireLifetime ~80 ticks, sembrada por Transform() al encender por
+        // contacto/autoignición) -- fuego sin combustible SIGUE debiendo apagarse pronto,
+        // esa regla ya era correcta, solo que "pronto" no puede significar "instantáneo".
+        private const byte FreeFireSeedLife = 16;
+        private const int FreeFireJitter = 3;
+        // Por debajo de esta vida, decae a MEDIA velocidad (desvanecido, ver ProcessFire).
+        private const byte FadeTailLife = 6;
+
         private void ProcessFire(int x, int y, int idx, MaterialDef def)
         {
             // El fuego solo se extingue si está realmente sumergido: agua ENCIMA,
@@ -567,10 +595,34 @@ namespace Alkahest.Sim
             }
 
             byte life = _grid.aux[idx];
-            // (fix playtest) La llama con combustible al lado se mantiene viva:
+
+            // (fix playtest 9) Una celda de Fuego con aux==0 en la ENTRADA de este método
+            // es SIEMPRE recién creada: el camino de expiración de más abajo transforma la
+            // celda el MISMO tick en que life llega a 0 (return inmediato), así que un
+            // Fuego con aux==0 jamás sobrevive de un tick al siguiente por el camino normal.
+            // Antes esto se interpretaba como "vida agotada" y la celda se convertía a
+            // Humo/Ceniza en el primerísimo tick procesado -- el jugador pintaba fuego en
+            // aire (F3) y lo veía gris al instante ("el fuego en el aire sigue siendo
+            // gris"): en realidad nunca llegaba a leerse como llama.
+            if (life == 0)
+            {
+                var seedRng = XorShift.FromCell(_tick, x, y, 91);
+                life = (byte)(FreeFireSeedLife + seedRng.Next(2 * FreeFireJitter + 1) - FreeFireJitter);
+            }
+
+            // La llama con combustible al lado se mantiene viva (fix playtest anterior):
             // sin esto el fuego moría a humo en ~1.5 s y "no parecía fuego".
             if (life < 30 && HasFlammableOrthogonalNeighbor(x, y)) life = 30;
-            if (life > 0) life--;
+
+            // (fix playtest 9) DESVANECIDO: en vez de restar 1 de vida cada tick hasta el
+            // último instante (llama roja a tope -> humo gris de golpe: un salto visual
+            // duro), por debajo de FadeTailLife decae a MEDIA velocidad -- un tick sí, un
+            // tick no, determinista por paridad de (x+y+tick), sin RNG -- así se dobla el
+            // tiempo pasado en el rojo mortecino final antes de convertirse en Humo/Ceniza:
+            // se LEE como un apagado gradual, no como un corte. No cambia la paleta de la
+            // llama (SimRenderer.ComputeCellColor sigue igual): solo alarga el tramo bajo.
+            bool halfRateFade = life <= FadeTailLife && (((x + y + (int)_tick) & 1) != 0);
+            if (life > 0 && !halfRateFade) life--;
             _grid.aux[idx] = life;
             if (life == 0)
             {
@@ -652,7 +704,15 @@ namespace Alkahest.Sim
 
             bool hotEnough = ndef.ignitionTemp != short.MaxValue && _grid.temp[nidx] > ndef.ignitionTemp;
             var rng = XorShift.FromCell(_tick, nx, ny, 17);
-            if (hotEnough || rng.ChancePercent(50))
+            // (fix playtest 9) Antes 50%/tick: un charco de aceite conectado se prendía
+            // ENTERO en 1-2 ticks (~0.05 s), un fogonazo instantáneo e imposible de observar
+            // o de usar como proceso ("la reacción es muy rápida"). Con 12%/tick el frente de
+            // llama avanza a razón de ~1 celda cada 8 ticks (~0.27 s): quemar aceite pasa a
+            // ser un proceso que se ve avanzar, no un flash. (hotEnough sigue siendo
+            // instantáneo a propósito: un vecino YA por encima de su ignitionTemp -- p.ej.
+            // aceite recién autoencendido por la Placa ígnea, ver ApplyPhase -- enciende de
+            // verdad al contacto, eso es autoignición real, no azar).
+            if (hotEnough || rng.ChancePercent(12))
             {
                 PushEvent(SimEventType.Ignite, nm, nx, ny);
                 Transform(nidx, MaterialId.Fire);
@@ -782,12 +842,54 @@ namespace Alkahest.Sim
         /// celdas (offset = tick % 8), promediando con los 4 vecinos ortogonales
         /// en aritmética entera. En 8 ticks (≈0.27s a 30Hz) toda la grilla se
         /// habrá actualizado una vez.
+        ///
+        /// (fix playtest 9 -- "el frío se propaga sin fin"). Dos bugs de aritmética
+        /// raw independientes hacían que el campo de temperatura derivara sin límite
+        /// en vez de estabilizarse en un charco local alrededor de la fuente:
+        ///
+        ///  1) TIRÓN HACIA AMBIENTE COLAPSADO A 1/8 DE LA GRILLA, PARA SIEMPRE. La
+        ///     condición vieja era `(_tick &amp; 7u) == 0u`, comprobada UNA VEZ por
+        ///     iteración sobre las celdas con `i % 8 == offset` (offset = tick % 8).
+        ///     Pero offset == tick % 8 SIEMPRE, así que "tick % 8 == 0" solo puede
+        ///     ser cierto en la misma iteración en la que offset == 0, es decir,
+        ///     SOLO para las celdas con i % 8 == 0. Las otras 7/8 partes de la
+        ///     grilla no recibían el tirón NUNCA (ni una sola vez en toda la
+        ///     partida): un trinquete de un solo sentido -- exactamente el mismo
+        ///     patrón que el bug del hielo del playtest 1, pero por aritmética en
+        ///     vez de por chunks dormidos. El calor/frío inyectado por Placa/Piedra/
+        ///     Fuego se difundía entre vecinos (que sí corre en TODA la grilla, sin
+        ///     depender de qué chunk está despierto) pero nunca se relajaba hacia
+        ///     ambiente fuera de ese 1/8 fijo, así que con suficientes ticks
+        ///     ("con el tiempo") terminaba filtrándose a cualquier rincón del taller
+        ///     sin que nada lo devolviera a los 20°C. Arreglo: la condición ahora se
+        ///     basa en cuántas veces se ha difundido CADA celda (_tick >> 3, que para
+        ///     una celda con offset fijo o avanza exactamente 1 por cada una de sus
+        ///     difusiones), no en el offset mismo -- así el tirón llega a TODA la
+        ///     grilla, una vez cada ~32 ticks (4 difusiones), como decía el comentario
+        ///     original y como se diseñó tras el playtest 1.
+        ///  2) REDONDEO SESGADO HACIA EL FRÍO. `diff >> 2` es desplazamiento
+        ///     aritmético: para enteros NEGATIVOS en C# equivale a floor(diff/4), no
+        ///     a truncar hacia cero. Ejemplo real: diff=+5 -> +5&gt;&gt;2=+1, pero
+        ///     diff=-5 -> -5&gt;&gt;2=-2 (¡el doble de magnitud!). El fallback
+        ///     "step==0 -> ±1" igualaba el caso |diff|&lt;4, pero para |diff|>=5 no
+        ///     múltiplo de 4 quedaba un sesgo real y permanente: una celda más
+        ///     caliente que sus vecinos se enfriaba más rápido de lo que una celda
+        ///     más fría que sus vecinos se calentaba. Aplicado 30 veces por segundo,
+        ///     eso es una deriva neta hacia el frío garantizada en TODA la grilla,
+        ///     con o sin piedra gélida encendida. Arreglo: `diff / 4` (división
+        ///     entera con truncamiento hacia cero, simétrica para signo positivo y
+        ///     negativo) en vez de `diff >> 2`.
         /// </summary>
         private void DiffuseTemperature()
         {
             int offset = (int)(_tick % 8u);
             int n = W * H;
             var temp = _grid.temp;
+
+            // Cuántas veces lleva difundiéndose CADA celda (ver punto 1 arriba):
+            // para una celda de offset fijo o = i%8, esto avanza en +1 exactamente
+            // cada vez que le toca su turno (cada 8 ticks), independientemente de o.
+            bool ambientSweep = ((_tick >> 3) & 3u) == 0u;
 
             for (int i = offset; i < n; i += 8)
             {
@@ -796,15 +898,16 @@ namespace Alkahest.Sim
                 if (x == 0 || x == W - 1 || y == 0 || y == H - 1) continue; // borde de Stone, inmutable
 
                 int sum = temp[i - 1] + temp[i + 1] + temp[i - W] + temp[i + W];
-                int avg = sum >> 2;
+                int avg = sum >> 2; // media de 4 vecinos: división exacta, sin signo negativo posible (temps son bytes >=0).
                 int cur = temp[i];
                 int diff = avg - cur;
-                int step = diff >> 2; // suavizado (division entera por 4)
+                int step = diff / 4; // truncamiento hacia cero: simétrico en signo (fix playtest 9, ver doc de arriba).
                 if (step == 0 && diff != 0) step = diff > 0 ? 1 : -1;
                 int next = cur + step;
 
-                // Atracción suave hacia la temperatura ambiente, poco frecuente.
-                if ((_tick & 7u) == 0u)
+                // Atracción suave hacia la temperatura ambiente, poco frecuente, para
+                // TODA la grilla (fix playtest 9: antes solo 1/8 de las celdas, ver doc).
+                if (ambientSweep)
                 {
                     int ad = CellGrid.AmbientRaw - next;
                     if (ad != 0) next += ad > 0 ? 1 : -1;
