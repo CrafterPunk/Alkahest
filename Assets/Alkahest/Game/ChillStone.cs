@@ -6,8 +6,72 @@ namespace Alkahest.Game
 {
     /// <summary>
     /// Piedra gélida: el aparato empotrado bajo la bandeja fría del estante
-    /// superior. Enfría (raw 20, ~-80 °C) las filas de celdas justo encima
-    /// suya. Dos estados: APAGADA / HELANDO, alternados con E.
+    /// superior. Enfría las filas de celdas justo encima suya. Tres estados
+    /// (APAGADA / FRESCA / HELANDO), ciclados con E — mismo patrón que
+    /// <see cref="HeatPlate"/> (APAGADA / TEMPLADA / ARDIENTE).
+    ///
+    /// -----------------------------------------------------------------
+    /// FRESCA (fix playtest 13)
+    /// -----------------------------------------------------------------
+    /// Reporte del jugador: "la placa fría parece irradiar más fuerte el frío
+    /// que el calor, y tardar más en recuperar su temperatura a 0, además de
+    /// tener más alcance". MEDIDO antes de tocar nada:
+    ///  · Antes de este fix, ChillStone tenía UN SOLO estado activo: raw 20
+    ///    (-80 °C), 50 unidades raw (100 °C) por DEBAJO de ambiente (raw 70,
+    ///    20 °C). HeatPlate en cambio SIEMPRE tuvo un estado moderado
+    ///    (TEMPLADA, calibrado al centro de la banda de crecimiento del
+    ///    Vivium de la seed — típicamente raw ~82, solo 12 unidades / 24 °C
+    ///    POR ENCIMA de ambiente) además del extremo ARDIENTE (raw 220,
+    ///    +320 °C, 150 unidades / 300 °C por encima). En uso normal el
+    ///    jugador cicla HeatPlate a TEMPLADA para casi todo y reserva
+    ///    ARDIENTE para encender/hervir de verdad -- pero ChillStone SOLO
+    ///    tenía la opción extrema, cada vez que "quería algo de frío".
+    ///  · SimStepper.DiffuseTemperature (NO TOCADA, regla 9 de CLAUDE.md)
+    ///    atrae cada celda hacia ambiente con un paso FIJO de ±1 raw cada
+    ///    ~32 ticks (~1.07 s), no proporcional a la distancia. Eso significa
+    ///    que el tiempo de vuelta a ambiente escala LINEALMENTE con cuán
+    ///    lejos se empujó la celda: ~53 s desde -80 °C (raw 20, 50
+    ///    unidades) frente a ~13 s desde TEMPLADA (raw 82, 12 unidades) --
+    ///    el frío, en su único modo, tardaba SIEMPRE ~4x más en apagarse que
+    ///    el calor en su modo de uso diario. Eso es justo lo que el jugador
+    ///    describe como "tarda más en recuperar su temperatura a 0" y
+    ///    "tiene más alcance" (un gradiente 4x más profundo se nota más
+    ///    lejos de la fuente antes de fundirse con el ambiente).
+    ///  · El propio juego define "frío" como -5 °C o menos (encargo Cold de
+    ///    OrderSystem, día 2) -- -80 °C es 16x más frío que lo que el juego
+    ///    considera "cumplir el encargo". Y el punto de congelación del agua
+    ///    de esta seed nunca baja de -20 °C (Universe.Create, rango
+    ///    acotado). -80 °C sigue siendo necesario para GARANTIZAR la
+    ///    congelación/cristalización con margen amplio en cualquier seed,
+    ///    pero no hacía falta como ÚNICA opción.
+    ///  · VEREDICTO: asimetría real pero NO en las mecánicas compartidas
+    ///    (TempStepPerTick=5 y RowsAffected=3 ya eran IGUALES en ambos
+    ///    archivos, ver comentario en HeatPlate.cs) -- estaba en que a
+    ///    ChillStone le faltaba el equivalente a TEMPLADA. FRESCA lo cierra:
+    ///    se calibra por seed (igual que TEMPLADA) al mínimo entre el punto
+    ///    de congelación del agua y el umbral de cristalización de ESTA
+    ///    seed, con margen de 10 raw (20 °C) por fiabilidad frente al tirón
+    ///    de vuelta a ambiente -- sigue congelando agua y permitiendo
+    ///    cristalizar, pero típicamente ronda raw ~50 (-20 °C, seed neutra),
+    ///    ~2.5x más cerca de ambiente que HELANDO en vez de forzar siempre
+    ///    el extremo. HELANDO se conserva intacto (raw 20 / -80 °C) para
+    ///    cuando el jugador SÍ quiere el resultado instantáneo y garantizado
+    ///    (ver casos de uso en la doc de la clase, más abajo).
+    ///
+    /// LO QUE NO SE TOCÓ, a propósito: el ALCANCE geométrico (RowsAffected=3
+    /// en ambos archivos, MISMO valor) y la VELOCIDAD de empuje
+    /// (TempStepPerTick=5 en ambos, MISMA velocidad) ya eran simétricos.
+    /// La sensación de "la placa ígnea no combate el frío tan rápido como
+    /// esperaría" con las dos hornillas a ARDIENTE cerca de la bandeja fría
+    /// es, medida la geometría real (Sim/SimLevelBuilder.cs, NO TOCADO), una
+    /// EXPECTATIVA IMPOSIBLE: la bandeja fría vive en y=88..96 y las cubas
+    /// de las hornillas terminan en su labio en y=53 -- 35 filas de aire
+    /// vacío de por medio, y el material Empty NO participa en la difusión
+    /// de temperatura (ver docs/SIM_NOTES.md, "Límites conocidos"). Ninguna
+    /// hornilla puede calentar la bandeja fría por difusión salvo que gas o
+    /// fuego de verdad vuele físicamente hasta allí arriba. Es información
+    /// de diseño, no un bug: las hornillas calientan SU cuba, no la bandeja
+    /// de al lado.
     ///
     /// Comparte con <see cref="HeatPlate"/> las tres decisiones del playtest 4:
     ///  · IDENTIDAD VISUAL PROPIA — bloque de roca escarchada con AGUJAS DE
@@ -27,21 +91,37 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva
     {
-        private enum State { Off = 0, Frio = 1 }
+        private enum State { Off = 0, Fresca = 1, Helando = 2 }
 
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
         private const float ProximityRange = 3.2f;
-        private const byte ColdRaw = 20;
+        private const byte HelandoRaw = 20; // ~-80 °C, extremo garantizado (ver doc de la clase).
         private const int TempStepPerTick = 5;
         /// <summary>Filas enfriadas por encima del aparato (2 -> 3, misma razón que en HeatPlate: la bandeja solo tiene 6 filas útiles).</summary>
         private const int RowsAffected = 3;
+
+        /// <summary>
+        /// (fix playtest 13) Margen de fiabilidad, en raw, entre FRESCA y el
+        /// umbral real (punto de congelación del agua / cristalización) de
+        /// esta seed: sin margen, el tirón hacia ambiente de
+        /// SimStepper.DiffuseTemperature (±1 raw cada ~32 ticks) podría dejar
+        /// una celda oscilando justo encima del umbral en vez de cruzarlo de
+        /// forma fiable. 10 raw = 20 °C, mismo orden de magnitud que la
+        /// histéresis de +5 °C que ya usa Ice.meltsAt y que el margen de 8 °C
+        /// que ARDIENTE deja sobre la ignición máxima sorteable (ver
+        /// HeatPlate.cs).
+        /// </summary>
+        private const int FrescaMarginRaw = 10;
 
         private AlkahestSim _sim;
         private Transform _player;
         private int _cellX0, _cellX1, _plateRow;
         private State _state = State.Off;
         private float _accumulator;
+
+        /// <summary>Objetivo de FRESCA: calibrado por seed en Init() (ver doc de la clase). Valor por defecto plausible si Universe no está listo aún.</summary>
+        private byte _frescaRaw = 45;
 
         private SpriteRenderer _cristales;
         private Vector3 _centroBloque;
@@ -58,6 +138,18 @@ namespace Alkahest.Game
             _cellX0 = cellX0;
             _cellX1 = cellX1;
             _plateRow = plateRow;
+
+            // (fix playtest 13) FRESCA: mínimo entre el punto de congelación
+            // del agua y el umbral de cristalización de ESTA seed, menos el
+            // margen de fiabilidad -- calibrado por seed igual que
+            // HeatPlate._templadaRaw se calibra a VivGrowMinRaw/MaxRaw.
+            if (_sim != null && _sim.Universe != null)
+            {
+                int freezesAt = _sim.Universe.Get(MaterialId.Water).freezesAt;
+                int limite = Mathf.Min(freezesAt, _sim.Universe.CrystallizeMaxTempRaw);
+                int fresca = limite - FrescaMarginRaw;
+                _frescaRaw = (byte)Mathf.Clamp(fresca, HelandoRaw + 1, CellGrid.AmbientRaw - 1);
+            }
 
             BuildVisual();
             UpdateVisualTint();
@@ -100,9 +192,7 @@ namespace Alkahest.Game
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
-                _state = _state == State.Off ? State.Frio : State.Off;
-                UpdateVisualTint();
-                Debug.Log($"[ChaosAlchemy] Piedra gélida -> {StateLabel()}");
+                CycleState();
             }
 
             if (_state != State.Off)
@@ -124,8 +214,19 @@ namespace Alkahest.Game
         /// <summary>¿Es ESTE el aparato que el aprendiz tiene delante? (ver Game/MachineFocus.cs)</summary>
         private bool EstaEnfocada() => MachineFocus.EsFoco(this, _player);
 
+        /// <summary>(fix playtest 13) Ciclo de 3 estados, mismo patrón que HeatPlate.CycleState.</summary>
+        private void CycleState()
+        {
+            _state = (State)(((int)_state + 1) % 3);
+            UpdateVisualTint();
+            Debug.Log($"[ChaosAlchemy] Piedra gélida -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
+        }
+
+        private byte TargetRaw() => _state == State.Helando ? HelandoRaw : _frescaRaw;
+
         private void ApplyColdTick()
         {
+            byte target = TargetRaw();
             var grid = _sim.Grid;
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
 
@@ -137,7 +238,7 @@ namespace Alkahest.Game
                     if (!CellGrid.InBounds(x, y)) continue;
                     int idx = CellGrid.Idx(x, y);
                     int cur = grid.temp[idx];
-                    int next = cur > ColdRaw ? Mathf.Max(ColdRaw, cur - TempStepPerTick) : Mathf.Min(ColdRaw, cur + TempStepPerTick);
+                    int next = cur > target ? Mathf.Max(target, cur - TempStepPerTick) : Mathf.Min(target, cur + TempStepPerTick);
                     grid.temp[idx] = (byte)next;
                     grid.WakeChunk(x, y, tick);
                 }
@@ -147,20 +248,34 @@ namespace Alkahest.Game
         private void UpdateVisualTint()
         {
             if (_cristales == null) return;
-            _cristales.color = _state == State.Frio
-                ? new Color(0.62f, 0.90f, 1f, 1f)
-                : new Color(0.42f, 0.46f, 0.52f, 0.75f); // apagada: cristal mate, sin luz propia
+            _cristales.color = ColorCristal(1f);
         }
 
-        /// <summary>Latido lento y frío mientras hiela (opuesto al latido rápido y cálido de la placa ígnea).</summary>
+        /// <summary>Latido lento y frío mientras hiela (opuesto al latido rápido y cálido de la placa ígnea); FRESCA late un poco más rápido, menos urgente que HELANDO.</summary>
         private void AnimarCristales()
         {
-            if (_cristales == null) return;
-            float pulso = 0.80f + 0.20f * Mathf.Sin(Time.time * 2.2f);
-            _cristales.color = new Color(0.62f * pulso + 0.20f, 0.90f * pulso, 1f, 1f);
+            if (_cristales == null || _state == State.Off) return;
+            float pulso = 0.80f + 0.20f * Mathf.Sin(Time.time * (_state == State.Helando ? 2.2f : 3.4f));
+            _cristales.color = ColorCristal(pulso);
         }
 
-        private string StateLabel() => _state == State.Frio ? "HELANDO" : "APAGADA";
+        /// <summary>(fix playtest 13) Tres tintes, mismo patrón que HeatPlate.ColorResistencia: apagada mate, FRESCA azul suave, HELANDO azul intenso.</summary>
+        private Color ColorCristal(float pulso)
+        {
+            switch (_state)
+            {
+                case State.Helando: return new Color(0.62f * pulso + 0.20f, 0.90f * pulso, 1f, 1f);
+                case State.Fresca: return new Color(0.50f * pulso + 0.16f, 0.72f * pulso, 0.88f * pulso + 0.08f, 1f);
+                default: return new Color(0.42f, 0.46f, 0.52f, 0.75f); // apagada: cristal mate, sin luz propia
+            }
+        }
+
+        private string StateLabel()
+        {
+            if (_state == State.Helando) return "HELANDO";
+            if (_state == State.Fresca) return "FRESCA";
+            return "APAGADA";
+        }
 
         private void OnGUI()
         {
@@ -170,11 +285,18 @@ namespace Alkahest.Game
             if (!cerca && _state == State.Off) return;
 
             UiStyles.Preparar();
-            Color color = _state == State.Frio ? UiStyles.Frio : UiStyles.TextoTenue;
+            Color color = _state != State.Off ? UiStyles.Frio : UiStyles.TextoTenue;
 
-            string chapa = _state == State.Frio
-                ? $"piedra gélida · HELANDO {CellGrid.RawToC(ColdRaw)}°"
-                : "piedra gélida";
+            // (fix playtest 13) El jugador dudaba de si el frío "tiene más alcance" que el
+            // calor -- RowsAffected es una constante IGUAL en este archivo y en HeatPlate.cs
+            // (ambas 3), pero él no tenía forma de comprobarlo. Se añade "(alcanza N filas)"
+            // SOLO cuando está cerca Y encendida (nunca un elemento permanente, regla 15) para
+            // que pueda leerlo y compararlo con el mismo texto en la placa ígnea.
+            string chapa = _state == State.Off
+                ? "piedra gélida"
+                : cerca
+                    ? $"piedra gélida · {StateLabel()} {CellGrid.RawToC(TargetRaw())}° (alcanza {RowsAffected} filas)"
+                    : $"piedra gélida · {StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
             // (fix playtest 10) EL RÓTULO VA DEBAJO, COMO LAS PLACAS. Playtest 7 lo había
             // subido (offset positivo) porque entonces caía dentro de la bandeja -- decisión
             // equivocada según el jugador, que pide la MISMA convención que HeatPlate: mismo

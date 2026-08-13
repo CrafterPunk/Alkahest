@@ -18,7 +18,8 @@ en el proyecto pero no integrado con la sim.
 | Leyes/reacciones/cultivo (M3) | ✅ Compila y arranca; Edictos sortean y se muestran; reacciones/cultivo SIN prueba de juego profunda aún |
 | Loop de juego (M4) | ✅ Título → Jornada 1 con pedidos generados VISTO en pantalla; el resto del flujo (entregas→Favor→jornadas 2-3→final) SIN probar |
 | Color de fuego + shimmer líquidos | ✅ código desplegado, PENDIENTE verificación visual (feedback del usuario: "el fuego no tenía color fuego") |
-| Firma morfológica por seed (M12) | código desplegado, PENDIENTE verificar en editor: jugar dos universos seguidos y comprobar legibilidad a escala de celda (ver "Playtest 12") |
+| Firma morfológica por seed (M12) | código desplegado, PENDIENTE verificar en editor: jugar dos universos seguidos y comprobar legibilidad a escala de celda (ver "Playtest 12"); playtest 13 rehizo el remapeo de escala (5..12 celdas, antes 14..46) y corrigió el alfa heredado de lo innominado — SIGUE sin verse en pantalla |
+| Firma visual GENERADA en redomas/frasco + `PaintStable` + Fresca de `ChillStone` (playtest 13) | código desplegado, SIN VERIFICAR en editor (ver "Playtest 13") |
 | Commits | M1+M2 en `001a9a1`; M3+M4+rebranding PENDIENTE de commit (script `ca_commit.cmd` listo en la raíz del proyecto) |
 
 ## Cómo continuar (receta operativa)
@@ -31,14 +32,15 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 12)
-1. **Verificar en Unity y jugar DOS universos seguidos** para juzgar si la variación de la firma
-   morfológica (playtest 12) se PERCIBE de verdad — es la pregunta que motivó toda la ronda.
-2. **Revisar que ningún patrón quede ilegible o molesto a la escala real de celda** (7,5 px/celda
-   en 1080p): Manchas/Laberinto/Dendritas/Motas solo se han comprobado por lectura de código y
-   verificación aritmética, nunca en pantalla.
-3. **Medir el coste real de `SimStepper.MorphTick`** con el overlay de dev (F3): estimado
-   <0,5 ms/tick sobre un presupuesto de 33 ms, SIN VERIFICAR en Unity.
+## Backlog priorizado (actualizado tras playtest 13)
+1. **Verificar en Unity y jugar DOS universos seguidos** para juzgar si (a) la variación de la
+   firma morfológica (playtest 12) se PERCIBE de verdad y (b) los patrones se leen ya con poca
+   materia tras el remapeo de escala del playtest 13 — es la pregunta que motivó ambas rondas.
+2. **Comprobar si la piedra en modo Fresca (`ChillStone`, playtest 13) se siente manejable** a
+   diario, o si sigue haciendo falta Helando como opción rápida por defecto.
+3. **Consolidar `FirmaVisualFabrica`** (`Game/StorageRack.cs`) **con el generador de
+   `JournalHud`**: duplican las siete funciones de patrón y los hashes (deuda técnica anotada en
+   el playtest 13 §4) — mover a un único `Game/FirmaVisualFabrica.cs` compartido.
 4. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
    (`JournalHud`): la API ya existe, escrita en paralelo en el playtest 10, pero nadie la consume
    todavía (arrastrado sin tocar desde el playtest 10).
@@ -69,7 +71,10 @@ en el proyecto pero no integrado con la sim.
       `mat[]` que no lo lleve dejará la textura interna desincronizada entre host y clientes.
     - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
       habla con él. NO rediseñar el template.
-12. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+12. **Medir el coste real de `SimStepper.MorphTick`** con el overlay de dev (F3): estimado
+    <0,5 ms/tick sobre un presupuesto de 33 ms, SIN VERIFICAR en Unity (arrastrado desde el
+    playtest 12).
+13. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
     NO para taller de una pantalla — ver DECISIONS §17).
 
 ## Riesgos y trampas conocidas
@@ -80,6 +85,166 @@ en el proyecto pero no integrado con la sim.
 - SetPixels32 por chunks: hay UN buffer scratch preasignado de 16x16 y el render asume que CHUNK
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
+
+## Playtest 13 → SAFE MODE, EL HIELO QUE SE FUNDÍA SOLO, HUMO-COMO-BORRADOR ES CORRECTO,
+## PATRONES SIN SOBRECARGAR MATERIA, FIRMA VISUAL GENERADA EN REDOMAS Y FRASCO, Y LA
+## ASIMETRÍA DEL FRÍO — SIN VERIFICAR EN EDITOR
+Ronda dirigida por Opus 5 (diagnóstico de los seis hallazgos de Cesar, especificación de 4
+encargos con propiedad de archivos disjunta, revisión de compilación); Sonnet 5 escribió el
+código en esos 4 encargos, más 1 pase de revisión.
+
+**0. Nota de arranque: tras Safe Mode, regenerar la escena.** Al salir de Safe Mode el juego
+arrancaba sin mostrar nada. Causa: los componentes de la escena quedan sin script asignado al
+recompilar en Safe Mode. Se arregló con **Alkahest → 1. Generar escena Lab** (idempotente,
+`AlkahestSceneBuilder`), que reengancha todo. **Este es ahora el primer reflejo documentado tras
+cualquier Safe Mode.** También se corrigieron dos errores de compilación reales: `CS1503`
+(`int`→`uint` en el argumento 4 de `XorShift.FromCell`, líneas 1360 y 1443 de `SimStepper.cs`).
+De las 14 llamadas a `FromCell` en ese archivo, 12 pasan una constante literal (`77`, `205`...),
+que C# convierte implícitamente a `uint`; esas dos pasan `201 + def.semillaPatron` y
+`209 + def.semillaPatron` — `semillaPatron` es un `byte` que al sumarse a una constante se
+promueve a `int`, y de `int` a `uint` no hay conversión implícita. Fix: cast explícito
+`(uint)(...)`. **Regla general dejada por escrito: al pasar `salt` a `XorShift.FromCell`, si la
+expresión mezcla una constante con un campo hay que castear a `uint`.**
+
+**1. BUG: pintar hielo con la paleta producía agua.** `CellGrid.SetCell` (la que usa
+`AlkahestSim.Paint`) nunca toca `temp`, así que la celda pintada hereda la temperatura que
+hubiera antes ahí — en la práctica siempre `CellGrid.AmbientRaw = 70` (20 °C), porque el grid
+arranca entero a ambiente. Y `Universe.Create` sortea `Ice.meltsAt = CToRaw(waterFreezeC + 5)`
+con `waterFreezeC` acotado a `[-20, 15]` por seed, así que `meltsAt` cae SIEMPRE en raw
+`[52, 70]`. Como la ambiente es exactamente el extremo superior de ese rango, la condición de
+fusión de `SimStepper.ApplyPhase` (`t >= meltsAt`) era cierta en cualquier seed, siempre: el
+hielo pintado se fundía a agua en el primerísimo tick, sin excepción.
+FIX GENERAL, no un parche del hielo: `AlkahestSim.StableBirthTempRaw(MaterialDef)` calcula una
+temperatura de nacimiento en la que el material sea ESTABLE, con las mismas comparaciones que
+`ApplyPhase`: si ambiente cruzaría una cota superior activa (`meltsAt`/`boilsAt`), nace en
+`umbral − 10 raw`; si cruzaría una inferior (`freezesAt`/`condensesAt`), nace en
+`umbral + 10 raw`; si ambiente ya cae dentro de la banda (el caso normal — Agua, Cristal...), se
+deja ambiente sin tocar. Expuesto en un método NUEVO, `AlkahestSim.PaintStable(x, y, radius,
+materialId)`, que solo usa `DevPalette`. `Paint`/`PaintCell`/`PaintRect` NO cambiaron de firma
+ni de comportamiento (comprobado con grep que sus únicos llamantes son Flask, MasterSupplies,
+DeliveryChute, Dispenser y DevPalette), y `Flask` sigue restituyendo la temperatura media de lo
+aspirado, validado desde el playtest 4.
+
+**2. El humo era un borrador — y es correcto que lo sea.** Cesar: *"el tirar humo es como si
+fuera un borrador... quizás porque no es un material a manipular sino una consecuencia"*. Tenía
+razón: Humo/Vapor/Fuego/Ceniza son SUBPRODUCTOS (nacen de una reacción y se disipan solos), y el
+Humo en concreto es un gas de vida corta — no es un bug de la sim, el fallo era que la paleta no
+distinguía insumo de subproducto. `DevPalette` agrupa ahora en dos bloques con cabecera
+("Insumos (los manipulas tú)" / "Subproductos (nacen de una reacción y se disipan solos)"),
+tiñe los botones de subproducto, y al seleccionar uno muestra una línea fija explicando qué lo
+produce y cómo se disipa. **No se quitó ningún material: pintar humo sigue siendo útil para
+depurar.** `DevPalette.SubproductoIds` es una lista de DISEÑO (fija a mano), no derivada de
+`MaterialArchetype`, porque el arquetipo no distingue "consecuencia" de "insumo".
+
+**3. Los patrones necesitaban demasiada materia — sobrecorrección del playtest 12 + un bug
+real.** Cesar: *"se necesita mucho material para poder apreciar los patrones... voy a terminar
+preparando mucho más de lo que necesito solo para apreciar bien el patrón y poder
+documentarlo"*.
+- **Sobrecorrección del playtest 12**: por miedo a que a 7,5 px/celda una frecuencia alta se
+  leyera como ruido, se había remapeado `patronEscala` a periodos de 14..35 celdas (Vetas) y
+  teselas de 18..46 (Celdas). Medición de los recipientes reales (`SimLevelBuilder`): cuba
+  interior 52x37 (`VatWidth=58`/`VatHeight=40` menos `WallThickness=3` por lado), bandeja fría
+  interior 46x6 (`ChillTrayInteriorX0..X1` = 39..84, `ChillTrayWidth=52`). Con rasgos de 35
+  celdas se ve UNA sola repetición en el recipiente más estrecho. **Principio de diseño dejado
+  por escrito: un patrón se reconoce por su REPETICIÓN, no por su tamaño.** Nuevo remapeo:
+  ambas familias a `4 + patronEscala` = **5..12 celdas** (`SimRenderer.cs`, `veinScale`/
+  `cellSize`), que da entre 3,8 y 9,2 repeticiones en el recipiente más estrecho.
+- Manchas/Laberinto/Dendritas viven en `SimStepper` (no se tocaron): su tamaño de rasgo emerge
+  de `feed`/`diffDiv` (4..18 celdas) y de la longitud de rama de Dendritas (~14..23), ya del
+  orden adecuado.
+- Suelo de `patronFuerza` de Powder subido de 40 a **55** en `Universe.Create` (es el arquetipo
+  con `patronEscala` más pequeño: rasgo diminuto + contraste mínimo era la combinación con más
+  riesgo de caer bajo el umbral de percepción — a 40 el swing máximo era ±20/255, ~8%, apenas
+  por encima de ruido de compresión de pantalla; a 55 sube a ±27/255).
+- **BUG REAL confirmado**: Cesar reportó *"el rosa es transparente porque se logran divisar un
+  poquito los patrones de los ladrillos atrás, el verde no"*. `SimRenderer` estaba limpio
+  (devuelve `baseColor.a` sin tocar salvo Fuego, y el borde `Difuso` solo modula RGB, cumple la
+  regla 19). El bug estaba en `Universe.SortearFirmasVisuales`: preservaba
+  `alphaOriginal = m.baseColor.a` del roster, y los tres líquidos innominados nacen con alfa
+  215-235 (Azoth 215, Acid 220, Slime 235), así que **toda la masa** era semitransparente, no
+  solo el contorno — el mismo mosaico duro contra `WorkshopBackdrop` que la regla 19 advierte
+  para el borde, pero aplicado a la sustancia entera. El verde no lo era por ser sólido (alfa
+  255). FIX: lo innominado fuerza alfa 255 siempre. **Regla dejada por escrito: lo innominado
+  nace OPACO; el alfa <255 del roster es para el vocabulario del taller, no para la firma
+  sorteada.**
+
+**4. Documentar sin producir de más — la firma generada.** Cesar: *"al llenar las botellas
+estos patrones no se notan ni se animan sus contenidos, lo que lo hace más dependiente del
+nombre. Una nueva dificultad a tener en cuenta."* Principio: no hace falta acumular materia
+para ver una firma, porque una muestra se puede GENERAR — no es una foto del mundo, es la firma
+del material dibujada a la escala que convenga; con eso, cinco celdas bastan para documentar.
+- Nueva clase `internal static FirmaVisualFabrica` (declarada al final de `StorageRack.cs`,
+  namespace `Alkahest.Game`), con `GenerarPixeles(w, h, def, frameIdx, maskAlpha, esBordeMask,
+  sobreMundo)`. Replica la técnica de `JournalHud.CrearMiniatura` adaptada para aceptar una
+  máscara de alfa y una máscara de borde, así sirve tanto a la silueta de una redoma como a un
+  cuadradito de HUD.
+- `StorageRack`: el contenido de cada redoma muestra el patrón y el borde del material, con la
+  silueta de la botella tomada de `MaquinariaSprites.ContenidoRedoma()` (verificado que su
+  textura se crea con `Apply(false, false)` y por tanto es LEGIBLE desde código — con
+  `makeNoLongerReadable: true` habría petado en runtime). **Y se anima**: hasta
+  `FirmaVisualFabrica.AnimFrames` fotogramas pregenerados cuyo desfase imita el `drift` de
+  `SimRenderer`; en `Update` solo se intercambia el sprite cacheado cuando cambia el índice
+  (`Time.time * FirmaVisualFabrica.AnimFps`). `ritmoAnim == 0` → un solo fotograma → quieto de
+  verdad.
+- `FlaskHud`: cada fila del panel y el chip de material bloqueado junto al cursor muestran la
+  firma en el mismo rectángulo que antes era color plano — **sin tocar la maqueta**, que ya tuvo
+  quejas de apiñamiento.
+- Regla 19 respetada con un flag `sobreMundo`: en el mundo (redomas) el borde Difuso oscurece
+  hacia `SimRenderer.BackgroundColor`; en un panel opaco de UI sí puede bajar alfa.
+- **DEUDA TÉCNICA ANOTADA**: `FirmaVisualFabrica` duplica las siete funciones de patrón y los
+  hashes de `JournalHud` (privados y en un archivo que no era editable en esta ronda). Debe
+  consolidarse en un único `Game/FirmaVisualFabrica.cs` compartido en una ronda futura. Añadido
+  al backlog.
+
+**5. El frío: la asimetría era real, pero no donde parecía.** Cesar: *"la placa fría parece
+irradiar más fuerte el frío que el calor, y tardar más en recuperar su temperatura, además de
+tener más alcance"*.
+Tabla medida (`ChillStone.cs`/`HeatPlate.cs`, comentarios de cabecera): `RowsAffected = 3` en
+AMBOS; `TempStepPerTick = 5` en AMBOS; área — bandeja interior 46 celdas de ancho vs cuba 52 —
+**la placa cubre más área absoluta**. O sea, no había asimetría de alcance ni de velocidad.
+La asimetría real: **la piedra gélida solo tenía UN modo y era el más extremo** (raw 20 = −80 °C,
+50 unidades / 100 °C por debajo de ambiente), mientras `HeatPlate` siempre tuvo un modo moderado
+(Templada, calibrada al centro de la banda de crecimiento del Vivium, típicamente raw ~82, solo
+12 unidades / 24 °C por encima) además del extremo Ardiente (raw 220, +320 °C, 150 unidades). Y
+como el tirón hacia ambiente de `SimStepper.DiffuseTemperature` es un paso FIJO (±1 raw cada
+~32 ticks, ~1,07 s), no proporcional a la distancia, el tiempo de retorno es lineal en la
+distancia empujada: **~53 s desde −80 °C contra ~13 s desde Templada** (y ~160 s desde Ardiente,
+150 unidades). Para dimensionarlo: el propio juego define "frío" como ≤−5 °C en el encargo Cold
+del día 2 — −80 °C es 16× más frío que lo que el juego pide, y el punto de congelación del agua
+de esta seed nunca baja de −20 °C.
+FIX: `ChillStone` gana un estado intermedio **Fresca** (ciclo Off→Fresca→Helando→Off con E,
+igual patrón que `HeatPlate`), calibrado por seed en `Init()` al mínimo entre
+`Universe.Get(MaterialId.Water).freezesAt` y `Universe.CrystallizeMaxTempRaw`, menos
+`FrescaMarginRaw = 10` raw de margen frente al tirón de `DiffuseTemperature` (típico ~raw 50,
+−20 °C). Sigue congelando y cristalizando sin dejar la zona helada un minuto. Renombrado
+`ColdRaw` → `HelandoRaw` (se conserva intacto, raw 20, para cuando el jugador SÍ quiere el
+resultado instantáneo garantizado).
+NO se tocó `SimStepper.DiffuseTemperature` (regla 9 de `CLAUDE.md`), aunque su tirón fijo es la
+causa técnica: queda REPORTADO como observación, no corregido.
+**Y un hallazgo de diseño importante**: las hornillas NO pueden calentar la bandeja fría,
+geométricamente. La bandeja vive en y=88..96 y las cubas terminan en su labio en y=53
+(`VatInteriorY1`): hay **35 filas de aire vacío** entre medias, y `Empty` no participa en la
+difusión de temperatura (`docs/SIM_NOTES.md`, "Límites conocidos"). Ninguna placa puede influir
+allí salvo que fuego o gas vuelen físicamente hasta la bandeja. No es un bug; es información de
+diseño que conviene tener presente al balancear.
+Añadido menor en ambos aparatos: cuando están encendidos y el aprendiz cerca, el rótulo añade
+`(alcanza N filas)` — mismo número (3) en los dos, para que el jugador pueda comprobar por sí
+mismo que el alcance es igual. No es un elemento permanente (regla 15).
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo): (a) verificar en
+Unity y juzgar si los patrones se leen ya con poca materia; (b) comprobar si la piedra en modo
+Fresca se siente manejable; (c) consolidar `FirmaVisualFabrica` con el generador de `JournalHud`
+(deuda técnica del punto 4); (d) enganchar `HintSystem.PistasMostradas` en la sección
+PROCEDIMIENTOS del diario; (e) decidir si el audio se queda (`DirectorDeAudio.SistemaActivo`);
+(f) CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una; (g) renombrar `Alkahest` →
+`ChaosAlchemy` (GitHub + `productName`); (h) replantear las redomas; (i) resto de M5; (j) nueva
+build de Windows con la checklist del playtest 11; (k) multiplayer, con el formato de deltas
+contemplando `morph`.
+Preguntas abiertas para el próximo playtest: ¿los patrones se leen ya en un charco de trabajo
+normal, sin preparar de más? ¿la firma en redomas y frasco quita la necesidad de producir de más
+para documentar? ¿el modo Fresca es el que se usará a diario, o sigue haciendo falta Helando
+como opción rápida?
+
 
 ## Playtest 10 → LA FANTASÍA DE BAUTIZAR RECUPERADA, EL DIARIO ES UN LIBRO,
 ## BLOQUEO DE MATERIAL + HAZ + ANILLO DEL FRASCO, y barrido de atajos — SIN VERIFICAR EN EDITOR
@@ -560,6 +725,10 @@ gradual dentro del mismo día 1?
   entre los tres archivos de `Sim/`, las tres garantías del sorteo de firma visual y las reglas de
   diseño); **Sonnet 5 escribió el código** en 5 encargos paralelos con propiedad de archivos
   disjunta, más 1 pase de revisión de compilación.
+- **Playtest 13**: mismo reparto — **Opus 5 dirigió** (diagnóstico de los seis hallazgos de
+  Cesar, incluida la nota de arranque tras Safe Mode y los dos `CS1503` de compilación,
+  especificación de 4 encargos paralelos con propiedad de archivos disjunta y revisión); **Sonnet
+  5 escribió el código** en esos 4 encargos, más 1 pase de revisión de compilación.
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no

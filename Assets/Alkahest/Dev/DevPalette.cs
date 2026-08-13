@@ -47,6 +47,53 @@ namespace Alkahest.Dev
         private Vector2Int _hoverCell;
         private bool _hoverValid;
 
+        // =====================================================================
+        // (fix playtest 13) "El tirar humo es como si fuera un borrador."
+        // =====================================================================
+        // El jugador tenía razón en su propia lectura: Vapor/Humo/Fuego/Ceniza
+        // no son un INSUMO que el jugador manipula, son la CONSECUENCIA de una
+        // reacción (hervir, arder, disolver -- ver SimStepper.ApplyPhase/
+        // ProcessFire) y se disipan solos (gasLifetime, o condensan/mueren por
+        // temperatura). Pintar Humo desplaza lo que hubiera y desaparece solo
+        // un rato después: de ahí la sensación de goma de borrar. Esto NO es
+        // un bug de la simulación -- es correcto que un subproducto no se
+        // comporte como un bloque de construcción -- así que el arreglo no es
+        // tocar Sim/, es que la paleta DISTINGA visualmente las dos clases y
+        // avise qué va a pasar cuando el jugador selecciona un subproducto.
+        // Ningún material se quita de la paleta: pintar Humo sigue siendo
+        // útil para depurar reacciones.
+        //
+        // Lista fija a propósito (no derivada de MaterialArchetype: Fuego es
+        // Fire, Humo/Vapor son Gas, Ceniza es Powder -- el arquetipo no
+        // distingue "consecuencia de una reacción" de "insumo", es una
+        // propiedad de DISEÑO, no de simulación).
+        // =====================================================================
+        private static readonly byte[] SubproductoIds =
+        {
+            MaterialId.Steam, MaterialId.Smoke, MaterialId.Fire, MaterialId.Ash,
+        };
+
+        /// <summary>Tinte cálido y sobrio para distinguir el botón de un subproducto sin gritar (regla del encargo: "la presentación más sobria que puedas").</summary>
+        private static readonly Color SubproductoTint = new Color(0.95f, 0.68f, 0.42f);
+
+        /// <summary>Ids del resto del roster (todo lo que NO es subproducto), calculado una única vez a nivel de tipo -- nunca en OnGUI.</summary>
+        private static readonly byte[] InsumoIds = BuildInsumoIds();
+
+        private static byte[] BuildInsumoIds()
+        {
+            var ids = new System.Collections.Generic.List<byte>(MaterialId.Count - SubproductoIds.Length);
+            for (int id = 0; id < MaterialId.Count; id++)
+            {
+                if (System.Array.IndexOf(SubproductoIds, (byte)id) < 0) ids.Add((byte)id);
+            }
+            return ids.ToArray();
+        }
+
+        private static bool EsSubproducto(byte id) => System.Array.IndexOf(SubproductoIds, id) >= 0;
+
+        /// <summary>Estilo de párrafo con word-wrap para la línea explicativa del subproducto seleccionado. Lazy: GUIStyle no se puede construir fuera de OnGUI/editor context de forma fiable.</summary>
+        private GUIStyle _explicacionStyle;
+
         private void Awake()
         {
             _sim = GetComponent<AlkahestSim>();
@@ -143,10 +190,17 @@ namespace Alkahest.Dev
             int radius = Mathf.Clamp(Mathf.RoundToInt(_brushRadius), 1, 10);
             if (mouse.leftButton.isPressed)
             {
-                _sim.Paint(cell.x, cell.y, radius, _selectedMaterial);
+                // (fix playtest 13) PaintStable en vez de Paint: nace a la
+                // temperatura de estabilidad del material, no a la heredada
+                // de la celda (normalmente ambiente) -- ver AlkahestSim para
+                // el porqué completo ("al seleccionar hielo, tiro agua").
+                _sim.PaintStable(cell.x, cell.y, radius, _selectedMaterial);
             }
             else if (mouse.rightButton.isPressed)
             {
+                // Borrar SÍ sigue siendo Paint(Empty): Empty no tiene ninguna
+                // transición de fase que corregir, y así no se introduce un
+                // segundo camino de comportamiento para el mismo botón.
                 _sim.Paint(cell.x, cell.y, radius, MaterialId.Empty);
             }
         }
@@ -171,26 +225,26 @@ namespace Alkahest.Dev
             GUILayout.Label($"Seed: {_sim.Universe.Seed}   Tick: {_sim.Stepper.Tick}");
 
             GUILayout.Space(6);
-            GUILayout.Label("Materiales:");
             var mats = _sim.Universe.Materials;
-            const int perRow = 3;
-            for (int i = 0; i < mats.Length; i += perRow)
+
+            // (fix playtest 13) Dos grupos en vez de una sola grilla: insumo
+            // (lo que el jugador manipula como bloque de construcción) vs
+            // subproducto (lo que nace de una reacción y se disipa solo). Ver
+            // el bloque de comentario grande junto a SubproductoIds arriba.
+            GUILayout.Label("Insumos (los manipulas tú):");
+            DrawMaterialGrid(mats, InsumoIds, tinted: false);
+
+            GUILayout.Space(4);
+            GUILayout.Label("Subproductos (nacen de una reacción y se disipan solos):");
+            DrawMaterialGrid(mats, SubproductoIds, tinted: true);
+
+            if (EsSubproducto(_selectedMaterial))
             {
-                GUILayout.BeginHorizontal();
-                int rowEnd = Mathf.Min(i + perRow, mats.Length);
-                for (int j = i; j < rowEnd; j++)
-                {
-                    var def = mats[j];
-                    bool selected = def.id == _selectedMaterial;
-                    var prevColor = GUI.backgroundColor;
-                    GUI.backgroundColor = selected ? Color.yellow : Color.white;
-                    if (GUILayout.Button(def.devName, GUILayout.Height(24)))
-                    {
-                        _selectedMaterial = def.id;
-                    }
-                    GUI.backgroundColor = prevColor;
-                }
-                GUILayout.EndHorizontal();
+                // Herramienta de dev: aquí SÍ conviene ser explícito (regla
+                // del encargo), a diferencia del resto del juego que nunca
+                // revela mecánica interna al jugador final.
+                _explicacionStyle ??= new GUIStyle(GUI.skin.label) { wordWrap = true };
+                GUILayout.Label(SubproductoExplicacion(_selectedMaterial), _explicacionStyle);
             }
 
             GUILayout.Space(6);
@@ -227,6 +281,54 @@ namespace Alkahest.Dev
             }
 
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
+        }
+
+        /// <summary>Dibuja una grilla de botones de 3 en 3 para el subconjunto `ids` del roster. `tinted` marca el grupo subproducto con <see cref="SubproductoTint"/> (seleccionado sigue siendo amarillo en ambos grupos, coherente con el resto del panel).</summary>
+        private void DrawMaterialGrid(MaterialDef[] mats, byte[] ids, bool tinted)
+        {
+            const int perRow = 3;
+            for (int i = 0; i < ids.Length; i += perRow)
+            {
+                GUILayout.BeginHorizontal();
+                int rowEnd = Mathf.Min(i + perRow, ids.Length);
+                for (int j = i; j < rowEnd; j++)
+                {
+                    var def = mats[ids[j]];
+                    bool selected = def.id == _selectedMaterial;
+                    var prevColor = GUI.backgroundColor;
+                    GUI.backgroundColor = selected ? Color.yellow : (tinted ? SubproductoTint : Color.white);
+                    if (GUILayout.Button(def.devName, GUILayout.Height(24)))
+                    {
+                        _selectedMaterial = def.id;
+                    }
+                    GUI.backgroundColor = prevColor;
+                }
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        /// <summary>
+        /// Línea explicativa mostrada bajo la paleta cuando el material
+        /// seleccionado es un subproducto (fix playtest 13, respuesta directa
+        /// a "¿es una consecuencia y no un material a manipular?" -- sí).
+        /// Strings literales fijas: no se concatena nada aquí, así que no hay
+        /// coste de construir texto por frame pese a llamarse desde OnGUI.
+        /// </summary>
+        private static string SubproductoExplicacion(byte id)
+        {
+            switch (id)
+            {
+                case MaterialId.Steam:
+                    return "Se disipa solo: por debajo de su temperatura de condensación vuelve a ser Agua (MaterialDef.condensesAt). Nace al hervir Agua o al apagarse Fuego con agua cerca.";
+                case MaterialId.Smoke:
+                    return "Se disipa solo (vida corta, gasLifetime). Nace cuando Fuego se apaga sin brasa debajo, o cuando Ácido disuelve Arena/Ceniza/Hielo/Cristal.";
+                case MaterialId.Fire:
+                    return "Se apaga solo (vida corta, gasLifetime). Nace al cruzar la temperatura de ignición de un material inflamable, o por contacto con otro Fuego.";
+                case MaterialId.Ash:
+                    return "Residuo sólido que se posa y NO se disipa. Nace cuando Fuego se apaga sobre una superficie sólida debajo.";
+                default:
+                    return string.Empty;
+            }
         }
     }
 }

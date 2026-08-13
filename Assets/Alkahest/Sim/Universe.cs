@@ -729,7 +729,21 @@ namespace Alkahest.Sim
                         break;
                     case MaterialArchetype.Powder:
                         escala = (byte)(1 + rng.Next(3)); // 1..3, grano fino
-                        fuerza = (byte)(40 + rng.Next(71)); // 40..110
+                        // (fix playtest 13) Suelo subido de 40 a 55: Powder es el
+                        // ÚNICO arquetipo cuyo suelo de fuerza bajaba de 50 (los
+                        // otros tres van 50/50/60), y es precisamente el que
+                        // combina con el patronEscala MÁS PEQUEÑO del roster
+                        // (1..3, "grano fino"): rasgo diminuto + contraste mínimo
+                        // es la combinación que con más probabilidad cruza el
+                        // umbral de percepción hacia "invisible". amt en
+                        // ModulatePattern es wave*fuerza/255 con wave~±127: a
+                        // fuerza=40 el swing máximo era ±20/255 (~8%), apenas
+                        // por encima de ruido de compresión de pantalla; a 55
+                        // sube a ±27/255, ya un empujón de brillo claramente
+                        // legible sin desbordar el techo de 110 (sigue siendo el
+                        // arquetipo menos contrastado, coherente con "grano
+                        // suelto" frente a mineral/orgánico).
+                        fuerza = (byte)(55 + rng.Next(56)); // 55..110
                         ritmo = (byte)rng.Next(41); // 0..40, casi estático
                         break;
                     case MaterialArchetype.Organic:
@@ -767,9 +781,35 @@ namespace Alkahest.Sim
                 float hueDeg = Mathf.Repeat(anchorHueDeg + hueSlots[i] * hueStepDeg + jitterDeg, 360f);
                 float sat = 0.55f + (float)rng.NextDouble() * 0.30f; // 0.55..0.85
                 float val = 0.55f + (float)rng.NextDouble() * 0.30f; // 0.55..0.85 (punto de partida; EnsureMinLuma lo empuja si hace falta)
-                byte alphaOriginal = m.baseColor.a; // conserva la transparencia de diseño (líquidos vs sólidos), el color se resortea entero
+                // (fix playtest 13, "el rosa es transparente / el verde no") ANTES
+                // esta línea era `byte alphaOriginal = m.baseColor.a;`, que
+                // conservaba el alfa base del roster (255 para StaticSolid/Powder/
+                // Organic, pero 215/220/235 para Azoth/Acid/Slime -- los tres
+                // ÚNICOS Liquid de lo innominado). SimRenderer.ComputeCellColor
+                // devuelve `baseColor.a` sin tocarlo en NINGÚN camino salvo Fuego
+                // (que ya fuerza 255 aparte) -- es el mismo alfa para TODA la
+                // celda, contorno E INTERIOR, cada frame. Eso es exactamente la
+                // trampa que la regla 19 de CLAUDE.md advierte para el borde
+                // Difuso (mosaico duro del ladrillo de fondo en bloques de
+                // ~7.5px, dos texturas Point de resoluciones distintas
+                // componiendo alfa) pero aplicada a la SUSTANCIA ENTERA, no solo
+                // al contorno -- el jugador lo describió literal ("se logran
+                // divisar un poquito los patrones de los ladrillos atrás") para
+                // una sustancia rosa que por su descripción es Liquid (Azoth con
+                // alfa heredado 215, o Acid/Slime con 220/235), mientras que la
+                // verde ("no tiene transparencia") encaja con StaticSolid/Powder/
+                // Organic, que ya nacían en 255. La transparencia de líquido es
+                // una decisión de arte VÁLIDA para el vocabulario del taller
+                // (Water/Oil, ver regla 17: nunca pasan por aquí, se quedan con
+                // su alfa de diseño intacto) pero lo innominado necesita máxima
+                // legibilidad de patrón -- por eso aquí, y SOLO aquí, se fuerza
+                // opacidad total en vez de heredar el alfa del roster. El borde
+                // Difuso sigue intacto y sigue sin tocar el canal alfa (oscurece
+                // hacia BackgroundColor, ver SimRenderer.ComputeCellColor): esto
+                // no lo sustituye, corrige un bug DISTINTO que se sumaba encima.
+                const byte OpacidadTotalInnominado = 255;
                 Color32 candidato = Color.HSVToRGB(hueDeg / 360f, sat, val, true);
-                candidato.a = alphaOriginal;
+                candidato.a = OpacidadTotalInnominado;
                 candidato = EnsureMinLuma(candidato, minLuma);
                 m.baseColor = candidato;
                 huePorIdx[i] = hueDeg;

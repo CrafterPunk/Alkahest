@@ -38,6 +38,40 @@ namespace Alkahest.Game
     /// LIMITACIÓN: escribe _sim.Grid.temp[] directamente en vez de pasar por una
     /// API dedicada del simulador. TODO(ChaosAlchemy): canalizar por
     /// AlkahestSim.InjectHeat de cara al netcode.
+    ///
+    /// ---------------------------------------------------------------------
+    /// MEDICIÓN CONTRA ChillStone (fix playtest 13): "la placa fría parece
+    /// irradiar más fuerte, tardar más en recuperarse y tener más alcance".
+    /// Comprobado con números reales (detalle completo en la doc de
+    /// ChillStone.cs, que es donde se hizo el fix): RowsAffected (3) y
+    /// TempStepPerTick (5) YA eran IDÉNTICOS a los de ChillStone -- no hay
+    /// nada que igualar aquí en alcance/velocidad de empuje. El ancho real
+    /// del área calentada (VatInteriorX1-X0+1 = 52 celdas por cuba) es
+    /// incluso ALGO MAYOR que el de la bandeja fría (ChillTrayInteriorX1-X0+1
+    /// = 46 celdas) — en celdas absolutas, esta placa cubre más área, no
+    /// menos. La asimetría real estaba en que ChillStone SOLO tenía un
+    /// estado activo (el extremo, -80 °C) mientras esta clase ya ofrecía
+    /// TEMPLADA como opción cercana a ambiente para el uso diario; se
+    /// corrigió añadiendo FRESCA a ChillStone (ver esa clase), NO tocando
+    /// nada de esta.
+    ///
+    /// Aparte, y esto NO se toca porque es geometría de nivel (Sim/
+    /// SimLevelBuilder.cs, fuera de estos dos archivos): la bandeja fría
+    /// (9 filas de alto, 6 útiles) es mucho más DELGADA que una cuba (40
+    /// filas de alto, 36 útiles), así que estas 3 filas de calor cubren un
+    /// 8% de la profundidad útil de la cuba (156 de ~1872 celdas) frente al
+    /// 50% que las mismas 3 filas de frío cubren en la bandeja (138 de 276
+    /// celdas). Es la diferencia física esperable entre "bandeja fina apoyada
+    /// sobre un enfriador" y "caldero hondo sobre una hornilla que calienta
+    /// desde el fondo" — no es un desequilibrio entre estos dos scripts, es
+    /// el contenedor que Sim/SimLevelBuilder.cs les da a cada uno.
+    ///
+    /// Y algo geométricamente IMPOSIBLE que el jugador esperaba sin saberlo:
+    /// esta placa calienta la cuba en la que vive (y=14..53); la bandeja fría
+    /// está en y=88..96, 35 filas de aire vacío más arriba, y el material
+    /// Empty no participa en la difusión de temperatura (docs/SIM_NOTES.md).
+    /// Ninguna hornilla puede combatir el frío de la bandeja por difusión —
+    /// son cubetas sin contacto térmico entre sí.
     /// </summary>
     public sealed class HeatPlate : MonoBehaviour, IMaquinaInteractiva
     {
@@ -234,9 +268,14 @@ namespace Alkahest.Game
 
             // 1) CHAPA FIJA: siempre debajo del chasis, sobre la piedra. Nunca
             //    dentro de la cuba, que es la zona de trabajo del jugador.
+            // (fix playtest 13) "(alcanza N filas)" solo cerca y encendida, igual que
+            // ChillStone.cs -- mismo texto, mismo número (3), para que el jugador pueda
+            // comprobar por sí mismo que el alcance de ambos aparatos es idéntico.
             string chapa = _state == State.Off
                 ? "placa ígnea"
-                : $"placa ígnea · {StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
+                : cerca
+                    ? $"placa ígnea · {StateLabel()} {CellGrid.RawToC(TargetRaw())}° (alcanza {RowsAffected} filas)"
+                    : $"placa ígnea · {StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
             UiStyles.PlacaMundo(_centroChasis, chapa, color, -UiStyles.S(17f));
 
             // 2) PROMPT: solo cerca y con las manos libres (ver doc de la clase).

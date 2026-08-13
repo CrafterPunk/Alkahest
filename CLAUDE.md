@@ -141,26 +141,60 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     produce un mosaico duro del fondo en bloques de ~7,5 px, que se lee como bug de recorte, no
     como deshilachado. La solución correcta es oscurecer hacia `BackgroundColor` en una fracción de
     las celdas de contorno (ver `SimRenderer.ComputeCellColor`, caso `BordeMorfologico.Difuso`).
+20. **TRAS SALIR DE SAFE MODE, REGENERAR LA ESCENA (playtest 13)**: los componentes de
+    `AlkahestLab.unity` quedan sin script asignado y el juego arranca sin mostrar nada. Primer
+    reflejo: **Alkahest → 1. Generar escena Lab** (idempotente) antes de investigar nada más.
+21. **`XorShift.FromCell` toma `uint` como `salt` (playtest 13)**: una llamada con una constante
+    literal (`77`, `205`...) convierte implícitamente; una expresión que MEZCLE una constante con
+    un campo (p. ej. `201 + def.semillaPatron`, donde el campo es `byte` y se promueve a `int`)
+    necesita cast explícito `(uint)(...)` — de `int` a `uint` no hay conversión implícita
+    (`CS1503`, visto en `SimStepper.cs`).
+22. **`AlkahestSim.PaintStable(x, y, radius, materialId)` es el camino para pintar materia de la
+    nada (playtest 13, solo `DevPalette`)**: la celda nace a `StableBirthTempRaw(MaterialDef)`,
+    una temperatura en la que el material es ESTABLE (evita el bug de "pintar hielo produce
+    agua": `Paint`/`SetCell` nunca tocan `temp`, y la celda heredaba ambiente=70raw, que cruza
+    siempre `Ice.meltsAt` en cualquier seed). `Paint`/`PaintCell`/`PaintRect` NO cambiaron de
+    firma ni de comportamiento — siguen siendo los que usa el juego real (Flask, MasterSupplies,
+    DeliveryChute, Dispenser).
+23. **LO INNOMINADO NACE OPACO (playtest 13, amplía la regla 19)**: `alfa = 255` siempre en
+    `Universe.SortearFirmasVisuales`, sin excepción. El alfa <255 del roster (215-235 en Azoth/
+    Acid/Slime) es vocabulario del taller y NO debe propagarse a la firma sorteada — si se
+    propaga, toda la masa del líquido queda semitransparente contra `WorkshopBackdrop` (mismo
+    mosaico duro que advierte la regla 19, pero en la sustancia entera, no solo el contorno).
+24. **UN PATRÓN SE RECONOCE POR SU REPETICIÓN, NO POR SU TAMAÑO (playtest 13)**: al calibrar
+    `patronEscala` (Vetas/Celdas en `SimRenderer`), medir contra el tamaño real de los
+    recipientes de `SimLevelBuilder` (cuba interior 52x37, bandeja fría interior 46x6) y apuntar
+    a 3-4 repeticiones mínimo en el recipiente más estrecho — no a evitar "ruido" a ciegas.
+25. **DEUDA TÉCNICA: `Game/StorageRack.cs::FirmaVisualFabrica` duplica el generador de patrones
+    de `JournalHud`** (playtest 13, ambos archivos de propiedad disjunta en la ronda que la creó).
+    Consolidar en un `Game/FirmaVisualFabrica.cs` compartido en una ronda futura.
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 12 (Opus 5 dirige, Sonnet 5 escribe en 5 encargos + 1 revisión), la
-ronda más ARQUITECTÓNICA hasta ahora: campo morfológico `CellGrid.morph`/`morphScratch` +
-`SimStepper.MorphTick` + firma visual sorteada por seed en `Universe.Create` (con las tres
-garantías: separación de tono ≥36°, diversidad de familias, legibilidad L≥0.40) + render en
-`SimRenderer` + catálogo con miniaturas en `JournalHud` + morfología de CRECIMIENTO en
-cristalización y Vivium (mismas tasas, solo cambia qué vecino se elige). De paso, fix de un bug real
-de bautizar (`NamingUi.Open()` hacía `return` mudo con target vacío — ahora `TryOpen()`, siempre
-avisa). Todo SIN VERIFICAR en editor. Detalle técnico completo: `docs/HANDOFF.md` sección
-"Playtest 12" y `docs/SIM_NOTES.md`.
-PENDIENTE (orden): 1) verificar en Unity y jugar DOS universos seguidos para juzgar si la variación
-se percibe; 2) revisar que ningún patrón quede ilegible a 7,5 px/celda; 3) medir el coste real de
-`MorphTick` (F3, estimado <0,5 ms/tick); 4) enganchar `HintSystem.PistasMostradas` en la sección
-PROCEDIMIENTOS del diario (API ya existe, sin consumidor desde el playtest 10); 5) decidir si el
-audio se queda o se apaga (`DirectorDeAudio.SistemaActivo`); 6) CURVA DE PROGRESIÓN — jornadas
-cortas de una mecánica cada una; 7) renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`;
-8) replantear las redomas (`StorageRack`, sugerencia de Cesar); 9) resto de M5 (glow, agua con más
-cuerpo); 10) ejecutar la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección
+VERIFICAR en editor. Playtest 12: campo morfológico completo (`CellGrid.morph`/`morphScratch` +
+`SimStepper.MorphTick` + firma visual sorteada en `Universe.Create` + render en `SimRenderer` +
+catálogo con miniaturas en `JournalHud`). Playtest 13 (Opus 5 dirige, Sonnet 5 escribe en 4
+encargos + 1 revisión) afinó esa base y cerró bugs reales de la ronda anterior: nota de arranque
+tras Safe Mode (regla 20) + 2 fixes de compilación `CS1503` (regla 21); `AlkahestSim.PaintStable`
+arregla "pintar hielo produce agua" (regla 22); `DevPalette` separa insumos/subproductos (el humo
+como "borrador" era comportamiento correcto, no bug); remapeo de `patronEscala` a 5..12 celdas
+por tamaño real de recipiente (regla 24) + fix del alfa heredado de lo innominado (regla 23);
+firma visual GENERADA (no una foto del mundo) en `StorageRack`/`FlaskHud` vía
+`FirmaVisualFabrica` (deuda técnica anotada, regla 25); `ChillStone` gana el estado intermedio
+Fresca, cerrando la asimetría real con `HeatPlate` (que ya tenía Templada); documentado que las
+hornillas NO pueden calentar la bandeja fría (35 filas de `Empty` de por medio, información de
+diseño, no bug). Todo SIN VERIFICAR en editor. Detalle técnico completo: `docs/HANDOFF.md`
+sección "Playtest 13" y `docs/SIM_NOTES.md`.
+PENDIENTE (orden): 1) verificar en Unity y jugar DOS universos seguidos para juzgar si la
+variación morfológica se percibe y si los patrones se leen ya con poca materia; 2) comprobar si
+Fresca se siente manejable a diario; 3) consolidar `FirmaVisualFabrica` con `JournalHud` (regla
+25); 4) enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya
+existe, sin consumidor desde el playtest 10); 5) decidir si el audio se queda o se apaga
+(`DirectorDeAudio.SistemaActivo`); 6) CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada
+una; 7) renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`; 8) replantear las
+redomas (`StorageRack`, sugerencia de Cesar); 9) resto de M5 (glow, agua con más cuerpo);
+10) ejecutar la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección
 "Playtest 11"); 11) multiplayer: sim solo-host + deltas RLE por chunks despiertos a 10-15Hz — el
-formato de deltas debe contemplar el campo `morph` (regla 16) — MEDIR antes de decidir.
+formato de deltas debe contemplar el campo `morph` (regla 16) — MEDIR antes de decidir; 12) medir
+el coste real de `MorphTick` (F3, estimado <0,5 ms/tick, arrastrado desde el playtest 12).

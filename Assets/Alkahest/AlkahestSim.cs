@@ -168,6 +168,12 @@ namespace Alkahest
         ///
         /// Igual que <see cref="Paint"/>, nunca escribe sobre el borde del mundo
         /// y despierta el chunk afectado.
+        ///
+        /// NO TOCAR el comportamiento de este método para arreglar el fix de
+        /// playtest 13 de más abajo (<see cref="PaintStable"/>): Flask ya pasa
+        /// la temperatura MEDIA correcta aquí, y esa ruta está validada desde
+        /// el playtest 4. El fix de "materia creada de la nada nace inestable"
+        /// vive en un método aparte a propósito.
         /// </summary>
         public void PaintCell(int x, int y, byte materialId, byte tempRaw)
         {
@@ -178,6 +184,139 @@ namespace Alkahest
             _grid.SetCell(idx, materialId);
             _grid.temp[idx] = tempRaw;
             _grid.WakeChunk(x, y, _stepper.Tick);
+        }
+
+        // =====================================================================
+        // (fix playtest 13) "Al seleccionar hielo, tiro agua."
+        // =====================================================================
+        // Diagnóstico confirmado leyendo Sim/SimStepper.cs (ApplyPhase) y
+        // Sim/Universe.cs (mats[MaterialId.Ice]):
+        //   - `Paint`/`SetCell` NUNCA tocan CellGrid.temp: una celda pintada
+        //     hereda la temperatura que hubiera antes ahí, que en la enorme
+        //     mayoría de casos es CellGrid.AmbientRaw (70 raw = 20°C, valor de
+        //     partida de TODO el grid en el constructor de CellGrid).
+        //   - El Hielo define `meltsAt = CToRaw(waterFreezeC + 5)`, y
+        //     `waterFreezeC` varía por seed en [-20, 15] (Universe.Create).
+        //     Eso deja `meltsAt` en el rango raw [52, 70] en CUALQUIER seed.
+        //   - `ApplyPhase` funde con `t >= meltsAt` (SimStepper.cs línea ~397).
+        //     Como AmbientRaw = 70 es el EXTREMO SUPERIOR de ese rango, la
+        //     condición `70 >= meltsAt` es SIEMPRE verdadera, sin excepción de
+        //     seed: el Hielo pintado con la paleta se funde a Agua en el
+        //     primerísimo tick. Diagnóstico del reporte CONFIRMADO con números
+        //     reales, no solo plausible.
+        //
+        // Arreglo GENERAL (no un parche solo para Hielo): al pintar materia de
+        // la nada, la celda debe nacer a una temperatura en la que ESE
+        // material sea estable, derivada de su propia MaterialDef. Ver
+        // StableBirthTempRaw para el cálculo completo y por qué NO hacía
+        // falta tocar Agua/Cristal/Vivium/etc (ya son estables en ambiente en
+        // todo seed, la cuenta está en el comentario del método).
+        //
+        // Vive en un método NUEVO (PaintStable) y no en Paint/PaintCell a
+        // propósito: Flask.cs usa Paint (para vaciar, MaterialId.Empty no
+        // tiene transiciones así que da igual) y PaintCell (para verter,
+        // donde la temperatura correcta es la del Frasco, no la de
+        // estabilidad del material) -- ninguno de los dos caminos que usa
+        // Flask debía cambiar de comportamiento. Comprobado con grep que los
+        // únicos llamantes de Paint/PaintCell/PaintRect son Flask,
+        // MasterSupplies, DeliveryChute, Dispenser y DevPalette (este último,
+        // el único que pasa a usar PaintStable para el pincel; su borrador
+        // sigue en Paint(..., MaterialId.Empty), sin cambios).
+        // =====================================================================
+
+        /// <summary>Colchón, en raw (1 raw = 2°C, ver CellGrid.RawToC), entre la temperatura de nacimiento corregida y el umbral de transición que la disparó. 10 raw = 20°C: de sobra para que el redondeo de CToRaw o el primer paso de difusión no la devuelvan al otro lado en el mismo tick.</summary>
+        private const int StableBirthMarginRaw = 10;
+
+        /// <summary>
+        /// Temperatura "raw" a la que debe nacer una celda pintada de la nada
+        /// para que <paramref name="def"/> sea ESTABLE justo al nacer (fix
+        /// playtest 13, ver el bloque de comentario de arriba). Vale para
+        /// CUALQUIER material, no solo Hielo:
+        ///
+        ///  - Sin ninguna transición de fase activa (meltsAt/boilsAt/
+        ///    freezesAt/condensesAt en su sentinel "nunca"): AMBIENTE. Caso de
+        ///    Stone/Sand/Oil/Nutrient/Vivium/Azoth/CrystalSeed/Slime/Acid y de
+        ///    los subproductos Fire/Smoke/Ash (vida corta por gasLifetime,
+        ///    pero sin transición de fase que ambiente pueda disparar).
+        ///  - Con una cota SUPERIOR activa (meltsAt y/o boilsAt: ApplyPhase
+        ///    las dispara con `t >= umbral`) que AMBIENTE ya cruzaría: nace
+        ///    holgadamente por DEBAJO de la más baja de esas cotas. Único caso
+        ///    real en el roster: Hielo (meltsAt en raw [52,70], ambiente=70
+        ///    siempre lo cruza) -- nace en `meltsAt - margen`, es decir,
+        ///    siempre 20°C por debajo de SU PROPIO punto de fusión, sea cual
+        ///    sea la seed.
+        ///  - Con una cota INFERIOR activa (freezesAt y/o condensesAt:
+        ///    `t <= umbral`) que AMBIENTE ya cruzaría: nace holgadamente por
+        ///    ENCIMA de la más alta. Único caso real: Vapor (condensesAt =
+        ///    CToRaw(waterBoilC-40), raw [80,99] según seed, siempre por
+        ///    encima de ambiente=70) -- nace en `condensesAt + margen`.
+        ///  - Si AMBIENTE ya cae DENTRO de la banda (el caso normal: Agua
+        ///    entre freezesAt[50,67] y boilsAt[100,119], ambiente=70 nunca
+        ///    cruza ninguno de los dos en ningún seed; Cristal con
+        ///    meltsAt=CToRaw(300)=210, muy por encima de 70): se deja AMBIENTE
+        ///    tal cual. No hay razón para mover una temperatura que ya
+        ///    funciona, y el panel de hover de DevPalette sigue leyendo "20°C"
+        ///    para casi todo, como siempre.
+        ///
+        /// La comparación de "¿ambiente cruza el umbral?" es la MISMA que usa
+        /// SimStepper.ApplyPhase (`>=`/`<=`, no una versión "por si acaso" con
+        /// margen ya incluido): así el margen solo se aplica cuando hace falta
+        /// corregir, y Agua/Cristal no se mueven un solo raw en ningún seed.
+        /// </summary>
+        private static byte StableBirthTempRaw(MaterialDef def)
+        {
+            int lower = int.MinValue; // cota inferior activa MÁS ALTA (freezesAt / condensesAt)
+            if (def.freezesAt != short.MinValue) lower = Math.Max(lower, def.freezesAt);
+            if (def.condensesAt != short.MinValue) lower = Math.Max(lower, def.condensesAt);
+
+            int upper = int.MaxValue; // cota superior activa MÁS BAJA (meltsAt / boilsAt)
+            if (def.meltsAt != short.MaxValue) upper = Math.Min(upper, def.meltsAt);
+            if (def.boilsAt != short.MaxValue) upper = Math.Min(upper, def.boilsAt);
+
+            int candidate = CellGrid.AmbientRaw;
+
+            bool violaSuperior = upper != int.MaxValue && candidate >= upper;
+            bool violaInferior = lower != int.MinValue && candidate <= lower;
+
+            if (violaSuperior) candidate = upper - StableBirthMarginRaw;
+            else if (violaInferior) candidate = lower + StableBirthMarginRaw;
+
+            if (candidate < 0) candidate = 0;
+            if (candidate > 255) candidate = 255;
+            return (byte)candidate;
+        }
+
+        /// <summary>
+        /// Igual que <see cref="Paint"/> (disco de radio `radius`), pero la
+        /// celda nace a la temperatura de estabilidad de <paramref
+        /// name="materialId"/> (ver <see cref="StableBirthTempRaw"/>) en vez
+        /// de heredar lo que hubiera antes en la celda. SOLO para la paleta de
+        /// dev (fix playtest 13): materia creada de la nada debe nacer siendo
+        /// lo que el jugador seleccionó, no otra cosa un tick después.
+        /// </summary>
+        public void PaintStable(int x, int y, int radius, byte materialId)
+        {
+            if (_grid == null || _stepper == null || _universe == null) return;
+            if (radius < 0) radius = 0;
+            int r2 = radius * radius;
+            byte tempRaw = StableBirthTempRaw(_universe.Get(materialId));
+
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                int py = y + dy;
+                if (py <= 0 || py >= CellGrid.H - 1) continue; // no pintar sobre el borde
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (dx * dx + dy * dy > r2) continue;
+                    int px = x + dx;
+                    if (px <= 0 || px >= CellGrid.W - 1) continue;
+
+                    int idx = CellGrid.Idx(px, py);
+                    _grid.SetCell(idx, materialId);
+                    _grid.temp[idx] = tempRaw;
+                    _grid.WakeChunk(px, py, _stepper.Tick);
+                }
+            }
         }
 
         /// <summary>

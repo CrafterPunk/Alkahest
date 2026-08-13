@@ -29,6 +29,31 @@ namespace Alkahest.Game
     /// junto al cursor —color + nombre— SOLO mientras se está aspirando: nada
     /// permanente, mismo criterio que ya sigue el resto de este HUD (el
     /// jugador se quejó antes de elementos fijos en pantalla).
+    ///
+    /// (fix playtest 13) FIRMA VISUAL EN VEZ DE CUADRADITO PLANO: el reporte
+    /// del jugador fue literal — "al llenar las botellas estos patrones no se
+    /// notan ni se animan sus contenidos, lo que lo hace más dependiente del
+    /// nombre" — y este panel es "el sitio de mayor impacto, porque es donde
+    /// el jugador mira mientras trabaja". Tanto la fila de cada material del
+    /// FRASCO (<see cref="DibujarPanel"/>) como el chip de material bloqueado
+    /// junto al cursor (<see cref="DibujarMaterialBloqueado"/>) sustituyen su
+    /// cuadradito de <c>UiStyles.Rellenar(..., def.baseColor)</c> por una
+    /// miniatura generada por código con el mismo lenguaje visual que ya usa
+    /// <c>JournalHud.CrearMiniatura</c> para el catálogo (color+patrón+borde),
+    /// vía <see cref="FirmaVisualFabrica"/> (StorageRack.cs, compartida con
+    /// las redomas — ver el comentario largo ahí sobre por qué esto duplica
+    /// parte de JournalHud). Generada UNA VEZ POR MATERIAL, cacheada en
+    /// <see cref="_firmaTexturas"/>, liberada en <see cref="OnDestroy"/>; SIN
+    /// AGRANDAR NINGUNA fila (el rect del swatch es el MISMO que ya ocupaba
+    /// el cuadradito plano, ver <see cref="SwatchLado"/>) — el playtest 10 ya
+    /// se había quejado de apiñamiento en este panel, así que aquí no se
+    /// añade superficie nueva, solo se mejora lo que ya había.
+    ///
+    /// Aquí SÍ vale bajar alfa para el borde Difuso (a diferencia de
+    /// StorageRack, donde el contenido se pinta sobre el MUNDO): este swatch
+    /// va sobre <c>UiStyles.Panel</c>, un panel IMGUI opaco, así que
+    /// <see cref="FirmaVisualFabrica.GenerarPixeles"/> se llama con
+    /// <c>sobreMundo: false</c> (regla 19 de CLAUDE.md).
     /// </summary>
     public sealed class FlaskHud : MonoBehaviour
     {
@@ -43,12 +68,121 @@ namespace Alkahest.Game
         private readonly byte[] _topIds = new byte[MaxSwatches];
         private readonly int[] _topCounts = new int[MaxSwatches];
 
+        // -----------------------------------------------------------------
+        // FIRMA VISUAL DE LOS SWATCHES (fix playtest 13, ver docblock de la
+        // clase). Un único tamaño de lienzo para TODOS los swatches de este
+        // HUD (filas del panel + chip de bloqueo): más sencillo de cachear
+        // que un tamaño por sitio, y FilterMode.Point + GUI.DrawTexture ya
+        // estira sin problema a lo que pida cada rect real.
+        // -----------------------------------------------------------------
+        private const int SwatchLado = 18;
+        private readonly Texture2D[][] _firmaTexturas = new Texture2D[MaterialId.Count][];
+        private bool[] _esBordeSwatch;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Flask flask, SubstanceKnowledge knowledge)
         {
             _sim = sim;
             _flask = flask;
             _knowledge = knowledge;
+        }
+
+        /// <summary>
+        /// (fix playtest 13) Misma disciplina de memoria que
+        /// JournalHud.OnDestroy/StorageRack.OnDestroy: un Texture2D creado por
+        /// código no se libera solo con destruir este GameObject, y este
+        /// componente se recrea entero en cada universo nuevo (recarga de
+        /// escena de DayCycle.RestartRun) -- sin este bucle se acumularían
+        /// huérfanas, hasta MaterialId.Count * AnimFrames texturas por partida.
+        /// </summary>
+        private void OnDestroy()
+        {
+            for (int m = 0; m < _firmaTexturas.Length; m++)
+            {
+                var texturas = _firmaTexturas[m];
+                if (texturas == null) continue;
+                for (int f = 0; f < texturas.Length; f++)
+                {
+                    if (texturas[f] != null) Destroy(texturas[f]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Qué téxeles del lienzo SwatchLado x SwatchLado cuentan como "borde"
+        /// para BordeMorfologico (ver FirmaVisualFabrica.GenerarPixeles):
+        /// aquí el swatch es un cuadrado macizo, así que "borde" es
+        /// simplemente "cerca del canto" -- igual criterio que
+        /// JournalHud.ApplyBordeMini. Calculado UNA vez (no depende del
+        /// material, solo del tamaño del lienzo) y reutilizado por todos.
+        /// </summary>
+        private void PrepararBordeSwatch()
+        {
+            if (_esBordeSwatch != null) return;
+
+            const int bandaBorde = 2; // ~11% del lado, mismo orden que el 10% de JournalHud.
+            _esBordeSwatch = new bool[SwatchLado * SwatchLado];
+            for (int y = 0; y < SwatchLado; y++)
+            {
+                for (int x = 0; x < SwatchLado; x++)
+                {
+                    int distBorde = Mathf.Min(Mathf.Min(x, SwatchLado - 1 - x), Mathf.Min(y, SwatchLado - 1 - y));
+                    _esBordeSwatch[y * SwatchLado + x] = distBorde < bandaBorde;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fotogramas de firma visual cacheados para `matId`: generados LA
+        /// PRIMERA VEZ que hacen falta, nunca más (ver docblock de la clase).
+        /// Longitud 1 si ritmoAnim==0 (swatch quieto de verdad).
+        /// </summary>
+        private Texture2D[] ObtenerFirmaTexturas(byte matId)
+        {
+            if (matId >= _firmaTexturas.Length || _sim == null || _sim.Universe == null) return null;
+
+            var existente = _firmaTexturas[matId];
+            if (existente != null) return existente;
+
+            PrepararBordeSwatch();
+            var def = _sim.Universe.Get(matId);
+            int frames = def.ritmoAnim > 0 ? FirmaVisualFabrica.AnimFrames : 1;
+            var texturas = new Texture2D[frames];
+
+            for (int f = 0; f < frames; f++)
+            {
+                var px = FirmaVisualFabrica.GenerarPixeles(SwatchLado, SwatchLado, def, f,
+                    null, _esBordeSwatch, sobreMundo: false);
+
+                var tex = new Texture2D(SwatchLado, SwatchLado, TextureFormat.RGBA32, false, false)
+                {
+                    filterMode = FilterMode.Point, // mismo criterio que toda textura generada del proyecto.
+                    wrapMode = TextureWrapMode.Clamp,
+                    name = "FirmaFlaskHud_" + def.devName + "_" + f,
+                };
+                tex.SetPixels32(px);
+                tex.Apply(false, true); // makeNoLongerReadable=true: solo se pinta con GUI.DrawTexture.
+                texturas[f] = tex;
+            }
+
+            _firmaTexturas[matId] = texturas;
+            return texturas;
+        }
+
+        /// <summary>
+        /// Textura del fotograma que toca mostrar AHORA MISMO para `matId`
+        /// (ver FirmaVisualFabrica.AnimFps). Barato: solo un módulo sobre un
+        /// array ya cacheado, nunca reconstruye nada -- llamado desde OnGUI,
+        /// que ya se redibuja cada frame por sí solo (IMGUI inmediato), así
+        /// que no hace falta trackear "el último fotograma mostrado" aquí
+        /// como sí hace StorageRack con sus SpriteRenderer persistentes.
+        /// </summary>
+        private Texture2D ObtenerFirmaFrameActual(byte matId)
+        {
+            var texturas = ObtenerFirmaTexturas(matId);
+            if (texturas == null || texturas.Length == 0) return null;
+            int idx = Mathf.FloorToInt(Time.time * FirmaVisualFabrica.AnimFps) % texturas.Length;
+            return texturas[idx];
         }
 
         private void OnGUI()
@@ -113,7 +247,12 @@ namespace Alkahest.Game
                     if (_topCounts[i] <= 0) continue;
                     var def = _sim.Universe.Get(_topIds[i]);
 
-                    UiStyles.Rellenar(new Rect(x, y + UiStyles.S(2f), lado, lado), def.baseColor);
+                    // (fix playtest 13) Miniatura de firma real en vez de un
+                    // cuadradito de color plano -- ver docblock de la clase.
+                    var swatchRect = new Rect(x, y + UiStyles.S(2f), lado, lado);
+                    var firma = ObtenerFirmaFrameActual(_topIds[i]);
+                    if (firma != null) GUI.DrawTexture(swatchRect, firma);
+                    else UiStyles.Rellenar(swatchRect, def.baseColor); // defensivo, ver ObtenerFirmaTexturas.
 
                     float xTexto = x + lado + UiStyles.S(6f);
                     GUI.Label(new Rect(xTexto, y, anchoInterior - lado - UiStyles.S(60f), altoFila),
@@ -247,6 +386,8 @@ namespace Alkahest.Game
 
             string texto;
             Color32 color;
+            byte matBloqueado = MaterialId.Empty;
+            bool tieneMatConcreto;
             // ModoIndiscriminado (Shift) se comprueba PRIMERO: si a mitad de una
             // pulsación con material ya bloqueado el jugador mantiene Shift,
             // Flask.TickSuck ignora ese bloqueo (aspira todo) -- el chip debe
@@ -256,12 +397,14 @@ namespace Alkahest.Game
             {
                 color = new Color32(200, 190, 170, 255);
                 texto = "todo (Mayús.)";
+                tieneMatConcreto = false; // "todo" no es UN material: no hay firma que dibujar, se queda en chip plano.
             }
             else if (_flask.TieneMaterialBloqueado)
             {
-                byte mat = _flask.MaterialBloqueado;
-                color = _sim.Universe.Get(mat).baseColor;
-                texto = NombreDe(mat);
+                matBloqueado = _flask.MaterialBloqueado;
+                color = _sim.Universe.Get(matBloqueado).baseColor;
+                texto = NombreDe(matBloqueado);
+                tieneMatConcreto = true;
             }
             else
             {
@@ -285,7 +428,15 @@ namespace Alkahest.Game
 
             Color colorUi = new Color(color.r / 255f, color.g / 255f, color.b / 255f, 1f);
             UiStyles.Panel(r, UiStyles.TintaFuerte, new Color(colorUi.r, colorUi.g, colorUi.b, 0.55f));
-            UiStyles.Rellenar(new Rect(r.x + padX, r.y + (r.height - lado) * 0.5f, lado, lado), colorUi);
+
+            var swatchRect = new Rect(r.x + padX, r.y + (r.height - lado) * 0.5f, lado, lado);
+            // (fix playtest 13) Miniatura de firma real cuando hay UN material
+            // concreto bloqueado -- "todo (Mayús.)" no es un material, se queda
+            // con el cuadradito plano de siempre (no hay firma que mostrar).
+            Texture2D firma = tieneMatConcreto ? ObtenerFirmaFrameActual(matBloqueado) : null;
+            if (firma != null) GUI.DrawTexture(swatchRect, firma);
+            else UiStyles.Rellenar(swatchRect, colorUi);
+
             GUI.Label(new Rect(r.x + padX + lado + padX, r.y + (r.height - UiStyles.CuerpoLinea.lineHeight) * 0.5f, anchoTexto + UiStyles.S(4f), UiStyles.CuerpoLinea.lineHeight), texto, UiStyles.CuerpoLinea);
         }
     }

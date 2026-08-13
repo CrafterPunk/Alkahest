@@ -440,12 +440,17 @@ ronda — solo cambia CUÁL Nutrient candidato se usa cuando hay más de uno.
 
 Vetas: bandas senoidales (tabla de seno de 256 entradas, construida una vez)
 deformadas por `LatticeNoise` (rejilla de hash con interpolación bilineal
-entera); `patronEscala` (1..8) se remapea a periodos de 14..35 celdas —nunca
+entera); `patronEscala` (1..8) se remapea a un periodo en celdas —nunca
 literal, o a ~7.5 px/celda sería ruido. Celdas: Voronoi barato de 9 puntos
-jitterados por rejilla (`VoronoiEdge`), `patronEscala` remapeado a teselas de
-18..46 celdas. Manchas/Laberinto/Pulso/Dendritas/Motas leen `CellGrid.morph`
-directamente. Dendritas SOLO ilumina (nunca oscurece), para leerse como aguja
-y no como sombra; Motas es aditivo puro hacia blanco.
+jitterados por rejilla (`VoronoiEdge`), `patronEscala` remapeado a un tamaño
+de tesela con la misma fórmula. Manchas/Laberinto/Pulso/Dendritas/Motas leen
+`CellGrid.morph` directamente. Dendritas SOLO ilumina (nunca oscurece), para
+leerse como aguja y no como sombra; Motas es aditivo puro hacia blanco.
+**(playtest 13) El remapeo original de este párrafo (periodos 14..35, teselas
+18..46) se sustituyó por `4 + patronEscala` = 5..12 celdas para ambas
+familias — ver "Playtest 13: remapeo de escala por tamaño de recipiente" al
+final de este documento; el motivo del cambio invalida el valor concreto de
+14..35/18..46, no la técnica de Vetas/Celdas descrita aquí.**
 Bordes (detectando vecino `Empty` ortogonal): `Neto` no hace nada; `Halo`
 suma brillo fijo +34 (independiente de `patronFuerza` — el borde es silueta,
 no patrón); `Escarcha` enciende ~1/3 de las celdas de contorno con un hash
@@ -488,7 +493,167 @@ garantías con verificación numérica:
    real: azules/violetas saturados con H≈240°, donde R y G son casi cero
    incluso con V=1), baja `S` hasta un suelo de 0.15 (sigue leyéndose como
    color, no gris puro).
+4. **(playtest 13) Opacidad**: el alfa de la firma sorteada se fuerza a 255
+   SIEMPRE, sin heredar `baseColor.a` del roster. Antes de este fix se
+   preservaba `alphaOriginal = m.baseColor.a`, y como los tres líquidos
+   innominados (Azoth 215, Acid 220, Slime 235) nacen con alfa <255 en el
+   roster, la MASA entera de esos materiales quedaba semitransparente —
+   `SimRenderer` devuelve `baseColor.a` tal cual salvo para Fuego, así que ese
+   alfa heredado se aplicaba a toda la celda cada frame, no solo al contorno.
+   Es la misma trampa de la regla 19 (mosaico duro de `WorkshopBackdrop` en
+   bloques de ~7.5 px por componer alfa entre dos texturas Point de
+   resoluciones distintas) pero aplicada a la sustancia entera en vez de al
+   borde `Difuso`.
 
 API: `Universe.CaracterDelUniverso` (frase corta cacheada del "clima visual"
 de la run, sin nombrar sustancias) y `Universe.DescribirFirma(byte matId)`
 (cacheada en array privado en la creación, nunca reconstruida por frame).
+
+### Playtest 13: remapeo de escala por tamaño de recipiente
+
+El playtest 12 remapeó `patronEscala` (Vetas/Celdas, `SimRenderer.cs`) a
+periodos de 14..35 celdas (Vetas) y teselas de 18..46 (Celdas), por miedo a
+que a ~7.5 px/celda una frecuencia alta se leyera como ruido. Cesar, en el
+playtest 13: *"se necesita mucho material para poder apreciar los
+patrones... voy a terminar preparando mucho más de lo que necesito solo para
+apreciar bien el patrón"*. Medición de los recipientes reales de
+`SimLevelBuilder` (constantes citadas, no de memoria):
+- Cuba (A/B): `VatWidth=58`/`VatHeight=40`, `WallThickness=3` por lado →
+  interior **52x37** celdas.
+- Bandeja fría: `ChillTrayWidth=52`, interior X `ChillTrayInteriorX0..X1` =
+  39..84 (46 celdas), interior Y 91..96 (6 celdas) → **46x6**.
+
+Con un rasgo de 35 celdas se ve UNA sola repetición en el recipiente más
+estrecho (37 o 6 celdas de lado corto) — el patrón deja de leerse como
+patrón y se lee como un degradado liso, obligando a preparar mucha más
+materia solo para que aparezca una segunda repetición. **Principio de
+diseño: un patrón se reconoce por su REPETICIÓN, no por su tamaño absoluto.**
+Nuevo remapeo, mismo para ambas familias: `4 + patronEscala` (rango de
+`patronEscala` es 1..8) = **5..12 celdas**, con suelo de 5 celdas (~38 px de
+pantalla a 7.5 px/celda) para no degenerar en ruido puro. Contra el lado
+corto de la bandeja fría (6 celdas), el rasgo de 5 celdas cabe una vez con
+holgura mínima; contra el lado corto de la cuba (37 celdas), da entre 3,1 y
+7,4 repeticiones según `patronEscala`; contra el ancho de la bandeja (46) da
+3,8 a 9,2. Manchas/Laberinto/Dendritas NO se tocaron: viven en
+`SimStepper.MorphTick` y su tamaño de rasgo ya emergía de `feed`/`diffDiv`
+(4..18 celdas) y de la longitud de rama de Dendritas (~14..23), del orden
+adecuado desde el playtest 12.
+De paso, el suelo de `patronFuerza` de Powder subió de 40 a 55 en
+`Universe.Create`: es el arquetipo con `patronEscala` más pequeño (2..6), así
+que rasgo diminuto + contraste mínimo era la combinación con más riesgo de
+caer bajo el umbral de percepción — a 40 el swing máximo de brillo era
+±20/255 (~8%), apenas por encima de ruido de compresión de pantalla; a 55
+sube a ±27/255.
+
+### ChillStone vs HeatPlate: la asimetría térmica medida
+
+Reporte de Cesar: *"la placa fría parece irradiar más fuerte el frío que el
+calor, y tardar más en recuperar su temperatura, además de tener más
+alcance"*. Medición completa (`ChillStone.cs`/`HeatPlate.cs`):
+
+| Magnitud | ChillStone | HeatPlate | ¿Simétrico? |
+|---|---|---|---|
+| `RowsAffected` (filas afectadas) | 3 | 3 | Sí |
+| `TempStepPerTick` (empuje por tick) | 5 | 5 | Sí |
+| Área del recipiente que cubre | bandeja, 46 celdas de ancho | cuba, 52 celdas de ancho | HeatPlate cubre MÁS área absoluta |
+| Modos disponibles (antes del fix) | 1: Helando (raw 20, −80°C) | 2: Templada (raw ~82, +24°C) y Ardiente (raw 220, +320°C) | **No — asimetría real** |
+| Distancia a ambiente (raw 70) del modo de uso diario | 50 raw (Helando, único modo) | 12 raw (Templada) | 4,2x más profundo |
+| Tiempo de retorno a ambiente | ~53 s (desde Helando) | ~13 s (desde Templada) / ~160 s (desde Ardiente) | Helando tardaba ~4x más que el uso diario de HeatPlate |
+
+`RowsAffected` y `TempStepPerTick` ya eran idénticos: no había asimetría de
+alcance ni de velocidad de empuje. La asimetría real es que **ChillStone
+solo tenía el modo más extremo**, mientras HeatPlate siempre tuvo un modo
+moderado (Templada, calibrada por seed al centro de la banda de crecimiento
+del Vivium) reservando el extremo (Ardiente) para encender/hervir de verdad.
+
+**Observación sobre `SimStepper.DiffuseTemperature` (NO tocada, regla 9 de
+`CLAUDE.md`)**: el tirón hacia ambiente es un paso FIJO de ±1 raw cada ~32
+ticks (~1.07 s a 30 Hz), no proporcional a la distancia a la que se empujó
+la celda. Eso hace el tiempo de retorno LINEAL en la distancia: 50 raw de
+distancia (Helando) tardan justo el doble que 25, y ~4,2x más que los 12 raw
+de Templada. Es la causa TÉCNICA de la sensación de "tarda más en
+recuperar" y "tiene más alcance" (un gradiente 4x más profundo se nota más
+lejos de la fuente antes de fundirse con ambiente) — queda REPORTADA aquí
+como observación para quien toque la difusión en el futuro, no corregida en
+esta ronda.
+
+Para dimensionar el extremo: el propio juego define "frío" como ≤−5°C en el
+encargo `Cold` del día 2 (`OrderSystem`), y el punto de congelación del agua
+de cualquier seed nunca baja de −20°C (`Universe.Create`, `waterFreezeC`
+acotado a `[-20, 15]`). −80°C (raw 20, Helando) es 16x más frío que el
+umbral que el propio juego pide para "cumplir el encargo" — necesario para
+GARANTIZAR congelación/cristalización en cualquier seed con margen amplio,
+pero no hacía falta como ÚNICA opción del día a día.
+
+**Fix**: `ChillStone` gana un tercer estado, **Fresca** (ciclo
+Off→Fresca→Helando→Off con E, mismo patrón de ciclado que HeatPlate),
+calibrado por seed en `Init()`:
+```
+limite = min(Universe.Get(MaterialId.Water).freezesAt, Universe.CrystallizeMaxTempRaw)
+fresca = limite - FrescaMarginRaw   // FrescaMarginRaw = 10 raw (20°C)
+```
+`FrescaMarginRaw` existe porque sin margen el tirón fijo de
+`DiffuseTemperature` (±1 raw/~32 ticks) podría dejar una celda oscilando
+justo encima del umbral de congelación/cristalización en vez de cruzarlo de
+forma fiable — mismo orden de magnitud que la histéresis de +5°C que ya usa
+`Ice.meltsAt` y que el margen de 8°C que Ardiente deja sobre la ignición
+máxima sorteable. En una seed neutra, Fresca ronda raw ~50 (−20°C), ~2,5x
+más cerca de ambiente que Helando. Helando se conserva intacto (raw 20,
+renombrado de `ColdRaw` a `HelandoRaw`) para cuando el resultado
+instantáneo y garantizado sigue haciendo falta.
+
+### El aislamiento térmico entre las cubas y la bandeja fría
+
+Hallazgo de diseño (no un bug): las hornillas de las cubas NO pueden
+calentar la bandeja fría por difusión, en NINGUNA configuración. Geometría
+real de `SimLevelBuilder` (constantes, no medida a ojo):
+- Labio superior de las cubas: `VatInteriorY1 = FloorHeight + VatHeight - 1
+  = 53`.
+- Suelo de la bandeja fría: `ChillTrayY0 = 88` (labio en y=96).
+- Filas de `Empty` entre ambas: `88 - 53 = 35`.
+
+`Empty` no participa en la difusión de temperatura (ver "Límites conocidos"
+más arriba: su `temp` no se re-consulta hasta que se ocupa con otro
+material). 35 filas de vacío interrumpen por completo la cadena de vecinos
+ortogonales por la que `DiffuseTemperature` propaga calor/frío — ninguna
+placa, por caliente o fría que esté, puede influir en la bandeja salvo que
+fuego o gas vuelen físicamente hasta allí arriba (materia real cruzando el
+hueco, no difusión). Información de diseño a tener presente al balancear
+cualquier mecánica que asuma que el calor de una zona del taller "se nota"
+en otra: las hornillas calientan SU cuba, no la bandeja de al lado.
+
+### `AlkahestSim.StableBirthTempRaw` — nacer estable
+
+Bug de origen: `AlkahestSim.Paint`→`CellGrid.SetCell` nunca toca `temp`, así
+que una celda pintada de la nada hereda la temperatura que hubiera antes ahí
+— casi siempre `CellGrid.AmbientRaw = 70` (20°C), porque el grid entero
+arranca a ambiente. `Ice.meltsAt = CellGrid.CToRaw(waterFreezeC + 5)` con
+`waterFreezeC` acotado por seed a `[-20, 15]` cae siempre en raw `[52, 70]`;
+como 70 es el extremo superior de ese rango, `SimStepper.ApplyPhase` (`t >=
+meltsAt`) fundía el hielo pintado en el primer tick, en cualquier seed, sin
+excepción.
+
+`StableBirthTempRaw(MaterialDef def)` (privado, `AlkahestSim.cs`) calcula la
+temperatura raw en la que `def` es estable, con las MISMAS comparaciones que
+`ApplyPhase` (para no inventar un criterio paralelo que pudiera divergir):
+1. Calcula `upper` = la más baja de las cotas superiores activas
+   (`meltsAt`/`boilsAt`, ignorando sentinels) y `lower` = la más alta de las
+   cotas inferiores activas (`freezesAt`/`condensesAt`).
+2. Si ambiente (`CellGrid.AmbientRaw`) cruzaría `upper` (`ambiente >=
+   upper`): nace en `upper - StableBirthMarginRaw` (10 raw = 20°C de
+   colchón). Único caso real del roster: Hielo.
+3. Si no, y ambiente cruzaría `lower` (`ambiente <= lower`): nace en `lower +
+   StableBirthMarginRaw`. Único caso real: Vapor (`condensesAt` siempre por
+   encima de ambiente por seed).
+4. Si ninguna de las dos, ambiente ya cae dentro de la banda estable (el
+   caso normal — Agua, Cristal, Vivium, Azoth...): se deja ambiente sin
+   tocar.
+
+Expuesto vía `AlkahestSim.PaintStable(x, y, radius, materialId)`, un método
+NUEVO usado SOLO por `DevPalette` (el pincel de desarrollo). `Paint`/
+`PaintCell`/`PaintRect` no cambiaron de firma ni de comportamiento: sus
+llamantes reales del juego (`Flask`, `MasterSupplies`, `DeliveryChute`,
+`Dispenser`) siguen sin tocar, y `Flask` sigue restituyendo la temperatura
+MEDIA de lo aspirado vía `PaintCell` (validado desde el playtest 4) — ese es
+un caso distinto (temperatura conocida del frasco), no el de "materia creada
+de la nada" que resuelve `StableBirthTempRaw`.

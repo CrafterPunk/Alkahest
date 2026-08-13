@@ -522,6 +522,23 @@ namespace Alkahest.Sim
                 }
             }
 
+            // (nota playtest 13, investigación de "el rosa es transparente") Este
+            // branch de Difuso está limpio: nunca toca alfa, solo r/g/b, tal como
+            // manda la regla 19. La transparencia que reportó el jugador para una
+            // sustancia rosa (se veían los ladrillos del fondo DENTRO de la masa,
+            // no solo en el contorno) no salía de aquí -- salía de
+            // `baseColor.a`, el único origen del alfa final de esta función (ver
+            // el `return` al fondo de ComputeCellColor). Universe.Create heredaba
+            // ese alfa del roster incluso tras el resorteo de firma visual de lo
+            // innominado, y los tres Liquid innominados (Azoth/Slime/Acid)
+            // arrancan con alfa 215/220/235 en el roster -- mismo bug de fondo
+            // que esta regla 19 advierte (mosaico duro contra WorkshopBackdrop),
+            // pero aplicado a la sustancia ENTERA en vez de solo al contorno.
+            // Fix real en Sim/Universe.cs (SortearFirmasVisuales, no aquí): lo
+            // innominado ahora fuerza alfa 255 siempre. El vocabulario del taller
+            // (Water/Oil, con su propio alfa <255 de diseño) no pasa por ese
+            // sorteo y no se ha tocado -- sigue viéndose exactamente igual.
+
             // EMISIÓN (playtest 12): luz propia, CONSTANTE e independiente del
             // patrón -- distinta de emitsGlow (el parpadeo heredado del fuego,
             // arriba, que sigue exactamente igual). def.emision es 0 para todo el
@@ -599,6 +616,33 @@ namespace Alkahest.Sim
                     // bandas) ya la produce SimStepper.MorphReactionDiffusion en el
                     // propio campo morph -- aquí solo se traduce concentración a
                     // brillo, igual en ambas.
+                    //
+                    // (investigación playtest 13, sin cambios -- SimStepper NO es
+                    // archivo modificable en esta ronda) A diferencia de Vetas/
+                    // Celdas, Manchas/Laberinto/Dendritas NO usan patronEscala
+                    // como un "periodo en celdas" explícito: son un proceso de
+                    // reacción-difusión (MorphReactionDiffusion) cuyo tamaño de
+                    // rasgo emerge de feed=8+(fuerza>>4) [8..23] y
+                    // diffDiv=max(4,20-escala*2) [4..18], y de la LONGITUD DE
+                    // DIFUSIÓN del propio sistema -- NO del tamaño del recipiente.
+                    // Un patrón de Turing se auto-organiza en manchas/bandas que
+                    // se repiten solas mientras el medio sea mayor que unas pocas
+                    // veces su longitud característica; con diffDiv en el rango
+                    // 4..18 (equivalente a un puñado de celdas de acoplamiento),
+                    // el rasgo emergente es de un orden de magnitud muy por debajo
+                    // de los 46-52 celdas de ancho de los recipientes medidos en
+                    // SimLevelBuilder.cs, así que YA se repite varias veces por
+                    // construcción, sin necesidad de remapeo. Dendritas: longitud
+                    // de rama = arranque(200..255) / decayStep(10+escala, 11..18)
+                    // ≈ 14..23 celdas -- del mismo orden que el ancho del
+                    // recipiente más pequeño (bandeja fría, 46), y con semillas
+                    // deliberadamente raras (1 entre ~600..3000 por turno de
+                    // celda) para que se lean como agujas aisladas, no una
+                    // alfombra. Ninguna de las tres coincide con el reporte del
+                    // jugador (que señaló Vetas y Celdas explícitamente) ni con
+                    // el diagnóstico de esta ronda -- se deja constancia aquí en
+                    // vez de tocar SimStepper.cs, fuera de los archivos
+                    // modificables de este encargo.
                     ApplyReactionDiffusion(morphVal, def, ref r, ref g, ref b);
                     break;
                 case PatronMorfologico.Dendritas:
@@ -627,13 +671,30 @@ namespace Alkahest.Sim
         /// </summary>
         private static void ApplyVetas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
         {
-            // Remapeo de patronEscala (1..8, "tamaño del rasgo en celdas" según el
-            // contrato) a un periodo de banda MUCHO mayor que el literal: a 7.5px
-            // de pantalla por celda, un periodo de 1-2 celdas se leería como ruido
-            // gris puro (la advertencia explícita del encargo). Con el suelo en 14
-            // celdas (~105px a 1080p) la veta SIEMPRE se lee como veta, y
-            // patronEscala sigue controlando el ancho relativo entre sustancias.
-            int veinScale = 11 + def.patronEscala * 3; // 14..35 celdas.
+            // (fix playtest 13, "hace falta mucho material para apreciar el
+            // patrón") ANTES este remapeo era 11+escala*3 (14..35 celdas): una
+            // SOBRECORRECCIÓN de la ronda anterior contra el miedo a que a 7.5px/
+            // celda una veta de 1-2 celdas se leyera como ruido. El diagnóstico
+            // del playtest 13 es distinto: un patrón se reconoce por su
+            // REPETICIÓN, no por su tamaño -- con periodo 14..35 hacía falta
+            // MEDIA PANTALLA de materia para ver una sola repetición, y algo que
+            // no se repite no se percibe como patrón (el jugador solo lo vio en
+            // masas enormes). Un rasgo de 5 celdas son ~38px de pantalla:
+            // perfectamente legible, y ESE es el suelo real, no 14.
+            // Recalibrado a la masa real de trabajo (medida en SimLevelBuilder.cs,
+            // playtest 13): el recipiente más pequeño donde el jugador acumula
+            // materia es el interior de la bandeja fría, ~46x6 celdas
+            // (ChillTrayInteriorX0..X1 x ChillTrayInteriorY0..~96); la pila de
+            // recogida es ~48x15 y el interior de una cuba ~52x37. Con el suelo
+            // en 5 celdas (patronEscala=1) y el techo en 12 (patronEscala=8), la
+            // bandeja fría -- el caso más ajustado -- muestra 46/12≈3.8 y
+            // 46/5≈9.2 repeticiones horizontales; la cuba, 52/12≈4.3 a 52/5≈10.4.
+            // Siempre >=3-4 repeticiones incluso en el recipiente más pequeño y
+            // en la escala más grande, tal como pide el encargo. El suelo de 5
+            // celdas es deliberado y no se baja más: por debajo de eso ya no hay
+            // margen entre "rasgo fino" y "ruido de un píxel" (ver la cita
+            // exacta del playtest 13 en la cabecera de este comentario).
+            int veinScale = 4 + def.patronEscala; // 5..12 celdas.
 
             int warp = LatticeNoise(x, y, veinScale, 220 + def.semillaPatron) - 128; // -128..127, deformación suave.
 
@@ -664,10 +725,18 @@ namespace Alkahest.Sim
         /// </summary>
         private static void ApplyCeldas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
         {
-            // Mismo remapeo que Vetas y por la misma razón: patronEscala 1..8
-            // literal en celdas daría teselas de un par de celdas, indistinguibles
-            // de ruido a 7.5px/celda. 18..46 celdas por tesela es SIEMPRE legible.
-            int cellSize = 14 + def.patronEscala * 4;
+            // (fix playtest 13, mismo diagnóstico que ApplyVetas -- ver su
+            // comentario para la cita completa y la medición de recipientes en
+            // SimLevelBuilder.cs) ANTES 14+escala*4 (18..46 celdas): mismo error
+            // de sobrecorrección, y es justo la familia que el jugador identificó
+            // sin ambigüedad ("verde con líneas negras como piedras de Machu
+            // Picchu", solo en masas enormes -- con teselas de 18..46 celdas la
+            // bandeja fría de ~46 celdas de ancho apenas cabía UNA tesela).
+            // Mismo rango que Vetas y misma verificación en el recipiente más
+            // pequeño (bandeja fría ~46x6): 46/12≈3.8 y 46/5≈9.2 repeticiones
+            // horizontales de tesela, nunca menos de ~3.8 aunque el jugador
+            // ponga el máximo de escala en el recipiente más ajustado.
+            int cellSize = 4 + def.patronEscala; // 5..12 celdas.
 
             // Deriva de las teselas si la sustancia fluye (Liquid/Gas -- StaticSolid
             // siempre trae ritmoAnim=0 por Universe.Create, así que este bloque es
