@@ -691,3 +691,82 @@ clima por zona (que era inocente: ver la sección "el grifo sale congelado"
 en el docblock de `SimLevelBuilder`). Es exactamente el mismo fallo que
 "pintar hielo produce agua" del playtest 13, que se arregló en un solo sitio
 en vez de arreglarse como clase.
+
+---
+
+## M18 — Química generada por semilla (playtest 18)
+
+Hasta el playtest 17 la tabla de reacciones tenía **7 entradas idénticas en toda semilla**; solo
+variaban `chancePct` y las bandas de temperatura. Ahora `Universe.Create` conserva ese núcleo fijo
+y **sortea 5-8 leyes más** con una gramática.
+
+### El descriptor: `Sim/LeyDelUniverso.cs`
+
+`LeyDelUniverso` es un DESCRIPTOR para la capa de juego (diario, banners), no la reacción
+ejecutable — la que ejecuta el stepper sigue siendo `Reaction`/`ReactionEngine`. Lleva los dos
+reactivos y sus productos, `chancePct`, la banda raw, `esDelNucleo`, y los dos ejes nuevos:
+
+- **`FormaDeLey`** — QUÉ CLASE de cosa hace, que es lo que hace que dos semillas se SIENTAN
+  distintas y no solo se vean distintas:
+  `Transmutacion` (A+B→C+B, B catalizador que no se gasta) · `Fusion` (A+B→C+C) ·
+  `Consumo` (A+B→Empty+C) · `Liberacion` (A+B→C+gas, la más fácil de ver de lejos) ·
+  `Contagio` (A+B→A+A, se propaga) · `Crecimiento` (la del Vivium, que no es de contacto).
+- **`CondicionTermica`** — `Cualquiera`/`Frio`/`Calor`. Las bandas quedan a propósito por debajo y
+  por encima del ambiente (raw 70): si una ley con condición pudiera dispararse a 20°C, la
+  condición no significaría nada. **No se derivan de `crystallizeMaxTempRaw`** aunque sea la banda
+  "fría" más obvia ya existente: bajo el Edicto FríoFértil esa constante puede llegar a raw 70,
+  exactamente igual que el ambiente — habría heredado en las leyes nuevas el solape que el backlog
+  ya tiene anotado en `Universe.waterFreezeC`/`crystallizeThresholdC`.
+
+### La afinidad del universo
+
+Sortear leyes variadas NO BASTA. Con el producto saliendo de una bolsa uniforme, cada ley es
+coherente consigo misma y arbitraria respecto a las demás: dentro de una misma semilla no hay
+ningún patrón que el jugador pueda aprender, y la fantasía del juego es *domesticar* leyes, no
+memorizar accidentes.
+
+`Universe.AfinidadDelUniverso` son 1-2 materiales sorteados en horneado (nunca `Empty`: "todo
+tiende a desaparecer" no es una tesis, es una partida rota) que los pickers de producto prefieren
+un ~55% de las veces. **Siempre como preferencia entre candidatos que las restricciones ya habían
+aceptado, nunca como excepción**: el helper solo devuelve el material afín si ya estaba en la
+lista filtrada.
+
+Medido sobre 5.000 semillas: el **54.4%** de las leyes de una semilla producen su material afín;
+el 70% de las semillas caen entre 2 y 5 leyes convergentes de 5-8; solo el 0.9% se queda sin tesis
+y solo el 0.2% converge del todo. Cada mundo tiene tendencia legible sin dejar de tener
+excepciones. El campo es público porque el gancho evidente de una ronda futura es que el rumor del
+Edicto la insinúe sin decirla.
+
+### Restricciones (R1-R10 + las dos endurecidas)
+
+Protegen la PARTIDA, no el gusto. Ver regla 34 de `CLAUDE.md` para las que no se pueden tocar.
+Resumen de las estructurales:
+- Un reactivo sale siempre de los INNOMINADOS y el otro de la unión — así R1 se cumple **por
+  construcción**, no por comprobación, y dos materiales del vocabulario nunca pueden reaccionar
+  entre sí.
+- `Stone`/`Fire`/`Empty` no están en ningún pool de reactivos (R2 estructural + assert de editor).
+  `Fire` tampoco es producto legal: no por imposible sino por prudencia — una ley que prende sola
+  hay que verla jugar antes de soltarla. Es una opción futura deliberada, no un olvido.
+- Colisión de par comprobada en los dos órdenes contra el núcleo Y contra las ya sorteadas.
+- Contagio: máximo uno por semilla, propagador innominado, chance [2,6], condición obligatoria, y
+  víctima que no salga de un grifo.
+- `Vivium`/`CrystalSeed` solo como catalizador de `Transmutacion`.
+- Un sorteo que viole cualquiera se descarta y se vuelve a tirar (tope 200 intentos por hueco); si
+  se agota, la semilla tiene menos leyes y se registra por qué — **nunca se relaja una restricción
+  para rellenar un hueco**. Tasa de aceptación por intento tras endurecer: 48.8%; cero escasez en
+  20.000 semillas simuladas.
+
+### Que una ley se pueda PRESENCIAR
+
+Antes, una reacción al dispararse no emitía nada identificable: solo dos casos cableados empujaban
+evento y el evento llevaba un solo material. Ahora `SimEventType.Ley` viaja con `leyIndice`, y
+**`Leyes[i]` describe exactamente `Reactions.At(i)`** (ver regla 33 — si se desalinean, el jugador
+descubre la ley equivocada). Los seis eventos viejos se siguen empujando igual con
+`leyIndice = -1`.
+
+**Limitador de ritmo, obligatorio.** El anillo tiene 256 entradas y un ácido disolviendo ya genera
+decenas de eventos por tick; si cada reacción empujase además un evento `Ley`, el anillo daría la
+vuelta antes de que el consumidor leyera y una ley podría no descubrirse nunca — intermitente y
+dependiente de la carga. Se empuja como mucho un evento por ley por segundo. El centinela de
+"nunca empujado" es `uint.MaxValue`, **no 0**: con 0, en el tick 0 la comparación
+`tick - ultimo >= 30` daría falso y la primerísima ley no se empujaría jamás.

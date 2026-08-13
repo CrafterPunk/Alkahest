@@ -88,6 +88,50 @@ namespace Alkahest.Sim
         public readonly string EdictoDescripcion;
 
         // -----------------------------------------------------------------
+        // LEYES DEL UNIVERSO (playtest 18, química generada por seed). Ver
+        // el bloque grande "SORTEO DE LEYES" en Create() para la gramática
+        // (contrato CONTRATO_FASE3.md sección 6) y ConstruirLeyesNucleo/
+        // SortearLeyesGeneradas/ConstruirLeyCrecimiento para la construcción.
+        // -----------------------------------------------------------------
+        /// <summary>
+        /// TODAS las leyes de este universo, con ÍNDICE ESTABLE. INVARIANTE QUE
+        /// NO SE PUEDE ROMPER: para i &lt; Reactions.Count, Leyes[i] describe
+        /// EXACTAMENTE la reacción Reactions.At(i) (mismo par, mismos productos,
+        /// misma banda); la última entrada, en el índice
+        /// LeyCrecimientoIndice == Reactions.Count, es la del Vivium, que no es
+        /// una reacción de contacto. Los eventos de la sim viajan con este índice
+        /// (SimEventType.Ley / SimNotableEvent.leyIndice). Se verifica con un
+        /// assert de solo-editor al final de Create() -- de esta invariante
+        /// depende que un evento pueda identificar QUÉ ley acaba de ocurrir.
+        /// </summary>
+        public readonly LeyDelUniverso[] Leyes;
+
+        /// <summary>Índice de la ley de crecimiento del Vivium dentro de Leyes. Siempre == Reactions.Count.</summary>
+        public int LeyCrecimientoIndice { get; }
+
+        /// <summary>Tope duro de leyes por universo. El diario ya reserva este tamaño (JournalHud.MaxLeyes).</summary>
+        public const int MaxLeyes = 24;
+
+        /// <summary>
+        /// (playtest 18, AFINIDAD DEL UNIVERSO) 1 o 2 ids de material hacia
+        /// los que esta semilla "tira" al elegir el producto de una ley
+        /// sorteada -- nunca <see cref="MaterialId.Empty"/> ("todo tiende a
+        /// desaparecer" no es una tesis, es una partida rota). Ver el bloque
+        /// grande en Create() para el porqué: sin esto, cada ley elegía su
+        /// producto en una bolsa uniforme sin relación con las demás leyes
+        /// de la MISMA semilla, y el resultado era "5 plantillas con
+        /// sustantivos intercambiables" en vez de un universo con carácter.
+        ///
+        /// EXPUESTO A PROPÓSITO como campo público y legible, no como detalle
+        /// interno del generador: el gancho evidente para una ronda futura es
+        /// que el rumor del Edicto (<see cref="EdictoDescripcion"/>) la
+        /// insinúe sin decirla ("el Maestro murmura que aquí todo quiere
+        /// volverse limo..."). Esta ronda NO toca ese texto -- solo deja el
+        /// dato listo para que otra ronda lo lea.
+        /// </summary>
+        public readonly byte[] AfinidadDelUniverso;
+
+        // -----------------------------------------------------------------
         // FIRMA VISUAL DEL UNIVERSO (playtest 12, reporte "más de lo mismo").
         // Ver el bloque grande en Create() para el sorteo; aquí solo se
         // cachea el resultado (nunca se construyen estas cadenas por frame).
@@ -106,7 +150,8 @@ namespace Alkahest.Sim
 
         private Universe(int seed, MaterialDef[] materials, ReactionEngine reactions,
             byte vivGrowMinRaw, byte vivGrowMaxRaw, byte crystallizeMaxTempRaw, byte crystallizeChancePct,
-            Edicto edicto, string edictoDescripcion, string caracterDelUniverso, string[] firmaPorMaterial)
+            Edicto edicto, string edictoDescripcion, string caracterDelUniverso, string[] firmaPorMaterial,
+            LeyDelUniverso[] leyes, int leyCrecimientoIndice, byte[] afinidadDelUniverso)
         {
             Seed = seed;
             Materials = materials;
@@ -119,6 +164,9 @@ namespace Alkahest.Sim
             EdictoDescripcion = edictoDescripcion;
             CaracterDelUniverso = caracterDelUniverso;
             _firmaPorMaterial = firmaPorMaterial;
+            Leyes = leyes;
+            LeyCrecimientoIndice = leyCrecimientoIndice;
+            AfinidadDelUniverso = afinidadDelUniverso;
         }
 
         public MaterialDef Get(byte id) => Materials[id];
@@ -470,10 +518,16 @@ namespace Alkahest.Sim
 
             // -----------------------------------------------------------------
             // Tabla de reacciones de contacto (ver ReactionEngine/SimStepper).
+            // NÚCLEO FIJO: estas 7 reacciones existen EN TODA SEMILLA, sin
+            // excepción -- son las que sostienen los encargos del Maestro (si
+            // desaparece la cristalización hay semillas imposibles de
+            // completar). NO REORDENAR este array sin actualizar
+            // ConstruirLeyesNucleo() más abajo: describe estas 7 entradas por
+            // ÍNDICE, a mano, porque su `forma`/`condicion` no varía nunca.
             // -----------------------------------------------------------------
             const byte acidDissolveChancePct = 40;
             const byte acidNeutralizeChancePct = 20;
-            var reactions = new[]
+            var nucleoReactions = new[]
             {
                 // Cristalización: Azoth + Crystal/CrystalSeed, en frío -> Azoth se vuelve Crystal.
                 // El vecino (b) no cambia: productB == b.
@@ -492,14 +546,135 @@ namespace Alkahest.Sim
                 // Ácido neutralizado por Agua: ambos -> Slime.
                 new Reaction(MaterialId.Acid, MaterialId.Water, MaterialId.Slime, MaterialId.Slime, acidNeutralizeChancePct),
             };
-            var reactionEngine = new ReactionEngine(reactions);
+
+            // -----------------------------------------------------------------
+            // SORTEO DE LEYES (playtest 18, CONTRATO_FASE3.md sección 6): 5-8
+            // reacciones adicionales, propias de esta seed, siguiendo la
+            // gramática ATREVIDA que Cesar eligió ("lo innominado puede
+            // reaccionar con el vocabulario del taller"). Bandas térmicas de
+            // Frio/Calor derivadas de CellGrid.AmbientRaw (no números mágicos
+            // nuevos: ver el comentario de CondicionMarginRaw).
+            // -----------------------------------------------------------------
+            const int CondicionMarginRaw = 30; // = 15 °C * 2 raw/°C: mismo orden de magnitud que freezeShiftC/boilShiftC/growShiftC (±15 °C) ya usados arriba en esta función para bandear temperaturas por seed.
+            byte frioMaxTempRaw = (byte)(CellGrid.AmbientRaw - CondicionMarginRaw);   // raw 40 (-40 °C): estrictamente por DEBAJO de ambiente (raw 70/20 °C).
+            byte calorMinTempRaw = (byte)(CellGrid.AmbientRaw + CondicionMarginRaw);  // raw 100 (80 °C): estrictamente por ENCIMA de ambiente.
+
+            // -----------------------------------------------------------------
+            // AFINIDAD DEL UNIVERSO (playtest 18, corrección post-crítica de
+            // diseño). DIAGNÓSTICO que motiva esto: sin afinidad, cada ley
+            // sorteada elegía su producto en una bolsa uniforme de ~12
+            // candidatos SIN relación con las demás leyes de la misma
+            // semilla -- cada ley es coherente consigo misma pero arbitraria
+            // respecto a las otras, así que el jugador no puede generalizar
+            // dentro de una partida. Es "5 plantillas con sustantivos
+            // intercambiables", no un universo -- y la fantasía del juego es
+            // DOMESTICAR LAS LEYES DE UN UNIVERSO, no memorizar una lista de
+            // accidentes.
+            //
+            // Sortea 1-2 materiales "afines" de entre los PRODUCTOS legales
+            // (nunca Empty: "todo tiende a desaparecer" no es una tesis, es
+            // una partida rota). Al elegir el producto de cada ley sorteada
+            // (ver PickProductoDistintoDe/PickProductoDistintoDeAmbos más
+            // abajo), la afinidad se prueba PRIMERO con ~55% de probabilidad
+            // y SOLO si esa opción sigue siendo legal para ese hueco concreto
+            // (ya pasó los filtros de R7/R8) -- si no lo es, o si la tirada
+            // de 55% falla, se cae al sorteo uniforme de siempre. La afinidad
+            // es una PREFERENCIA dentro del picker, nunca una excepción a una
+            // restricción: no puede colar nada que R7/R8 no permitieran ya.
+            //
+            // Efecto esperado: 3-4 de las 5-8 leyes convergen en la misma
+            // sustancia, así que el universo pasa a tener una TESIS ("aquí
+            // todo acaba en limo", "este mundo tira a cristal") en vez de una
+            // lista de productos sin relación -- generalizable leyendo un
+            // puñado de leyes, sorprendente al cambiar de semilla, y sobre
+            // todo NOMBRABLE, que es justo lo que Cesar lleva pidiendo desde
+            // el playtest 14 ("las texturas solo me inducen a poner nombres
+            // como rojo bonito"): un mundo con tendencia se puede bautizar,
+            // una lista de accidentes no.
+            //
+            // EXPUESTA A PROPÓSITO como campo público (Universe.AfinidadDelUniverso,
+            // ver el campo): el gancho evidente para una ronda futura es que
+            // el rumor del Edicto la insinúe sin decirla. Esta ronda NO toca
+            // ese texto -- solo deja el dato listo.
+            // -----------------------------------------------------------------
+            var afinidadPool = new List<byte>(ProductosPermitidos.Length);
+            foreach (var p in ProductosPermitidos) if (p != MaterialId.Empty) afinidadPool.Add(p);
+
+            int nAfinidad = rng.Next(2) == 0 ? 1 : 2; // "uno o dos materiales afines".
+            var afinidadDelUniverso = new byte[nAfinidad];
+            afinidadDelUniverso[0] = afinidadPool[rng.Next(afinidadPool.Count)];
+            if (nAfinidad == 2)
+            {
+                byte segundo = afinidadDelUniverso[0];
+                for (int t = 0; t < 50 && segundo == afinidadDelUniverso[0]; t++)
+                    segundo = afinidadPool[rng.Next(afinidadPool.Count)];
+                afinidadDelUniverso[1] = segundo; // en el peor caso (rarísimo, 50 intentos fallidos con 11 candidatos) repite el primero -- inofensivo, el picker simplemente tendría dos copias del mismo material entre las que elegir.
+            }
+
+            SortearLeyesGeneradas(rng, nucleoReactions, frioMaxTempRaw, calorMinTempRaw, afinidadDelUniverso,
+                out Reaction[] leyesGeneradasReactions, out LeyDelUniverso[] leyesGeneradasDescriptores);
+
+            var todasReactions = new Reaction[nucleoReactions.Length + leyesGeneradasReactions.Length];
+            Array.Copy(nucleoReactions, todasReactions, nucleoReactions.Length);
+            Array.Copy(leyesGeneradasReactions, 0, todasReactions, nucleoReactions.Length, leyesGeneradasReactions.Length);
+            var reactionEngine = new ReactionEngine(todasReactions);
+
+            var nucleoLeyes = ConstruirLeyesNucleo(nucleoReactions);
+            const byte vivGrowChancePctParaLey = 60; // duplica el default del campo de instancia VivGrowChancePct: Create() es estático, no puede leer `this` antes de construir el Universe.
+            var leyCrecimiento = ConstruirLeyCrecimiento(CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC), vivGrowChancePctParaLey);
+
+            int leyCrecimientoIndice = todasReactions.Length; // == reactionEngine.Count, por definición (invariante del contrato).
+            var leyes = new LeyDelUniverso[todasReactions.Length + 1];
+            Array.Copy(nucleoLeyes, leyes, nucleoLeyes.Length);
+            Array.Copy(leyesGeneradasDescriptores, 0, leyes, nucleoLeyes.Length, leyesGeneradasDescriptores.Length);
+            leyes[leyCrecimientoIndice] = leyCrecimiento;
+
+#if UNITY_EDITOR
+            // INVARIANTE DEL CONTRATO (sección 3): para i < Reactions.Count,
+            // Leyes[i] describe EXACTAMENTE Reactions.At(i). Si esto falla,
+            // un evento SimEventType.Ley con ese índice apuntaría a la ley
+            // equivocada -- el diario anunciaría haber descubierto algo que
+            // el jugador no vio, o nunca marcaría lo que sí vio.
+            for (int li = 0; li < reactionEngine.Count; li++)
+            {
+                var r = reactionEngine.At(li);
+                var l = leyes[li];
+                UnityEngine.Debug.Assert(
+                    l.a == r.a && l.b == r.b && l.productoA == r.productA && l.productoB == r.productB
+                    && l.chancePct == r.chancePct && l.minTempRaw == r.minTempRaw && l.maxTempRaw == r.maxTempRaw,
+                    $"[ChaosAlchemy] INVARIANTE ROTA: Leyes[{li}] no describe Reactions.At({li}) (ver CONTRATO_FASE3.md sección 3).");
+            }
+            UnityEngine.Debug.Assert(leyCrecimientoIndice == reactionEngine.Count,
+                "[ChaosAlchemy] LeyCrecimientoIndice debe ser exactamente Reactions.Count.");
+            UnityEngine.Debug.Assert(leyes.Length <= MaxLeyes,
+                $"[ChaosAlchemy] Leyes.Length={leyes.Length} supera MaxLeyes={MaxLeyes} (R9 del contrato).");
+#endif
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            {
+                var sb = new System.Text.StringBuilder();
+                string afinidadNombres = string.Join(", ", Array.ConvertAll(afinidadDelUniverso, id => mats[id] != null ? mats[id].devName : id.ToString()));
+                sb.Append($"[ChaosAlchemy] Química de esta seed ({seed}): {leyesGeneradasDescriptores.Length} leyes sorteadas + 7 núcleo + 1 crecimiento = {leyes.Length} totales. Afinidad: {afinidadNombres}.\n");
+                for (int li = 0; li < leyesGeneradasDescriptores.Length; li++)
+                {
+                    var l = leyesGeneradasDescriptores[li];
+                    string nombreA = mats[l.a] != null ? mats[l.a].devName : l.a.ToString();
+                    string nombreB = mats[l.b] != null ? mats[l.b].devName : l.b.ToString();
+                    string nombrePA = mats[l.productoA] != null ? mats[l.productoA].devName : l.productoA.ToString();
+                    string nombrePB = mats[l.productoB] != null ? mats[l.productoB].devName : l.productoB.ToString();
+                    sb.Append($"  [{nucleoLeyes.Length + li}] {l.forma} {nombreA}+{nombreB} -> {nombrePA}+{nombrePB} | condicion={l.condicion} chance={l.chancePct}%\n");
+                }
+                UnityEngine.Debug.Log(sb.ToString());
+            }
+#endif
 
             string edictoDescripcion = DescribeEdicto(edicto);
 
             return new Universe(seed, mats, reactionEngine,
                 CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC),
                 crystallizeMaxTempRaw, crystallizeChancePct,
-                edicto, edictoDescripcion, caracterDelUniverso, firmaPorMaterial);
+                edicto, edictoDescripcion, caracterDelUniverso, firmaPorMaterial,
+                leyes, leyCrecimientoIndice, afinidadDelUniverso);
         }
 
         private static string DescribeEdicto(Edicto edicto)
@@ -970,6 +1145,618 @@ namespace Alkahest.Sim
                 case BordeMorfologico.Difuso: return "borde difuso";
                 default: return "borde neto";
             }
+        }
+
+        // ===================================================================
+        // SORTEO DE LEYES POR SEED (playtest 18, CONTRATO_FASE3.md sección 6).
+        // Todo este bloque corre UNA vez por Universe.Create (tiempo de
+        // horneado): las asignaciones de List<>/HashSet<> de abajo son
+        // aceptables por el mismo motivo que en SortearFirmasVisuales arriba
+        // -- nunca corre en el hot path de SimStepper.
+        //
+        // Se apoya en UnnamedMaterialIds (los 6 INNOMINADOS, ya definido más
+        // arriba para la firma visual) y añade el resto de los depósitos que
+        // pide el contrato.
+        // ===================================================================
+
+        /// <summary>VOCABULARIO_REACTIVO del contrato: vocabulario del taller que SÍ puede aparecer como reactivo de una ley sorteada (solo si el otro lado es INNOMINADO, ver R1).</summary>
+        private static readonly byte[] VocabularioReactivo =
+        {
+            MaterialId.Water, MaterialId.Sand, MaterialId.Oil, MaterialId.Nutrient,
+            MaterialId.Ice, MaterialId.Ash, MaterialId.Steam, MaterialId.Smoke,
+        };
+
+        /// <summary>Depósito completo de reactivos permitidos en una ley sorteada: INNOMINADOS ∪ VOCABULARIO_REACTIVO. Empty/Stone/Fire (R2) nunca aparecen aquí por construcción -- no hace falta filtrarlos en el sorteo, el pool ya los excluye.</summary>
+        private static readonly byte[] ReactivosPermitidos = ConcatBytes(UnnamedMaterialIds, VocabularioReactivo);
+
+        /// <summary>
+        /// Productos permitidos para una ley sorteada: los 6 INNOMINADOS +
+        /// Smoke/Steam/Ash/Water/Sand/Empty (contrato sección 6).
+        /// `Fire` NO es producto legal esta ronda -- IDEA DESCARTADA A
+        /// PROPÓSITO (CLAUDE.md regla 15), no un olvido: una ley que prende
+        /// sola es exactamente el tipo de cosa que hay que ver jugar antes de
+        /// soltarla. Si una ronda futura la habilita, basta con añadir
+        /// MaterialId.Fire a este array -- el resto del sorteo no necesita
+        /// cambiar.
+        /// </summary>
+        private static readonly byte[] ProductosPermitidos =
+        {
+            MaterialId.Azoth, MaterialId.CrystalSeed, MaterialId.Crystal, MaterialId.Vivium, MaterialId.Slime, MaterialId.Acid,
+            MaterialId.Smoke, MaterialId.Steam, MaterialId.Ash, MaterialId.Water, MaterialId.Sand, MaterialId.Empty,
+        };
+
+        /// <summary>
+        /// (playtest 18, corrección post-auditoría adversarial — FALLO 1 del
+        /// contrato) Materiales que salen de un GRIFO (`Game/Dispenser`,
+        /// montados por `AlkahestGameBootstrap.SpawnDispensers`): Water,
+        /// Sand, Oil, Nutrient desde el minuto uno, Azoth desde la jornada 2.
+        /// `Dispenser.EmitTick` no tiene tope de cantidad -- cualquiera de
+        /// estos cinco es una fuente infinita.
+        ///
+        /// La redacción original del contrato (R5) solo protegía `Water`
+        /// ("el agua sale de un grifo infinito"): la RAZÓN era correcta pero
+        /// la LISTA estaba incompleta -- Sand/Oil/Nutrient/Azoth salen del
+        /// mismo tipo de grifo y un Contagio cuya víctima fuera cualquiera de
+        /// ellos colaba exactamente el mismo bucle de materia infinita que la
+        /// regla quería impedir. La restricción real nunca fue "proteger el
+        /// agua", fue "lo que sale de un grifo no se acaba nunca".
+        ///
+        /// FUENTE DE VERDAD: `Sim/` no puede referenciar `Game/`
+        /// (`AlkahestGameBootstrap` vive en la capa de arriba, Sim es la capa
+        /// de abajo) así que esta lista es una COPIA A MANO de
+        /// `AlkahestGameBootstrap.SpawnDispensers` y hay que mantenerla
+        /// sincronizada TODA VEZ que se añada, quite o cambie un grifo ahí.
+        /// SI SE DESINCRONIZA: un grifo nuevo que no se añada aquí vuelve a
+        /// abrir el mismo agujero que este array corrige (una ley Contagio
+        /// sorteada podría elegir esa materia como víctima infinita sin que
+        /// ninguna comprobación lo impida) -- no hay ningún error de
+        /// compilación ni de editor que lo señale, así que quien añada un
+        /// grifo nuevo tiene que acordarse de este comentario.
+        /// </summary>
+        private static readonly byte[] MaterialesDeGrifo =
+        {
+            MaterialId.Water, MaterialId.Sand, MaterialId.Oil, MaterialId.Nutrient, MaterialId.Azoth,
+        };
+
+        /// <summary>
+        /// (playtest 18, corrección post-auditoría adversarial — sustituye a
+        /// la R6 original del contrato) `Vivium` y `CrystalSeed` solo pueden
+        /// aparecer como reactivo de una ley SORTEADA en la posición
+        /// CATALIZADORA (`b`) de una `Transmutacion` -- la única posición
+        /// donde, POR DEFINICIÓN de esa forma, `productoB == b` y el material
+        /// no se gasta. En cualquier otra forma, o en la posición `a` de una
+        /// Transmutacion (donde si se gasta: `productoA` sustituye a `a`), el
+        /// sorteo se descarta.
+        ///
+        /// LA R6 ORIGINAL NACIÓ INCOMPLETA: solo miraba las formas Consumo y
+        /// Contagio ("el vivium es la cadena más lenta del juego, y un
+        /// encargo de 'algo vivo' se vuelve imposible si algo se lo come de
+        /// forma pasiva"). Pero Fusion (`A+B->C+C`) destruye los DOS
+        /// reactivos por igual, Liberacion (`A+B->C+gas`) también cambia los
+        /// dos lados, y en Transmutacion el vivium solo se salva la mitad de
+        /// las veces (depende de si `rng.Next(2)` lo puso del lado
+        /// catalizador) -- las cuatro formas que no eran Consumo/Contagio
+        /// podían matarlo igual, la restricción original solo tapaba dos de
+        /// las cinco puertas.
+        ///
+        /// POR QUÉ ESTOS DOS MATERIALES Y NO OTROS DE `UnnamedMaterialIds`:
+        ///  - `Vivium`: la cadena más lenta del juego (crece consumiendo
+        ///    Nutrient, GrowthTick). Un encargo de "algo vivo" se vuelve
+        ///    imposible de completar si una ley sorteada lo destruye al
+        ///    contacto con cualquier cosa.
+        ///  - `CrystalSeed`: `MasterSupplies` entrega 60 celdas UNA VEZ, en
+        ///    la jornada 2 -- no hay grifo, no se repone. La cristalización
+        ///    del núcleo YA la trata como catalizador (no se gasta,
+        ///    `productB == b` en la Reaction del núcleo): una ley sorteada
+        ///    que SÍ la gastara (p.ej. `Fusion(CrystalSeed, Water)`) deja los
+        ///    encargos de cristal imposibles en cuanto la semilla toque agua,
+        ///    que está por todas partes.
+        ///  - `Azoth` NO está en esta lista a propósito: tiene su propio
+        ///    grifo desde la jornada 2 (`AlkahestGameBootstrap`, ver
+        ///    `MaterialesDeGrifo`), así que es reponible -- perder una
+        ///    cantidad no es catastrófico.
+        ///  - `Crystal` NO está en esta lista a propósito: es el PRODUCTO de
+        ///    la cristalización, no un suministro limitado -- si se gasta, el
+        ///    jugador vuelve a fabricarlo con Azoth+CrystalSeed.
+        ///  - `Slime`/`Acid` no tienen ninguna cantidad finita que proteger
+        ///    (no son ingrediente de ningún encargo con suministro limitado
+        ///    conocido en esta ronda), así que quedan libres para el sorteo.
+        ///
+        /// Es justo el tipo de restricción que alguien va a querer relajar
+        /// dentro de seis meses sin saber qué sostenía: si `MasterSupplies`
+        /// cambia a reponer CrystalSeed por grifo, o si el vivium deja de ser
+        /// la cadena más lenta, esta lista (y el comentario) son el sitio
+        /// donde reabrir la decisión con conocimiento de causa.
+        /// </summary>
+        private static readonly byte[] MaterialesSoloCatalizador =
+        {
+            MaterialId.Vivium, MaterialId.CrystalSeed,
+        };
+
+        /// <summary>Sentinela "no encontrado" para los pickers de producto de abajo. 255 no es un id de material válido (MaterialId.Count == 17): nunca puede confundirse con un resultado real.</summary>
+        private const byte SinProductoValido = 255;
+
+        private static byte[] ConcatBytes(byte[] a, byte[] b)
+        {
+            var r = new byte[a.Length + b.Length];
+            Array.Copy(a, r, a.Length);
+            Array.Copy(b, 0, r, a.Length, b.Length);
+            return r;
+        }
+
+        /// <summary>
+        /// Construye los descriptores de las 7 leyes del NÚCLEO FIJO, en el
+        /// MISMO orden que <paramref name="nucleo"/> (invariante Leyes[i] ↔
+        /// Reactions.At(i)). Forma/condición se escriben A MANO porque estas
+        /// 7 reacciones no varían de forma entre semillas -- solo varían
+        /// chancePct/banda térmica, que ya vienen en cada Reaction.
+        /// </summary>
+        private static LeyDelUniverso[] ConstruirLeyesNucleo(Reaction[] nucleo)
+        {
+            var leyes = new LeyDelUniverso[nucleo.Length];
+            for (int i = 0; i < nucleo.Length; i++)
+            {
+                var r = nucleo[i];
+                leyes[i] = new LeyDelUniverso
+                {
+                    a = r.a,
+                    b = r.b,
+                    productoA = r.productA,
+                    productoB = r.productB,
+                    chancePct = r.chancePct,
+                    minTempRaw = r.minTempRaw,
+                    maxTempRaw = r.maxTempRaw,
+                    esDelNucleo = true,
+                };
+            }
+
+            // [0][1] Cristalización (Azoth+Crystal, Azoth+CrystalSeed): Transmutacion,
+            // el vecino Crystal/CrystalSeed es catalizador (productoB == b en ambas).
+            // Solo ocurre en frío -> condicion Frio.
+            leyes[0].forma = FormaDeLey.Transmutacion; leyes[0].condicion = CondicionTermica.Frio;
+            leyes[1].forma = FormaDeLey.Transmutacion; leyes[1].condicion = CondicionTermica.Frio;
+            // [2..5] Ácido disuelve Sand/Ash/Ice/Crystal: Consumo (Acid -> Empty,
+            // el objetivo -> Smoke). Sin restricción térmica: Cualquiera.
+            for (int i = 2; i <= 5; i++) { leyes[i].forma = FormaDeLey.Consumo; leyes[i].condicion = CondicionTermica.Cualquiera; }
+            // [6] Ácido neutralizado por Agua -> ambos Slime: Fusion. Cualquiera.
+            leyes[6].forma = FormaDeLey.Fusion; leyes[6].condicion = CondicionTermica.Cualquiera;
+
+            return leyes;
+        }
+
+        /// <summary>
+        /// La ley de crecimiento del Vivium (playtest 18): NO es una reacción
+        /// de contacto (no pasa por ReactionEngine/TryReactNeighbor, vive en
+        /// SimStepper.GrowthTick) pero SÍ es núcleo -- existe en TODA semilla,
+        /// esDelNucleo=true. a=Vivium consume b=Nutrient; productoA=Vivium (la
+        /// propia célula no cambia: sigue viva; si `grows`, aparece OTRA
+        /// célula de Vivium en un vecino, ver GrowthTick); productoB=Empty (el
+        /// Nutrient se consume siempre, gane o no la tirada de crecimiento).
+        /// condicion=Cualquiera porque la banda real no es "frío" ni "calor"
+        /// universal, depende de la seed (VivGrowMinRaw/MaxRaw, en min/maxTempRaw).
+        /// </summary>
+        private static LeyDelUniverso ConstruirLeyCrecimiento(byte vivGrowMinRaw, byte vivGrowMaxRaw, byte vivGrowChancePct)
+        {
+            return new LeyDelUniverso
+            {
+                a = MaterialId.Vivium,
+                b = MaterialId.Nutrient,
+                productoA = MaterialId.Vivium,
+                productoB = MaterialId.Empty,
+                forma = FormaDeLey.Crecimiento,
+                condicion = CondicionTermica.Cualquiera,
+                minTempRaw = vivGrowMinRaw,
+                maxTempRaw = vivGrowMaxRaw,
+                chancePct = vivGrowChancePct,
+                esDelNucleo = true,
+            };
+        }
+
+        /// <summary>
+        /// Sortea entre 5 y 8 leyes propias de esta semilla (R9), aplicando
+        /// las restricciones R1-R10 del contrato. Cada intento que viola
+        /// cualquier restricción se DESCARTA y se reintenta (tope
+        /// <see cref="MaxIntentosPorLey"/>); si un hueco agota sus intentos,
+        /// esa ley simplemente no se genera (la semilla acaba con menos
+        /// leyes de las pedidas) y se deja constancia en el log -- nunca se
+        /// relajan las restricciones para "rellenar el hueco como sea".
+        /// </summary>
+        private const int MaxIntentosPorLey = 200;
+
+        private static void SortearLeyesGeneradas(
+            System.Random rng,
+            Reaction[] nucleo,
+            byte frioMaxTempRaw,
+            byte calorMinTempRaw,
+            byte[] afinidad,
+            out Reaction[] leyesReactions,
+            out LeyDelUniverso[] leyesDescriptores)
+        {
+            int objetivo = 5 + rng.Next(4); // R9: entre 5 y 8 (Next(4) = 0..3).
+
+            // R4: ningún par sorteado puede coincidir con uno ya existente, en
+            // NINGUNO de los dos órdenes -- ReactionEngine es un lookup de UNA
+            // entrada por par (a*256+b Y b*256+a apuntan a la misma reacción);
+            // sin esta comprobación, una segunda entrada para el mismo par
+            // SOBREESCRIBIRÍA en silencio la del núcleo (la cristalización, el
+            // ácido...) al construir el ReactionEngine, dejando la partida sin
+            // esa ley sin ningún error visible -- el bug más peligroso de todo
+            // este sorteo porque no falla nunca de forma ruidosa.
+            var paresUsados = new HashSet<int>();
+            foreach (var r in nucleo)
+            {
+                paresUsados.Add(r.a * 256 + r.b);
+                paresUsados.Add(r.b * 256 + r.a);
+            }
+
+            var formasPosibles = new[]
+            {
+                FormaDeLey.Transmutacion, FormaDeLey.Fusion, FormaDeLey.Consumo,
+                FormaDeLey.Liberacion, FormaDeLey.Contagio,
+            };
+
+            var reactionsList = new List<Reaction>(objetivo);
+            var leyesList = new List<LeyDelUniverso>(objetivo);
+            bool contagioUsado = false; // R5: como mucho UNA ley Contagio por semilla.
+
+            for (int slot = 0; slot < objetivo; slot++)
+            {
+                bool aceptada = false;
+
+                for (int intento = 0; intento < MaxIntentosPorLey && !aceptada; intento++)
+                {
+                    FormaDeLey forma = formasPosibles[rng.Next(formasPosibles.Length)];
+                    if (forma == FormaDeLey.Contagio && contagioUsado) continue; // R5, ya gastada esta semilla.
+
+                    byte a, b;
+                    if (forma == FormaDeLey.Contagio)
+                    {
+                        // R5: `a` (el que se propaga) tiene que ser INNOMINADO.
+                        a = UnnamedMaterialIds[rng.Next(UnnamedMaterialIds.Length)];
+                        // R5: `b` (la víctima) nunca puede ser un material que
+                        // salga de un GRIFO (MaterialesDeGrifo, ver comentario
+                        // ahí arriba) -- la fuente es infinita
+                        // (`Dispenser.EmitTick` no tiene tope) y un contagio
+                        // que se coma lo que sale del grifo se propaga sin
+                        // final por la pila. Corrección post-auditoría: la
+                        // redacción original solo excluía `Water`; la razón
+                        // ("grifo infinito") aplicaba igual a Sand/Oil/
+                        // Nutrient/Azoth y se había quedado fuera. CORREA
+                        // DELIBERADA Y AFLOJABLE (CLAUDE.md regla 15): si se
+                        // ve jugar y una fuente infinita deja de ser un
+                        // problema, vaciar `MaterialesDeGrifo` es el único
+                        // cambio necesario.
+                        byte candidatoB = SinProductoValido;
+                        for (int t = 0; t < 50; t++)
+                        {
+                            byte cand = ReactivosPermitidos[rng.Next(ReactivosPermitidos.Length)];
+                            if (cand != a && Array.IndexOf(MaterialesDeGrifo, cand) < 0) { candidatoB = cand; break; }
+                        }
+                        if (candidatoB == SinProductoValido) continue; // no se encontró víctima válida este intento.
+                        b = candidatoB;
+                    }
+                    else
+                    {
+                        // R1: al menos uno de los dos reactivos tiene que ser
+                        // INNOMINADO -- se garantiza POR CONSTRUCCIÓN: uno de
+                        // los dos SIEMPRE sale de UnnamedMaterialIds, nunca de
+                        // los dos a la vez del vocabulario. Esto es lo que
+                        // impide que agua+arena reaccionen solas: el
+                        // vocabulario solo se comporta raro en PRESENCIA de
+                        // algo raro.
+                        byte innominado = UnnamedMaterialIds[rng.Next(UnnamedMaterialIds.Length)];
+                        byte otro = innominado;
+                        for (int t = 0; t < 50; t++)
+                        {
+                            byte cand = ReactivosPermitidos[rng.Next(ReactivosPermitidos.Length)];
+                            if (cand != innominado) { otro = cand; break; }
+                        }
+                        if (otro == innominado) continue; // R3: no se encontró un segundo reactivo distinto.
+
+                        if (rng.Next(2) == 0) { a = innominado; b = otro; }
+                        else { a = otro; b = innominado; }
+                    }
+
+                    // R2 (Empty/Stone/Fire nunca reactivo): GARANTIZADO por
+                    // construcción -- ninguno de los dos aparece en
+                    // UnnamedMaterialIds ni en ReactivosPermitidos. Se deja un
+                    // assert de solo-editor como red de seguridad por si
+                    // alguien amplía esos pools en el futuro sin leer este
+                    // comentario.
+#if UNITY_EDITOR
+                    UnityEngine.Debug.Assert(a != MaterialId.Empty && a != MaterialId.Stone && a != MaterialId.Fire, "[ChaosAlchemy] R2 violada: reactivo prohibido en el pool de sorteo.");
+                    UnityEngine.Debug.Assert(b != MaterialId.Empty && b != MaterialId.Stone && b != MaterialId.Fire, "[ChaosAlchemy] R2 violada: reactivo prohibido en el pool de sorteo.");
+#endif
+
+                    // R3: a != b.
+                    if (a == b) continue;
+
+                    // R4: el par no puede coincidir con ninguno ya presente, en ningún orden.
+                    int key1 = a * 256 + b, key2 = b * 256 + a;
+                    if (paresUsados.Contains(key1) || paresUsados.Contains(key2)) continue;
+
+                    // R6 (corregida post-auditoría, ver MaterialesSoloCatalizador
+                    // arriba para el razonamiento completo): Vivium/CrystalSeed
+                    // SOLO pueden ser reactivo en la posición catalizadora (`b`)
+                    // de una Transmutacion -- ahí, por definición de la forma,
+                    // `productoB == b` y no se gastan. Cualquier otra
+                    // combinación (otra forma, o esta forma pero en la posición
+                    // `a`, que SÍ cambia) se descarta.
+                    bool aProtegido = Array.IndexOf(MaterialesSoloCatalizador, a) >= 0;
+                    bool bProtegido = Array.IndexOf(MaterialesSoloCatalizador, b) >= 0;
+                    if (aProtegido || bProtegido)
+                    {
+                        bool esCatalizadorSeguro = forma == FormaDeLey.Transmutacion && bProtegido && !aProtegido;
+                        if (!esCatalizadorSeguro) continue;
+                    }
+
+                    if (!TryBuildProductos(rng, afinidad, forma, a, b, out byte productoA, out byte productoB)) continue;
+
+                    // R7: prohibido que los dos productos sean Empty (materia
+                    // que desaparece sin dejar rastro es una ley que nunca
+                    // entrará en el diario).
+                    if (productoA == MaterialId.Empty && productoB == MaterialId.Empty) continue;
+
+                    CondicionTermica condicion;
+                    byte chancePct;
+                    short minTempRaw, maxTempRaw;
+
+                    if (forma == FormaDeLey.Contagio)
+                    {
+                        // R5: condicion OBLIGATORIAMENTE Frio o Calor, nunca
+                        // Cualquiera; chancePct en [2,6] -- un contagio que se
+                        // pudiera disparar sin aparato y a tasa alta se comería
+                        // el taller antes de que el jugador entendiera qué pasó.
+                        condicion = rng.Next(2) == 0 ? CondicionTermica.Frio : CondicionTermica.Calor;
+                        chancePct = (byte)(2 + rng.Next(5)); // 2..6
+                    }
+                    else
+                    {
+                        condicion = SortearCondicionGeneral(rng);
+                        chancePct = SortearChancePctGeneral(rng);
+                    }
+
+                    if (condicion == CondicionTermica.Frio) { minTempRaw = 0; maxTempRaw = frioMaxTempRaw; }
+                    else if (condicion == CondicionTermica.Calor) { minTempRaw = calorMinTempRaw; maxTempRaw = 255; }
+                    else { minTempRaw = 0; maxTempRaw = 255; }
+
+                    var reaction = new Reaction(a, b, productoA, productoB, chancePct, minTempRaw, maxTempRaw);
+                    var ley = new LeyDelUniverso
+                    {
+                        a = a, b = b, productoA = productoA, productoB = productoB,
+                        forma = forma, condicion = condicion,
+                        minTempRaw = minTempRaw, maxTempRaw = maxTempRaw,
+                        chancePct = chancePct, esDelNucleo = false,
+                    };
+
+                    reactionsList.Add(reaction);
+                    leyesList.Add(ley);
+                    paresUsados.Add(key1);
+                    paresUsados.Add(key2);
+                    if (forma == FormaDeLey.Contagio) contagioUsado = true;
+                    aceptada = true;
+                }
+
+                if (!aceptada)
+                {
+                    // El hueco se descarta: se generan menos leyes de las
+                    // pedidas para esta semilla, en vez de relajar R1-R8 para
+                    // forzar un hueco imposible. Registrado para poder ver,
+                    // semilla a semilla, si el tope de intentos se queda corto.
+                    UnityEngine.Debug.LogWarning($"[ChaosAlchemy] Sorteo de leyes: hueco {slot + 1}/{objetivo} agotó {MaxIntentosPorLey} intentos sin una combinación válida (R1-R8). Esta semilla tendrá {leyesList.Count} leyes sorteadas en vez de {objetivo}.");
+                }
+            }
+
+            // R10: al menos DOS de las sorteadas tienen que tener condicion ==
+            // Cualquiera. Si el sorteo no lo cumplió por azar, se fuerza
+            // convirtiendo hasta 2 leyes YA ACEPTADAS (nunca Contagio, que R5
+            // exige Frio/Calor) a Cualquiera -- solo se AMPLÍA su banda
+            // térmica a [0,255], nunca se toca su par ni sus productos, así
+            // que esto no puede reabrir ninguna de las restricciones R1-R9 ya
+            // verificadas para esa ley.
+            GarantizarCondicionCualquieraMinima(reactionsList, leyesList);
+
+            leyesReactions = reactionsList.ToArray();
+            leyesDescriptores = leyesList.ToArray();
+        }
+
+        /// <summary>
+        /// Construye productoA/productoB para una ley sorteada según su
+        /// forma. Devuelve false si no encontró una combinación válida (pool
+        /// de productos agotado tras excluir lo prohibido) -- en la práctica
+        /// no debería ocurrir con los 12 productos permitidos, pero el
+        /// llamante trata un false como un intento fallido más (se reintenta
+        /// desde SortearLeyesGeneradas).
+        /// </summary>
+        private static bool TryBuildProductos(System.Random rng, byte[] afinidad, FormaDeLey forma, byte a, byte b, out byte productoA, out byte productoB)
+        {
+            switch (forma)
+            {
+                case FormaDeLey.Transmutacion:
+                {
+                    // A+B -> C+B. B es catalizador: productoB == b es justo lo
+                    // que define la forma (excepción explícita de R8).
+                    // productoA (C) sí tiene que ser distinto de `a` (R8).
+                    // (playtest 18) C prueba primero la AFINIDAD de la semilla.
+                    byte c = PickProductoDistintoDe(rng, afinidad, a);
+                    if (c == SinProductoValido) { productoA = 0; productoB = 0; return false; }
+                    productoA = c;
+                    productoB = b;
+                    return true;
+                }
+                case FormaDeLey.Fusion:
+                {
+                    // A+B -> C+C. C distinto de `a` Y de `b` (R8 aplica a los
+                    // dos lados: ambos reactivos tienen que cambiar de verdad).
+                    // (playtest 18) C prueba primero la AFINIDAD de la semilla.
+                    byte c = PickProductoDistintoDeAmbos(rng, afinidad, a, b);
+                    if (c == SinProductoValido) { productoA = 0; productoB = 0; return false; }
+                    productoA = c;
+                    productoB = c;
+                    return true;
+                }
+                case FormaDeLey.Consumo:
+                {
+                    // A+B -> Empty+C. productoA=Empty siempre (A se destruye;
+                    // nunca puede igualar a `a`, porque `a` nunca es Empty por
+                    // construcción). productoB (C) distinto de `b` (R8).
+                    // (playtest 18) C prueba primero la AFINIDAD de la semilla.
+                    byte c = PickProductoDistintoDe(rng, afinidad, b);
+                    if (c == SinProductoValido) { productoA = 0; productoB = 0; return false; }
+                    productoA = MaterialId.Empty;
+                    productoB = c;
+                    return true;
+                }
+                case FormaDeLey.Liberacion:
+                {
+                    // A+B -> C+gas(Smoke/Steam). productoA (C) distinto de `a`
+                    // (R8). El gas tiene que ser distinto de `b` (R8): si el
+                    // gas elegido al azar coincide con `b`, se usa el otro --
+                    // con solo dos opciones esto siempre resuelve (b es un
+                    // único valor, como mucho coincide con una de las dos).
+                    // (playtest 18) C prueba primero la AFINIDAD de la semilla;
+                    // el GAS no -- Smoke/Steam es un mecanismo fijo de la forma
+                    // (contrato sección 6), no un "producto" sujeto a afinidad.
+                    byte c = PickProductoDistintoDe(rng, afinidad, a);
+                    if (c == SinProductoValido) { productoA = 0; productoB = 0; return false; }
+                    byte gas = rng.Next(2) == 0 ? MaterialId.Smoke : MaterialId.Steam;
+                    if (gas == b) gas = gas == MaterialId.Smoke ? MaterialId.Steam : MaterialId.Smoke;
+                    productoA = c;
+                    productoB = gas;
+                    return true;
+                }
+                case FormaDeLey.Contagio:
+                {
+                    // A+B -> A+A (self-propagación, definición explícita de la
+                    // forma: ver LeyDelUniverso.cs). productoA == a es
+                    // INHERENTE a Contagio, no un incumplimiento de R8 --R8
+                    // nombra explícitamente solo la excepción de Transmutacion
+                    // porque es la única forma donde "un lado no cambia" es
+                    // una elección de diseño y no la definición misma de la
+                    // forma; en Contagio el lado A nunca cambia POR
+                    // DEFINICIÓN (es lo que significa "se propaga"), así que
+                    // aplicarle la misma exigencia que a Fusion/Liberacion
+                    // haría que Contagio no pudiera existir nunca. productoB
+                    // (=a) sí es distinto de `b` siempre, porque R3 ya
+                    // garantiza a != b -- el lado B SIEMPRE cambia, que es lo
+                    // que hace la ley discernible (R8, en espíritu: nunca los
+                    // dos lados sin cambio).
+                    productoA = a;
+                    productoB = a;
+                    return true;
+                }
+                default:
+                    productoA = 0;
+                    productoB = 0;
+                    return false;
+            }
+        }
+
+        /// <summary>Probabilidad de que un producto pruebe primero la AFINIDAD de la semilla antes del sorteo uniforme. Ver Universe.AfinidadDelUniverso / TryAfinidad.</summary>
+        private const int AfinidadChancePct = 55;
+
+        /// <summary>
+        /// (playtest 18) Intenta resolver un producto con la AFINIDAD de esta
+        /// semilla antes de caer al sorteo uniforme. Devuelve
+        /// <see cref="SinProductoValido"/> si no aplica: sin afinidad
+        /// configurada, tirada de <see cref="AfinidadChancePct"/> fallida, o
+        /// el material afín NO está en <paramref name="candidatosYaFiltrados"/>
+        /// -- esa lista ya tiene aplicadas las exclusiones de R7/R8 para este
+        /// hueco concreto, así que esto NUNCA puede devolver algo que esas
+        /// restricciones habrían rechazado: la afinidad es una preferencia
+        /// DENTRO del conjunto ya legal, jamás una excepción a él.
+        /// </summary>
+        private static byte TryAfinidad(System.Random rng, byte[] afinidad, List<byte> candidatosYaFiltrados)
+        {
+            if (afinidad == null || afinidad.Length == 0) return SinProductoValido;
+            if (rng.Next(100) >= AfinidadChancePct) return SinProductoValido;
+            byte af = afinidad[rng.Next(afinidad.Length)];
+            return candidatosYaFiltrados.Contains(af) ? af : SinProductoValido;
+        }
+
+        private static byte PickProductoDistintoDe(System.Random rng, byte[] afinidad, byte excluido)
+        {
+            var candidatos = new List<byte>(ProductosPermitidos.Length);
+            foreach (var p in ProductosPermitidos)
+            {
+                if (p != excluido) candidatos.Add(p);
+            }
+            if (candidatos.Count == 0) return SinProductoValido;
+
+            byte afinElegido = TryAfinidad(rng, afinidad, candidatos);
+            if (afinElegido != SinProductoValido) return afinElegido;
+
+            return candidatos[rng.Next(candidatos.Count)];
+        }
+
+        private static byte PickProductoDistintoDeAmbos(System.Random rng, byte[] afinidad, byte excluidoA, byte excluidoB)
+        {
+            var candidatos = new List<byte>(ProductosPermitidos.Length);
+            foreach (var p in ProductosPermitidos)
+            {
+                if (p != excluidoA && p != excluidoB) candidatos.Add(p);
+            }
+            if (candidatos.Count == 0) return SinProductoValido;
+
+            byte afinElegido = TryAfinidad(rng, afinidad, candidatos);
+            if (afinElegido != SinProductoValido) return afinElegido;
+
+            return candidatos[rng.Next(candidatos.Count)];
+        }
+
+        /// <summary>
+        /// Rango de chancePct para una ley sorteada NO-Contagio: 15..60. No
+        /// lo pide el contrato explícitamente (solo fija el rango de
+        /// Contagio, R5) -- decisión de diseño de esta ronda, pensada para
+        /// que una ley sorteada se sienta del mismo orden que las del núcleo
+        /// (ver crystallizeChancePct/acidDissolveChancePct/
+        /// acidNeutralizeChancePct arriba en Create(), todas en 12-40): ni
+        /// tan alta que se lea como un flash instantáneo (&gt;=80%) ni tan baja
+        /// que parezca que "no hace nada" en una sesión corta de playtest.
+        /// </summary>
+        private static byte SortearChancePctGeneral(System.Random rng)
+        {
+            return (byte)(15 + rng.Next(46)); // 15..60
+        }
+
+        /// <summary>Condicion para una ley sorteada NO-Contagio: tercios iguales entre Cualquiera/Frio/Calor. R10 garantiza el mínimo de Cualquiera aparte (GarantizarCondicionCualquieraMinima), así que este reparto no necesita estar sesgado.</summary>
+        private static CondicionTermica SortearCondicionGeneral(System.Random rng)
+        {
+            int roll = rng.Next(3);
+            return roll == 0 ? CondicionTermica.Cualquiera : (roll == 1 ? CondicionTermica.Frio : CondicionTermica.Calor);
+        }
+
+        /// <summary>R10: fuerza a Cualquiera hasta 2 leyes ya aceptadas (nunca Contagio) si el sorteo no llegó al mínimo por azar. Ver la nota junto a la llamada en SortearLeyesGeneradas.</summary>
+        private static void GarantizarCondicionCualquieraMinima(List<Reaction> reactions, List<LeyDelUniverso> leyes)
+        {
+            int cualquieraCount = 0;
+            for (int i = 0; i < leyes.Count; i++)
+                if (leyes[i].condicion == CondicionTermica.Cualquiera) cualquieraCount++;
+
+            int necesarias = 2 - cualquieraCount;
+            for (int i = 0; i < leyes.Count && necesarias > 0; i++)
+            {
+                var ley = leyes[i];
+                if (ley.forma == FormaDeLey.Contagio) continue; // R5: Contagio nunca puede ser Cualquiera.
+                if (ley.condicion == CondicionTermica.Cualquiera) continue;
+
+                ley.condicion = CondicionTermica.Cualquiera;
+                ley.minTempRaw = 0;
+                ley.maxTempRaw = 255;
+                leyes[i] = ley;
+
+                var reaccion = reactions[i];
+                reaccion.minTempRaw = 0;
+                reaccion.maxTempRaw = 255;
+                reactions[i] = reaccion;
+
+                necesarias--;
+            }
+            // Si `necesarias` sigue > 0 aquí, es porque el sorteo devolvió muy
+            // pocas leyes no-Contagio en total (huecos agotados, ya
+            // registrado por LogWarning más arriba): R10 queda en
+            // mejor-esfuerzo, no hay ninguna ley más que convertir sin violar
+            // R5.
         }
     }
 }

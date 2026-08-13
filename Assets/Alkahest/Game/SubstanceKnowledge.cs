@@ -88,17 +88,36 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         // (fix playtest 9) "LEY DESCUBIERTA": el jugador reportó que llevaba horas sin
         // entender que las muestras del Maestro son SEMILLAS (catalizadores que no se
-        // gastan), no ingredientes. El malentendido es invisible porque las dos leyes que
-        // lo desmentirían (Azoth->Cristal sin gastar el cristal; Vivium creciendo sin
-        // gastarse) ocurren en celdas diminutas, lejos del cursor, sin ningún aviso: la
+        // gastan), no ingredientes. El malentendido es invisible porque las leyes que lo
+        // desmentirían ocurren en celdas diminutas, lejos del cursor, sin ningún aviso: la
         // primera vez que pasan de verdad, nadie las ve pasar. Aquí se anuncian UNA vez
-        // cada una, la primera vez que el ring buffer de SimStepper reporta el evento
-        // correspondiente (Crystallize/Grow), con la frase ejecutable de la ley, no una
-        // descripción poética. Cola de 2 (como mucho hay 2 leyes de este tipo en el
-        // roster fijo) para que si ambas se disparan el mismo tick no se pisen.
+        // cada una, con la frase ejecutable de la ley, no una descripción poética.
+        //
+        // (playtest 18, CONTRATO_FASE3.md) REESCRITO: con química sorteada por semilla hay
+        // entre 13 y 16 leyes por universo (7 núcleo + 5-8 sorteadas + 1 crecimiento), no
+        // 2 fijas -- los dos `bool` cableados a mano (`_leyCristalDescubierta`,
+        // `_leyVivumDescubierta`) y los dos constructores de texto a mano
+        // (ConstruirTextoLeyCristal/Vivium) ya no valen: ninguna ley se conoce en tiempo de
+        // compilación. El registro pasa a ser POR ÍNDICE (`_leyDescubierta`, dimensionado
+        // con `Universe.Leyes.Length` en Init) y el disparador es el evento ADICIONAL
+        // `SimEventType.Ley` (no sustituye a Crystallize/Grow/etc., que se siguen
+        // consumiendo igual para las witness flags -- ver ApplyWitness/ApplyLey). El texto
+        // ya no se escribe a mano por ley: se GENERA desde el descriptor `LeyDelUniverso`
+        // con una plantilla por `FormaDeLey` (ver ConstruirTextoLey).
+        //
+        // Cola de LeyBannerCapacidad (subida de 2 a 8, ver el comentario junto a la
+        // constante): un vertido puede disparar varias reacciones casi a la vez.
         // ---------------------------------------------------------------------------------
         private const float LeyBannerDuracionSeg = 7f;
-        private const int LeyBannerCapacidad = 2;
+
+        // (playtest 18) ERA 2 ("solo 2 leyes de este tipo existen"): con química por seed
+        // eso es falso -- puede haber 13-16 leyes y varias descubrirse en el mismo puñado
+        // de ticks (un vertido grande dispara reacciones en cadena). 8 da margen amplio sin
+        // reservar memoria real (son solo dos arrays paralelos de referencias/bytes). Si la
+        // cola se llena de todas formas, EncolarLeyBanner descarta el banner en silencio --
+        // pero el registro en `_leyDescubierta` ya se hizo ANTES de encolar (ver ApplyLey),
+        // así que nunca se pierde que la ley fue presenciada, solo el aviso visual de esa vez.
+        private const int LeyBannerCapacidad = 8;
 
         private AlkahestSim _sim;
         private Flask _flask;
@@ -119,15 +138,21 @@ namespace Alkahest.Game
         // conteo de nombrados no cambia.
         public int NamingVersion { get; private set; }
 
-        // Estado de la ley "descubierta" (ver doc arriba): dos banderas de una sola vez
-        // (Cristalizar, Crecer) más una cola FIFO fija de textos ya construidos (se
-        // construyen una única vez, al disparar el evento -- nunca en OnGUI/Update).
-        // _leyBannerColaMat es paralelo a _leyBannerCola: guarda el matId PRODUCTO de
-        // cada ley (Crystal / Vivium) para poder encadenar el aviso de bautizo justo
-        // cuando el banner de esa ley termina (fix playtest 10, ver
-        // DispararAvisoBautizoTrasLey).
-        private bool _leyCristalDescubierta;
-        private bool _leyVivumDescubierta;
+        // Estado de la ley "descubierta" (ver doc arriba). (playtest 18) Registro POR
+        // ÍNDICE de Universe.Leyes -- dimensionado en Init, cuando Universe ya existe
+        // (AlkahestGameBootstrap.TrySpawn no llama a Init hasta que _sim.Universe != null,
+        // ver AlkahestGameBootstrap.cs). null hasta entonces; todos los accesos públicos
+        // (LeyDescubierta/CountLeyesDescubiertas) y ApplyLey se defienden de ese caso.
+        private bool[] _leyDescubierta;
+
+        /// <summary>Sube cada vez que se descubre una ley (nunca decrece). Ver LeyesVersion del contrato: JournalHud lo mete en su firma de caché para saber cuándo reconstruir el texto de la sección LEYES.</summary>
+        public int LeyesVersion { get; private set; }
+
+        // Cola FIFO fija de textos de banner ya construidos (se construyen una única vez,
+        // al disparar el evento -- nunca en OnGUI/Update). _leyBannerColaMat es paralelo a
+        // _leyBannerCola: guarda el matId que MaterialParaInvitarBautizo eligió para esa
+        // ley, para poder encadenar el aviso de bautizo justo cuando el banner de esa ley
+        // termina (fix playtest 10, ver DispararAvisoBautizoTrasLey).
         private readonly string[] _leyBannerCola = new string[LeyBannerCapacidad];
         private readonly byte[] _leyBannerColaMat = new byte[LeyBannerCapacidad];
         private int _leyBannerColaCount;
@@ -159,9 +184,32 @@ namespace Alkahest.Game
         {
             _sim = sim;
             _flask = flask;
+
+            // (playtest 18) Dimensionado aquí y no como inicializador de campo porque el
+            // tamaño depende de la seed (Universe.Leyes.Length varía entre 13 y 16, ver
+            // CONTRATO_FASE3.md secciones 1 y 6) -- AlkahestGameBootstrap.TrySpawn garantiza
+            // que _sim.Universe ya existe en este punto, pero se defiende igual por si
+            // algún día Init se llama desde otro sitio.
+            int count = (_sim != null && _sim.Universe != null) ? _sim.Universe.Leyes.Length : 0;
+            _leyDescubierta = new bool[count];
         }
 
         public bool EsDescubierto(byte matId) => matId < MaterialId.Count && _discovered[matId];
+
+        /// <summary>¿El jugador ha PRESENCIADO la ley `indiceLey` (índice de Universe.Leyes)? Contrato sección 5. Un índice fuera de rango devuelve false sin romper nada.</summary>
+        public bool LeyDescubierta(int indiceLey)
+        {
+            return _leyDescubierta != null && indiceLey >= 0 && indiceLey < _leyDescubierta.Length && _leyDescubierta[indiceLey];
+        }
+
+        /// <summary>Cuántas leyes ha presenciado (la N del "N de M" del diario). Contrato sección 5.</summary>
+        public int CountLeyesDescubiertas()
+        {
+            if (_leyDescubierta == null) return 0;
+            int n = 0;
+            for (int i = 0; i < _leyDescubierta.Length; i++) if (_leyDescubierta[i]) n++;
+            return n;
+        }
 
         /// <summary>Nombre puesto por el jugador, o "???" si todavía no se ha bautizado (o el id es inválido).</summary>
         public string NombreDe(byte matId)
@@ -268,6 +316,45 @@ namespace Alkahest.Game
             string propio = _playerName[matId];
             if (!string.IsNullOrEmpty(propio)) return propio;
             return NombreComun(matId) ?? respaldo;
+        }
+
+        /// <summary>
+        /// (playtest 18) Sobrecarga que resuelve el respaldo por tabla fija (ver
+        /// RespaldoLey) en vez de que cada llamante lo escriba a mano. Antes solo dos
+        /// llamantes (ConstruirTextoLeyCristal/Vivium) necesitaban respaldo, uno cada
+        /// uno; con leyes sorteadas por seed CUALQUIERA de las 6 sustancias innominadas
+        /// puede aparecer en cualquier ley (a, b, productoA o productoB), así que
+        /// ConstruirTextoLey necesita poder pedir el nombre de cualquiera sin saber de
+        /// antemano cuál va a tocarle.
+        /// </summary>
+        private string NombreLey(byte matId) => NombreLey(matId, RespaldoLey(matId));
+
+        /// <summary>
+        /// Descripción de respaldo por ORIGEN/EFECTO para cada sustancia innominada,
+        /// nunca su identidad interna (regla 13/17 de CLAUDE.md) -- usada por
+        /// NombreLey(byte) mientras el jugador no haya bautizado ni el material sea
+        /// vocabulario de taller. Azoth/CrystalSeed/Vivium reutilizan LITERALMENTE los
+        /// mismos textos que ya usan MasterSupplies.TextoEntrega y Game/HintSystem.cs
+        /// ("el líquido reservado del Maestro", "su semilla sin nombre", "el retoño de
+        /// la cuba") para que el vocabulario del jugador sea el mismo en cualquier
+        /// pantalla que hable de esa sustancia. Crystal/Slime/Acid no tenían respaldo
+        /// hasta ahora (solo dos leyes tenían banner); se añaden aquí siguiendo el mismo
+        /// criterio de origen/efecto: Crystal por CÓMO nace (del frío), Slime por lo que
+        /// lo produce (neutralizar ácido), Acid por lo que se le ha visto hacer (disolver).
+        /// </summary>
+        private static string RespaldoLey(byte matId)
+        {
+            switch (matId)
+            {
+                case MaterialId.Empty: return "nada";
+                case MaterialId.Azoth: return "el líquido reservado del Maestro";
+                case MaterialId.CrystalSeed: return "su semilla sin nombre";
+                case MaterialId.Vivium: return "el retoño de la cuba";
+                case MaterialId.Crystal: return "la piedra que nace del frío";
+                case MaterialId.Slime: return "el poso que deja el ácido al apagarse";
+                case MaterialId.Acid: return "lo que disuelve lo que toca";
+                default: return NombreComun(matId) ?? "algo sin nombre todavía"; // vocabulario de taller (ya tiene nombre común) o id fuera de rango.
+            }
         }
 
         public WitnessFlags WitnessOf(byte matId) => matId < MaterialId.Count ? _witness[matId] : WitnessFlags.None;
@@ -408,7 +495,12 @@ namespace Alkahest.Game
             while (i != head && steps < SimStepper.EventBufferSize)
             {
                 var e = events[i];
-                ApplyWitness(e.type, e.matId);
+                // (playtest 18) SimEventType.Ley es un evento ADICIONAL (contrato sección
+                // 4): los eventos de siempre (Ignite/Boil/.../Dissolve) se siguen
+                // consumiendo exactamente igual en ApplyWitness, Ley se despacha aparte
+                // porque lleva su propio dato (leyIndice) y no una WitnessFlag.
+                if (e.type == SimEventType.Ley) ApplyLey(e.leyIndice);
+                else ApplyWitness(e.type, e.matId);
                 i = (i + 1) & (SimStepper.EventBufferSize - 1);
                 steps++;
             }
@@ -432,56 +524,143 @@ namespace Alkahest.Game
             }
 
             _witness[matId] |= flag;
+        }
 
-            // (fix playtest 9) Disparo de "LEY DESCUBIERTA": solo la PRIMERA vez que cada
-            // una de las dos leyes de multiplicación ocurre de verdad en la sim. matId de
-            // Crystallize es SIEMPRE Azoth (ver SimStepper.NotifyReactionEvent) y el de
-            // Grow SIEMPRE Vivium (ver SimStepper.GrowthTick) -- no hace falta comprobarlo,
-            // pero se deja explícito por claridad.
-            if (type == SimEventType.Crystallize && !_leyCristalDescubierta)
-            {
-                _leyCristalDescubierta = true;
-                EncolarLeyBanner(ConstruirTextoLeyCristal(), MaterialId.Crystal);
-            }
-            else if (type == SimEventType.Grow && !_leyVivumDescubierta)
-            {
-                _leyVivumDescubierta = true;
-                EncolarLeyBanner(ConstruirTextoLeyVivium(), MaterialId.Vivium);
-            }
+        /// <summary>
+        /// (playtest 18) Disparo de "LEY DESCUBIERTA": solo la PRIMERA vez que el índice
+        /// de esta ley concreta llega por el evento SimEventType.Ley (empujado desde
+        /// Sim/SimStepper.cs, ya limitado de ritmo allí -- ver CONTRATO_FASE3.md sección
+        /// 7, esta clase no necesita su propio limitador). `leyIndice` llega como short
+        /// desde SimNotableEvent; se defiende el rango ANTES de indexar -- un evento con
+        /// un índice fuera de rango (que no debería poder ocurrir con un Universe.Leyes
+        /// bien construido, pero el contrato lo exige por si acaso) se ignora sin más,
+        /// nunca tira la partida.
+        /// </summary>
+        private void ApplyLey(int leyIndice)
+        {
+            if (_leyDescubierta == null) return;
+            if (leyIndice < 0 || leyIndice >= _leyDescubierta.Length) return; // índice inválido: se ignora, ver doc de arriba.
+            if (_leyDescubierta[leyIndice]) return; // ya presenciada -- solo cuenta la primera vez.
+
+            _leyDescubierta[leyIndice] = true;
+            LeyesVersion++;
+
+            var ley = _sim.Universe.Leyes[leyIndice];
+            EncolarLeyBanner(ConstruirTextoLey(ley), MaterialParaInvitarBautizo(ley));
         }
 
         private void EncolarLeyBanner(string texto, byte matId)
         {
-            if (_leyBannerColaCount >= LeyBannerCapacidad) return; // defensivo: no debería pasar (solo 2 leyes de este tipo existen).
+            // (playtest 18) Ya NO es defensivo-imposible: con 13-16 leyes por universo un
+            // vertido puede disparar varias reacciones casi a la vez y llenar la cola de
+            // verdad. Si pasa, el banner de esa ley se pierde (nadie ve el aviso), pero el
+            // registro de "presenciada" YA se hizo en ApplyLey antes de llamar aquí -- son
+            // dos cosas distintas a propósito: perder un aviso visual es aceptable, perder
+            // el registro de descubrimiento no lo sería (el diario mentiría para siempre
+            // sobre si el jugador vio esa ley).
+            if (_leyBannerColaCount >= LeyBannerCapacidad) return;
             _leyBannerCola[_leyBannerColaCount] = texto;
             _leyBannerColaMat[_leyBannerColaCount] = matId;
             _leyBannerColaCount++;
         }
 
         /// <summary>
-        /// Construido UNA vez, al disparar el evento (ver ApplyWitness) -- nunca en
-        /// Update/OnGUI. Usa los nombres bautizados o comunes de taller si los hay
-        /// (ver NombreLey); si no, una descripción de ORIGEN -- nunca la identidad
-        /// interna del material (fix playtest 10: eso sería la misma circularidad
-        /// que rompía las pistas, ver doc de NombreLey).
+        /// (playtest 18) Qué material invitar a bautizar cuando termine el banner de esta
+        /// ley (ver DispararAvisoBautizoTrasLey): el producto que CAMBIA respecto a su
+        /// reactivo es "lo nuevo que acabas de ver aparecer", el candidato natural a
+        /// nombrar -- antes esto era MaterialId.Crystal/MaterialId.Vivium a mano porque
+        /// solo había dos leyes con banner; ahora cualquier ley puede dispararlo. Caso
+        /// especial: Crecimiento (única ley con esa forma, la del Vivium) no tiene un
+        /// "producto nuevo" en el sentido de la fórmula -- productoA==a (la célula sigue
+        /// siendo la misma) y productoB es Nutrient consumiéndose a Empty, que no es nada
+        /// que invitar a nombrar -- así que se invita sobre el propio organismo (a).
         /// </summary>
-        private string ConstruirTextoLeyCristal()
+        private static byte MaterialParaInvitarBautizo(LeyDelUniverso ley)
         {
-            string azoth = NombreLey(MaterialId.Azoth, "el líquido reservado del Maestro");
-            string semilla = NombreLey(MaterialId.CrystalSeed, "su semilla sin nombre");
-            string cristal = NombreLey(MaterialId.Crystal, "la piedra que nace del frío");
-            // "que ya haya cuajado" en vez de un adjetivo con género (crecido/a): el
-            // nombre bautizado puede ser cualquier palabra y no sabemos su género.
-            return $"LEY DESCUBIERTA — En frío, {azoth} se vuelve {cristal} al tocar {semilla} o al tocar {cristal} que ya haya cuajado. " +
-                   "La semilla no se gasta: siembra una y aliméntala.";
+            if (ley.forma == FormaDeLey.Crecimiento) return ley.a;
+            if (ley.productoA != ley.a) return ley.productoA;
+            if (ley.productoB != ley.b) return ley.productoB;
+            return ley.a; // caso degenerado (no debería darse con el sorteo del contrato: R8 exige que al menos un lado cambie).
         }
 
-        private string ConstruirTextoLeyVivium()
+        /// <summary>
+        /// (playtest 18) Construido UNA vez, al disparar el evento (ver ApplyLey) --
+        /// nunca en Update/OnGUI. Sustituye a los ConstruirTextoLeyCristal/Vivium de
+        /// antes: con leyes sorteadas por seed no hay dos textos que escribir a mano, hay
+        /// que GENERAR el texto desde el descriptor `LeyDelUniverso`, una plantilla por
+        /// `FormaDeLey` (CONTRATO_FASE3.md sección 1) para que la FORMA de la ley se note
+        /// -- un catalizador que no se gasta se lee muy distinto de una fusión o de un
+        /// contagio que se propaga, y esa diferencia es la que hace que una semilla se
+        /// SIENTA distinta de otra, no solo se vea distinta. Los nombres pasan siempre
+        /// por NombreLey(byte) (bautizado &gt; vocabulario de taller &gt; respaldo de
+        /// origen/efecto): mientras un material siga innominado nunca se revela su
+        /// identidad interna (regla 13/17 de CLAUDE.md).
+        /// </summary>
+        private string ConstruirTextoLey(LeyDelUniverso ley)
         {
-            string vivium = MayusculaInicial(NombreLey(MaterialId.Vivium, "lo vivo que os dejó el Maestro"));
-            string nutriente = NombreLey(MaterialId.Nutrient, "nutriente");
-            return $"LEY DESCUBIERTA — {vivium}, asentado, con {nutriente} al lado y calor TEMPLADO, crea más de sí mismo. " +
-                   "No se consume: cada célula que nace es otra semilla.";
+            string a = NombreLey(ley.a);
+            string A = MayusculaInicial(a);
+            string b = NombreLey(ley.b);
+            string B = MayusculaInicial(b);
+            string pa = NombreLey(ley.productoA);
+            string pb = NombreLey(ley.productoB);
+
+            // La condición térmica tiene que quedar dicha para que el jugador sepa
+            // REPRODUCIR lo que acaba de ver, no solo lo que acaba de pasar (contrato
+            // sección 5, punto 3: "al frío"/"con calor" cuando no sea Cualquiera).
+            string cond = ley.condicion == CondicionTermica.Frio ? " en frío"
+                : ley.condicion == CondicionTermica.Calor ? " con calor"
+                : "";
+
+            string cuerpo;
+            switch (ley.forma)
+            {
+                case FormaDeLey.Transmutacion:
+                    // A+B -> C+B: B es catalizador, no se gasta -- la propiedad que más
+                    // cambia cómo se juega una semilla (siembra una vez y ya).
+                    cuerpo = $"{A}, al tocar {b}{cond}, se vuelve {pa}. {B} no se gasta: sirve de semilla una y otra vez.";
+                    break;
+
+                case FormaDeLey.Fusion:
+                    // A+B -> C+C: los dos reactivos se funden en la misma cosa nueva.
+                    cuerpo = $"{A} y {b}, al tocarse{cond}, se funden los dos en {pa}.";
+                    break;
+
+                case FormaDeLey.Consumo:
+                    // A+B -> Empty+C: A desaparece del todo, B se transforma.
+                    cuerpo = $"{A}, al tocar {b}{cond}, desaparece por completo — y {b} se transforma en {pb}.";
+                    break;
+
+                case FormaDeLey.Liberacion:
+                    // A+B -> C+gas: la ley más fácil de presenciar de lejos, algo sube.
+                    cuerpo = $"{A}, al tocar {b}{cond}, se vuelve {pa} y suelta {pb}, que sube por el aire.";
+                    break;
+
+                case FormaDeLey.Contagio:
+                    // A+B -> A+A: A se propaga comiéndose a B. Como mucho una por semilla
+                    // (R5 del contrato) y SIEMPRE con condición térmica -- nunca Cualquiera.
+                    cuerpo = $"{A} se propaga{cond}: en cuanto toca {b}, {b} se convierte también en {a}. Basta un punto de contacto.";
+                    break;
+
+                case FormaDeLey.Crecimiento:
+                    // Caso especial (vive en Sim/SimStepper.GrowthTick, no es reacción de
+                    // contacto): la única ley con esta forma es la del Vivium, garantizada
+                    // en TODA semilla (esDelNucleo). Se mantiene el texto de siempre
+                    // ("templado", no "frío"/"calor" genérico): la banda real es propia de
+                    // la seed y no encaja en la etiqueta binaria de CondicionTermica.
+                    cuerpo = $"{A}, asentado y con {b} al lado, a temperatura templada, crea más de sí mismo. No se consume: cada célula que nace es otra semilla.";
+                    break;
+
+                default:
+                    // Defensivo: FormaDeLey es un enum cerrado con 6 valores, todos
+                    // cubiertos arriba -- esta rama no debería alcanzarse nunca, pero un
+                    // texto genérico es mejor que una excepción si el enum creciera en el
+                    // futuro sin actualizar este switch.
+                    cuerpo = $"{A} y {b} reaccionan{cond}.";
+                    break;
+            }
+
+            return "LEY DESCUBIERTA — " + cuerpo;
         }
 
         private static string MayusculaInicial(string s)
@@ -530,7 +709,7 @@ namespace Alkahest.Game
         /// <summary>
         /// Aviso cálido y destacado (estilo UiStyles, sin HUD permanente): título en el
         /// color de aviso del taller + cuerpo centrado con la ley en frase ejecutable.
-        /// El texto ya viene cacheado (ConstruirTextoLey*): aquí solo se mide/dibuja, igual
+        /// El texto ya viene cacheado (ConstruirTextoLey): aquí solo se mide/dibuja, igual
         /// que hace Game/HintSystem.cs con su pista activa.
         /// </summary>
         private void DrawLeyBanner()

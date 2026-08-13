@@ -59,6 +59,29 @@ namespace Alkahest.Sim
         // ---------------------------------------------------------------------------------
         private readonly bool[] _morphChunkRelevant = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
 
+        // ---------------------------------------------------------------------------------
+        // (playtest 18) LIMITADOR DE RITMO POR LEY -- CONTRATO_FASE3.md sección 7, NO
+        // OPCIONAL. El anillo de arriba tiene 256 entradas y lo leen tres clases sin
+        // consumirlo (CLAUDE.md regla 8). Un ácido disolviendo ya empuja decenas de eventos
+        // Dissolve por tick; si CADA reacción empujara ADEMÁS un evento Ley sin límite, el
+        // anillo daría la vuelta antes de que el consumidor lo leyera y una ley podría no
+        // descubrirse NUNCA -- un bug intermitente y dependiente de la carga, de los que se
+        // tardan varias rondas en ver, precisamente porque solo aparece bajo carga alta.
+        //
+        // _ultimoTickPorLey[i] guarda el último tick en el que se empujó un evento Ley para
+        // Universe.Leyes[i]; PushLeyEvent solo empuja si es la PRIMERA vez para esa ley o si
+        // pasaron >= LeyEventCooldownTicks (30 ticks = 1s a 30Hz, ver Step) desde el anterior
+        // empujón de ESA MISMA ley -- otras leyes no comparten cooldown entre sí. Array
+        // preasignado al tamaño de Universe.Leyes en el constructor: cero allocs en el hot
+        // path, y determinista (depende solo del historial de ticks de la sim, nunca de
+        // temporizadores de reloj real). Se "reinicia" porque AlkahestSim.Start() crea un
+        // SimStepper NUEVO cada vez que la sim se reinicia (ver ese archivo) -- no hace falta
+        // un método Reset aparte, el array nace limpio con cada instancia.
+        // ---------------------------------------------------------------------------------
+        private const uint LeyEventCooldownTicks = 30;
+        private const uint LeyEventNuncaEmpujado = uint.MaxValue; // sentinela: "aún no se ha empujado ningún evento para esta ley".
+        private readonly uint[] _ultimoTickPorLey;
+
         /// <summary>Array fijo (no crece) de eventos notables; leer entre un "lastSeenHead" propio y <see cref="EventHead"/>, ambos módulo EventBufferSize.</summary>
         public SimNotableEvent[] Events => _events;
         public int EventHead => _eventHead;
@@ -67,9 +90,18 @@ namespace Alkahest.Sim
         {
             _universe = universe;
             _grid = grid;
+
+            _ultimoTickPorLey = new uint[universe.Leyes.Length];
+            for (int i = 0; i < _ultimoTickPorLey.Length; i++) _ultimoTickPorLey[i] = LeyEventNuncaEmpujado;
         }
 
-        private void PushEvent(SimEventType type, byte matId, int x, int y)
+        /// <summary>
+        /// (playtest 18) `leyIndice` por defecto -1: TODOS los caminos viejos
+        /// (Ignite/Boil/Freeze/Crystallize/Grow/Dissolve) siguen empujando
+        /// exactamente igual que antes y jamás identifican una ley. Solo
+        /// <see cref="PushLeyEvent"/> pasa un índice real.
+        /// </summary>
+        private void PushEvent(SimEventType type, byte matId, int x, int y, short leyIndice = -1)
         {
             ref var e = ref _events[_eventHead];
             e.type = type;
@@ -77,7 +109,25 @@ namespace Alkahest.Sim
             e.x = (short)x;
             e.y = (short)y;
             e.tick = _tick;
+            e.leyIndice = leyIndice;
             _eventHead = (_eventHead + 1) & (EventBufferSize - 1);
+        }
+
+        /// <summary>
+        /// Empuja un evento SimEventType.Ley para <paramref name="leyIndice"/>,
+        /// sujeto al limitador de ritmo por ley (ver <see cref="_ultimoTickPorLey"/>
+        /// arriba). Llamado desde TryReactNeighbor (leyes de contacto) y desde
+        /// GrowthTick (la ley de crecimiento del Vivium, con leyIndice ==
+        /// Universe.LeyCrecimientoIndice) -- mismo limitador para las dos,
+        /// ninguna ley puede saturar el anillo por sí sola.
+        /// </summary>
+        private void PushLeyEvent(int leyIndice, byte matId, int x, int y)
+        {
+            if ((uint)leyIndice >= (uint)_ultimoTickPorLey.Length) return; // defensivo: no debería ocurrir con un Universe.Leyes bien construido.
+            uint ultimo = _ultimoTickPorLey[leyIndice];
+            if (ultimo != LeyEventNuncaEmpujado && _tick - ultimo < LeyEventCooldownTicks) return;
+            _ultimoTickPorLey[leyIndice] = _tick;
+            PushEvent(SimEventType.Ley, matId, x, y, (short)leyIndice);
         }
 
         public void Step()
@@ -341,13 +391,20 @@ namespace Alkahest.Sim
             byte matNeighbor = _grid.mat[nidx];
             if (matNeighbor == MaterialId.Empty) return false;
 
-            if (!_universe.Reactions.TryGet(matSelf, matNeighbor, out var reaction)) return false;
+            if (!_universe.Reactions.TryGet(matSelf, matNeighbor, out var reaction, out int reactionIndex)) return false;
 
             byte t = _grid.temp[idx];
             if (t < reaction.minTempRaw || t > reaction.maxTempRaw) return false;
 
             var rng = XorShift.FromCell(_tick, x, y, 77);
             if (!rng.ChancePercent(reaction.chancePct)) return false;
+
+            // (playtest 18) La ley acaba de ocurrir de verdad (pasó banda térmica
+            // y tirada de probabilidad): empuja su evento Ley, con el ÍNDICE
+            // ESTABLE que TryGet acaba de devolver -- Universe.Leyes[reactionIndex]
+            // describe exactamente esta Reaction (invariante del contrato). Sujeto
+            // al limitador de ritmo por ley, igual que GrowthTick.
+            PushLeyEvent(reactionIndex, matSelf, x, y);
 
             byte productSelf, productNeighbor;
             if (reaction.a == matSelf)
@@ -998,6 +1055,12 @@ namespace Alkahest.Sim
                 // ya puso aux[nidx]=0 arriba, así que esto no pisa nada.
                 _grid.aux[nidx] = (byte)((dir & CameFromDirMask) | CameFromKnownFlag);
                 PushEvent(SimEventType.Grow, MaterialId.Vivium, nx, ny);
+                // (playtest 18) La ley de crecimiento del Vivium también es una
+                // LEY: empuja su propio evento Ley con LeyCrecimientoIndice,
+                // sujeto al MISMO limitador de ritmo que las leyes de contacto
+                // (CONTRATO_FASE3.md sección 7) -- un cultivo de Vivium creciendo
+                // rápido no debe poder saturar el anillo más que un ácido disolviendo.
+                PushLeyEvent(_universe.LeyCrecimientoIndice, MaterialId.Vivium, nx, ny);
             }
             // un Nutrient por célula y por tick (igual que antes).
         }

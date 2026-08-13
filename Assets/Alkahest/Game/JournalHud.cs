@@ -27,14 +27,23 @@ namespace Alkahest.Game
     /// cociéndose mientras consulta el libro.
     ///
     /// SECCIONES (pestañas arriba, LEYES/SUSTANCIAS/PROCEDIMIENTOS):
-    ///  · LEYES -- igual que antes del playtest 10, lee la tabla de
-    ///    reacciones REAL del universo activo (AlkahestSim.Universe.Reactions,
-    ///    horneada por seed en Sim/Universe.cs -- NUNCA se toca Sim/, solo se
-    ///    lee su API pública) más la ley de crecimiento del Vivium (que no
-    ///    vive en esa tabla: es una regla propia de Sim/SimStepper.cs/
-    ///    GrowthTick, así que se añade a mano pero con los NÚMEROS REALES de
-    ///    esta seed). Formato "de un vistazo": fórmula (entrada) + condición
-    ///    de temperatura (detalle) + distintivo ★ SE PROPAGA cuando aplica.
+    ///  · LEYES -- (playtest 18, CONTRATO_FASE3.md) REESCRITA para química
+    ///    sorteada por semilla: lee `AlkahestSim.Universe.Leyes` DIRECTAMENTE
+    ///    (horneado por seed en Sim/Universe.cs -- NUNCA se toca Sim/, solo se
+    ///    lee su API pública), un array ya resuelto con forma/condición/banda/
+    ///    esDelNucleo por índice ESTABLE, el mismo índice que usan los eventos
+    ///    SimEventType.Ley. Ya NO rastrea pares (a,b) con Reactions.TryGet ni
+    ///    añade la ley del Vivium a mano (ver ConstruirLeyesDesdeUniverso).
+    ///    VISIBILIDAD (decisión de Cesar, "solo lo presenciado, con hueco
+    ///    visible"): una ley se enseña sii `SubstanceKnowledge.LeyDescubierta`
+    ///    -- el jugador la ha visto OCURRIR, no basta con conocer sus dos
+    ///    materiales (criterio viejo, ver ActualizarCache). Las leyes que
+    ///    faltan OCUPAN SITIO como huecos idénticos entre sí, en el mismo
+    ///    orden estable del array -- el diario es una pregunta ("¿cuántas te
+    ///    faltan?"), no un manual. Contador "N de M" en la cabecera de la
+    ///    sección (ver _tituloLeyesConContador). Formato "de un vistazo":
+    ///    fórmula (entrada) + condición de temperatura (detalle) + distintivo
+    ///    ★ SE PROPAGA cuando aplica.
     ///  · SUSTANCIAS -- REHECHA EN EL PLAYTEST 12 como fichas de catálogo:
     ///    "en esta ronda cada sustancia innominada recibe una firma visual
     ///    sorteada por seed... el diario pasa a ser el catálogo de este
@@ -77,9 +86,13 @@ namespace Alkahest.Game
     {
         private enum Seccion { Leyes = 0, Sustancias = 1, Procedimientos = 2 }
 
-        // Cota generosa para el array fijo de leyes: 17 materiales -> como
-        // mucho 17*16/2=136 pares posibles, pero la tabla real de Universe.cs
-        // tiene ~6 entradas; 24 deja margen de sobra sin listas dinámicas.
+        // (playtest 18) Coincide a propósito con Sim/Universe.MaxLeyes ("El
+        // diario ya reserva este tamaño", ver el doc de esa constante en el
+        // contrato): con química por seed hay entre 13 y 16 leyes reales
+        // (7 núcleo + 5-8 sorteadas + 1 crecimiento), y 24 es el tope duro
+        // que Universe.Create ya no puede superar (asserted ahí). Antes esta
+        // cota se justificaba por "136 pares posibles de 17 materiales" --
+        // ya no aplica: ya no se rastrean pares, se lee Universe.Leyes tal cual.
         private const int MaxLeyes = 24;
 
         private struct LeyDatos
@@ -136,12 +149,13 @@ namespace Alkahest.Game
         /// </summary>
         public static bool Abierto { get; private set; }
 
-        // Estructura de leyes: se calcula UNA sola vez en Init (la tabla de
-        // reacciones de este universo no cambia durante la partida). El TEXTO
-        // de cada entrada sí depende de nombres bautizables, así que se
-        // cachea aparte y solo se reconstruye cuando cambia el estado de
-        // conocimiento del jugador (ver ActualizarCache) -- nunca se
-        // reconstruyen strings en cada frame de OnGUI si nada cambió.
+        // Estructura de leyes: se calcula UNA sola vez en Init (playtest 18:
+        // Universe.Leyes de este universo no cambia durante la partida). El
+        // TEXTO de cada entrada sí depende de nombres bautizables y de si la
+        // ley se ha presenciado, así que se cachea aparte y solo se
+        // reconstruye cuando cambia el estado de conocimiento del jugador
+        // (ver ActualizarCache) -- nunca se reconstruyen strings en cada
+        // frame de OnGUI si nada cambió.
         private readonly LeyDatos[] _leyes = new LeyDatos[MaxLeyes];
         private int _leyesCount;
 
@@ -152,6 +166,17 @@ namespace Alkahest.Game
         private readonly Entrada[] _entradasSustancias = new Entrada[MaterialId.Count];
         private int _entradasSustanciasCount;
         private int _cacheFirma = int.MinValue;
+
+        // (playtest 18) "N de M" de la sección LEYES: cabecera bien visible
+        // (DrawContenido la usa en vez de la constante "LEYES" cuando
+        // _seccion==Leyes), NO el pie de página -- el pie ya está ocupado por
+        // la paginación real (DrawPie) y solo se dibuja si hay más de una
+        // página; el contador tiene que verse SIEMPRE que estés en la sección,
+        // aunque quepa entera en una página. Se reconstruye en ActualizarCache
+        // (mismo disparador que el resto de texto cacheado: ahí es donde
+        // CountLeyesDescubiertas() ya se necesita para decidir qué huecos
+        // dibujar, así que el contador sale gratis del mismo cálculo).
+        private string _tituloLeyesConContador = "LEYES";
 
         // -----------------------------------------------------------------
         // Paginación real (fix playtest 10): se recalcula en cada OnGUI
@@ -239,9 +264,34 @@ namespace Alkahest.Game
         private static readonly Color _lomo = new Color(0.09f, 0.07f, 0.06f, 1f);
 
         private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS" };
-        private const string TextoVacioLeyes = "(ninguna ley descubierta todavía: combina materiales para desvelarlas)";
+
+        // (playtest 18) TextoVacioLeyes queda como fallback puramente DEFENSIVO: con el
+        // criterio de huecos (ver ConstruirLeyesDesdeUniverso/ActualizarCache) la sección
+        // LEYES siempre pinta Universe.Leyes.Length renglones -- reales o huecos idénticos
+        // "??? -- ley aún no presenciada" -- así que count==0 solo puede darse si el
+        // universo todavía no ha cargado ninguna ley (un frame muy temprano). El texto ya
+        // no habla de "combinar materiales para desvelarlas": el criterio nuevo es
+        // PRESENCIAR la ley, no conocer sus dos materiales por separado (ver punto 6).
+        private const string TextoVacioLeyes = "(el libro todavía no conoce las leyes de este universo)";
         private const string TextoVacioSustancias = "(nada descubierto todavía: aspira, vierte o mantén el cursor un instante sobre algo)";
-        private const string TextoVacioProcedimientos = "(sin procedimientos archivados todavía: aparecen solos en cuanto descubres los dos materiales de una ley)";
+
+        // (playtest 18) PROCEDIMIENTOS usa el MISMO criterio nuevo que LEYES
+        // (LeyDescubierta), pero SIN huecos -- una "receta" en blanco no genera curiosidad,
+        // solo ruido (el catálogo de LEYES ya es el sitio que cuenta "cuántas te faltan").
+        // El texto viejo ("aparecen solos en cuanto descubres los dos materiales de una
+        // ley") describía el criterio ANTERIOR y ya no es cierto: ahora hace falta
+        // PRESENCIAR la ley, no solo conocer sus dos materiales por separado.
+        private const string TextoVacioProcedimientos = "(sin procedimientos archivados todavía: aparecen solos en cuanto presencias esa ley ocurrir)";
+
+        // (playtest 18) EL HUECO: renglón que ocupa el sitio de una ley que el jugador
+        // TODAVÍA no ha presenciado (ver ConstruirLeyesDesdeUniverso/ActualizarCache,
+        // decisión de Cesar "solo lo presenciado, con hueco visible"). Un mismo texto
+        // SIEMPRE, sin excepción -- si el hueco cambiara según la ley oculta (aunque fuera
+        // solo la longitud o la forma), estaría filtrando información de una ley que el
+        // jugador no ha visto ocurrir. Sin distintivo ★ SE PROPAGA tampoco (revelaría si es
+        // catalítica): Propaga se deja explícitamente en false donde se construye.
+        private const string TextoHuecoLeyTitulo = "??? — ley aún no presenciada";
+        private const string TextoHuecoLeyCuerpo = "Ocurre en algún punto de este universo. Tendrás que verla pasar.";
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
@@ -508,7 +558,11 @@ namespace Alkahest.Game
             var colDer = new Rect(der.x + padPagina, der.y + padPagina, der.width - padPagina * 2f, der.height - padPagina * 2f);
 
             float altoEncabezado = _estiloTituloSeccion.lineHeight + UiStyles.S(10f);
-            string tituloSeccion = _tituloSeccion[(int)_seccion];
+            // (playtest 18) La sección LEYES sustituye el título fijo por la versión con
+            // contador "N de M" cacheada en ActualizarCache (ver doc de
+            // _tituloLeyesConContador) -- bien visible, en la cabecera de la sección, no en
+            // el pie de página (que solo aparece con más de una página).
+            string tituloSeccion = _seccion == Seccion.Leyes ? _tituloLeyesConContador : _tituloSeccion[(int)_seccion];
             GUI.Label(new Rect(colIzq.x, colIzq.y, colIzq.width, _estiloTituloSeccion.lineHeight), tituloSeccion, _estiloTituloSeccion);
             GUI.Label(new Rect(colDer.x, colDer.y, colDer.width, _estiloTituloSeccion.lineHeight), tituloSeccion, _estiloTituloSeccion);
 
@@ -786,77 +840,64 @@ namespace Alkahest.Game
         }
 
         // ===================================================================
-        // DATOS: leyes desde Universe.Reactions (sin cambios de fondo desde
-        // antes del playtest 10, solo se reparte en Entrada de dos formas).
+        // DATOS: leyes desde Universe.Leyes (playtest 18, reescrito para
+        // química sorteada por semilla -- ver doc de ConstruirLeyesDesdeUniverso).
         // ===================================================================
 
         /// <summary>
-        /// Vuelca la tabla de reacciones real de este universo (más la ley de
-        /// crecimiento de Vivium) a <see cref="_leyes"/>. Llamado una única
-        /// vez desde Init: la tabla de reacciones de un universo ya creado no
-        /// cambia jamás durante la partida (Sim/Universe.cs la hornea una sola
-        /// vez en Create), así que no hace falta recalcular esto en Update.
+        /// (playtest 18, CONTRATO_FASE3.md) Vuelca <c>_sim.Universe.Leyes</c> a
+        /// <see cref="_leyes"/> UNA vez desde Init: el array de leyes de un
+        /// universo ya creado no cambia jamás durante la partida (Sim/Universe.cs
+        /// lo hornea una sola vez en Create), así que no hace falta recalcular
+        /// esto en Update.
+        ///
+        /// ANTES esta función rastreaba TODOS los pares (a,b) con
+        /// Reactions.TryGet (dos bucles anidados sobre 17 materiales, ~136
+        /// pares comprobados para encontrar ~6 reacciones reales) y añadía la
+        /// ley del Vivium a mano al final, con productB=Vivium hardcodeado
+        /// como truco de presentación (no era el dato real: GrowthTick
+        /// consume Nutrient a Empty, no lo convierte en Vivium). Con el
+        /// contrato de Fase 3, Sim/Universe.cs YA ENTREGA el array resuelto
+        /// -- forma, condición, banda, esDelNucleo, y el índice ESTABLE que
+        /// usan los eventos SimEventType.Ley -- así que esto pasa a ser una
+        /// única pasada de copia. Es una simplificación real, no un parche:
+        /// con 13-16 leyes por seed, rastrear pares habría escalado peor
+        /// (17*16/2=136 comprobaciones) sin aportar nada que Universe.Leyes
+        /// no diera ya resuelto.
+        ///
+        /// INVARIANTE que el resto de la clase asume: `_leyes[i]` describe
+        /// EXACTAMENTE `Universe.Leyes[i]` para todo i -- ni se salta ni se
+        /// reordena ninguna entrada -- porque ActualizarCache usa ESE MISMO
+        /// índice `i` para preguntarle a SubstanceKnowledge.LeyDescubierta.
         /// </summary>
         private void ConstruirLeyesDesdeUniverso()
         {
             _leyesCount = 0;
             if (_sim == null || _sim.Universe == null) return;
 
-            var universe = _sim.Universe;
-            var reactions = universe.Reactions;
+            var leyes = _sim.Universe.Leyes;
+            int n = Mathf.Min(leyes.Length, MaxLeyes); // defensivo: Universe.MaxLeyes(24) == este MaxLeyes, nunca debería recortar.
 
-            // Recorre todos los pares (a,b) con a<b: ReactionEngine.TryGet es
-            // simétrico (registra la misma reacción en (a,b) y (b,a)), así que
-            // basta un sentido para no duplicar filas.
-            for (byte a = 1; a < MaterialId.Count && _leyesCount < MaxLeyes; a++)
+            for (int i = 0; i < n; i++)
             {
-                for (byte b = (byte)(a + 1); b < MaterialId.Count && _leyesCount < MaxLeyes; b++)
-                {
-                    if (!reactions.TryGet(a, b, out Reaction r)) continue;
+                var l = leyes[i];
 
-                    // r.a/r.b pueden venir en cualquier orden respecto a (a,b) --
-                    // se reordena para que productA/productB correspondan siempre
-                    // a (a,b), no a como se registró internamente la Reaction.
-                    byte pa = r.a == a ? r.productA : r.productB;
-                    byte pb = r.a == a ? r.productB : r.productA;
+                // Catalítica = exactamente un lado no cambia (ver doc de la
+                // clase): la misma semántica que documenta ReactionEngine, ahora
+                // leída directamente del descriptor en vez de inferida de una
+                // Reaction reordenada a mano.
+                bool catalitica = (l.productoA == l.a) != (l.productoB == l.b);
 
-                    // Catalítica = exactamente un lado no cambia (ver doc de la
-                    // clase): la misma semántica que documenta ReactionEngine.
-                    bool catalitica = (pa == a) != (pb == b);
-
-                    _leyes[_leyesCount] = new LeyDatos
-                    {
-                        a = a,
-                        b = b,
-                        productA = pa,
-                        productB = pb,
-                        catalitica = catalitica,
-                        soloFrio = r.maxTempRaw < 255,
-                        soloCalor = r.minTempRaw > 0,
-                        esCrecimiento = false,
-                    };
-                    _leyesCount++;
-                }
-            }
-
-            // Ley de crecimiento del Vivium: no vive en ReactionEngine (es la
-            // regla propia de Sim/SimStepper.cs GrowthTick -- un Nutrient
-            // vecino se consume y, con VivGrowChancePct de probabilidad, nace
-            // Vivium nuevo ahí), así que se añade a mano, pero SIN inventar
-            // ningún número: solo se usa como marcador estructural (a=Vivium
-            // no cambia, b=Nutrient se convierte en Vivium).
-            if (_leyesCount < MaxLeyes && universe.Get(MaterialId.Vivium).archetype == MaterialArchetype.Organic)
-            {
                 _leyes[_leyesCount] = new LeyDatos
                 {
-                    a = MaterialId.Vivium,
-                    b = MaterialId.Nutrient,
-                    productA = MaterialId.Vivium,
-                    productB = MaterialId.Vivium,
-                    catalitica = true,
-                    soloFrio = false,
-                    soloCalor = false,
-                    esCrecimiento = true,
+                    a = l.a,
+                    b = l.b,
+                    productA = l.productoA,
+                    productB = l.productoB,
+                    catalitica = catalitica,
+                    soloFrio = l.condicion == CondicionTermica.Frio,
+                    soloCalor = l.condicion == CondicionTermica.Calor,
+                    esCrecimiento = l.forma == FormaDeLey.Crecimiento,
                 };
                 _leyesCount++;
             }
@@ -865,14 +906,36 @@ namespace Alkahest.Game
         /// <summary>
         /// Reconstruye TODAS las entradas del libro (leyes, sustancias,
         /// procedimientos) SOLO si el conocimiento del jugador cambió desde
-        /// la última vez (nuevo material descubierto o un (re)bautizo -- ver
-        /// SubstanceKnowledge.NamingVersion, que a diferencia de
-        /// CountNamed() sí detecta un renombrado). Nunca se reconstruyen
-        /// strings en cada frame de OnGUI cuando el texto no cambia.
+        /// la última vez (nuevo material descubierto, una ley presenciada, o
+        /// un (re)bautizo -- ver SubstanceKnowledge.NamingVersion/LeyesVersion,
+        /// que a diferencia de CountDiscovered()/CountLeyesDescubiertas()
+        /// solos sí detectan un renombrado / una ley repetida ya vista).
+        /// Nunca se reconstruyen strings en cada frame de OnGUI cuando el
+        /// texto no cambia.
         /// </summary>
         private void ActualizarCache()
         {
-            int firma = _knowledge.CountDiscovered() * 1000003 + _knowledge.NamingVersion;
+            // (playtest 18) LeyesVersion se suma a la firma: sin este término,
+            // descubrir una ley (que no cambia CountDiscovered() ni
+            // NamingVersion -- presenciar una ley no descubre ni bautiza un
+            // material nuevo) no invalidaría la caché y el diario no
+            // repintaría el hueco recién revelado. Es la trampa más fácil de
+            // este cambio: el diario "funcionaría" en todo menos en lo nuevo,
+            // sin ningún error visible, solo un hueco que nunca se rellena.
+            //
+            // Los tres factores son POTENCIAS SEPARADAS a propósito, no primos
+            // sueltos: con multiplicadores arbitrarios (estaba en 1000003/1009/1)
+            // existe una colisión real -- 991 rebautizos compensan exactamente un
+            // material descubierto de más, y la caché se comería una
+            // actualización. Es inalcanzable en una partida de tres jornadas, pero
+            // es justo la clase de fallo que aparece el día que alguien alargue la
+            // partida y que nadie relacionaría jamás con esta línea. Con
+            // desplazamientos por rangos (leyes <= 24 -> 5 bits, bautizos <= 17
+            // materiales pero la versión sube también al REbautizar -> se le dan
+            // 16 bits) no hay colisión posible hasta 65.535 rebautizos.
+            int firma = (_knowledge.CountDiscovered() << 21)
+                      ^ ((_knowledge.NamingVersion & 0xFFFF) << 5)
+                      ^ (_knowledge.LeyesVersion & 0x1F);
             if (firma == _cacheFirma) return;
             _cacheFirma = firma;
 
@@ -881,16 +944,59 @@ namespace Alkahest.Game
             for (int i = 0; i < _leyesCount; i++)
             {
                 var ley = _leyes[i];
-                // Un libro no revela leyes de materiales que el jugador aún
-                // no ha visto: los dos lados tienen que estar descubiertos.
-                if (!_knowledge.EsDescubierto(ley.a) || !_knowledge.EsDescubierto(ley.b)) continue;
 
-                ConstruirEntradaLey(ley, out string tituloL, out string detalleL);
-                _entradasLeyes[_entradasLeyesCount++] = new Entrada { Titulo = tituloL, Cuerpo = detalleL, Propaga = ley.catalitica };
+                // (playtest 18) CRITERIO VIEJO (hasta playtest 17): una ley se
+                // mostraba si el jugador conocía sus DOS reactivos
+                // (EsDescubierto(a) && EsDescubierto(b)). Era razonable
+                // mientras no había otra señal: era un PROXY de "esto ya te lo
+                // he explicado", derivado de datos que ya existían (descubrir
+                // un material no requiere haber visto ninguna reacción suya).
+                // El problema real: el diario podía revelar una ley entera
+                // -- fórmula, condición térmica, si se propaga -- de una
+                // reacción que el jugador NUNCA VIO OCURRIR, solo por haber
+                // aspirado o mirado fijamente sus dos ingredientes por
+                // separado. Ahora que SubstanceKnowledge registra la ley en
+                // sí (evento SimEventType.Ley, ver LeyDescubierta), ese proxy
+                // queda sustituido por la señal directa: "¿la presenció?".
+                bool descubierta = _knowledge.LeyDescubierta(i); // `i` ES el índice de Universe.Leyes -- ver invariante en ConstruirLeyesDesdeUniverso.
 
-                ConstruirEntradaProcedimiento(ley, out string tituloP, out string detalleP);
-                _entradasProcedimientos[_entradasProcedimientosCount++] = new Entrada { Titulo = tituloP, Cuerpo = detalleP, Propaga = ley.catalitica };
+                if (descubierta)
+                {
+                    ConstruirEntradaLey(ley, out string tituloL, out string detalleL);
+                    _entradasLeyes[_entradasLeyesCount++] = new Entrada { Titulo = tituloL, Cuerpo = detalleL, Propaga = ley.catalitica };
+
+                    ConstruirEntradaProcedimiento(ley, out string tituloP, out string detalleP);
+                    _entradasProcedimientos[_entradasProcedimientosCount++] = new Entrada { Titulo = tituloP, Cuerpo = detalleP, Propaga = ley.catalitica };
+                }
+                else
+                {
+                    // (playtest 18) EL HUECO (decisión de Cesar, "solo lo
+                    // presenciado, con hueco visible"): la ley NO desaparece de
+                    // la lista, ocupa su sitio en el mismo orden estable que
+                    // Universe.Leyes -- es lo que convierte "N de M" en algo
+                    // que se puede CONTAR mirando la página, no solo leer como
+                    // número. Texto IDÉNTICO siempre (ver doc de
+                    // TextoHuecoLeyTitulo): no puede filtrar nada de la ley que
+                    // esconde, ni materiales ni forma ni condición térmica.
+                    // Propaga=false explícito: un ★ SE PROPAGA en el hueco
+                    // filtrarías justo lo que se supone que se esconde.
+                    //
+                    // PROCEDIMIENTOS no recibe hueco a propósito: una "receta"
+                    // en blanco no genera curiosidad como sí lo hace un
+                    // renglón vacío en el catálogo de leyes, solo ruido -- ese
+                    // trabajo ya lo hace la sección LEYES. Procedimientos
+                    // simplemente omite la entrada, como siempre hizo.
+                    _entradasLeyes[_entradasLeyesCount++] = new Entrada { Titulo = TextoHuecoLeyTitulo, Cuerpo = TextoHuecoLeyCuerpo, Propaga = false };
+                }
             }
+
+            // (playtest 18) Contador "N de M" de la cabecera de LEYES (ver
+            // DrawContenido/_tituloLeyesConContador): se recalcula aquí, en el
+            // mismo disparador que ya gobierna cuándo hace falta reconstruir
+            // texto -- no hace falta un segundo mecanismo de invalidación.
+            _tituloLeyesConContador = _leyesCount > 0
+                ? "LEYES — " + _knowledge.CountLeyesDescubiertas() + " de " + _leyesCount
+                : "LEYES";
 
             _entradasSustanciasCount = 0;
             var universe = _sim.Universe;
@@ -930,16 +1036,22 @@ namespace Alkahest.Game
         {
             string nombreA = _knowledge.NombreParaHud(ley.a);
             string nombreB = _knowledge.NombreParaHud(ley.b);
-            string nombrePb = _knowledge.NombreParaHud(ley.productB);
 
             if (ley.esCrecimiento)
             {
-                titulo = $"{nombreA} + {nombreB}, templado -> {nombrePb} nuevo";
+                // (playtest 18) Antes `productB` venía hardcodeado a Vivium a mano
+                // (truco de presentación de la LeyDatos escrita a mano). El dato REAL
+                // de Universe.Leyes para esta ley es productoB=Empty (el Nutrient se
+                // consume) -- usarlo aquí habría mostrado "??? nuevo" (NombreParaHud
+                // de Empty es "???"). Lo que nace es OTRA CÉLULA DE nombreA, no algo
+                // relacionado con productB: se usa nombreA directamente.
+                titulo = $"{nombreA} + {nombreB}, templado -> {nombreA} nuevo";
                 detalle = "Requiere temperatura TEMPLADA (ni fría ni ardiente).";
                 return;
             }
 
             string nombrePa = _knowledge.NombreParaHud(ley.productA);
+            string nombrePb = _knowledge.NombreParaHud(ley.productB);
             titulo = $"{nombreA} + {nombreB} -> {nombrePa} + {nombrePb}";
             detalle = ley.soloFrio ? "Solo ocurre en frío." : (ley.soloCalor ? "Solo ocurre con calor." : "Sin condición de temperatura.");
         }
@@ -963,16 +1075,22 @@ namespace Alkahest.Game
         /// ALTERNATIVA IMPLEMENTADA (sin tocar HintSystem, sin adivinar su
         /// estado interno): en vez de re-leer sus pistas, esta sección
         /// SINTETIZA procedimientos ejecutables a partir de la MISMA fuente
-        /// de verdad que ya usa la sección LEYES (Universe.Reactions +
-        /// SimStepper.GrowthTick, vía _leyes) pero con un nivel de detalle
-        /// de "receta paso a paso" en vez de "fórmula compacta". La
-        /// visibilidad se gobierna con el MISMO criterio que LEYES (los dos
-        /// materiales ya descubiertos), que es un proxy razonable de "esto
-        /// ya te lo he explicado antes" sin depender de HintSystem. Esto
-        /// cubre EXACTAMENTE el caso que motivó la queja -- multiplicar
-        /// vivium y cristalizar azoth son las dos únicas leyes catalíticas/
-        /// de crecimiento del roster fijo -- explicitando el paso que se
-        /// olvida ("no se gasta, repite el paso 2").
+        /// de verdad que ya usa la sección LEYES (playtest 18:
+        /// <c>Universe.Leyes</c>, vía <see cref="_leyes"/> -- ver
+        /// ConstruirLeyesDesdeUniverso) pero con un nivel de detalle de
+        /// "receta paso a paso" en vez de "fórmula compacta".
+        ///
+        /// (playtest 18) VISIBILIDAD: se gobierna con el MISMO criterio nuevo
+        /// que LEYES (<see cref="SubstanceKnowledge.LeyDescubierta"/> -- la
+        /// ley PRESENCIADA, no solo sus dos materiales conocidos por
+        /// separado; ver el comentario largo en ActualizarCache). A
+        /// diferencia de LEYES, aquí NO se dibuja un hueco por cada
+        /// procedimiento que falta: una "receta" en blanco no genera
+        /// curiosidad, solo ruido -- la entrada simplemente se omite, como
+        /// siempre. El criterio VIEJO (playtest 10-17, "los dos materiales ya
+        /// descubiertos") era un proxy razonable de "esto ya te lo he
+        /// explicado antes" mientras no existía una señal directa; ahora que
+        /// SÍ existe (la propia ley registrada), el proxy queda sustituido.
         /// </summary>
         private void ConstruirEntradaProcedimiento(LeyDatos ley, out string titulo, out string detalle)
         {

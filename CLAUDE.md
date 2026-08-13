@@ -8,9 +8,13 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 ## Mapa del código (Assets/Alkahest/)
 - `Sim/` — autómata celular DETERMINISTA (grid **768x288** desde el playtest 15 = 3x2 pantallas;
   `CellGrid.PantallaW/H` siguen midiendo 1 pantalla = 256x144 para pensar el plano en esa unidad; 30Hz): `Universe` (materiales + leyes
-  por seed + Edictos + sorteo de FIRMA VISUAL, ver regla 16), `SimStepper` (reglas por arquetipo +
+  por seed + Edictos + sorteo de FIRMA VISUAL, ver regla 16 + **QUÍMICA GENERADA POR SEMILLA**,
+  ver reglas 33-35), `SimStepper` (reglas por arquetipo +
   `MorphTick` que evoluciona el campo morfológico + ring buffer de eventos), `ReactionEngine`
-  (tabla de reacciones), `CellGrid` (incluye `byte[] morph`/`morphScratch`, ver regla 16),
+  (tabla de reacciones; expone `Count`/`At(i)`/`TryGet(...,out int index)` — el índice ES la
+  identidad de una ley), `LeyDelUniverso` (playtest 18: `FormaDeLey` Transmutacion/Fusion/Consumo/
+  Liberacion/Contagio/Crecimiento + `CondicionTermica`, el descriptor que consume el diario),
+  `CellGrid` (incluye `byte[] morph`/`morphScratch`, ver regla 16),
   `SimRenderer` (textura + sprite; también dibuja el patrón/borde de la firma), `SimLevelBuilder`
   (**EL PLANO del taller: única fuente de verdad de TODAS las coordenadas**).
   REGLA DE ORO: nada de UnityEngine.Random ni allocs en el hot path; solo `XorShift` sembrado
@@ -236,6 +240,41 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     los diffs — se pudo porque los docblocks del código sí eran extensos, que es la red de
     seguridad de la regla 15. Es el mismo mecanismo que produjo la regresión de las reglas 26-27:
     trabajo que ocurre y no queda escrito deja de existir para quien venga después.
+33. **LA INVARIANTE `Leyes[i]` ↔ `Reactions.At(i)` ES SAGRADA (playtest 18)**: para
+    `i < Reactions.Count`, `Universe.Leyes[i]` describe EXACTAMENTE `ReactionEngine.At(i)`; la ley
+    de crecimiento del Vivium (que no es una reacción de contacto) va la última, en
+    `LeyCrecimientoIndice == Reactions.Count`. Los eventos `SimEventType.Ley` viajan con ese
+    índice y es lo ÚNICO que identifica qué ley acaba de ocurrir: si los dos arrays se desalinean,
+    el jugador descubre la ley equivocada y el diario le miente, sin ningún error visible. Las dos
+    listas solo pueden crecer JUNTAS, en el mismo `Add`. Hay un assert de solo-editor; no quitarlo.
+34. **LAS RESTRICCIONES DEL SORTEO DE QUÍMICA PROTEGEN LA PARTIDA, NO EL GUSTO (playtest 18)**:
+    R1-R10 en `Universe.SortearLeyesGeneradas`. Las que no se pueden tocar sin romper algo:
+    **R1** (al menos un reactivo INNOMINADO — garantiza que dos materiales del vocabulario nunca
+    reaccionan entre sí, o sea que el agua y la arena de la pila jamás hacen algo raro solas);
+    **R4** (el par no puede colisionar con ninguno ya presente, comprobado en LOS DOS órdENES:
+    `ReactionEngine` es un lookup de una entrada por par y una colisión sobreescribiría EN SILENCIO
+    una ley del núcleo, dejando semillas sin cristalización); **`MaterialesDeGrifo`** (la víctima
+    de un Contagio no puede salir de un grifo — son infinitos y `Dispenser` no tiene tope: sería un
+    bucle de materia sin fin. La lista es una copia a mano de `AlkahestGameBootstrap`: si alguien
+    añade un grifo allí y no la actualiza, el agujero se reabre sin que nada avise);
+    **`MaterialesSoloCatalizador`** (`Vivium` y `CrystalSeed` solo pueden ser reactivo en la
+    posición de catalizador de una `Transmutacion` — el vivium es la cadena más lenta del juego y
+    la semilla de cristal se entrega UNA vez, 60 celdas: si una ley los destruye pasivamente, hay
+    encargos imposibles. Coste consciente: esos dos tienen una sola frase posible).
+    **Cualquier restricción que se relaje exige volver a correr el modelo** de aceptación/descarte:
+    endurecer bajó la tasa por intento al 48.8%, y con 200 intentos por hueco sale cero escasez en
+    20.000 semillas — pero eso es un margen medido, no una intuición.
+35. **UN MUNDO SE DOMESTICA, UNA LISTA DE ACCIDENTES NO (playtest 18, la lección de diseño de la
+    ronda)**: la primera versión de la química generada pasó TODAS las auditorías técnicas y aun
+    así estaba mal, porque el producto de cada ley salía de una bolsa uniforme y dentro de una
+    misma semilla no había ningún patrón que el jugador pudiera aprender — *"5 plantillas con
+    sustantivos intercambiables"*. Lo arregla `Universe.AfinidadDelUniverso`: 1-2 materiales afines
+    por semilla que los pickers prefieren un ~55% (siempre como PREFERENCIA entre candidatos ya
+    filtrados, NUNCA como excepción a una restricción). Resultado medido: el 54.4% de las leyes de
+    una semilla convergen en su afín, y el mundo pasa a tener una tesis legible y NOMBRABLE ("aquí
+    todo acaba en limo"). Criterio general para lo que venga: **generar variedad no basta; hay que
+    generar variedad que el jugador pueda formular como una frase.** Si no se puede decir en voz
+    alta, no se puede bautizar, y si no se puede bautizar no alimenta la fantasía del juego.
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
@@ -254,19 +293,26 @@ siguen a la cámara (`DentroDePantalla`, un bug que la cámara fija escondía), 
 con **O** (los encargos "estorbaban espacio construible"), lo básico redistribuido al 47% del
 ancho sin encoger el mundo ni mover geometría validada, y el **CINCEL** (`Game/Cincel.cs`, tecla
 **C**): primera pieza real del taller movible.
-**Playtest 17** (Opus dirige y escribe, revisión por agente independiente) — PENDIENTE DE VALIDAR
-EN EL EDITOR: la causa real del "agua del grifo congelada" (`Dispenser` emitía con `Paint`, que no
-toca `temp`: el agua heredaba el frío del hueco y nacía helada — regla 29), el clima por zona
-RETIRADO entero (regla 31, el array `ambient` se queda para el clima que cree el JUGADOR), barrido
-de siete comentarios que quedaron mintiendo, y las secciones 15/16 del HANDOFF escritas a
-posteriori porque se habían commiteado sin documentar (regla 32).
-**Los playtests 15, 16 y 17 siguen SIN PUSHEAR a GitHub**: el remoto está en el 14 (`f931e61`).
-El commit pendiente los cubre los tres de una vez.
+**Playtest 17** (Opus dirige y escribe, revisión por agente independiente) — VALIDADO por Cesar:
+la causa real del "agua del grifo congelada" (`Dispenser` emitía con `Paint`, que no toca `temp`:
+el agua heredaba el frío del hueco y nacía helada — regla 29), el clima por zona RETIRADO entero
+(regla 31, el array `ambient` se queda para el clima que cree el JUGADOR), barrido de siete
+comentarios que quedaron mintiendo, y las secciones 15/16 del HANDOFF escritas a posteriori
+(regla 32). Pusheado junto con el 15 y el 16 en el commit `9033b31`.
+**Playtest 18** (Opus dirige: contrato congelado + gramática + 4 auditorías; Sonnet escribe en 2
+encargos disjuntos) — PENDIENTE DE VALIDAR EN EL EDITOR: **LA FASE 3, química generada por
+semilla**. Sobre el núcleo fijo de 7 reacciones se sortean 5-8 leyes más con una GRAMÁTICA de
+formas (`FormaDeLey`), lo innominado puede reaccionar con el vocabulario del taller (decisión
+explícita de Cesar; medido: el 76.4% de las leyes lo tocan) pero dos materiales del vocabulario
+nunca entre sí; `Universe.AfinidadDelUniverso` da a cada semilla una TESIS nombrable (regla 35);
+las reacciones por fin emiten un evento que identifica QUÉ ley ocurrió (`SimEventType.Ley` +
+`leyIndice`, con limitador de ritmo); y el diario pasa a mostrar solo lo PRESENCIADO, con los
+huecos a la vista y un contador "N de M". Detalle completo: `docs/HANDOFF.md` sección Playtest 18.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
-3) **química generada por semilla** (núcleo fijo + reacciones sorteadas + "leyes descubiertas:
-N de M" en el diario) ← SIGUIENTE; 4) comportamiento variable por semilla, no solo aspecto (de ahí
-nacen los nombres que Cesar busca); 5) taller movible (el cincel ya está; faltan grifos/estantes/
+3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no
+solo aspecto** (de ahí nacen los nombres que Cesar busca) ← SIGUIENTE: la gramática de leyes ya da
+variedad de QUÉ reacciona con qué; falta que varíe CÓMO se mueve/se comporta la materia misma; 5) taller movible (el cincel ya está; faltan grifos/estantes/
 placas anclados a bedrock, botón central del ratón); 6) mundo persistente con semilla y progreso.
 Backlog heredado aún vigente: separar en `Universe.cs` los rangos solapados de `waterFreezeC` y
 `crystallizeThresholdC` (hoy en algunas seeds cristalizar exige un frío que ya fabrica hielo);

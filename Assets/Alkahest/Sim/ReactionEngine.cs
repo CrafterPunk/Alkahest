@@ -60,6 +60,12 @@ namespace Alkahest.Sim
             }
         }
 
+        /// <summary>Cuántas reacciones de contacto tiene este universo. El índice [0, Count) es ESTABLE toda la partida.</summary>
+        public int Count => _reactions.Length;
+
+        /// <summary>La reacción en un índice estable. Para el diario, que necesita listar leyes que el jugador aún no ha visto.</summary>
+        public Reaction At(int index) => _reactions[index];
+
         /// <summary>Busca una reacción registrada entre matA y matB (orden indiferente). No asigna memoria.</summary>
         public bool TryGet(byte matA, byte matB, out Reaction reaction)
         {
@@ -70,6 +76,27 @@ namespace Alkahest.Sim
                 return false;
             }
             reaction = _reactions[idx];
+            return true;
+        }
+
+        /// <summary>
+        /// (playtest 18) Como <see cref="TryGet(byte, byte, out Reaction)"/>,
+        /// pero además devuelve el ÍNDICE ESTABLE de la reacción -- es lo que
+        /// identifica QUÉ ley acaba de ocurrir para el evento SimEventType.Ley
+        /// (ver SimStepper.TryReactNeighbor). La sobrecarga de 3 argumentos
+        /// NO se toca: tiene llamantes vivos que no necesitan el índice.
+        /// </summary>
+        public bool TryGet(byte matA, byte matB, out Reaction reaction, out int index)
+        {
+            short idx = _lookup[matA * 256 + matB];
+            if (idx < 0)
+            {
+                reaction = default;
+                index = -1;
+                return false;
+            }
+            reaction = _reactions[idx];
+            index = idx;
             return true;
         }
     }

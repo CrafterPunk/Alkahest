@@ -104,6 +104,162 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 18 → LA QUÍMICA YA NO ES LA MISMA EN TODA SEMILLA: leyes generadas, un universo
+## con TESIS, y el diario como motor de curiosidad — pendiente de validar en el editor
+Ronda dirigida por Opus 5 (contrato de API congelado, gramática, auditorías); Sonnet 5 escribió el
+código en 2 encargos de propiedad disjunta. **Es la fase 3 del plan acordado en el playtest 14.**
+
+**EL DIAGNÓSTICO DE PARTIDA, de Cesar:** *"una semilla nueva solo cambia la piel porque la piel es
+lo único que se genera"* y *"solo soy capaz de descubrir dos o tres reacciones"*. Los números le
+daban la razón sin discusión: la tabla tenía **7 reacciones IDÉNTICAS en toda semilla** (solo
+variaban `chancePct` y las bandas), y el juego solo sabía anunciar **DOS** leyes, cableadas a mano
+con dos `bool` (`_leyCristalDescubierta`, `_leyVivumDescubierta`) atados a dos tipos de evento.
+Trece rondas de riqueza de presentación sobre una capa de sistemas de siete entradas.
+
+**LAS DOS DECISIONES QUE TOMÓ CESAR ANTES DE EMPEZAR** (se le preguntaron a propósito porque
+cambian la identidad del juego, no solo el código):
+1. *Alcance de la química sorteada*: **la variante ATREVIDA** — lo innominado puede reaccionar CON
+   el vocabulario del taller ("en este universo el aceite y el líquido del Maestro hacen algo").
+   Lo que el vocabulario hace POR SÍ SOLO no cambia jamás (el agua sigue apagando el fuego,
+   congelándose e hirviendo igual en toda semilla: eso vive en `ApplyPhase`, intocado).
+2. *Criterio del diario*: **solo lo PRESENCIADO, con hueco visible**.
+
+---
+
+### 1. LA GRAMÁTICA DE LEYES (`Sim/LeyDelUniverso.cs`, nuevo, + `Universe.cs`)
+Sobre el núcleo fijo de 7 reacciones (las que sostienen los encargos: si desaparece la
+cristalización hay semillas imposibles de completar) se sortean **5-8 leyes más** por semilla. Lo
+que las hace sentirse distintas no es el par de materiales sino la **FORMA**, que es un eje nuevo:
+
+- **Transmutación** `A+B -> C+B` — B es CATALIZADOR, no se gasta. (La forma de la cristalización.)
+- **Fusión** `A+B -> C+C` — los dos se vuelven la misma cosa nueva.
+- **Consumo** `A+B -> Empty+C` — A se destruye y B se transforma. (La forma del ácido.)
+- **Liberación** `A+B -> C+gas` — suelta algo que SE VE SUBIR: la ley más fácil de presenciar de lejos.
+- **Contagio** `A+B -> A+A` — A se propaga comiéndose a B. La forma peligrosa.
+- **Crecimiento** — la del Vivium, que no es una reacción de contacto y vive en `GrowthTick`.
+
+Más una **CondicionTermica** (`Cualquiera`/`Frio`/`Calor`) cuyas bandas quedan a propósito por
+debajo y por encima del ambiente, para que una ley con condición NO pueda dispararse sola en el
+taller: si se dispara a 20°C, la condición no significa nada.
+
+### 2. LA AFINIDAD DEL UNIVERSO — el añadido que salvó la ronda
+La primera versión pasó todas las auditorías y aun así **estaba mal a nivel de diseño**, y lo dijo
+el propio agente revisor sin que nadie se lo preguntase: *"el producto no tiene lógica causal
+perceptible... cada ley es arbitraria en aislado. Si el jugador intenta generalizar entre leyes
+sorteadas de la MISMA semilla, no va a encontrar un patrón, porque no existe"*. Su veredicto:
+*"la profundidad real de la gramática es la de 5 plantillas con sustantivos intercambiables"*.
+
+Eso choca de frente con la fantasía del juego — **no se domestica una lista de accidentes**. La
+corrección: en tiempo de horneado se sortean 1-2 **materiales afines**, y los pickers de producto
+los prefieren un ~55% de las veces (solo entre candidatos que las restricciones ya habían
+aceptado: la afinidad es una PREFERENCIA dentro del picker, nunca una excepción a una regla).
+
+El efecto medido: **el 54.4% de las leyes de una semilla convergen en su material afín**, con el
+grueso de las semillas (70%) entre 2 y 5 leyes convergentes sobre 5-8. Casi ninguna semilla se
+queda sin tesis (0.9%) y casi ninguna se vuelve monótona (0.2% converge al 100%). En lenguaje
+llano: la semilla de ejemplo 31337 se lee de un tirón como **"aquí todo acaba en limo"**, y la
+1000 como un mundo de fusión fría que tira a semilla de cristal. Eso ya es una ley POR ENCIMA de
+las leyes de contacto: generalizable, sorprendente al cambiar de semilla, y sobre todo
+**NOMBRABLE** — que es exactamente lo que Cesar lleva pidiendo desde el playtest 14 (*"las
+texturas solo me inducen a poner nombres como rojo bonito"*). Un mundo con tendencia se puede
+bautizar; una lista de accidentes no.
+`Universe.AfinidadDelUniverso` queda expuesto público: el gancho evidente de una ronda futura es
+que el RUMOR del Edicto la insinúe sin decirla (no se tocó `EdictoDescripcion` esta ronda).
+
+### 3. LAS RESTRICCIONES, Y LOS DOS AGUJEROS QUE TENÍA EL CONTRATO
+Diez restricciones duras (R1-R10) protegen la partida. Las dos que de verdad importan:
+- **R1 — al menos un reactivo tiene que ser INNOMINADO.** Implementa la decisión de Cesar y a la
+  vez protege el taller: garantiza que dos materiales del vocabulario NUNCA reaccionan entre sí,
+  así que el agua y la arena de la pila jamás hacen algo raro solas. El vocabulario solo se
+  comporta de forma extraña **en presencia de algo extraño**. Medido: el **76.4%** de las leyes
+  sorteadas tocan al menos un material del vocabulario — la decisión de Cesar se nota en los
+  números, no se diluye.
+- **R4 — el par no puede colisionar con ninguno ya presente**, comprobado en los DOS órdenes.
+  `ReactionEngine` es un lookup de UNA entrada por par: una colisión **sobreescribiría en silencio
+  una ley del núcleo** y podría dejar una partida sin cristalización.
+
+**Y DOS AGUJEROS QUE ERAN MÍOS, NO DEL CÓDIGO** (los encontró la auditoría adversarial; el
+implementador había seguido el contrato al pie de la letra):
+- **R5 protegía el agua y se olvidaba de los otros grifos.** Escribí *"la víctima de un Contagio
+  nunca puede ser `Water`, porque sale de un grifo infinito"*. Razón correcta, lista incompleta:
+  hay CINCO grifos (agua, arena, aceite, nutriente abiertos desde el minuto uno; azoth en la
+  jornada 2) y `Dispenser.EmitTick` no tiene tope de cantidad. Un contagio con víctima `Sand`,
+  `Oil` o `Nutrient` producía **exactamente el bucle de materia infinita que la regla pretendía
+  impedir**, pasando todas las comprobaciones. Corregido con `MaterialesDeGrifo`.
+- **R6 solo miraba `Consumo` y `Contagio`.** La razón que di era que el vivium es la cadena más
+  lenta del juego y un encargo de "algo vivo" se vuelve imposible si algo se lo come pasivamente —
+  pero en `Fusion` los dos reactivos se vuelven un tercero y en `Liberacion` los dos cambian: el
+  vivium moría igual. Y el mismo agujero tenía un segundo material que no vi: **`CrystalSeed`**,
+  que `MasterSupplies` entrega 60 celdas UNA vez y que la cristalización trata como catalizador —
+  una ley `Fusion(CrystalSeed, Water)` dejaba los encargos de cristal imposibles en cuanto la
+  semilla tocara agua, que está por todas partes. Sustituida por: **`Vivium` y `CrystalSeed` solo
+  pueden aparecer como reactivo en la posición de CATALIZADOR de una `Transmutacion`**.
+  **COSTE ACEPTADO Y CONSCIENTE**: esos dos materiales pasan a tener una sola frase posible ("X se
+  convierte en Y al tocar el vivium, que sigue igual"). Se pierde sabor en dos de los seis
+  innominados, justo dos de los más importantes. Proteger que ningún encargo sea imposible vale
+  más que la variedad, pero queda escrito que fue un intercambio, no un descuido.
+
+Validación del endurecimiento: se modeló la lógica de aceptación/descarte en Python y se simularon
+**20.000 semillas** — tasa de aceptación por intento 48.8%, y **cero** semillas quedándose cortas
+de leyes sobre 130.007 huecos pedidos (con 200 intentos por hueco).
+
+### 4. QUE UNA LEY SE PUEDA PRESENCIAR (`SimEvents.cs`, `SimStepper.cs`, `ReactionEngine.cs`)
+Antes, **una reacción al dispararse no emitía nada identificable**: solo dos casos cableados
+empujaban evento, y el evento llevaba UN material, ni el segundo reactivo ni cuál de las
+reacciones había sido. Con química sorteada eso es inservible.
+- `SimEventType.Ley = 6` + `SimNotableEvent.leyIndice`. Los seis eventos viejos se siguen
+  empujando EXACTAMENTE igual, con `leyIndice = -1`: los lee el audio y el sistema de testigos, y
+  cambiar uno rompe cosas lejos (regla 8).
+- `ReactionEngine` expone `Count`/`At(i)`/`TryGet(...,out int index)`.
+- **INVARIANTE, de la que depende todo**: `Leyes[i]` describe exactamente `Reactions.At(i)` para
+  `i < Reactions.Count`, y la ley de crecimiento va la última, en `LeyCrecimientoIndice ==
+  Reactions.Count`. Si se desalineara, el jugador descubriría la ley equivocada. Verificada con
+  assert de solo-editor y trazada a mano en la auditoría, incluido el caso de un sorteo descartado.
+- **LIMITADOR DE RITMO, no opcional**: el anillo tiene 256 entradas y un ácido disolviendo ya
+  genera decenas de eventos por tick. Si cada reacción empujara además un evento `Ley`, el anillo
+  daría la vuelta antes de que el consumidor leyese y **una ley podría no descubrirse nunca** —
+  bug intermitente y dependiente de la carga, de los que tardan tres rondas en verse. Se empuja
+  como mucho un evento por ley por segundo, con centinela `uint.MaxValue` para el caso "nunca
+  empujado" (usar 0 habría hecho que la primerísima ley del tick 0 no se empujara jamás: el fallo
+  de arranque clásico, comprobado a propósito en la auditoría).
+
+### 5. EL DIARIO COMO MOTOR DE CURIOSIDAD (`SubstanceKnowledge.cs`, `JournalHud.cs`)
+- Los dos `bool` cableados pasan a ser un registro real **por índice de ley**, con validación de
+  rango: un evento con índice fuera de rango se ignora, no tira la partida.
+- **El texto del banner se GENERA desde el descriptor**, con una plantilla por FORMA — porque la
+  forma es lo que hace memorable una ley y lo que distingue una semilla de otra. Ejemplo real:
+  *"El retoño de la cuba se propaga con calor: en cuanto toca la arena, la arena se convierte
+  también en el retoño de la cuba. Basta un punto de contacto."* Respeta la regla 13/17 al pie de
+  la letra: mientras algo siga innominado se describe por ORIGEN, nunca por su identidad interna.
+  Y menciona la condición térmica cuando no es `Cualquiera`, porque sin eso el jugador no sabe
+  reproducir lo que acaba de ver.
+- **CAMBIO DE CRITERIO**: antes el diario revelaba una ley con solo conocer sus dos ingredientes,
+  aunque nunca la hubieras visto ocurrir — un criterio derivado, razonable en su momento. Ahora
+  una ley entra **si y solo si la has presenciado**. Las que faltan **ocupan sitio** como renglones
+  idénticos entre sí (no filtran ni materiales, ni forma, ni condición) y un contador **"N de M"**
+  en la cabecera de sección dice cuánto queda. Es lo que convierte el diario en una pregunta en
+  vez de en un manual.
+- La cola de banners pasa de 2 a 8 (el comentario decía *"solo 2 leyes de este tipo existen"*, ya
+  falso). Si se llena se pierde el AVISO pero **nunca** el registro: son dos cosas distintas y
+  confundirlas habría sido un bug silencioso.
+- **La trampa de la ronda**: la firma de caché del diario. Si no incluye `LeyesVersion`, descubrir
+  una ley no repinta nada y el sistema "funciona" en todo menos en lo nuevo, sin error visible.
+  Incluida — y de paso reescrita a desplazamientos por rangos, porque la versión con primos tenía
+  una colisión real (991 rebautizos compensaban un material descubierto de más).
+
+**BUG LATENTE ENCONTRADO DE PASO**: `JournalHud` cableaba `productB = Vivium` para la ley de
+crecimiento como truco de presentación; el dato real es `Empty` (el nutriente se consume). Al
+pasar a leer el descriptor habría salido *"Vivium + Nutriente, templado -> ??? nuevo"*.
+
+### 6. Verificación
+Cuatro pases con agentes independientes: auditoría adversarial de la capa Sim (¿puede una semilla
+generar una partida rota?), revisión de la costura y la capa Game, y una verificación final de
+`Universe.cs` tras las dos tandas de correcciones. Ningún archivo encogió (regla 26): todos
+crecieron. **Sigue sin haber compilador de C# en el sandbox: la compilación real está pendiente
+del editor de Cesar.**
+
+---
+
 ## Playtest 17 → FUERA EL CLIMA POR ZONA, Y LA CAUSA REAL DEL "AGUA DEL GRIFO CONGELADA"
 ## (que NO era el clima) — pendiente de validar en el editor
 Ronda dirigida y escrita por Opus 5. Dos archivos de código real tocados, cinco de documentación.
