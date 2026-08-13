@@ -104,6 +104,109 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 20 → LAS CINCO FAMILIAS DE PATRÓN QUE NUNCA FUNCIONARON, y por qué Cesar no vio
+## los cambios que le prometí — pendiente de validar en el editor
+
+**Reporte de Cesar tras probar la build del playtest 19:** *"pude mover los grifos, y las placas de
+frío y calor, quedó bien"* · *"ahora empezaba con todo más cerca, está muy bien"* · **"No encontré
+cambios en los niveles ni en la morfología de las formas. Tenía ganas de probarlo."** · *"me queda
+la duda de si existe un commit 19 que no se generó"*.
+
+Tres dudas distintas, y las tres tienen respuestas distintas. Dos son culpa mía.
+
+### 1. SÍ HABÍA COMMIT 19 — la confusión la causa mi propia numeración
+El commit existe (`d1560f6`) y está en GitHub, junto con el del playtest 18 (`a4b7b93`). El push
+funcionó. **La confusión es que mis scripts van desfasados un número**: `ca_commit15.cmd` commiteó
+el playtest 14, `ca_commit16.cmd` los playtests 15-17, `ca_commit17.cmd` el 18 y `ca_commit18.cmd`
+el 19. Es un nombre heredado de cuando la cuenta coincidía y no lo corregí nunca. **A partir de
+aquí los scripts llevan el número del PLAYTEST que commitean**, no un contador propio: este es
+`ca_playtest20.cmd`.
+
+### 2. LOS ENCARGOS SÍ CAMBIARON — pero el cambio es invisible si no lo buscas
+La jornada 1 ya no pide 60 y 80 celdas: pide **32-40 y 42-54**, y varía con la semilla. Está en el
+código desplegado y verificado. Lo que no hice fue **decírselo de forma comprobable**: le conté que
+"pediría un 40% menos" en vez de darle los números exactos que tenía que ver en pantalla. Un cambio
+que el jugador no puede distinguir de "no pasó nada" es, para él, un cambio que no ocurrió.
+
+### 3. LA MORFOLOGÍA: TENÍA RAZÓN, Y EL FALLO ES UN ERROR DE PLANIFICACIÓN MÍO
+En el playtest 19 encargué "bajar la escala de los patrones para que se lean con poca materia" y
+repartí los archivos así: `Sim/SimRenderer.cs` a un encargo, `Sim/SimStepper.cs` a otro. **Pero la
+escala de los patrones vive en LOS DOS SITIOS**: `Vetas` y `Celdas` son puramente posicionales y
+las calcula `SimRenderer` (regla 16), mientras que `Manchas`, `Laberinto`, `Dendritas`, `Pulso` y
+`Motas` salen de `SimStepper.MorphTick`. El agente que tenía `SimRenderer` bajó las dos que podía
+y dejó anotado que las otras no eran suyas; el que tenía `SimStepper` estaba haciendo el
+crecimiento dendrítico y no tenía ese encargo.
+**Resultado: cambiaron 2 de 8 familias.** Como la firma visual se sortea por semilla, lo más
+probable es que los materiales de Cesar cayeran en las otras seis — y no vio absolutamente nada.
+Ningún agente se equivocó: **la partición de archivos que hice yo no admitía hacer el trabajo
+completo**, y ninguno podía verlo desde su lado.
+
+### LO QUE APARECIÓ AL IR A ARREGLARLO: cinco familias que nunca funcionaron
+Antes de tocar nada se montó una réplica en Python del hash y de las cinco funciones `Morph*`, y
+se verificó el diagnóstico con los parámetros VIEJOS. El problema era **mucho más grave que una
+mala calibración**:
+
+- **`Manchas` y `Laberinto` no podían producir patrón, jamás.** El campo `morph` es de UN SOLO
+  valor por celda, y una reacción-difusión biestable de un solo campo **no produce patrones de
+  Turing**: se homogeneiza siempre (engrosamiento tipo Allen-Cahn). En un charco acotado colapsaba
+  a un tinte casi plano hiciera lo que hiciera `patronEscala`. Ni puntos, ni bandas, ni diferencia
+  entre las dos: un degradado. **El comentario de `SimRenderer` que afirmaba lo contrario llevaba
+  mintiendo desde el playtest 12** — corregido.
+- **`Dendritas`**: una sola semilla, con tiempo suficiente, acababa cubriendo el charco entero
+  (percolación). Se veía como un borrón, no como agujas.
+- **`Pulso`**: **su fórmula nunca usaba `patronEscala`**. Multiplicador espacial fijo `5`, periodo
+  ~51 celdas — más grande que cualquier charco pequeño. Era la única de las ocho cuya escala no
+  hacía nada en absoluto.
+- **`Motas`**: disparaba tan poco que era invisible más del 90% del tiempo.
+
+O sea que la queja de Cesar del playtest 19 ("necesito mucho material para ver las formas") no era
+un problema de calibración: **cinco de las ocho familias nunca funcionaron como decían funcionar**,
+desde que se introdujeron.
+
+### LO ARREGLADO
+- **Manchas/Laberinto**: `diffDiv` sale de la zona inestable (`24-escala`, 16..23), y —el cambio
+  real— un **anclaje de ruido ESTÁTICO por bloque**, calculado con `XorShift.FromCell(0u, bx, by,
+  sal)` con **tick constante 0, no `_tick`** (si usara el tick, el mapa cambiaría cada frame y el
+  patrón parpadearía). Los bloques "fríos" decaen, los "calientes" sostienen su punto fijo, y la
+  difusión redondea la frontera. Verificado: 0 celdas cambian entre el turno 1500 y el 3000 — hay
+  estructura y es estable, no hervido.
+- **Dendritas**: `seedChanceInv` de 600..2700 a 100..380, más un **mapa estático de orígenes
+  elegibles** (1 de cada 6..10 celdas) para que no acabe cubriéndolo todo, y `decayStep` mucho más
+  agresivo — con la dirección del efecto de escala corregida (el comentario decía una cosa y la
+  fórmula hacía la contraria).
+- **Pulso**: pasa a reutilizar el mismo periodo ya calibrado que usan Vetas/Celdas (3..6 celdas).
+- **Motas**: `chanceInv` de 900..2300 a 80..360.
+
+### LO QUE NO SE ARREGLÓ, Y HAY QUE DECIRLO
+**`Manchas` y `Laberinto` siguen siendo gemelas.** Ya no colapsan —ahora las dos muestran
+estructura real— pero se diferencian por **brillo medio** (Manchas ~15-35/255 más oscura), no por
+forma. La distinción puntos-vs-bandas que el diseño prometía **nunca fue mecánicamente posible con
+un solo campo**. El arreglo de verdad es un Gray-Scott real de DOS campos (U y V), que exige tocar
+`CellGrid` — va al backlog como tal, no como afinado.
+
+Y una expectativa que conviene aterrizar: **un charco de 30 celdas son ~30 píxeles.** Ningún
+algoritmo dibuja una forma reconocible en 30 píxeles. Lo que sí cambia es que ahora hay estructura
+visible en vez de un tinte plano, y que a 150 celdas las familias se distinguen de verdad
+(Dendritas ramifica, Pulso hace bandas diagonales, Motas son chispas aisladas).
+
+### Sobre el crecimiento dendrítico del vivium (playtest 19), que tampoco pudo ver
+No es un fallo: **el vivium solo aparece en la JORNADA 2**, cuando el Maestro deja el retoño. Si se
+está atascado en la 1, es inalcanzable. Atajo para probarlo sin jugar la progresión: **F3** abre la
+paleta de desarrollo (la build es `Development`), pintar vivium + nutriente en una cuba y encender
+la placa dentro de la banda.
+
+### Verificación
+Réplica en Python de las cinco funciones con los hashes reales, PNGs comparativos viejo/nuevo por
+familia y por tamaño de charco, y una auditoría independiente sobre `SimStepper.cs`: compilación,
+determinismo (cero `UnityEngine.Random`, doble búfer intacto, mapas estáticos con tick 0), cero
+allocs en el hot path, rangos de todos los divisores para `patronEscala` 1..8, y confirmación de
+que `GrowthTick` es byte a byte idéntico. La auditoría encontró además que el jitter inicial
+(±100 sobre un `kill` de 10..46) dejaba el 25-42% de los bloques pegados al clamp; se rediseñó a
+un esquema binario derivado del punto crítico analítico (`S ≤ 255²/1024 ≈ 63.5`), con 0% de
+saturación medida. **Sin compilador de C# en el sandbox: la compilación real sigue pendiente.**
+
+---
+
 ## Playtest 19 → EL TALLER SE ENCOGE Y SE MUEVE, LA VIDA CRECE CON FORMA, Y EL MAGO PIDE MENOS
 ## — ronda nocturna en autónomo, pendiente de validar en el editor
 Ronda dirigida por Opus 5 (survey de viabilidad, 4 encargos en paralelo con propiedad disjunta,

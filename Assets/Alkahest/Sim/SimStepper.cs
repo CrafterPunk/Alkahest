@@ -1674,9 +1674,7 @@ namespace Alkahest.Sim
         /// local u=255-v (allí donde v es alto, se asume que el sustrato disponible es
         /// bajo) -- no es Gray-Scott textbook (ahí u difunde por su cuenta), pero
         /// reproduce el mismo comportamiento cualitativo: producción autocatalítica
-        /// uv² que se satura cuando v→255 (u→0) y decae con (feed+kill)*v, exactamente
-        /// lo que separa un régimen que colapsa en puntos de uno que se sostiene en
-        /// bandas.
+        /// uv² que se satura cuando v→255 (u→0) y decae con (feed+kill)*v.
         ///
         /// PARÁMETROS (derivados de patronEscala 1..8 y patronFuerza 0..255): "feed" usa
         /// la MISMA fórmula en los dos regímenes (feed=8..23, solo de patronFuerza) y lo
@@ -1684,16 +1682,69 @@ namespace Alkahest.Sim
         /// bandas que NUNCA se solapan aunque feed varíe:
         ///   Laberinto (bandas):  kill-feed = 2..6   (delta pequeño: kill≈feed)
         ///   Manchas (puntos):    kill-feed = 16..23 (delta grande: kill≫feed)
-        /// kill≫feed (Manchas) es el régimen real de Gray-Scott para puntos (p.ej.
-        /// F=0.035 K=0.065): el reactivo no se sostiene en un frente amplio y colapsa en
-        /// manchas aisladas que compiten por el sustrato. kill≈feed (Laberinto) es el
-        /// régimen de bandas/laberinto real (p.ej. F=0.029 K=0.057, mucho más cerca entre
-        /// sí que en el régimen de puntos): el reactivo se sostiene en frentes alargados
-        /// que serpentean en vez de colapsar. Se usa el DELTA (no el ratio kill/feed)
-        /// precisamente para que las dos bandas NUNCA se toquen sea cual sea el valor de
-        /// feed que toque por seed: verificación aritmética, delta_manchas_min(16) >
-        /// delta_laberinto_max(6) siempre, sin excepción, para cualquier patronFuerza/
-        /// patronEscala.
+        /// kill≫feed (Manchas) es el régimen real de Gray-Scott para puntos: el reactivo
+        /// no se sostiene en un frente amplio y colapsa en manchas aisladas que compiten
+        /// por el sustrato. kill≈feed (Laberinto) es el régimen de bandas/laberinto real:
+        /// el reactivo se sostiene en frentes alargados que serpentean en vez de
+        /// colapsar. Se usa el DELTA (no el ratio kill/feed) para que las dos bandas
+        /// NUNCA se toquen sea cual sea el valor de feed que toque por seed:
+        /// delta_manchas_min(16) > delta_laberinto_max(6) siempre.
+        ///
+        /// EL ANCLAJE DE RUIDO (playtest 20, la parte nueva): un sistema biestable de un
+        /// solo campo con difusión puramente local, sin más, SIEMPRE termina
+        /// homogeneizándose en un dominio acotado por mucho que se ajuste "diffDiv" --
+        /// es "coarsening" tipo Allen-Cahn, no un fallo de calibración. Confirmado con
+        /// una réplica en Python del propio Gray-Scott simplificado (ver el informe de
+        /// la ronda): en un charco AISLADO de 20-40 celdas, con la fórmula vieja
+        /// (diffDiv=20-escala*2, sin más) el campo converge a un tinte casi plano en
+        /// TODAS las escalas -- exactamente lo que Cesar reportó y el playtest 19 solo
+        /// pudo sospechar sin confirmar. Forzar diffDiv al límite de estabilidad
+        /// numérica del laplaciano de 4 vecinos (diffDiv=4) sí produce estructura, pero
+        /// OSCILA de verdad cada tick (confirmado con el mismo modelo: hasta 130/255 de
+        /// cambio por tick, un parpadeo real, no percibido) -- viola el punto 4 del
+        /// encargo ("que no se convierta en hervido nervioso"). La solución que sí
+        /// converge y se queda quieta: una heterogeneidad FIJA por BLOQUE de "block"
+        /// celdas (variable local más abajo, 1 o 2 según patronEscala; mapa estático,
+        /// calculado con XorShift.FromCell usando un tick CONSTANTE=0 en vez de _tick --
+        /// por diseño, no cambia turno a turno). Bloques "fríos" decaen a 0 sin remedio;
+        /// bloques "calientes" sostienen su punto fijo alto; la propia difusión (a un
+        /// diffDiv ya seguro, ≥16, lejos del límite de estabilidad) redondea la frontera
+        /// entre ambos. Resultado: un patrón ESTABLE (no parpadea, converge y se queda)
+        /// y no plano, con manchas/bandas de un tamaño ligado a "block" en vez de a la
+        /// longitud de difusión (que en un solo campo no tiene "longitud de onda"
+        /// propia que seleccionar, a diferencia de un Gray-Scott de dos especies).
+        ///
+        /// LA MONEDA, NO UN JITTER DE AMPLITUD FIJA (auditoría independiente de esta
+        /// misma ronda): la primera versión de este anclaje sumaba a "kill" un ruido
+        /// ±100 CONSTANTE, sin relación con la magnitud real de kill (10..29 en
+        /// Laberinto, 24..46 en Manchas) -- entre 3x y 10x el propio valor que
+        /// perturbaba, así que en Laberinto (kill bajo) cerca de la mitad de los
+        /// bloques quedaban pegados al clamp inferior killLocal=1, un régimen que no es
+        /// ni Laberinto ni Manchas y que borraba la distinción entre las dos familias
+        /// que el propio DELTA de arriba jura proteger. La cifra "100" no tenía además
+        /// ninguna derivación: a diferencia de diffDiv/decayStep/seedChanceInv/chanceInv
+        /// (cada uno con un número salido de la réplica en Python), era una constante
+        /// suelta. Corregido con una cifra real: resolviendo el punto fijo del reactivo
+        /// (255-v)v=256·S, esa ecuación solo tiene raíces reales -- el punto fijo alto
+        /// que sostiene la sustancia -- cuando el discriminante 255²-4·256·S no es
+        /// negativo, es decir S=feed+kill ≤ 255²/1024 ≈ 63,5; por encima de eso el único
+        /// punto fijo es v=0 y el reactivo muere sin remedio. Con eso, la moneda de cada
+        /// bloque es binaria y estática (tick fijo=0): "cara" deja kill EXACTAMENTE como
+        /// lo definió la familia -- el delta manchas/laberinto llega intacto a esa mitad
+        /// de los bloques, nada de ruido encima --; "cruz" empuja S a un objetivo fijo
+        /// de 75 (bien pasado 63,5, con margen para no depender de dónde caía kill antes
+        /// de moverlo), así que ese bloque decae a 0 con garantías. El boost SIEMPRE se
+        /// SUMA (nunca resta), así que en el camino normal killLocal nunca necesita el
+        /// clamp -- el clamp que queda es defensivo, no la salida esperada del cálculo.
+        /// Contrapartida medida y aceptada (no escondida): con esto Manchas y Laberinto
+        /// siguen sin diferenciarse por FORMA (puntos vs bandas) tanto como el diseño
+        /// original aspiraba -- ese ratio de forma nunca fue mecánicamente real en esta
+        /// aproximación de un solo campo, ver el informe -- pero sí se diferencian por
+        /// COBERTURA/BRILLO medio (Manchas, con su S más alto, deja sistemáticamente
+        /// menos superficie "caliente" y un tinte más oscuro que Laberinto a igualdad de
+        /// escala y fuerza; medido con el mismo modelo, ~20-30 puntos de media sobre
+        /// 255), y ninguna de las dos vuelve a colapsar a plano ni depende de un clamp
+        /// saturado para sostenerse.
         /// </summary>
         private void MorphReactionDiffusion(int x, int y, int idx, MaterialDef def, bool laberinto)
         {
@@ -1716,19 +1767,68 @@ namespace Alkahest.Sim
                 kill = feed + 15 + def.patronEscala; // delta 16..23.
             }
 
-            // Difusión: escala grande -> rasgo más ancho -> más peso de difusión
-            // (divisor más pequeño). truncamiento hacia cero (operador "/", no ">>":
+            // Anclaje de ruido ESTÁTICO por bloque (ver cabecera): block(escala) es el
+            // tamaño de rasgo en celdas -- 1 en escala baja (grano fino, varias manchas
+            // diminutas caben en un charco de 20-40 celdas), 2 en escala alta (parches
+            // más anchos, pero SIN llegar a que uno solo ocupe el charco entero, que es
+            // justo el colapso que se está arreglando). División entera por block: como
+            // x,y nunca son negativos aquí (defensivo de arriba ya descarta el borde),
+            // "/" trunca igual que la posición del bloque espera.
+            int block = def.patronEscala <= 4 ? 1 : 2;
+            int bx = x / block;
+            int by = y / block;
+
+            // MONEDA 50/50 por bloque, NO ruido de amplitud fija (playtest 20, auditoría
+            // independiente): la primera versión sumaba un jitter ±100 fijo a "kill" --
+            // un número sin ninguna cifra detrás, y ±100 es de 3x a 10x el propio kill
+            // real (10..29 en Laberinto, 24..46 en Manchas, feed 8..23), así que para
+            // Laberinto con kill bajo la mitad de los bloques quedaba pegada al clamp
+            // inferior killLocal=1 -- un régimen que no es NI Laberinto NI Manchas,
+            // borrando la distinción entre las dos que la cabecera jura que protege.
+            // Arreglo con una cifra real detrás: (255-v)v=256·S tiene raíces reales
+            // (el punto fijo alto que sostiene la sustancia) solo si el discriminante
+            // 255²-4·256·S no es negativo, es decir S=feed+kill <= 255²/1024 ≈ 63,5 --
+            // Manchas/Laberinto viven SIEMPRE por debajo de eso con su kill de diseño
+            // (S real 24..40 en Laberinto, 38..57 en Manchas para feed 11..17), así que
+            // ambos son bloques "calientes" de sobra por defecto. Cada bloque tira una
+            // moneda ESTÁTICA (tick fijo=0, no _tick -- si cambiara turno a turno el
+            // propio anclaje parpadearía, igual que antes): "cara" deja kill EXACTAMENTE
+            // como lo definió la familia (nada de ruido encima -- el delta manchas/
+            // laberinto llega intacto a la mitad de los bloques, sin diluirse);
+            // "cruz" empuja S a ColdTargetS=75, bien por encima de 63,5 con margen, así
+            // que ese bloque decae a 0 sin remedio, "frío" de verdad. No hace falta
+            // clampear en el camino normal (ColdBoost se SUMA, nunca resta, así que
+            // killLocal no baja de "kill"); el clamp de abajo es solo defensivo por si
+            // patronFuerza/patronEscala se salieran algún día del rango nominal.
+            const int ColdTargetS = 75;
+            var coinRng = XorShift.FromCell(0u, bx, by, (uint)(221 + def.semillaPatron));
+            bool cold = coinRng.Next(2) == 0;
+            int killLocal = kill;
+            if (cold)
+            {
+                int coldBoost = ColdTargetS - (feed + kill);
+                if (coldBoost < 20) coldBoost = 20; // piso defensivo: siempre un empujón real, aunque S ya estuviera muy cerca de 63,5.
+                killLocal = kill + coldBoost;
+            }
+            if (killLocal < 1) killLocal = 1; else if (killLocal > 200) killLocal = 200; // defensivo, ver arriba -- no debería dispararse con patronEscala/patronFuerza en su rango nominal.
+
+            // Difusión: SIEMPRE por encima del límite de estabilidad del laplaciano de
+            // 4 vecinos (diffDiv>=4, ver cabecera) -- 24-escala cae en 16..23, muy lejos
+            // del filo, así que nunca oscila. Escala alta -> diffDiv más bajo -> más
+            // peso de difusión -> bordes más suaves/redondeados sobre los parches (más
+            // anchos por el bloque) más grandes de esa escala; escala baja -> bordes más
+            // netos sobre el grano fino. truncamiento hacia cero (operador "/", no ">>":
             // mismo criterio de simetría de signo que el fix de temperatura del
             // playtest 9 -- lap puede ser negativo).
-            int diffDiv = 20 - def.patronEscala * 2; // escala 1->18, escala 8->4
-            if (diffDiv < 4) diffDiv = 4;
+            int diffDiv = 24 - def.patronEscala; // escala 1->23, escala 8->16.
+            if (diffDiv < 4) diffDiv = 4; // defensivo: nunca por debajo del límite de estabilidad numérica (ver cabecera), aunque patronEscala se saliera algún día del 1..8 nominal.
 
             int lap = left + right + up + down - 4 * v;
             int diffuseStep = lap / diffDiv;
 
             int u = 255 - v;
-            int reactTerm = (u * v * v) >> 16;        // aprox. u*v² escalado a ~0..254
-            int decay = ((feed + kill) * v) >> 8;       // aprox. (feed+kill)*v
+            int reactTerm = (u * v * v) >> 16;             // aprox. u*v² escalado a ~0..254
+            int decay = ((feed + killLocal) * v) >> 8;       // aprox. (feed+killLocal)*v
 
             int next = v + diffuseStep + reactTerm - decay;
             if (next < 0) next = 0; else if (next > 255) next = 255;
@@ -1744,6 +1844,26 @@ namespace Alkahest.Sim
         /// forma y textura cuentan la misma historia), decayendo con la distancia
         /// recorrida -- así se lee como aguja que se afina hacia la punta, no como una
         /// mancha redonda que crece uniforme.
+        ///
+        /// ORÍGENES ELEGIBLES (playtest 20, la parte nueva): con la fórmula vieja
+        /// (seedChanceInv 600..2700, decayStep 11..18) una réplica en Python de esta
+        /// misma regla mostró que en un charco AISLADO de 20-40 celdas, dado tiempo
+        /// suficiente (unos 300 ticks, 10s a 30Hz -- nada raro en una partida), CUALQUIER
+        /// celda a v=0 puede volver a sembrar, así que el conjunto de celdas alguna vez
+        /// tocadas por una rama solo CRECE con el tiempo (nunca se vacía) hasta cubrir
+        /// el 100% del charco -- el patrón se lee entonces como un gradiente borroso
+        /// uniforme, no como agujas aisladas: el mismo colapso "a tinte plano" que
+        /// Manchas, por un mecanismo distinto (percolación, no coarsening). La cura:
+        /// solo un SUBCONJUNTO FIJO y disperso de celdas puede arrancar una semilla
+        /// (mapa "elegible" estático por celda, calculado con XorShift.FromCell y un
+        /// tick CONSTANTE=0 en vez de _tick, igual que el anclaje de
+        /// <see cref="MorphReactionDiffusion"/>); las celdas NO elegibles solo reciben
+        /// valor por propagación desde una rama viva y, al decaer a 0, se quedan
+        /// apagadas para siempre salvo que otra rama vuelva a pasar por ahí. Con eso,
+        /// más un decayStep MUCHO mayor (una rama solo alcanza unas pocas celdas antes
+        /// de apagarse, en vez de encadenar resiembras que la hacen crecer sin límite),
+        /// el charco converge a una cobertura PARCIAL y ESTABLE (confirmado con el mismo
+        /// modelo: 13-90% según escala, sin parpadeo turno a turno) en vez de 0% o 100%.
         /// </summary>
         private void MorphDendrites(int x, int y, int idx, MaterialDef def)
         {
@@ -1751,11 +1871,20 @@ namespace Alkahest.Sim
 
             if (v == 0)
             {
-                // Semilla DISPERSA y RARA: sin esto, cualquier celda a 0 (recién pintada,
-                // o punta de una rama que ya decayó) arrancaría una rama nueva cada pocos
-                // ticks y el resultado se vería como una alfombra de agujas, no como
-                // cristales/agujas aisladas que arrancan de un punto.
-                int seedChanceInv = 600 + (8 - def.patronEscala) * 300; // 1 entre ~2400..3000 por turno de esta celda.
+                // Origen elegible (ver cabecera): mapa ESTÁTICO (tick fijo=0), 1 cada
+                // ~(10-escala/2) celdas -- 10 en escala baja (pocos orígenes, agujas
+                // finas y aisladas), 6 en escala alta (más orígenes, pero las agujas
+                // siguen siendo cortas por el decayStep grande de más abajo, así que no
+                // llegan a fundirse en una alfombra).
+                int eligibleK = 10 - def.patronEscala / 2; // 10..6
+                if (eligibleK < 1) eligibleK = 1;
+                var eligibleRng = XorShift.FromCell(0u, x, y, (uint)(213 + def.semillaPatron));
+                if (eligibleRng.Next(eligibleK) != 0) return; // esta celda nunca arranca una semilla.
+
+                // Semilla RARA además de dispersa: sin esto, la celda elegible sembraría
+                // en cuanto quedara libre y el "orígenes fijos" de arriba no bastaría por
+                // sí solo para acotar la cobertura.
+                int seedChanceInv = 100 + (8 - def.patronEscala) * 40; // 1 entre 100..380 por turno de esta celda.
                 var seedRng = XorShift.FromCell(_tick, x, y, (uint)(201 + def.semillaPatron));
                 if (seedRng.Next(seedChanceInv) == 0)
                 {
@@ -1766,9 +1895,13 @@ namespace Alkahest.Sim
 
             if (x == 0 || x == W - 1 || y == 0 || y == H - 1) return; // no propaga fuera de rango (defensivo).
 
-            // Decaimiento por paso: escalas grandes producen agujas más largas antes de
-            // apagarse (menos decaimiento por paso).
-            int decayStep = 10 + def.patronEscala; // 11..18
+            // Decaimiento por paso: MUCHO más agresivo que antes (145..75 en vez de
+            // 11..18) -- ver cabecera, es lo que evita que una sola rama, sostenida por
+            // resiembras sucesivas en su origen, acabe recorriendo el charco entero.
+            // Escala alta -> decayStep más bajo -> agujas algo más largas (coherente con
+            // "escala alta = rasgo más grueso" del resto de familias) pero SIN acercarse
+            // al régimen de la fórmula vieja que inundaba el charco.
+            int decayStep = 155 - 10 * def.patronEscala; // escala 1->145, escala 8->75.
             int next = v - decayStep;
             if (next <= 0) return; // la rama muere aquí; no se propaga más.
 
@@ -1800,6 +1933,23 @@ namespace Alkahest.Sim
         /// distancia Manhattan a un ancla fija por sustancia (semillaPatron) para que la
         /// "ola" de fase recorra la masa en vez de que todas las celdas respiren a la
         /// vez.
+        ///
+        /// EL MULTIPLICADOR "5" ERA UNA CONSTANTE, NO USABA patronEscala (playtest 20,
+        /// bug encontrado esta ronda): con spatialOffset=(dist*5)&amp;0xFF el periodo
+        /// espacial de la onda es 256/5≈51 celdas -- más de una PANTALLA de recipiente
+        /// (regla 24/39), así que en cualquier charco de 20-40 celdas el jugador nunca
+        /// llega a ver un ciclo completo: la "onda" se lee como un degradado liso que
+        /// crece hacia una esquina, no como un pulso con bandas que se repiten. Y como
+        /// ninguna otra familia deriva a su vez el tamaño de Pulso de patronEscala (a
+        /// diferencia de Manchas/Laberinto/Dendritas, todos tocados esta misma ronda),
+        /// Pulso era la única de las 8 familias cuya escala NO HACÍA NADA en absoluto.
+        /// Arreglo: el mismo periodo en celdas que ya usa <c>SimRenderer.PatronPeriodoCeldas</c>
+        /// para Vetas/Celdas (3+(escala-1)/2, 3..6 celdas -- validado contra los
+        /// recipientes reales del taller por la regla 39), reutilizado aquí como
+        /// multiplicador espacial: periodo pequeño -> multiplicador grande -> bandas
+        /// finas y frecuentes; periodo grande -> multiplicador pequeño -> bandas anchas.
+        /// A 3-6 celdas de periodo, un charco de 20-40 celdas ya muestra varias bandas
+        /// completas (el mismo criterio de repetición de la regla 24).
         /// </summary>
         private void MorphPulse(int x, int y, int idx, MaterialDef def)
         {
@@ -1814,7 +1964,15 @@ namespace Alkahest.Sim
             int anchorX = def.semillaPatron % W;
             int anchorY = (def.semillaPatron * 41) % H; // segundo hash barato, para no alinear anchorY con anchorX.
             int dist = System.Math.Abs(x - anchorX) + System.Math.Abs(y - anchorY);
-            int spatialOffset = (dist * 5) & 0xFF; // bandas de "onda expansiva" concéntrica (Manhattan) desde el ancla.
+
+            // periodoCeldas: MISMA fórmula que SimRenderer.PatronPeriodoCeldas (Vetas/
+            // Celdas), para que "escala" signifique lo mismo (tamaño de rasgo en
+            // celdas) en toda la firma visual de la sustancia, no solo en dos de las
+            // ocho familias. spatialMult=256/periodo (entero, trunca): periodo 3->85,
+            // periodo 6->42.
+            int periodoCeldas = 3 + (def.patronEscala - 1) / 2; // 3..6.
+            int spatialMult = 256 / periodoCeldas;
+            int spatialOffset = (dist * spatialMult) & 0xFF; // bandas de "onda expansiva" concéntrica (Manhattan) desde el ancla.
 
             _grid.morphScratch[idx] = (byte)((globalPhase + (uint)spatialOffset) & 0xFFu);
         }
@@ -1825,6 +1983,17 @@ namespace Alkahest.Sim
         /// con el TIEMPO (a diferencia de Dendritas, que decae con la distancia
         /// recorrida): unos pocos turnos de vida, un parpadeo, no una mancha que se
         /// queda pintada.
+        ///
+        /// CHANCEINV RECALIBRADO (playtest 20): con la vida de una chispa en 3-6 turnos
+        /// (~12-24 ticks) y chanceInv=900..2300, una réplica en Python de esta regla
+        /// mostró que un charco de ~30 celdas tenía alguna mota encendida en menos del
+        /// 10% de los ticks muestreados -- prácticamente invisible en la práctica, y
+        /// exactamente lo que Cesar reportó ("no encontré cambios"). Con chanceInv
+        /// bajado a 80..360 el mismo charco muestra alguna mota encendida 24% del
+        /// tiempo en escala baja (sigue siendo un material "inquieto pero esquivo": el
+        /// diseño pide rareza) y 78% del tiempo en escala alta, con hasta 4-5 motas
+        /// simultáneas -- lo bastante frecuente para que el jugador lo note sin que dos
+        /// materiales Motas de escalas distintas se lean igual.
         /// </summary>
         private void MorphSparkle(int x, int y, int idx, MaterialDef def)
         {
@@ -1837,8 +2006,8 @@ namespace Alkahest.Sim
                 return;
             }
 
-            int chanceInv = 2500 - def.patronEscala * 200; // 1 entre ~900..2300 por turno de esta celda.
-            if (chanceInv < 300) chanceInv = 300;
+            int chanceInv = 400 - def.patronEscala * 40; // 1 entre ~80..360 por turno de esta celda.
+            if (chanceInv < 50) chanceInv = 50;
             var rng = XorShift.FromCell(_tick, x, y, (uint)(209 + def.semillaPatron));
             if (rng.Next(chanceInv) == 0)
             {

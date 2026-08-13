@@ -266,6 +266,17 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     **Cualquier restricción que se relaje exige volver a correr el modelo** de aceptación/descarte:
     endurecer bajó la tasa por intento al 48.8%, y con 200 intentos por hueco sale cero escasez en
     20.000 semillas — pero eso es un margen medido, no una intuición.
+35. **UN MUNDO SE DOMESTICA, UNA LISTA DE ACCIDENTES NO (playtest 18, la lección de diseño de la
+    ronda)**: la primera versión de la química generada pasó TODAS las auditorías técnicas y aun
+    así estaba mal, porque el producto de cada ley salía de una bolsa uniforme y dentro de una
+    misma semilla no había ningún patrón que el jugador pudiera aprender — *"5 plantillas con
+    sustantivos intercambiables"*. Lo arregla `Universe.AfinidadDelUniverso`: 1-2 materiales afines
+    por semilla que los pickers prefieren un ~55% (siempre como PREFERENCIA entre candidatos ya
+    filtrados, NUNCA como excepción a una restricción). Resultado medido: el 54.4% de las leyes de
+    una semilla convergen en su afín, y el mundo pasa a tener una tesis legible y NOMBRABLE ("aquí
+    todo acaba en limo"). Criterio general para lo que venga: **generar variedad no basta; hay que
+    generar variedad que el jugador pueda formular como una frase.** Si no se puede decir en voz
+    alta, no se puede bautizar, y si no se puede bautizar no alimenta la fantasía del juego.
 36. **`BuildVisual()` NO ES IDEMPOTENTE, Y `Init()` NO ES UN "MOVER" (playtest 19)**:
     `MaquinariaSprites.CrearCapa` SIEMPRE hace `new GameObject`, así que llamar dos veces a
     `BuildVisual` duplica todos los hijos y deja los viejos huérfanos, visibles, en la posición
@@ -306,18 +317,33 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     **nunca 1**, con el dato escrito en el propio campo de `Universe`. Cualquier cambio ahí exige
     volver a correr el modelo, no razonar a ojo — y ojo con `OrderSystem`, cuyo balance ya no puede
     razonarse como "crecimiento exponencial": ahora escala con el PERÍMETRO ÚTIL, no con la masa.
-35. **UN MUNDO SE DOMESTICA, UNA LISTA DE ACCIDENTES NO (playtest 18, la lección de diseño de la
-    ronda)**: la primera versión de la química generada pasó TODAS las auditorías técnicas y aun
-    así estaba mal, porque el producto de cada ley salía de una bolsa uniforme y dentro de una
-    misma semilla no había ningún patrón que el jugador pudiera aprender — *"5 plantillas con
-    sustantivos intercambiables"*. Lo arregla `Universe.AfinidadDelUniverso`: 1-2 materiales afines
-    por semilla que los pickers prefieren un ~55% (siempre como PREFERENCIA entre candidatos ya
-    filtrados, NUNCA como excepción a una restricción). Resultado medido: el 54.4% de las leyes de
-    una semilla convergen en su afín, y el mundo pasa a tener una tesis legible y NOMBRABLE ("aquí
-    todo acaba en limo"). Criterio general para lo que venga: **generar variedad no basta; hay que
-    generar variedad que el jugador pueda formular como una frase.** Si no se puede decir en voz
-    alta, no se puede bautizar, y si no se puede bautizar no alimenta la fantasía del juego.
-
+41. **UNA MECÁNICA PUEDE VIVIR EN DOS ARCHIVOS: REPARTIR MAL LA PROPIEDAD ES UN FALLO DEL
+    DIRECTOR, NO DE LOS AGENTES (playtest 20)**: se encargó "bajar la escala de los patrones" con
+    `SimRenderer.cs` en un encargo y `SimStepper.cs` en otro — pero la escala vive en LOS DOS
+    (`Vetas`/`Celdas` son posicionales y las calcula el renderer; `Manchas`/`Laberinto`/
+    `Dendritas`/`Pulso`/`Motas` salen de `MorphTick`). Cambiaron 2 de 8 familias, la firma visual
+    se sortea, y Cesar probó la build y no vio NADA. Ningún agente se equivocó: la partición no
+    admitía hacer el trabajo completo, y ninguno podía verlo desde su lado. **Antes de repartir
+    archivos, preguntarse dónde vive REALMENTE la mecánica, no dónde vive el nombre del archivo**;
+    y si una mecánica cruza la frontera, o va entera a un encargo o se escribe un contrato entre
+    los dos (como en el playtest 18).
+42. **`morph` ES UN SOLO CAMPO, Y ESO LIMITA LO QUE PUEDE DIBUJAR (playtest 20)**: una
+    reacción-difusión BIESTABLE DE UN SOLO CAMPO **no produce patrones de Turing** — se homogeneiza
+    siempre (engrosamiento tipo Allen-Cahn), así que en un charco acotado colapsa a un tinte plano
+    hiciera lo que hiciera `patronEscala`. Durante ocho rondas el código AFIRMABA que
+    `MorphReactionDiffusion` producía "puntos vs. bandas" y era falso: `Manchas` y `Laberinto`
+    nunca se diferenciaron por forma, solo hoy por brillo medio. El playtest 20 arregló el colapso
+    (anclaje de ruido ESTÁTICO por bloque, con `XorShift.FromCell(0u, ...)` — **tick constante 0,
+    nunca `_tick`**, o el mapa cambia cada frame y el patrón parpadea), pero la distinción de FORMA
+    exige un Gray-Scott real de DOS campos (U y V), que es un cambio de `CellGrid`. Está en el
+    backlog como cambio estructural, no como afinado.
+43. **UN CAMBIO QUE EL JUGADOR NO PUEDE DISTINGUIR DE "NO PASÓ NADA" ES, PARA ÉL, UN CAMBIO QUE NO
+    OCURRIÓ (playtest 20)**: los encargos de la jornada 1 bajaron de 60/80 celdas a 32-40/42-54 y
+    Cesar reportó "no encontré cambios en los niveles". El cambio estaba y funcionaba; lo que
+    faltó fue **decirle los números exactos que tenía que ver en pantalla** en vez de "pedirá un
+    40% menos". Al entregar una ronda, por cada cambio hay que dar el gesto concreto y el valor
+    observable que lo comprueba — y si algo solo se ve en la jornada 2 (el vivium, por ejemplo),
+    decirlo, o el playtest se gasta buscando lo inalcanzable.
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -365,13 +391,27 @@ poca materia** (redomas +80% de área derivada del ancho real del estante, swatc
 periodo de patrón de 5-12 a 3-6 celdas); y **el mago pide un 40% menos**, con temblor por semilla,
 porque la jornada 1 era literalmente idéntica cada partida.
 
+**Playtest 20** (Opus dirige y audita; Sonnet escribe) — PENDIENTE DE VALIDAR: Cesar probó la build
+del 19 y dijo *"no encontré cambios en los niveles ni en la morfología de las formas"*. Tenía razón
+en lo segundo por un error de reparto de archivos MÍO (regla 41): la escala de los patrones vive en
+`SimRenderer` Y en `SimStepper`, se repartieron a encargos distintos y solo cambiaron 2 de las 8
+familias. Al ir a arreglarlo apareció algo peor: **cinco familias nunca funcionaron como el código
+decía** — `Manchas`/`Laberinto` colapsaban siempre a tinte plano (regla 42), `Dendritas` acababa
+cubriendo el charco entero, `Pulso` **ignoraba `patronEscala` por completo** y `Motas` era invisible
+el 90% del tiempo. Arreglado con anclaje de ruido estático, mapa de orígenes elegibles y
+recalibración; queda pendiente que Manchas y Laberinto se distingan por FORMA (backlog).
+También: los encargos SÍ habían bajado (32-40 y 42-54 en la jornada 1) pero no se le dieron los
+números para comprobarlo (regla 43), y los scripts de commit pasan a llevar el número del playtest.
+
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no
 solo aspecto** (de ahí nacen los nombres que Cesar busca) ← SIGUIENTE: la gramática de leyes ya da
 variedad de QUÉ reacciona con qué; falta que varíe CÓMO se mueve/se comporta la materia misma; 5) ✅ taller movible (playtest 19: cincel + mudanza; falta el estante, y anclar de verdad a bedrock);
 6) **mundo persistente con semilla y progreso** ← SIGUIENTE, junto con el desbloqueo de áreas por
 niveles que Cesar viene pidiendo ("un lugar pequeño que luego se me amplíe").
-Backlog heredado aún vigente: separar en `Universe.cs` los rangos solapados de `waterFreezeC` y
+Backlog heredado aún vigente: **Gray-Scott de DOS campos** para que `Manchas` y `Laberinto` se
+distingan por FORMA y no solo por brillo (regla 42 — es un cambio de `CellGrid`, no un afinado);
+separar en `Universe.cs` los rangos solapados de `waterFreezeC` y
 `crystallizeThresholdC` (hoy en algunas seeds cristalizar exige un frío que ya fabrica hielo);
 consolidar `FirmaVisualFabrica` con `JournalHud` (regla 25); enganchar `HintSystem.PistasMostradas`
 en PROCEDIMIENTOS del diario; descripción completa de encargos en el diario; decidir si el audio se

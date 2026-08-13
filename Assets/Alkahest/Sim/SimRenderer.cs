@@ -948,13 +948,28 @@ namespace Alkahest.Sim
                     break;
                 case PatronMorfologico.Manchas:
                 case PatronMorfologico.Laberinto:
-                    // Misma regla de mapeo para las dos: la FORMA (puntos vs.
-                    // bandas) ya la produce SimStepper.MorphReactionDiffusion en el
-                    // propio campo morph -- aquí solo se traduce concentración a
-                    // brillo, igual en ambas.
+                    // (playtest 20, CORRECCIÓN IMPORTANTE) Estas dos líneas decían
+                    // que "la FORMA (puntos vs. bandas) ya la produce
+                    // SimStepper.MorphReactionDiffusion en el propio campo morph".
+                    // **ERA FALSO, y llevaba siéndolo desde el playtest 12.** El
+                    // campo morph es de UN SOLO valor por celda, y una
+                    // reacción-difusión biestable de un solo campo NO produce
+                    // patrones de Turing: se homogeneiza siempre (engrosamiento
+                    // tipo Allen-Cahn), así que en un charco acotado colapsaba a un
+                    // tinte casi plano hiciera lo que hiciera `patronEscala`. Ni
+                    // había puntos, ni había bandas, ni había diferencia entre
+                    // Manchas y Laberinto: había un degradado.
                     //
-                    // (investigación playtest 13, revisada playtest 20 -- SimStepper
-                    // NO es archivo modificable en esta ronda tampoco) A diferencia
+                    // El playtest 20 arregló el COLAPSO (anclaje de ruido estático
+                    // por bloque en MorphReactionDiffusion: ahora sí hay estructura
+                    // visible, y estable, en un charco pequeño), pero NO la
+                    // distinción entre las dos familias — hoy se separan por brillo
+                    // medio (Manchas ~15-35/255 más oscura), no por forma. La
+                    // diferencia de forma exige DOS campos (Gray-Scott de verdad,
+                    // U y V), que es un cambio de `CellGrid` y está en el backlog.
+                    // Aquí solo se traduce concentración a brillo, igual en ambas.
+                    //
+                    // (investigación playtest 13, revisada playtest 20) A diferencia
                     // de Vetas/Celdas, Manchas/Laberinto/Dendritas NO usan
                     // patronEscala como un "periodo en celdas" explícito: son un
                     // proceso de reacción-difusión (MorphReactionDiffusion) cuyo
