@@ -104,6 +104,158 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 19 → EL TALLER SE ENCOGE Y SE MUEVE, LA VIDA CRECE CON FORMA, Y EL MAGO PIDE MENOS
+## — ronda nocturna en autónomo, pendiente de validar en el editor
+Ronda dirigida por Opus 5 (survey de viabilidad, 4 encargos en paralelo con propiedad disjunta,
+3 auditorías, e integración a mano de lo que ningún encargo podía cerrar); Sonnet 5 escribió el
+código. **Cesar dejó el encargo y se fue a dormir**: *"sorpréndeme, muéstrame tu mejor esfuerzo,
+confío en ti, mañana lo pruebo"*. Todo lo que sigue se decidió sin poder preguntarle.
+
+**EL HILO COMÚN DE SU REPORTE, que es lo que ordenó las prioridades:** experimentar CANSA. Todo
+está lejos, hace falta demasiada materia para ver un patrón, y el mago pide cantidades que se
+comen la jornada. Cuatro quejas distintas, un solo problema de fondo — así que la ronda entera va
+de **bajar el coste de probar cosas**.
+
+### 1. EL TALLER COMPACTO (`SimLevelBuilder.cs`, `WorkshopBackdrop.cs`)
+Cesar: *"debería transmitir la sensación de estar yo en un lugar pequeño que luego quizás con los
+niveles se me amplíe el espacio, pero ahora eso no es necesario"*.
+El mundo NO se encoge (768x288 es el tamaño final y el desbloqueo por niveles lo va a usar): lo
+que cambia es la distribución. La bandeja fría y el estante de redomas bajan a vivir **encima del
+propio banco de grifos** (x262..374, y=236..245) y la Tolva se acerca 137 celdas
+(`EntregaX1` 607→470). Nada del banco, la pila, el pilar, el pozo ni el sótano se movió: geometría
+ya validada no se toca dos veces.
+
+| Aparato | Antes | Ahora |
+|---|---|---|
+| grifos | 25 | 25 |
+| placa de cuba B | 64 | 64 |
+| **piedra gélida** | 107 | **49** |
+| **estante de redomas** | 154 | **50** |
+| **boca de la Tolva** | 225 | **88** |
+| placa de cuba A (lejos a propósito) | 216 | 216 |
+
+**La verificación importa tanto como el cambio.** En el playtest 16 un pilar invadió la pila y no
+se detectó. Esta vez se comprobó con una **simulación celda a celda sobre un grid real de 768x288,
+parseando las constantes directamente del `.cs` final** (no copiadas a mano, para eliminar el error
+de transcripción): 210 pares de rectángulos comprobados, **cero solapes nuevos** (los 4 existentes
+son piezas anidadas dentro del sótano y la pared compartida pila/pilar, ya intencionales); todos
+los interiores libres; paredes completas; el punto de aparición del aprendiz sigue cayendo en aire.
+Bandeja y estante dejan 8 celdas de hueco entre sí y 3 celdas de aire sobre el pilar de grifos.
+
+### 2. EL MODO MUDANZA — mover los aparatos a su antojo (`Mudanza.cs` nuevo, + 6 archivos)
+Cesar: *"ya tengo ganas de mover las cosas a mi antojo"*. Es el paso 5 de la fase acordada.
+**Tecla V.** Clic izq. agarra el aparato más cercano al cursor, clic izq. otra vez lo suelta.
+Silueta verde/roja siguiendo el cursor. Grifos, placas ígneas y piedra gélida son movibles; la
+Tolva y el estante no (todavía).
+
+**La decisión técnica que lo hizo barato:** los cuatro aparatos ya estaban 100% parametrizados por
+celda desde el playtest 15, así que mover uno es recalcular su ancla — no reconstruirlo. Pero
+`BuildVisual()` **no es idempotente**: `MaquinariaSprites.CrearCapa` siempre hace `new GameObject`,
+así que llamarlo dos veces duplicaría todos los hijos y dejaría los viejos huérfanos y visibles en
+el sitio antiguo, para siempre. Y volver a llamar a `Init()` es peor todavía: resetearía
+`favorCostPerActivation` y `Bloqueado` a sus valores por defecto, **volviendo a sellar el grifo de
+Azoth**. Por eso cada aparato tiene un `Reposicionar(Vector2Int)` que reutiliza los hijos ya
+creados y **nunca** pasa por `BuildVisual` ni por `Init`. Escrito en el docblock de los tres, porque
+es exactamente la trampa que alguien repetirá.
+
+**Mientras llevas un aparato, el aparato real no se toca**: solo se mueve una silueta genérica, y
+`Reposicionar` se llama UNA vez, al soltar bien. Por eso cancelar es literalmente gratis.
+
+**Y SE ARREGLÓ EL SOLAPAMIENTO DE MODOS QUE EL CINCEL DEJÓ A MEDIAS.** Su propio docblock lo
+documentaba como pendiente: `Flask` seguía leyendo clics mientras el cincel estaba activo. Ahora
+**frasco, cincel y mudanza son tres modos excluyentes de verdad**, con la exclusión simétrica en
+los tres sentidos. El último lado (Cincel → Mudanza) lo cerró el director al integrar: ningún
+encargo era dueño de los dos archivos a la vez, y ese hueco es el precio recurrente de trabajar en
+paralelo — hay que ir a buscarlo, no aparece solo.
+
+**LA RED DE SEGURIDAD, que salió de la auditoría de jugabilidad y es lo mejor de esta parte.**
+Mover un aparato fuera de su recipiente no rompe nada visible, pero **vuelve imposibles encargos
+enteros en silencio**: la piedra gélida fuera de la bandeja sigue enfriando, solo que ya no donde
+el Maestro sembró la semilla, así que "algo helado" deja de ser cumplible y el juego no dice por
+qué. La respuesta NO podía ser prohibirlo (Cesar pidió justo lo contrario, y una herramienta que
+te impide equivocarte tampoco te deja descubrir): la respuesta es que **deshacer sea trivial**.
+**R con algo agarrado cancela ese arrastre; R con las manos vacías devuelve TODOS los aparatos a
+su sitio de fábrica.** Se experimenta sin miedo porque el camino de vuelta es una tecla.
+(Detalle que casi cuesta caro: las dos listas paralelas — aparatos y anclas de fábrica — tenían un
+punto de limpieza que quitaba solo de una. Habría hecho que R devolviera cada aparato al sitio de
+otro, que es peor que no tener R.)
+
+También se arregló que el **audio de un grifo siga a su boquilla** al moverlo: `DirectorDeAudio`
+cacheaba las coordenadas UNA vez al crear las voces.
+
+### 3. QUE LA VIDA CREZCA CON FORMA (`SimStepper.cs`, `Universe.cs`)
+Cesar: *"lo que no vi por más que intenté es que algo crezca con formas que vengan de algoritmos,
+fractales qué sé yo, ya habíamos hablado de eso; solo vi diferencias de viscosidad y propagación"*.
+Tenía razón: el campo morfológico del playtest 12 da TEXTURA, que es piel — la silueta del
+organismo seguía siendo un borrón redondo, porque **cualquier célula del cuerpo podía engendrar**.
+
+**El cambio es una sola idea:** una mancha crece porque engendra todo el cuerpo; una rama crece
+porque **solo engendran las PUNTAS**. Ahora una célula solo compite por el nutriente si tiene pocos
+vecinos vivos; en cuanto queda rodeada pasa a ser tallo y no vuelve a intentarlo. Con eso solo, las
+manchas se vuelven dendritas. Encima: persistencia de dirección, bifurcación, y **4 parámetros de
+"hábito" sorteados por semilla** (cuántos vecinos tolera una punta, probabilidad de bifurcar,
+cuánta persistencia, y un sesgo vertical que puede ser positivo — trepa hacia la luz — negativo —
+se entierra hacia el nutriente — o nulo). La vida de un universo se reconoce de la de otro.
+Y juega a favor de su otra queja: **una silueta ramificada se distingue con 30 celdas; una mancha
+necesita 300**.
+
+**El fallo mortal de este mecanismo es que la colonia se autobloquee** (todas las células con
+demasiados vecinos, nadie puede crecer, cultivo muerto para siempre). Se investigó con un modelo
+en Python antes de escribir nada: con tolerancia 1 vecino, **el 100% de 60 semillas terminaba en
+un anillo cerrado autobloqueado**; con vecindad de Moore (filamentos más finos, más bonitos),
+27 de 60. Se eligió la variante segura y el rango de tolerancia se fijó en 2-3, **nunca 1**, con el
+dato escrito en el propio campo. La auditoría independiente lo reverificó después con 1.000
+tiradas sobre la cuba real y el retoño real del Maestro: **cero atascos**.
+`VivGrowChancePct` sube de 60 a 75 para compensar el freno — no es un rebalanceo de dificultad,
+es que cultivar cueste lo mismo que antes: ~46 ticks/120 celdas con la regla vieja, ~52 sin
+compensar, ~40 compensada.
+
+### 4. QUE EL PATRÓN SE LEA SIN ESFUERZO (`StorageRack.cs`, `FlaskHud.cs`, `SimRenderer.cs`)
+Cesar: *"los patrones son visibles y son distintos en cada generación, eso está bien, pero aún
+siento que necesito mucho material para ver las formas, y me cuesta un esfuerzo visual cuando los
+meto en los frascos; quizás los frascos pueden ser más gordos"*.
+- **Redomas +53% de ancho, +80% de área visible**, y —esto es lo que las hace útiles— sus medidas
+  ahora se **derivan del ancho real del estante en tiempo de ejecución**, no de constantes fijas:
+  si el estante se mueve o cambia, se recalculan solas.
+- **El swatch del frasco** pasa de 18 a 28 téxeles de lienzo y +31% en pantalla.
+- **El periodo de los patrones baja de 5-12 celdas a 3-6.** Agrandar el recipiente sin achicar el
+  periodo solo habría enseñado un trozo gigante de una sola repetición (regla 24). Repeticiones en
+  la bandeja fría: antes 3.7-8.8, ahora 7.3-14.7. En un charco de ~30 celdas, la escala más gruesa
+  pasa de un borrón sin repetición a mostrar 1-2 repeticiones reales.
+- Se añadió un **assert de arranque** que revienta con `LogError` si el periodo máximo deja de
+  caber tres veces en el recipiente más estrecho — para que el próximo que suba el techo de
+  `patronEscala` se entere al arrancar, no tres rondas después. Y la cifra "bandeja fría 46x6" de
+  la regla 24 estaba obsoleta: la medida real es 44x7, y ahora se lee de las constantes.
+
+### 5. EL MAGO PIDE MENOS, Y NO PIDE LO MISMO CADA PARTIDA (`OrderSystem.cs`)
+Cesar: *"aún estoy atorado con los niveles de cosas que me pide el mago, en especial el nivel 1,
+que creo que siempre es el mismo"*. Dos quejas en una frase, las dos ciertas.
+Todos los umbrales estaban calibrados contra el TIEMPO de jornada (¿cabe en el 60-70% de los
+360s?) y esa cuenta era correcta — **pero medía la pregunta equivocada**. El juego no va de
+producir en cantidad, va de experimentar; un umbral que "cabe en el tiempo" te obliga igualmente a
+pasarte ese tiempo acarreando frasco. Cumplir tiene que ser el peaje corto que te deja seguir
+jugando, no la jornada entera. Ahora todas las cantidades pasan por un `Volumen()` que **recorta
+al 60% y añade un temblor de ±12% por semilla** — y la jornada 1, que estaba escrita con
+constantes y era literalmente idéntica cada partida, por fin usa el `rng` sembrado con
+(semilla, día) que este archivo ya construía y solo usaba la jornada 3.
+**Las RECOMPENSAS no se tocan**: toda la aritmética de desenlaces (120/180/260 de Favor, máximo
+teórico 305) depende del Favor, no de las celdas, así que sigue cuadrando exactamente — verificado
+sumando las recompensas del código en la auditoría.
+
+### 6. Verificación
+Un survey de viabilidad previo, 4 encargos con propiedad de archivos disjunta, y **tres auditorías
+independientes**: compilación cruzada (los 4 agentes escribieron sin verse: interfaz `IMovible`
+implementada por tres clases, símbolos cruzados, firmas de `Init`, meta y guid del archivo nuevo),
+**jugabilidad** (¿se puede terminar la partida con la geometría nueva? ¿puede el jugador romperse
+la partida con la mudanza? ¿se atasca el cultivo? ¿cuadra la economía?) y una verificación final
+tras las ediciones a mano del director. De la auditoría de jugabilidad salió la red de seguridad
+de la tecla R, que es el mejor cambio de la ronda y no estaba en el plan.
+Se arreglaron de paso dos avisos XML preexistentes (`CS1570`/`CS1574`) en `Cincel.cs` y
+`OrderSystem.cs`. Ningún archivo encogió.
+**Sigue sin haber compilador de C# en el sandbox: la compilación real está pendiente del editor.**
+
+---
+
 ## Playtest 18 → LA QUÍMICA YA NO ES LA MISMA EN TODA SEMILLA: leyes generadas, un universo
 ## con TESIS, y el diario como motor de curiosidad — pendiente de validar en el editor
 Ronda dirigida por Opus 5 (contrato de API congelado, gramática, auditorías); Sonnet 5 escribió el

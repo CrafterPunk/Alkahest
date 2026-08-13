@@ -76,8 +76,87 @@ namespace Alkahest.Sim
         /// <summary>Banda de temperatura raw en la que Vivium crece consumiendo Nutrient.</summary>
         public readonly byte VivGrowMinRaw;
         public readonly byte VivGrowMaxRaw;
-        /// <summary>Probabilidad de que consumir un Nutrient en banda cree una nueva célula de Vivium (si no, solo se consume).</summary>
-        public readonly byte VivGrowChancePct = 60;
+        /// <summary>
+        /// Probabilidad de que consumir un Nutrient en banda cree una nueva
+        /// célula de Vivium (si no, solo se consume). Era 60 antes del
+        /// playtest 19; sube a 75 para COMPENSAR la tasa de cultivo tras el
+        /// gate de "solo las puntas engendran" (ver
+        /// <see cref="HabitoTolerarVecinosPunta"/> y
+        /// SimStepper.GrowthTick): con el gate, menos células
+        /// compiten por Nutrient a la vez, así que a igual probabilidad el
+        /// cultivo tardaría más que con la mancha vieja. Medido con un
+        /// modelo en Python (informe playtest 19, 150 semillas): la mancha
+        /// vieja tardaba ~46 ticks de media en llegar a 120 células a 60%;
+        /// la silueta nueva SIN compensar tardaba ~52; con este 75% baja a
+        /// ~40 -- igual de rápida o más, sin perder la ramificación (el
+        /// gate de puntas no depende de este número).
+        /// </summary>
+        public readonly byte VivGrowChancePct;
+
+        // -----------------------------------------------------------------
+        // HÁBITO DE CRECIMIENTO DEL VIVIUM (playtest 19, forma dendrítica por
+        // semilla). Cesar: "lo que no vi por más que intenté es que algo
+        // crezca con formas que vengan de algoritmos, fractales qué sé yo...
+        // solo vi diferencias de viscosidad y propagación". El campo
+        // morfológico (playtest 12) le da TEXTURA al Vivium, pero la FORMA
+        // del organismo seguía siendo un borrón redondo -- GrowthTick hacía
+        // crecer cualquier célula asentada con Nutrient al lado, así que un
+        // núcleo con varios vecinos de Nutrient rellenaba su entorno entero
+        // en unos pocos ticks. La regla nueva (ver GrowthTick) hace que
+        // SOLO LAS PUNTAS engendren -- una célula con muchos vecinos de
+        // Vivium ya es tallo/interior y deja de competir por Nutrient. Estos
+        // cuatro números, sorteados por semilla, son el "hábito de
+        // crecimiento" concreto de ESTE universo: tupido o ralo, recto o
+        // errático, isótropo o con preferencia vertical -- así una silueta
+        // se reconoce de otra sin mirar el color.
+        //
+        // EXPUESTO A PROPÓSITO como campos públicos, igual que
+        // AfinidadDelUniverso (playtest 18, ver ese campo): el gancho para
+        // una ronda futura es que el diario/el rumor del Edicto lo insinúen
+        // sin decirlo ("el Maestro murmura que aquí la vida trepa hacia la
+        // luz...", "...que aquí la vida se ramifica muy despacio..."). Esta
+        // ronda NO toca ese texto, solo deja los datos listos.
+        // -----------------------------------------------------------------
+        /// <summary>
+        /// Vecinos ORTOGONALES de Vivium que una célula tolera y aun así
+        /// seguir contando como PUNTA (ver SimStepper.GrowthTick).
+        /// Por encima de este número, la célula es tallo/interior y no
+        /// vuelve a intentar engendrar. Rango 2-3, NUNCA 1: un modelo en
+        /// Python (informe playtest 19, 60 semillas) mostró que con
+        /// tolerancia 1 el 100% de las semillas probadas terminaba en un
+        /// anillo cerrado que se autobloquea para siempre (cada célula del
+        /// anillo pasa a tener 2 vecinos propios, por encima de la
+        /// tolerancia, y ninguna vuelve a crecer) -- un cultivo que deja de
+        /// crecer para siempre rompería los encargos, así que se descarta
+        /// aunque sea la opción más "fina" visualmente.
+        /// </summary>
+        public readonly byte HabitoTolerarVecinosPunta;
+        /// <summary>
+        /// Probabilidad (0-100) de que una punta con dirección conocida la
+        /// IGNORE a propósito esta vez y fuerce un candidato distinto -- la
+        /// célula sigue teniendo pocos vecinos, así que puede volver a
+        /// engendrar otro tick en una tercera dirección, y las dos crías ya
+        /// se leen como horquilla. EL parámetro que más cambia la silueta
+        /// (más alto = colonia más ramificada y más abierta; más bajo =
+        /// filamentos largos con pocas horquillas).
+        /// </summary>
+        public readonly byte HabitoBifurcarPct;
+        /// <summary>
+        /// Probabilidad (0-100) de que una punta con dirección conocida SIGA
+        /// esa dirección en vez de recalcular el mejor candidato cada vez --
+        /// ramas rectas (alto) frente a erráticas/zigzagueantes (bajo).
+        /// </summary>
+        public readonly byte HabitoPersistenciaPct;
+        /// <summary>
+        /// Sesgo -100..100: positivo tantea con esa probabilidad crecer
+        /// hacia ARRIBA antes que el orden isotrópico normal ("planta que
+        /// trepa a la luz"); negativo tantea crecer hacia ABAJO ("moho que
+        /// se entierra hacia el nutriente"); 0 = isótropo, crece hacia
+        /// donde haya Nutrient sin preferencia. Es un rasgo del UNIVERSO,
+        /// no de la textura que le tocó a este Vivium -- se aplica igual en
+        /// las tres familias visuales de SimStepper.
+        /// </summary>
+        public readonly sbyte HabitoSesgoVerticalPct;
 
         /// <summary>Umbral de temperatura raw por DEBAJO del cual Azoth cristaliza al tocar Crystal/CrystalSeed.</summary>
         public readonly byte CrystallizeMaxTempRaw;
@@ -149,7 +228,9 @@ namespace Alkahest.Sim
         private readonly string[] _firmaPorMaterial;
 
         private Universe(int seed, MaterialDef[] materials, ReactionEngine reactions,
-            byte vivGrowMinRaw, byte vivGrowMaxRaw, byte crystallizeMaxTempRaw, byte crystallizeChancePct,
+            byte vivGrowMinRaw, byte vivGrowMaxRaw, byte vivGrowChancePct,
+            byte habitoTolerarVecinosPunta, byte habitoBifurcarPct, byte habitoPersistenciaPct, sbyte habitoSesgoVerticalPct,
+            byte crystallizeMaxTempRaw, byte crystallizeChancePct,
             Edicto edicto, string edictoDescripcion, string caracterDelUniverso, string[] firmaPorMaterial,
             LeyDelUniverso[] leyes, int leyCrecimientoIndice, byte[] afinidadDelUniverso)
         {
@@ -158,6 +239,11 @@ namespace Alkahest.Sim
             Reactions = reactions;
             VivGrowMinRaw = vivGrowMinRaw;
             VivGrowMaxRaw = vivGrowMaxRaw;
+            VivGrowChancePct = vivGrowChancePct;
+            HabitoTolerarVecinosPunta = habitoTolerarVecinosPunta;
+            HabitoBifurcarPct = habitoBifurcarPct;
+            HabitoPersistenciaPct = habitoPersistenciaPct;
+            HabitoSesgoVerticalPct = habitoSesgoVerticalPct;
             CrystallizeMaxTempRaw = crystallizeMaxTempRaw;
             CrystallizeChancePct = crystallizeChancePct;
             ActiveEdicto = edicto;
@@ -252,6 +338,27 @@ namespace Alkahest.Sim
             int growMinC = Mathf.RoundToInt(30f + growShiftC);
             int growMaxC = Mathf.RoundToInt(60f + growShiftC);
             if (growMaxC <= growMinC) growMaxC = growMinC + 10;
+
+            // -----------------------------------------------------------------
+            // 4b) HÁBITO DE CRECIMIENTO DEL VIVIUM (playtest 19, forma
+            //     dendrítica por semilla). Ver el bloque de campos
+            //     Universe.HabitoTolerarVecinosPunta y hermanos para el
+            //     porqué de cada rango -- en particular por qué la
+            //     tolerancia NUNCA sortea 1.
+            // -----------------------------------------------------------------
+            byte habitoTolerarVecinosPunta = (byte)(rng.Next(3) == 2 ? 3 : 2); // 2 el doble de probable que 3 (2/3 vs 1/3): la mayoría de semillas ramifica fino, algunas más tupido.
+            byte habitoBifurcarPct = (byte)rng.Next(4, 21);      // 4-20%: EL parámetro que más cambia la silueta.
+            byte habitoPersistenciaPct = (byte)rng.Next(45, 86); // 45-85%.
+            sbyte habitoSesgoVerticalPct;
+            if (rng.NextDouble() < 0.4)
+            {
+                habitoSesgoVerticalPct = 0; // isótropo: ni planta ni moho, ~40% de las semillas.
+            }
+            else
+            {
+                int magnitudSesgo = rng.Next(30, 71);
+                habitoSesgoVerticalPct = (sbyte)(rng.Next(2) == 0 ? magnitudSesgo : -magnitudSesgo);
+            }
 
             // -----------------------------------------------------------------
             // 5) Cristalización: umbral frío por defecto ~5°C, 12% de
@@ -620,8 +727,14 @@ namespace Alkahest.Sim
             var reactionEngine = new ReactionEngine(todasReactions);
 
             var nucleoLeyes = ConstruirLeyesNucleo(nucleoReactions);
-            const byte vivGrowChancePctParaLey = 60; // duplica el default del campo de instancia VivGrowChancePct: Create() es estático, no puede leer `this` antes de construir el Universe.
-            var leyCrecimiento = ConstruirLeyCrecimiento(CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC), vivGrowChancePctParaLey);
+            // (playtest 19) 75, no 60: compensa la tasa de cultivo tras el gate de
+            // "solo las puntas engendran" -- ver el docblock de Universe.VivGrowChancePct.
+            // Un solo local en vez de una constante duplicada como antes: se usa
+            // aquí para el DESCRIPTOR de la ley (lo que lee el diario) y se pasa
+            // tal cual al constructor de Universe más abajo, así que ya no puede
+            // haber una copia que quede desincronizada.
+            const byte vivGrowChancePct = 75;
+            var leyCrecimiento = ConstruirLeyCrecimiento(CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC), vivGrowChancePct);
 
             int leyCrecimientoIndice = todasReactions.Length; // == reactionEngine.Count, por definición (invariante del contrato).
             var leyes = new LeyDelUniverso[todasReactions.Length + 1];
@@ -671,7 +784,8 @@ namespace Alkahest.Sim
             string edictoDescripcion = DescribeEdicto(edicto);
 
             return new Universe(seed, mats, reactionEngine,
-                CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC),
+                CellGrid.CToRaw(growMinC), CellGrid.CToRaw(growMaxC), vivGrowChancePct,
+                habitoTolerarVecinosPunta, habitoBifurcarPct, habitoPersistenciaPct, habitoSesgoVerticalPct,
                 crystallizeMaxTempRaw, crystallizeChancePct,
                 edicto, edictoDescripcion, caracterDelUniverso, firmaPorMaterial,
                 leyes, leyCrecimientoIndice, afinidadDelUniverso);

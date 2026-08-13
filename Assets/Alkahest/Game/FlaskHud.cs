@@ -43,11 +43,20 @@ namespace Alkahest.Game
     /// vía <see cref="FirmaVisualFabrica"/> (StorageRack.cs, compartida con
     /// las redomas — ver el comentario largo ahí sobre por qué esto duplica
     /// parte de JournalHud). Generada UNA VEZ POR MATERIAL, cacheada en
-    /// <see cref="_firmaTexturas"/>, liberada en <see cref="OnDestroy"/>; SIN
-    /// AGRANDAR NINGUNA fila (el rect del swatch es el MISMO que ya ocupaba
-    /// el cuadradito plano, ver <see cref="SwatchLado"/>) — el playtest 10 ya
-    /// se había quejado de apiñamiento en este panel, así que aquí no se
-    /// añade superficie nueva, solo se mejora lo que ya había.
+    /// <see cref="_firmaTexturas"/>, liberada en <see cref="OnDestroy"/>. En
+    /// el playtest 13 esto se hizo A PROPÓSITO sin agrandar ninguna fila (el
+    /// rect del swatch era el mismo que ya ocupaba el cuadradito plano) —
+    /// el playtest 10 se había quejado de apiñamiento en este panel y no
+    /// convenía sumar superficie nueva a la vez que se cambiaba el contenido.
+    ///
+    /// (playtest 20, CORRIGE lo anterior a propósito) Cesar, dos rondas
+    /// después, pidió lo contrario explícitamente: *"me cuesta un esfuerzo
+    /// visual cuando los meto en los frascos"*. El swatch SÍ crece esta ronda
+    /// (<see cref="SwatchLado"/> 18→28 téxeles de lienzo, `altoFila`/`lado`
+    /// en <see cref="DibujarPanel"/> 16→21 en pantalla) — la cautela del
+    /// playtest 13 seguía siendo válida como PRINCIPIO ("no crezcas sin que
+    /// te lo pidan"), pero ahora sí se pidió. Se mantiene la moderación: no
+    /// es un panel de inspección, sigue siendo una fila de HUD compacta.
     ///
     /// Aquí SÍ vale bajar alfa para el borde Difuso (a diferencia de
     /// StorageRack, donde el contenido se pinta sobre el MUNDO): este swatch
@@ -64,10 +73,11 @@ namespace Alkahest.Game
     /// <see cref="TextoAyuda"/> a partir de <see cref="UsosParaAprender"/>.
     /// Ver <see cref="ActualizarUsosAyuda"/>. También se aprieta el relleno
     /// del panel ("doble espaciado innecesario", reporte del jugador): SIN
-    /// volver al apiñamiento que ya se quejó en el playtest 10 -- el ancho de
-    /// fila y el tamaño del swatch de firma NO se tocan (están validados,
-    /// "el punto de luz del color de material está increíble"), solo se
-    /// aprietan los márgenes/huecos entre secciones.
+    /// volver al apiñamiento que ya se quejó en el playtest 10 -- solo se
+    /// aprietan los márgenes/huecos entre secciones (el ancho de fila y el
+    /// tamaño del swatch, entonces "validados, el punto de luz de color
+    /// está increíble", SÍ se tocan dos rondas después: ver el playtest 20
+    /// en el párrafo de más arriba, petición explícita de Cesar).
     /// </summary>
     public sealed class FlaskHud : MonoBehaviour
     {
@@ -101,8 +111,23 @@ namespace Alkahest.Game
         // HUD (filas del panel + chip de bloqueo): más sencillo de cachear
         // que un tamaño por sitio, y FilterMode.Point + GUI.DrawTexture ya
         // estira sin problema a lo que pida cada rect real.
+        //
+        // (playtest 20, "me cuesta un esfuerzo visual cuando los meto en los
+        // frascos") 18 -> 28 téxeles de LIENZO (resolución de la textura
+        // generada, no el tamaño en pantalla -- ese lo fija `altoFila` en
+        // DibujarPanel, que también sube esta ronda). Verificado con la
+        // réplica en Python del informe: a 18 téxeles, un material de
+        // patronEscala alto (periodo grande) mostraba un swatch casi liso,
+        // sin ninguna repetición -- exactamente lo que Cesar describe. A 28
+        // téxeles + el periodo más corto de FirmaVisualFabrica.PatronPeriodoCeldas
+        // (3..6, bajado esta misma ronda) el swatch más pequeño en pantalla
+        // sigue mostrando 2+ repeticiones incluso en la escala más gruesa.
+        // Sigue siendo una única textura por material (nunca por frame, ver
+        // ObtenerFirmaTexturas) -- subir la resolución del lienzo no cambia
+        // el patrón de asignaciones, solo el tamaño de cada Texture2D ya
+        // cacheada.
         // -----------------------------------------------------------------
-        private const int SwatchLado = 18;
+        private const int SwatchLado = 28;
         private readonly Texture2D[][] _firmaTexturas = new Texture2D[MaterialId.Count][];
         private bool[] _esBordeSwatch;
 
@@ -181,7 +206,7 @@ namespace Alkahest.Game
         {
             if (_esBordeSwatch != null) return;
 
-            const int bandaBorde = 2; // ~11% del lado, mismo orden que el 10% de JournalHud.
+            const int bandaBorde = 3; // ~11% de SwatchLado (antes 2/18; con el lienzo a 28 téxeles esta ronda, 3/28 mantiene la misma proporción -- mismo orden que el 10% de JournalHud).
             _esBordeSwatch = new bool[SwatchLado * SwatchLado];
             for (int y = 0; y < SwatchLado; y++)
             {
@@ -264,19 +289,29 @@ namespace Alkahest.Game
         private void DibujarPanel()
         {
             // (fix playtest 16) Márgenes/huecos apretados un escalón --
-            // "doble espaciado innecesario" del reporte. altoFila (y por
-            // tanto el swatch de firma, `lado` más abajo) se deja EXACTAMENTE
-            // igual: eso está validado y no se toca. El punto medio buscado:
-            // menos aire ENTRE secciones, no menos aire DENTRO de cada fila
-            // (que es donde vivía la queja de apiñamiento del playtest 10).
+            // "doble espaciado innecesario" del reporte. El punto medio
+            // buscado entonces: menos aire ENTRE secciones, no menos aire
+            // DENTRO de cada fila (que es donde vivía la queja de apiñamiento
+            // del playtest 10).
+            //
+            // (playtest 20, "me cuesta un esfuerzo visual... quizás los
+            // frascos pueden ser más gordos") altoFila SÍ cambia esta ronda,
+            // a propósito, pese a la nota "validado, no tocar" del playtest
+            // 16 -- esa nota respondía a una queja de apiñamiento anterior a
+            // esta petición explícita de Cesar de ver mejor el patrón. Subida
+            // moderada (16->21, +31%): el swatch (`lado` más abajo) crece a
+            // juego, pero SIN volver a la caja gigante que ya se rechazó una
+            // vez -- sigue siendo una fila de HUD compacta, no un panel de
+            // inspección. `ancho` sube un poco (300->316) para que el texto
+            // del nombre no se apriete contra el swatch más grande.
             float margen = UiStyles.S(10f);
-            float pad = UiStyles.S(6f);           // antes 8.
-            float ancho = UiStyles.S(300f);
-            float altoLinea = UiStyles.S(17f);    // antes 19.
-            float altoBarra = UiStyles.S(11f);    // antes 13.
-            float altoFila = UiStyles.S(16f);     // SIN CAMBIOS: aquí vive el swatch validado.
-            float gapChico = UiStyles.S(3f);      // antes 4 (bajo el título).
-            float gapSeccion = UiStyles.S(4f);    // antes 6 (antes de las filas y antes de la ayuda).
+            float pad = UiStyles.S(6f);           // antes 8 (playtest 16, sin cambios esta ronda).
+            float ancho = UiStyles.S(316f);       // antes 300 -- respiro para el swatch más grande.
+            float altoLinea = UiStyles.S(17f);    // antes 19 (playtest 16, sin cambios esta ronda).
+            float altoBarra = UiStyles.S(11f);    // antes 13 (playtest 16, sin cambios esta ronda).
+            float altoFila = UiStyles.S(21f);     // antes 16 (playtest 16) -- swatch más grande, ver arriba.
+            float gapChico = UiStyles.S(3f);      // antes 4 (playtest 16, sin cambios esta ronda).
+            float gapSeccion = UiStyles.S(4f);    // antes 6 (playtest 16, sin cambios esta ronda).
 
             bool mostrarAyuda = MostrarAyuda;
             // La línea de ayuda se MIDE (podría necesitar dos líneas a resoluciones

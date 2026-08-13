@@ -93,16 +93,29 @@ namespace Alkahest.Game
     ///   DISEÑO, tal y como pide docs/SIM_NOTES.md.
     ///
     /// CRECIMIENTO DE VIVIUM (Sim/SimStepper.cs GrowthTick + Universe.cs):
-    /// - VivGrowChancePct = 60% de crear célula nueva al consumir un
-    ///   Nutrient vecino en banda de temperatura.
+    /// - (playtest 19, ACTUALIZADO) `VivGrowChancePct` = **75%** (antes 60) de
+    ///   crear célula nueva al consumir un Nutrient vecino en banda. La subida
+    ///   NO es un rebalanceo de dificultad: compensa exactamente el freno que
+    ///   introdujo el crecimiento DENDRÍTICO, para que cultivar cueste el mismo
+    ///   tiempo que antes. Medido en el modelo de esa ronda: ~46 ticks/120
+    ///   celdas con la regla vieja, ~52 sin compensar, ~40 compensada.
+    /// - (playtest 19) **YA NO CRECE COMO UNA MANCHA.** Antes cualquier célula
+    ///   asentada con Nutrient al lado podía engendrar, y por eso el
+    ///   crecimiento era EXPONENCIAL en toda la masa. Ahora solo engendran las
+    ///   PUNTAS (las que tienen pocos vecinos vivos, umbral por semilla):
+    ///   la colonia ramifica en vez de engordar entera. La consecuencia para
+    ///   ESTE archivo es que el número de células capaces de crecer ya no es
+    ///   proporcional a la masa sino a su PERÍMETRO ÚTIL -- sigue sin ser el
+    ///   cuello de botella (ver la medición de arriba), pero si alguien vuelve
+    ///   a calibrar umbrales, que no razone con "exponencial".
     /// - Cadencia de intento: throttle de 1 de cada 4 ticks por celda
     ///   asentada = 7.5 intentos/s (a 30Hz) SI tiene un vecino Nutrient
-    ///   disponible ese intento.
-    /// - Cuba B (Sim/SimLevelBuilder.cs): interior (VatWidth58-2*3) x
-    ///   (VatHeight40-3) = 52*37 = 1924 celdas -- NUNCA es el límite real.
-    /// - El crecimiento es EXPONENCIAL mientras haya Nutrient y sitio (cada
-    ///   célula nueva se vuelve, unos ticks después, una célula-frontera
-    ///   más), así que el cuello de botella real es el ARRANQUE: el retoño
+    ///   disponible ese intento Y sigue siendo punta.
+    /// - Cuba B (Sim/SimLevelBuilder.cs): el interior real se deriva de
+    ///   `VatInteriorX0/X1` y ronda las 58x37 celdas (la cifra "52x37" que
+    ///   decía esta línea llevaba obsoleta desde el playtest 15) -- en
+    ///   cualquier caso, NUNCA es el límite real.
+    /// - El cuello de botella real es el ARRANQUE: el retoño
     ///   inicial que deja el Maestro (disco r=5 = 81 celdas, Game/
     ///   MasterSupplies.cs) nace DORMIDO (fuera de banda) y hace falta
     ///   templar la placa Y seguir vertiendo Nutrient a mano para que la
@@ -318,6 +331,48 @@ namespace Alkahest.Game
             return true;
         }
 
+        /// <summary>
+        /// EL VOLUMEN DE UN ENCARGO (playtest 19). Reporte de Cesar, tras la
+        /// build: *"aún estoy atorado con los niveles de cosas que me pide el
+        /// mago, en especial el nivel 1, que creo que siempre es el mismo"*.
+        ///
+        /// Dos quejas en una frase, y las dos son ciertas:
+        ///  (1) SE PIDE DEMASIADO. Todos los umbrales de este archivo se
+        ///      calibraron contra el TIEMPO de jornada (¿cabe en el 60-70% de
+        ///      los 360s?) y esa cuenta sigue siendo correcta -- pero medía la
+        ///      pregunta equivocada. El juego no va de producir en cantidad,
+        ///      va de EXPERIMENTAR; y un umbral que "cabe en el tiempo" te
+        ///      obliga igualmente a pasarte ese tiempo acarreando frasco en
+        ///      vez de probando cosas. Cumplir tiene que ser el peaje corto
+        ///      que te deja seguir jugando, no la jornada entera.
+        ///  (2) LA JORNADA 1 ES LITERALMENTE IDÉNTICA cada partida: sus dos
+        ///      encargos estaban escritos con constantes, sin tocar el `rng`
+        ///      sembrado con (semilla, día) que este método ya construía y que
+        ///      hasta ahora solo usaba la jornada 3.
+        ///
+        /// Esta función responde a las dos: recorta al <see cref="FactorVolumen"/>
+        /// y añade un temblor por semilla, así que dos partidas distintas nunca
+        /// piden exactamente lo mismo. Se aplica a TODAS las jornadas.
+        ///
+        /// LO QUE NO TOCA, A PROPÓSITO: las RECOMPENSAS. Toda la aritmética de
+        /// desenlaces de la cabecera de esta clase (120/180/260 de Favor, y el
+        /// máximo teórico de 175 antes de la jornada 3) depende de las
+        /// recompensas, no de las celdas. Bajar el volumen sin tocar el Favor
+        /// deja esa cuenta intacta y solo hace el camino más corto.
+        /// </summary>
+        private static int Volumen(int celdasOriginales, System.Random rng)
+        {
+            int recortado = Mathf.RoundToInt(celdasOriginales * FactorVolumen);
+            // Temblor de +/-12%: suficiente para que no se lea igual dos
+            // partidas seguidas, pequeño para no descalibrar el equilibrio.
+            float temblor = 0.88f + (float)rng.NextDouble() * 0.24f;
+            int final = Mathf.RoundToInt(recortado * temblor);
+            return Mathf.Max(20, final); // nunca por debajo de un frasco largo: un encargo trivial no enseña nada.
+        }
+
+        /// <summary>Cuánto se recorta cada umbral respecto al valor calibrado por tiempo. Ver <see cref="Volumen"/>.</summary>
+        private const float FactorVolumen = 0.6f;
+
         /// <summary>Genera y activa los encargos de la jornada `day` (1-based), reemplazando los de la jornada anterior.</summary>
         public void GenerateOrdersForDay(int day)
         {
@@ -328,19 +383,21 @@ namespace Alkahest.Game
             switch (day)
             {
                 case 1:
-                    // SIN CAMBIOS -- jornada de referencia (Cesar la completó
-                    // con margen en el playtest real). Con el grifo de Aceite
-                    // dando 20-150 celdas/s (ver medición de cabecera) 60
-                    // celdas de Flammable son un par de viajes de frasco, muy
-                    // por debajo del 60-70% de los 360s de la jornada.
-                    AddOrder(OrderType.Flammable, 60, 25,
-                        "Trae algo que arda de verdad -- 60 celdas de material inflamable.");
-                    // La placa ígnea (fuera del alcance de este archivo) es
-                    // lo bastante rápida en el playtest real como para que
-                    // 80 celdas a 80°C tampoco fuera el cuello de botella;
-                    // se deja igual por la misma razón que el anterior.
-                    AddOrder(OrderType.Hot, 80, 25,
-                        "Algo que queme al tacto -- 80 celdas a 80°C o más.", minTempC: 80);
+                    // (playtest 19) La jornada de la que Cesar dijo "en especial
+                    // el nivel 1, que creo que siempre es el mismo". Tenía razón
+                    // por partida doble: pedía mucho Y era idéntica cada vez.
+                    // Ahora las dos cantidades pasan por Volumen(), así que se
+                    // recortan y tiemblan con la semilla. Los textos se
+                    // construyen con la cifra REAL -- si se vuelve a escribir a
+                    // mano un número en la frase, mentirá en cuanto tiemble.
+                    {
+                        int celdasArde = Volumen(60, rng);
+                        AddOrder(OrderType.Flammable, celdasArde, 25,
+                            "Trae algo que arda de verdad -- " + celdasArde + " celdas de material inflamable.");
+                        int celdasQuema = Volumen(80, rng);
+                        AddOrder(OrderType.Hot, celdasQuema, 25,
+                            "Algo que queme al tacto -- " + celdasQuema + " celdas a 80°C o más.", minTempC: 80);
+                    }
                     break;
 
                 case 2:
@@ -352,15 +409,22 @@ namespace Alkahest.Game
                     // -- ver DescribirGrows/DescribirCrystalSolid y el docblock de la
                     // clase: es justo lo que ambas eran ANTES de este cambio, un texto
                     // fijo que decía "Vivium"/"Cristal" a las claras.
-                    AddOrder(OrderType.Grows, 120, 35, DescribirGrows(120), targetMat: MaterialId.Vivium);
-                    AddOrder(OrderType.Cold, 60, 30,
-                        "Algo helado -- 60 celdas a -5°C o menos.", minTempC: -5);
+                    {
+                        int celdasVivo = Volumen(120, rng);
+                        AddOrder(OrderType.Grows, celdasVivo, 35, DescribirGrows(celdasVivo), targetMat: MaterialId.Vivium);
+                        int celdasFrio = Volumen(60, rng);
+                        AddOrder(OrderType.Cold, celdasFrio, 30,
+                            "Algo helado -- " + celdasFrio + " celdas a -5°C o menos.", minTempC: -5);
+                    }
                     // 70 celdas de Crystal es coherente con la medición de
                     // cabecera (~1-2 cel/s sostenidas con un frente recién
                     // sembrado): ronda 35-70s de conversión activa, primer
                     // contacto del jugador con la mecánica, sin exigir aún
                     // dominarla.
-                    AddOrder(OrderType.CrystalSolid, 70, 40, DescribirCrystalSolid(70), targetMat: MaterialId.Crystal);
+                    {
+                        int celdasCristal = Volumen(70, rng);
+                        AddOrder(OrderType.CrystalSolid, celdasCristal, 40, DescribirCrystalSolid(celdasCristal), targetMat: MaterialId.Crystal);
+                    }
                     break;
 
                 case 3:
@@ -380,7 +444,10 @@ namespace Alkahest.Game
                     // el día 3 -- no se arranca de cero, así que el margen real
                     // es aún mayor. 276 celdas de capacidad de bandeja dejan un
                     // 67% de la bandeja libre incluso al llegar al umbral.
-                    AddOrder(OrderType.CrystalSolid, 90, 45, DescribirCrystalSolid(90), targetMat: MaterialId.Crystal);
+                    {
+                        int celdasCristal3 = Volumen(90, rng);
+                        AddOrder(OrderType.CrystalSolid, celdasCristal3, 45, DescribirCrystalSolid(celdasCristal3), targetMat: MaterialId.Crystal);
+                    }
                     AddNamedOrFallback(rng);
                     // Grows 220->130 (-41%): la MISMA cuba y el MISMO cultivo
                     // de vivium de la jornada 2 (que ya entregó 120) siguen
@@ -393,7 +460,10 @@ namespace Alkahest.Game
                     // bastante menos de un minuto de crecimiento puro -- el
                     // tiempo real se va en el arranque (atender la placa y
                     // verter Nutriente), no en esperar a que crezca.
-                    AddOrder(OrderType.Grows, 130, 50, DescribirGrows(130), targetMat: MaterialId.Vivium);
+                    {
+                        int celdasVivo3 = Volumen(130, rng);
+                        AddOrder(OrderType.Grows, celdasVivo3, 50, DescribirGrows(celdasVivo3), targetMat: MaterialId.Vivium);
+                    }
                     break;
             }
         }
@@ -448,7 +518,8 @@ namespace Alkahest.Game
                 // produce está muy por debajo del techo de 20-150 cel/s
                 // medido en cabecera, así que el coste real es de viajes de
                 // frasco, no de producción.
-                AddOrder(OrderType.NamedMaterial, 70, 35, DescribirNamedMaterial(70, target), targetMat: target);
+                int celdasNombrado = Volumen(70, rng);
+                AddOrder(OrderType.NamedMaterial, celdasNombrado, 35, DescribirNamedMaterial(celdasNombrado, target), targetMat: target);
             }
             else
             {
@@ -457,8 +528,9 @@ namespace Alkahest.Game
                 // sigue siendo mayor que el NamedMaterial equivalente (100 vs
                 // 70) porque verter un básico sin descubrir nada es más fácil
                 // por celda que cumplir el encargo "de verdad".
-                AddOrder(OrderType.Flammable, 100, 35,
-                    "Nada tiene nombre todavía -- trae 100 celdas de algo inflamable.");
+                int celdasReserva = Volumen(100, rng);
+                AddOrder(OrderType.Flammable, celdasReserva, 35,
+                    "Nada tiene nombre todavía -- trae " + celdasReserva + " celdas de algo inflamable.");
             }
         }
 
@@ -512,8 +584,9 @@ namespace Alkahest.Game
         /// coincide está incompleto, avanza su progreso (completándolo y
         /// otorgando Favor si llega al mínimo) y devuelve
         /// <see cref="DeliveryOutcome.Progressed"/>. Si coincide solo con
-        /// encargos YA completos, devuelve <see cref="DeliveryOutcome.
-        /// OrderAlreadyComplete"/> (el material era correcto, pero sobra). Si
+        /// encargos YA completos, devuelve
+        /// <see cref="DeliveryOutcome.OrderAlreadyComplete"/> (el material era
+        /// correcto, pero sobra). Si
         /// no coincide con ninguno, <see cref="DeliveryOutcome.NoMatch"/>.
         ///
         /// (fix playtest 9) Antes devolvía bool y, si no encajaba con ningún

@@ -204,7 +204,14 @@ namespace Alkahest.Audio
             public Dispenser dispenser;
             public AudioSource fuente;
             public byte matId;
-            public int spoutX, spoutY;
+            // (playtest 19, TALLER MOVIBLE) spoutX/spoutY YA NO se guardan
+            // aquí -- ver SondearGrifos, que ahora los recalcula en vivo cada
+            // sondeo a partir de dispenser.transform.position. Antes eran
+            // campos cacheados una única vez en ConstruirVocesGrifo: si
+            // Game/Mudanza.cs reposicionaba el grifo, el sondeo seguía
+            // muestreando la boquilla VIEJA para siempre y el bucle de este
+            // grifo se quedaba mudo (o sonando en el sitio equivocado) tras
+            // la mudanza.
             public bool objetivoFluyendo;
             public float volumenSuavizado;
         }
@@ -387,14 +394,16 @@ namespace Alkahest.Audio
 
                 var fuente = CrearFuenteBucle("Bucle_Grifo_" + i, clip);
 
-                Vector2Int celdaAncla = _sim.WorldToCell(d.transform.position);
+                // (playtest 19) spoutX/spoutY NO se calculan ni se guardan
+                // aquí -- ver el comentario del struct VozGrifo y
+                // SondearGrifos, que los deriva EN VIVO de
+                // dispenser.transform.position en cada sondeo (12Hz) para que
+                // sigan siendo correctos si Game/Mudanza.cs mueve el grifo.
                 _grifos[i] = new VozGrifo
                 {
                     dispenser = d,
                     fuente = fuente,
                     matId = d.Material,
-                    spoutX = celdaAncla.x + GrifoSpoutOffsetCells,
-                    spoutY = celdaAncla.y - GrifoSpoutDropCells,
                     objetivoFluyendo = false,
                     volumenSuavizado = 0f,
                 };
@@ -611,6 +620,23 @@ namespace Alkahest.Audio
             if (_filtroFuego != null) _filtroFuego.cutoffFrequency = Mathf.Lerp(700f, 3200f, _intensidadFuegoSuavizada);
         }
 
+        /// <summary>
+        /// (playtest 19, TALLER MOVIBLE) LA BOQUILLA SE LEE EN VIVO, NO SE
+        /// CACHEA. Antes spoutX/spoutY se calculaban UNA sola vez al crear la
+        /// voz (en ConstruirVocesGrifo) y se guardaban en el struct VozGrifo;
+        /// si Game/Mudanza.cs reposicionaba el grifo, este sondeo seguía
+        /// muestreando la boquilla VIEJA para siempre -- el bucle de ese
+        /// grifo se quedaba mudo (o, peor, "sonando" en un punto de la
+        /// grilla que ya no tiene nada que ver con el grifo real). Ahora se
+        /// recalcula `celdaAncla` a partir de `dispenser.transform.position`
+        /// en CADA sondeo: como Dispenser.Reposicionar mueve ese mismo
+        /// transform (todos sus hijos son locales a él, ver Game/
+        /// Dispenser.cs), esto es siempre correcto sin importar cuántas
+        /// veces se haya movido el grifo. Coste: una resta de floats y un
+        /// WorldToCell por grifo a IntervaloSondeo (~12Hz) -- exactamente lo
+        /// mismo que ya hacía ConstruirVocesGrifo una vez, solo que ahora
+        /// repetido a un ritmo barato en vez de memorizado mal.
+        /// </summary>
         private void SondearGrifos()
         {
             if (_grifos == null || _sim == null) return;
@@ -619,13 +645,17 @@ namespace Alkahest.Audio
                 ref var g = ref _grifos[i];
                 if (g.dispenser == null || g.fuente == null) { g.objetivoFluyendo = false; continue; }
 
+                Vector2Int celdaAncla = _sim.WorldToCell(g.dispenser.transform.position);
+                int spoutX = celdaAncla.x + GrifoSpoutOffsetCells;
+                int spoutY = celdaAncla.y - GrifoSpoutDropCells;
+
                 bool fluyendo = false;
                 for (int dy = -1; dy <= 1 && !fluyendo; dy++)
                 {
                     for (int dx = -1; dx <= 1 && !fluyendo; dx++)
                     {
                         if (dx * dx + dy * dy > 1) continue; // mismo rombo de radio 1 que Dispenser.EmitTick.
-                        if (_sim.SampleMaterial(g.spoutX + dx, g.spoutY + dy) == g.matId) fluyendo = true;
+                        if (_sim.SampleMaterial(spoutX + dx, spoutY + dy) == g.matId) fluyendo = true;
                     }
                 }
                 g.objetivoFluyendo = fluyendo;

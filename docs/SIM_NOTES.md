@@ -770,3 +770,65 @@ vuelta antes de que el consumidor leyera y una ley podría no descubrirse nunca 
 dependiente de la carga. Se empuja como mucho un evento por ley por segundo. El centinela de
 "nunca empujado" es `uint.MaxValue`, **no 0**: con 0, en el tick 0 la comparación
 `tick - ultimo >= 30` daría falso y la primerísima ley no se empujaría jamás.
+
+---
+
+## M19 — Crecimiento dendrítico y taller movible (playtest 19)
+
+### La vida crece por las PUNTAS, no por toda la masa
+
+Hasta el playtest 18, `SimStepper.GrowthTick` dejaba engendrar a **cualquier** célula asentada de
+Vivium con un `Nutrient` ortogonal en banda de temperatura. Por eso una colonia era una MANCHA:
+crecía igual en todas direcciones y el organismo no tenía silueta. El campo morfológico
+(`morph`, M12) daba textura — piel — pero la forma seguía siendo un borrón.
+
+La regla nueva: una célula solo compite por el nutriente si su cuenta de vecinos ortogonales de
+Vivium está por debajo de `Universe.HabitoTolerarVecinosPunta`. En cuanto queda rodeada pasa a ser
+TALLO y no vuelve a intentarlo. Ese único cambio convierte manchas en dendritas, porque el
+crecimiento se concentra en el frente. Encima van la persistencia de dirección (una punta tiende a
+seguir recto) y la bifurcación (de vez en cuando se abre en dos).
+
+**Cuatro parámetros de HÁBITO, sorteados por semilla** (`Universe.Create`, con el mismo
+`System.Random(seed)` de horneado que el resto de leyes):
+
+| Campo | Rango | Efecto |
+|---|---|---|
+| `HabitoTolerarVecinosPunta` | 2 ó 3 (2 el doble de probable) | vecinos que tolera una punta antes de volverse tallo |
+| `HabitoBifurcarPct` | 4-20% | el parámetro que MÁS cambia la silueta |
+| `HabitoPersistenciaPct` | 45-85% | seguir recto vs. recalcular. Enredadera +15, Mata −15 |
+| `HabitoSesgoVerticalPct` | 0 (~40% de semillas) ó ±30-70 | + trepa hacia la luz, − se entierra hacia el nutriente |
+
+### EL FALLO MORTAL: el autobloqueo
+
+Un mecanismo de "solo crecen las puntas" puede **cerrarse sobre sí mismo**: si toda la colonia
+queda con demasiados vecinos, nadie puede crecer y el cultivo muere para siempre — con encargos de
+vivium imposibles y sin ninguna señal de por qué. Se modeló en Python ANTES de escribir el código:
+
+- **Tolerancia 1 vecino: el 100% de 60 semillas terminaba en un anillo cerrado autobloqueado.**
+- **Vecindad de Moore** (8-conexa, filamentos más finos y bonitos): 27 de 60 se atascaban.
+- Vecindad 4-conexa con tolerancia 2-3: 0 atascos en 1.000 tiradas sobre la cuba real (58x37)
+  partiendo del retoño real del Maestro (disco r=5, 81 celdas — de las cuales 53 quedan tallo para
+  siempre, pero 12-28 del borde siguen siendo punta, así que el arranque nunca está bloqueado).
+
+Por eso el rango vive en **2-3, nunca 1**, con el dato escrito en el propio campo. Contra una pared
+de cuba, la dirección se descarta solo para ESA punta; el resto de la colonia sigue.
+
+**Compensación de ritmo**: `VivGrowChancePct` sube de 60 a 75. No es rebalanceo de dificultad — es
+que cultivar cueste lo mismo que antes. Medido: ~46 ticks/120 celdas con la regla vieja, ~52 con la
+nueva sin compensar, ~40 compensada.
+
+**Consecuencia para quien calibre encargos**: el número de células capaces de crecer ya NO es
+proporcional a la masa sino al PERÍMETRO ÚTIL. `Game/OrderSystem.cs` razonaba con "crecimiento
+exponencial"; ese razonamiento ya no vale.
+
+### El taller como material del jugador
+
+`Game/Mudanza.cs` (tecla V) añade el contrato `IMovible`, implementado por `HeatPlate`,
+`ChillStone` y `Dispenser`. La sim no cambia: los aparatos nunca pintaron piedra, solo escriben
+`grid.temp` mientras están encendidos, y la temperatura vieja se autocura sola con el tirón hacia
+`CellGrid.ambient` — así que **al mover un aparato no hay nada que limpiar en la grilla**.
+
+Lo que sí importa para quien toque esto (ver reglas 36-38 de `CLAUDE.md`): `BuildVisual()` no es
+idempotente y `Init()` no es un "mover". Y como el jugador puede dejar un aparato fuera de su
+recipiente y volver imposibles encargos EN SILENCIO, existe el deshacer global: R con las manos
+vacías devuelve todo a su ancla de fábrica.

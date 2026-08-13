@@ -920,9 +920,11 @@ namespace Alkahest.Sim
         // Organic (Vivium)
         // ---------------------------------------------------------------------------------
         private const byte SettledFlag = 0x80;
-        // (playtest 12 -- morfología de crecimiento, modo Enredadera) Bits
-        // de aux libres para Organic: 0x80=SettledFlag, 0x40=OrganicDormantAux
-        // (CellGrid), así que 0x01/0x02/0x04 quedan libres sin colisionar.
+        // (playtest 12, ampliado en el 19 -- persistencia/bifurcación de
+        // GrowthTick, ya no solo el modo Enredadera) Bits de aux libres para
+        // Organic: 0x80=SettledFlag, 0x40=OrganicDormantAux (CellGrid), así
+        // que 0x01/0x02/0x04 quedan libres sin colisionar. Quedan 0x08/0x10/
+        // 0x20 sin usar todavía (bits libres para lo que venga después).
         private const byte CameFromKnownFlag = 0x04; // "esta célula recuerda de qué dirección vino" (sembradas por el jugador no lo tienen: aux nace en 0).
         private const byte CameFromDirMask = 0x03;   // índice (0..3) en DirX/DirY de la dirección de la que vino.
         private static readonly int[] DirX = { -1, 1, 0, 0 };
@@ -958,18 +960,90 @@ namespace Alkahest.Sim
         }
 
         /// <summary>
-        /// Crecimiento de Vivium (M3, arco de domesticación): una célula asentada
-        /// con un vecino ortogonal de Nutrient Y su propia temperatura dentro de
-        /// [Universe.VivGrowMinRaw, VivGrowMaxRaw] consume ESE Nutrient (-&gt; Empty)
-        /// y, con Universe.VivGrowChancePct de probabilidad, crea una nueva célula
-        /// de Vivium en su lugar (si falla, el Nutrient se pierde igualmente: la
-        /// célula "gastó" el intento). Como mucho un Nutrient por célula y por tick
-        /// (evita un relleno instantáneo; el throttle de abajo lo ralentiza más aún
-        /// para que se LEA como un coral creciendo, no como un flood-fill).
-        /// Fuera de banda: la célula queda "dormida" (bit CellGrid.OrganicDormantAux,
-        /// leído por SimRenderer para una ligera desaturación) -- no crece, pero
-        /// tampoco muere (solo se quema por encima de ~120°C vía ApplyPhase/boilsAt,
-        /// que reutiliza el mecanismo genérico de transición de fase).
+        /// Crecimiento de Vivium (M3, arco de domesticación; REESCRITO en el
+        /// playtest 19 para darle FORMA al crecimiento -- Cesar: "lo que no
+        /// vi por más que intenté es que algo crezca con formas que vengan
+        /// de algoritmos, fractales qué sé yo... solo vi diferencias de
+        /// viscosidad y propagación"). Una célula asentada con un vecino
+        /// ortogonal de Nutrient Y su propia temperatura dentro de
+        /// [Universe.VivGrowMinRaw, VivGrowMaxRaw] consume ESE Nutrient (-&gt;
+        /// Empty) y, con Universe.VivGrowChancePct de probabilidad, crea una
+        /// nueva célula de Vivium en su lugar (si falla, el Nutrient se
+        /// pierde igualmente: la célula "gastó" el intento).
+        ///
+        /// EL CAMBIO QUE ROMPE LA MANCHA: antes CUALQUIER célula asentada con
+        /// Nutrient al lado podía engendrar, así que un núcleo con varios
+        /// vecinos de Nutrient rellenaba su entorno entero en unos pocos
+        /// ticks -- un borrón redondo, sin silueta (el campo morfológico,
+        /// playtest 12, le daba TEXTURA a ese borrón, nunca forma). Ahora
+        /// SOLO LAS PUNTAS engendran: CountOrganicNeighbors cuenta los
+        /// vecinos ORTOGONALES de Vivium de esta MISMA célula (la candidata
+        /// a engendrar, no el hueco vecino); por encima de
+        /// Universe.HabitoTolerarVecinosPunta la célula es TALLO/interior y
+        /// ya cumplió su función estructural -- no vuelve a intentar crecer
+        /// (no se marca de ninguna forma ni muere: simplemente deja de
+        /// competir por el Nutrient que le quede alrededor, que solo un
+        /// vecino que SÍ siga siendo punta podrá alcanzar). Con esto una
+        /// colonia crece por sus EXTREMOS y se ramifica, en vez de engordar
+        /// entera a la vez -- ver el modelo Python del informe de la ronda
+        /// para las siluetas resultantes en varias semillas.
+        ///
+        /// Encima del gate, tres afinamientos leídos de Universe (el
+        /// "hábito de crecimiento" de esta semilla, junto a
+        /// AfinidadDelUniverso):
+        ///   - PERSISTENCIA (HabitoPersistenciaPct): una punta con dirección
+        ///     conocida (aux, CameFromDirMask/CameFromKnownFlag) tiende a
+        ///     seguir en línea recta en vez de recalcular candidato cada vez
+        ///     -- ramas rectas en vez de zigzagueantes.
+        ///   - BIFURCACIÓN (HabitoBifurcarPct): de vez en cuando, una punta
+        ///     con dirección conocida IGNORA esa dirección a propósito y
+        ///     fuerza un candidato distinto -- como la célula sigue teniendo
+        ///     pocos vecinos, puede volver a engendrar en una TERCERA
+        ///     dirección otro tick, y las dos crías ya se leen como
+        ///     horquilla. Es EL parámetro que más cambia la silueta.
+        ///   - SESGO VERTICAL (HabitoSesgoVerticalPct): antes del orden
+        ///     isotrópico de siempre, tantea la vertical preferida de este
+        ///     universo (arriba = "planta que trepa a la luz", abajo = "moho
+        ///     que se entierra hacia el nutriente"; 0 = isótropo). Es un
+        ///     rasgo del UNIVERSO, no de la textura que le tocó a este
+        ///     Vivium -- por eso se aplica igual en las tres familias
+        ///     visuales de abajo.
+        ///
+        /// El modo heredado del playtest 12 (Enredadera/Mata/Disperso, según
+        /// la familia visual de Vivium) se conserva como matiz SECUNDARIO:
+        /// Enredadera REFUERZA la persistencia del universo, Mata la
+        /// DEBILITA, y Disperso sigue usando su propia heurística de
+        /// candidato (el vecino MENOS rodeado) en vez de persistencia. Ya no
+        /// decide él solo si hay dirección continuada o no, como antes de
+        /// esta ronda -- el gate de puntas y el hábito por semilla son
+        /// universales para las tres familias.
+        ///
+        /// COMO MUCHO un Nutrient por célula y por tick (evita un relleno
+        /// instantáneo; el throttle de abajo lo ralentiza más aún para que
+        /// se LEA como un coral creciendo, no como un flood-fill). Fuera de
+        /// banda: la célula queda "dormida" (bit CellGrid.OrganicDormantAux,
+        /// leído por SimRenderer para una ligera desaturación) -- no crece,
+        /// pero tampoco muere (solo se quema por encima de ~120°C vía
+        /// ApplyPhase/boilsAt, que reutiliza el mecanismo genérico de
+        /// transición de fase).
+        ///
+        /// COSTE: el gate añade una llamada a CountOrganicNeighbors (4
+        /// lecturas de byte) por célula asentada elegible -- antes solo la
+        /// pagaba el modo Disperso, y solo por candidato válido (hasta 4
+        /// veces). En el peor caso teórico (las 221.184 celdas del mundo
+        /// llenas de Vivium y despiertas a la vez) son ~55.000 células
+        /// elegibles por tick (1/4 por el throttle) con una lectura extra de
+        /// 4 vecinos cada una: ~220.000 lecturas de byte adicionales por
+        /// tick, frente al presupuesto de 33 ms a 30 Hz -- no medible con un
+        /// profiler real, y en la práctica un cultivo ocupa una fracción
+        /// pequeña del mundo, con los chunks dormidos filtrando el resto
+        /// antes de llegar aquí.
+        ///
+        /// TASA DE CULTIVO: el gate reduce cuántas células compiten por
+        /// Nutrient a la vez (las de tallo dejan de intentarlo), así que a
+        /// igualdad de VivGrowChancePct cultivar 120 células tardaría más
+        /// que con la mancha vieja -- por eso Universe.VivGrowChancePct sube
+        /// de 60 a 75 esta ronda (ver ese campo para las cifras medidas).
         /// </summary>
         private void GrowthTick(int x, int y, int idx)
         {
@@ -989,31 +1063,47 @@ namespace Alkahest.Sim
             // Throttle de ritmo visual: cada célula solo intenta crecer 1 de cada 4 ticks.
             if (((x * 13 + y * 7 + (int)_tick) & 3) != 0) return;
 
-            var rng = XorShift.FromCell(_tick, x, y, 88);
-            int start = rng.Next(4); // SIEMPRE se consume (aunque el modo no lo use) para no alterar qué número le toca a rng.ChancePercent más abajo entre modos -- es la misma tirada de siempre, solo cambia qué dirección se prueba primero.
+            // (playtest 19) SOLO LAS PUNTAS ENGENDRAN -- ver el docblock de
+            // arriba. Vecinos ORTOGONALES de Vivium de esta MISMA célula (no
+            // del hueco al que aspira a crecer): por encima de la tolerancia
+            // de este universo, es tallo/interior y no compite más por
+            // Nutrient este tick (ni ningún otro, salvo que un vecino suyo
+            // muera y le baje el conteo -- Vivium asentado no muere solo,
+            // así que en la práctica es definitivo).
+            if (CountOrganicNeighbors(x, y) > _universe.HabitoTolerarVecinosPunta) return;
 
-            // ---------------------------------------------------------------
-            // MORFOLOGÍA DE CRECIMIENTO (playtest 12) -- Vivium. Ver
-            // VivGrowthModeFor para la tabla de qué familia visual implica
-            // qué modo. GARANTÍA DE TASA: en los tres modos, la elegibilidad
-            // para crecer sigue siendo EXACTAMENTE "¿hay al menos un
-            // Nutrient ortogonal?" (igual que el código original), y
-            // rng.ChancePercent(VivGrowChancePct) se llama UNA sola vez por
-            // célula elegible por tick, igual que antes -- solo cambia CUÁL
-            // Nutrient candidato se usa cuando hay más de uno disponible.
+            var rng = XorShift.FromCell(_tick, x, y, 88);
+            int start = rng.Next(4); // SIEMPRE se consume, aunque el camino elegido no lo use -- mismo criterio que siempre: no desalinear las tiradas siguientes entre células con y sin dirección conocida.
+
+            bool tieneDirConocida = (_grid.aux[idx] & CameFromKnownFlag) != 0;
+            int dirConocida = _grid.aux[idx] & CameFromDirMask;
+
+            // BIFURCACIÓN (playtest 19): una punta con dirección conocida,
+            // de vez en cuando, descarta esa dirección A PROPÓSITO -- ver
+            // docblock. Tirada propia, independiente de `start`.
+            bool bifurca = tieneDirConocida && rng.ChancePercent(_universe.HabitoBifurcarPct);
+            int dirExcluida = bifurca ? dirConocida : -1;
+
             var vivDef = _universe.Get(MaterialId.Vivium);
             var mode = VivGrowthModeFor(vivDef.patron);
+            // La familia visual de este Vivium AFINA la persistencia base
+            // del universo, no la sustituye (ver docblock): Enredadera
+            // (Dendritas/Laberinto) la refuerza, Mata (Celdas/Pulso) la
+            // debilita; Disperso no la usa -- prioriza dejar huecos (scoring
+            // más abajo).
+            int persistenciaPct = _universe.HabitoPersistenciaPct;
+            if (mode == VivGrowthMode.Enredadera) persistenciaPct = System.Math.Min(100, persistenciaPct + 15);
+            else if (mode == VivGrowthMode.Mata) persistenciaPct = System.Math.Max(0, persistenciaPct - 15);
+
             int dir = -1;
 
-            if (mode == VivGrowthMode.Enredadera && (_grid.aux[idx] & CameFromKnownFlag) != 0)
+            if (mode != VivGrowthMode.Disperso && tieneDirConocida && !bifurca && IsNutrientDir(x, y, dirConocida)
+                && rng.ChancePercent(persistenciaPct))
             {
-                // Sigue en la MISMA dirección de la que vino esta célula
-                // (avanza, no retrocede hacia el padre): así la colonia
-                // crece como una enredadera en vez de abrirse en abanico.
-                int continueDir = _grid.aux[idx] & CameFromDirMask;
-                if (IsNutrientDir(x, y, continueDir)) dir = continueDir;
+                dir = dirConocida; // sigue recto: avanza, no retrocede hacia el padre.
             }
-            else if (mode == VivGrowthMode.Disperso)
+
+            if (dir < 0 && mode == VivGrowthMode.Disperso)
             {
                 // Prefiere el candidato con MENOS vecinos de Vivium ya
                 // alrededor (lo opuesto al "compacto" del Cristal, ver
@@ -1022,25 +1112,49 @@ namespace Alkahest.Sim
                 int bestScore = int.MaxValue;
                 for (int d = 0; d < 4; d++)
                 {
-                    if (!IsNutrientDir(x, y, d)) continue;
+                    if (d == dirExcluida || !IsNutrientDir(x, y, d)) continue;
                     int nx0 = x + DirX[d], ny0 = y + DirY[d];
                     int score = CountOrganicNeighbors(nx0, ny0);
                     if (score < bestScore) { bestScore = score; dir = d; }
                 }
             }
-            // Mata (o fallback si Enredadera/Disperso no encontraron
-            // candidato válido este tick): comportamiento original,
-            // isotrópico, orden aleatorio sembrado por celda.
+
+            if (dir < 0 && _universe.HabitoSesgoVerticalPct != 0)
+            {
+                // SESGO VERTICAL: tantea la vertical preferida de este
+                // universo antes que el orden isotrópico de abajo. 3=arriba,
+                // 2=abajo (ver DirX/DirY arriba; misma convención de ejes
+                // que la gravedad de Powder/Liquid: idx-W, y-1, es "abajo").
+                int preferida = _universe.HabitoSesgoVerticalPct > 0 ? 3 : 2;
+                if (preferida != dirExcluida && IsNutrientDir(x, y, preferida)
+                    && rng.ChancePercent(System.Math.Abs((int)_universe.HabitoSesgoVerticalPct)))
+                {
+                    dir = preferida;
+                }
+            }
+
             if (dir < 0)
             {
+                // Isotrópico -- comportamiento original, orden aleatorio
+                // sembrado por celda, saltando la dirección que la
+                // bifurcación acaba de descartar.
                 for (int i = 0; i < 4; i++)
                 {
                     int d = (start + i) & 3;
+                    if (d == dirExcluida) continue;
                     if (IsNutrientDir(x, y, d)) { dir = d; break; }
                 }
             }
 
-            if (dir < 0) return; // ningún Nutrient adyacente: igual que antes, sin cambio de tasa.
+            if (dir < 0 && bifurca && IsNutrientDir(x, y, dirConocida))
+            {
+                // La bifurcación descartó el ÚNICO candidato disponible este
+                // tick: mejor engendrar en línea recta que no engendrar nada
+                // (improvisado a propósito, ver el informe de la ronda).
+                dir = dirConocida;
+            }
+
+            if (dir < 0) return; // ningún Nutrient disponible este tick para esta punta.
 
             int nx = x + DirX[dir], ny = y + DirY[dir];
             int nidx = CellGrid.Idx(nx, ny);
@@ -1050,9 +1164,9 @@ namespace Alkahest.Sim
             if (grows)
             {
                 Transform(nidx, MaterialId.Vivium);
-                // Graba de qué dirección vino (para que SU cría, si la
-                // tiene, siga la misma vena en modo Enredadera). Transform
-                // ya puso aux[nidx]=0 arriba, así que esto no pisa nada.
+                // Graba de qué dirección vino (persistencia/bifurcación de SU
+                // cría, si la tiene). Transform ya puso aux[nidx]=0 arriba,
+                // así que esto no pisa nada.
                 _grid.aux[nidx] = (byte)((dir & CameFromDirMask) | CameFromKnownFlag);
                 PushEvent(SimEventType.Grow, MaterialId.Vivium, nx, ny);
                 // (playtest 18) La ley de crecimiento del Vivium también es una
@@ -1065,15 +1179,24 @@ namespace Alkahest.Sim
             // un Nutrient por célula y por tick (igual que antes).
         }
 
-        /// <summary>Modo de crecimiento derivado de la familia visual de Vivium (playtest 12, morfología de crecimiento). Ver GrowthTick para las garantías de tasa.</summary>
+        /// <summary>
+        /// Modo derivado de la familia visual de Vivium (playtest 12,
+        /// morfología de crecimiento). Desde el playtest 19 es un matiz
+        /// SECUNDARIO sobre el hábito de crecimiento de la semilla
+        /// (Universe.HabitoTolerarVecinosPunta y hermanos, que se aplican
+        /// igual en los tres modos): Enredadera solo refuerza la
+        /// persistencia base, Mata la debilita, y Disperso sustituye la
+        /// persistencia por su propia heurística de candidato. Ver
+        /// GrowthTick para el porqué completo.
+        /// </summary>
         private enum VivGrowthMode { Mata, Enredadera, Disperso }
 
         /// <summary>
         /// Dendritas/Laberinto (rasgo lineal o ramificado) -> Enredadera
-        /// (sigue una dirección). Celdas/Pulso (rasgo compacto y coherente,
-        /// panal o respiración de bloque) -> Mata, el comportamiento
-        /// isotrópico original. Manchas/Motas (rasgo disperso por
-        /// definición) -> Disperso (deja huecos). Cubre las 6 familias
+        /// (refuerza la persistencia). Celdas/Pulso (rasgo compacto y
+        /// coherente, panal o respiración de bloque) -> Mata (la debilita).
+        /// Manchas/Motas (rasgo disperso por definición) -> Disperso (deja
+        /// huecos, elige el vecino menos rodeado). Cubre las 6 familias
         /// plausibles para Organic (Universe.FamiliasPlausibles), 2 cada una.
         /// </summary>
         private static VivGrowthMode VivGrowthModeFor(PatronMorfologico patron)

@@ -35,7 +35,9 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   cercano responde a E). `Cincel` (playtest 16): tecla **C** alterna frasco/cincel — es un MODO,
   no otro botón (el frasco se desactiva mientras está activo); clic izq. talla piedra a vacío, der.
   rellena vacío con piedra vía `PaintStable`. Primera pieza de la fase "taller movible".
-  `Dispenser` emite con `PaintStable`, no con `Paint` (regla 29). `HeatPlate`/`ChillStone` (playtest 14): `FootprintFraction`=0.4 recorta el
+  `Dispenser` emite con `PaintStable`, no con `Paint` (regla 29). `Mudanza` (playtest 19): tecla
+  **V** para agarrar y recolocar grifos/placas/piedra gélida (contrato `IMovible`), **R** con las
+  manos vacías devuelve todo a su sitio de fábrica (reglas 36-38). `HeatPlate`/`ChillStone` (playtest 14): `FootprintFraction`=0.4 recorta el
   ancho recibido del bootstrap a una fracción centrada ANTES de `BuildVisual` (placas más pequeñas,
   el centro no se mueve); al apagarse, la fila adyacente sigue empujada débilmente
   (`HoldStepRaw`=1) hacia el último objetivo durante `HoldTicksTrasApagar`=60 ticks mientras las
@@ -264,6 +266,46 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     **Cualquier restricción que se relaje exige volver a correr el modelo** de aceptación/descarte:
     endurecer bajó la tasa por intento al 48.8%, y con 200 intentos por hueco sale cero escasez en
     20.000 semillas — pero eso es un margen medido, no una intuición.
+36. **`BuildVisual()` NO ES IDEMPOTENTE, Y `Init()` NO ES UN "MOVER" (playtest 19)**:
+    `MaquinariaSprites.CrearCapa` SIEMPRE hace `new GameObject`, así que llamar dos veces a
+    `BuildVisual` duplica todos los hijos y deja los viejos huérfanos, visibles, en la posición
+    antigua, para siempre. Y volver a llamar a `Init()` es peor: en `Dispenser` resetea
+    `favorCostPerActivation` y `Bloqueado` a sus valores por defecto — **vuelve a sellar el grifo
+    de Azoth** — y no resetea `_on`, así que un grifo abierto seguiría emitiendo en la boquilla
+    nueva. Para mover un aparato existe `Reposicionar(Vector2Int)` (contrato `IMovible` en
+    `Game/Mudanza.cs`), que reutiliza los hijos ya creados y no pasa por ninguno de los dos.
+37. **TRES MODOS EXCLUYENTES: FRASCO / CINCEL / MUDANZA (playtest 19)**: cada modo nuevo tiene que
+    ceder ante los otros Y hacer que los otros cedan ante él — la exclusión es SIMÉTRICA o no
+    sirve. El cincel se añadió en el playtest 16 sin poder tocar `Flask.cs` y dejó el hueco medio
+    año; la mudanza se añadió sin poder tocar `Cincel.cs` y dejó el otro medio. Los dos huecos son
+    el precio de trabajar con propiedad de archivos disjunta: **al integrar una ronda en paralelo
+    hay que ir a buscar las guardas recíprocas que ningún encargo podía cerrar**, porque no
+    aparecen solas ni rompen la compilación. `Mudanza.ForzarSalida()` es la puerta que debe usar
+    un cuarto modo si algún día lo hay.
+38. **SI EL JUGADOR PUEDE ROMPER ALGO EN SILENCIO, DALE EL DESHACER — NO LE QUITES LA HERRAMIENTA
+    (playtest 19)**: mover la piedra gélida fuera de la bandeja no rompe nada visible pero vuelve
+    imposibles encargos enteros sin decir por qué (el frío sigue funcionando, solo que ya no donde
+    el Maestro sembró la semilla). Prohibirlo era la respuesta fácil y la equivocada: Cesar pidió
+    explícitamente poder mover las cosas a su antojo, y una herramienta que te impide equivocarte
+    tampoco te deja descubrir. La respuesta correcta fue **R con las manos vacías = todo vuelve a
+    su sitio de fábrica**. Criterio general: cuando una libertad nueva pueda dejar la partida en
+    un estado malo Y MUDO, la palanca es abaratar la vuelta atrás, no estrechar la libertad.
+39. **CALIBRAR SIEMPRE CONTRA MEDIDAS LEÍDAS, NUNCA CONTRA PROSA (playtest 19)**: los comentarios
+    del proyecto decían "cuba interior 52x37" y "bandeja fría interior 46x6"; las medidas reales
+    eran 58x37 y 44x7 desde el playtest 15, y la regla 24 mandaba calibrar contra ellas. Todo lo
+    que dependa de una medida de recipiente tiene que LEERLA de `SimLevelBuilder` en tiempo de
+    ejecución (las redomas de `StorageRack` ya lo hacen, y por eso se recalculan solas cuando el
+    estante se mueve). `SimRenderer.Init` tiene además un assert que revienta con `LogError` si el
+    periodo de patrón deja de caber tres veces en el recipiente más estrecho: que se entere quien
+    lo rompa al arrancar, no tres rondas después.
+40. **UN MECANISMO DE CRECIMIENTO PUEDE AUTOBLOQUEARSE — MODÉLALO ANTES DE ESCRIBIRLO (playtest
+    19)**: el crecimiento dendrítico (solo engendran las PUNTAS, las células con pocos vecinos
+    vivos) tiene un fallo mortal: si la colonia se cierra sobre sí misma, nadie puede crecer y el
+    cultivo muere para siempre. Con tolerancia de 1 vecino, **el 100% de 60 semillas modeladas
+    terminaba en un anillo autobloqueado**; con vecindad de Moore, 27 de 60. El rango vive en 2-3,
+    **nunca 1**, con el dato escrito en el propio campo de `Universe`. Cualquier cambio ahí exige
+    volver a correr el modelo, no razonar a ojo — y ojo con `OrderSystem`, cuyo balance ya no puede
+    razonarse como "crecimiento exponencial": ahora escala con el PERÍMETRO ÚTIL, no con la masa.
 35. **UN MUNDO SE DOMESTICA, UNA LISTA DE ACCIDENTES NO (playtest 18, la lección de diseño de la
     ronda)**: la primera versión de la química generada pasó TODAS las auditorías técnicas y aun
     así estaba mal, porque el producto de cada ley salía de una bolsa uniforme y dentro de una
@@ -309,11 +351,26 @@ las reacciones por fin emiten un evento que identifica QUÉ ley ocurrió (`SimEv
 `leyIndice`, con limitador de ritmo); y el diario pasa a mostrar solo lo PRESENCIADO, con los
 huecos a la vista y un contador "N de M". Detalle completo: `docs/HANDOFF.md` sección Playtest 18.
 
+**Playtest 19** (RONDA NOCTURNA EN AUTÓNOMO — Cesar dejó el encargo y se fue a dormir: *"sorpréndeme,
+muéstrame tu mejor esfuerzo, confío en ti, mañana lo pruebo"*. Opus dirige e integra; Sonnet escribe
+en 4 encargos paralelos con propiedad disjunta; 3 auditorías) — PENDIENTE DE VALIDAR EN EL EDITOR.
+El hilo común de su reporte era que EXPERIMENTAR CANSA, así que la ronda entera baja el coste de
+probar cosas: **taller compacto** (la bandeja fría y el estante bajan encima del banco de grifos, la
+Tolva se acerca 137 celdas; de 107/154/225 celdas de distancia a 49/50/88, sin encoger el mundo ni
+mover geometría validada); **MODO MUDANZA** (tecla V, el paso 5 de la fase: agarrar y recolocar
+grifos, placas y piedra gélida — con R para devolver todo a su sitio, regla 38); **crecimiento
+DENDRÍTICO** del vivium (solo engendran las puntas; 4 parámetros de hábito por semilla, incluido si
+la vida trepa hacia la luz o se entierra hacia el nutriente — reglas 40); **patrones legibles con
+poca materia** (redomas +80% de área derivada del ancho real del estante, swatch del frasco +31%,
+periodo de patrón de 5-12 a 3-6 celdas); y **el mago pide un 40% menos**, con temblor por semilla,
+porque la jornada 1 era literalmente idéntica cada partida.
+
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no
 solo aspecto** (de ahí nacen los nombres que Cesar busca) ← SIGUIENTE: la gramática de leyes ya da
-variedad de QUÉ reacciona con qué; falta que varíe CÓMO se mueve/se comporta la materia misma; 5) taller movible (el cincel ya está; faltan grifos/estantes/
-placas anclados a bedrock, botón central del ratón); 6) mundo persistente con semilla y progreso.
+variedad de QUÉ reacciona con qué; falta que varíe CÓMO se mueve/se comporta la materia misma; 5) ✅ taller movible (playtest 19: cincel + mudanza; falta el estante, y anclar de verdad a bedrock);
+6) **mundo persistente con semilla y progreso** ← SIGUIENTE, junto con el desbloqueo de áreas por
+niveles que Cesar viene pidiendo ("un lugar pequeño que luego se me amplíe").
 Backlog heredado aún vigente: separar en `Universe.cs` los rangos solapados de `waterFreezeC` y
 `crystallizeThresholdC` (hoy en algunas seeds cristalizar exige un frío que ya fabrica hielo);
 consolidar `FirmaVisualFabrica` con `JournalHud` (regla 25); enganchar `HintSystem.PistasMostradas`

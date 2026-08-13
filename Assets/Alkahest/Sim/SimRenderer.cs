@@ -54,6 +54,26 @@ namespace Alkahest.Sim
 
         private const int FullRefreshEveryFrames = 30;
 
+        /// <summary>
+        /// (playtest 20, "necesito mucho material para ver las formas") Ancho del
+        /// recipiente MÁS ESTRECHO donde el jugador acumula materia -- LEÍDO de las
+        /// constantes reales de <see cref="SimLevelBuilder"/> (regla 24 de
+        /// CLAUDE.md: nunca copiar la medida a mano). Es un `const int` porque
+        /// ambos operandos son `public const int` en SimLevelBuilder -- el
+        /// compilador lo pliega en tiempo de compilación, pero sigue siendo una
+        /// referencia simbólica al plano real: si el equipo del plano cambia
+        /// <see cref="SimLevelBuilder.ChillTrayWidth"/> o el grosor de pared, este
+        /// valor se actualiza solo, sin que nadie tenga que acordarse de venir
+        /// aquí a corregir un literal. Usado solo para verificar por assert (ver
+        /// Init) que el periodo máximo de Vetas/Celdas sigue dando >=3 repeticiones
+        /// aquí -- el propio bandeja fría, no una cifra de comentario que se
+        /// queda vieja (la regla 24 cita "46x6"; medido de nuevo esta ronda con
+        /// las constantes reales tras el playtest 19 son 44x7, ver el aviso del
+        /// encargo -- por eso se lee del código, no de la prosa).
+        /// </summary>
+        private const int RecipienteMasEstrechoAncho =
+            SimLevelBuilder.ChillTrayInteriorX1 - SimLevelBuilder.ChillTrayInteriorX0 + 1;
+
         // =====================================================================
         // CÁMARA QUE SIGUE AL APRENDIZ (playtest 15)
         // =====================================================================
@@ -188,6 +208,21 @@ namespace Alkahest.Sim
                                "SimRenderer necesita chunks completos (ver el buffer scratch único).");
             }
 #pragma warning restore 0162
+
+            // (playtest 20) Guardia de la regla 24: el periodo MÁXIMO de Vetas/
+            // Celdas (ver PatronPeriodoCeldas, compartido por las dos) debe seguir
+            // cabiendo >=3 veces en el recipiente más estrecho del taller,
+            // LEÍDO arriba de SimLevelBuilder -- si el plano vuelve a estrechar la
+            // bandeja fría (o alguien sube el techo de patronEscala) sin que nadie
+            // revise esto, que salte aquí y no en un reporte de "no se ve el
+            // patrón" tres rondas después.
+            int peorPeriodo = PatronPeriodoCeldas(8); // patronEscala tope, ver Universe.Create.
+            if (RecipienteMasEstrechoAncho / peorPeriodo < 3)
+            {
+                Debug.LogError($"[ChaosAlchemy] El recipiente más estrecho ({RecipienteMasEstrechoAncho} celdas) ya no cabe " +
+                                $"3 repeticiones del periodo máximo de Vetas/Celdas ({peorPeriodo}): revisar PatronPeriodoCeldas " +
+                                "o la medida real de SimLevelBuilder (regla 24 de CLAUDE.md).");
+            }
 
             for (int i = 0; i < _pixels.Length; i++) _pixels[i] = default;
             _texture.SetPixels32(_pixels);
@@ -918,32 +953,46 @@ namespace Alkahest.Sim
                     // propio campo morph -- aquí solo se traduce concentración a
                     // brillo, igual en ambas.
                     //
-                    // (investigación playtest 13, sin cambios -- SimStepper NO es
-                    // archivo modificable en esta ronda) A diferencia de Vetas/
-                    // Celdas, Manchas/Laberinto/Dendritas NO usan patronEscala
-                    // como un "periodo en celdas" explícito: son un proceso de
-                    // reacción-difusión (MorphReactionDiffusion) cuyo tamaño de
-                    // rasgo emerge de feed=8+(fuerza>>4) [8..23] y
+                    // (investigación playtest 13, revisada playtest 20 -- SimStepper
+                    // NO es archivo modificable en esta ronda tampoco) A diferencia
+                    // de Vetas/Celdas, Manchas/Laberinto/Dendritas NO usan
+                    // patronEscala como un "periodo en celdas" explícito: son un
+                    // proceso de reacción-difusión (MorphReactionDiffusion) cuyo
+                    // tamaño de rasgo emerge de feed=8+(fuerza>>4) [8..23] y
                     // diffDiv=max(4,20-escala*2) [4..18], y de la LONGITUD DE
                     // DIFUSIÓN del propio sistema -- NO del tamaño del recipiente.
-                    // Un patrón de Turing se auto-organiza en manchas/bandas que
-                    // se repiten solas mientras el medio sea mayor que unas pocas
-                    // veces su longitud característica; con diffDiv en el rango
-                    // 4..18 (equivalente a un puñado de celdas de acoplamiento),
-                    // el rasgo emergente es de un orden de magnitud muy por debajo
-                    // de los 46-52 celdas de ancho de los recipientes medidos en
-                    // SimLevelBuilder.cs, así que YA se repite varias veces por
-                    // construcción, sin necesidad de remapeo. Dendritas: longitud
+                    // Medidas reales tras el playtest 19 (regla 24, "44x7"/"58x37",
+                    // ver RecipienteMasEstrechoAncho arriba -- las cifras "46x6"/
+                    // "52x37" de este comentario y de la regla 24 quedaron viejas
+                    // en posición pero el orden de magnitud sigue siendo el mismo).
+                    // Un patrón de Turing se auto-organiza en manchas/bandas que se
+                    // repiten solas mientras el medio sea mayor que unas pocas veces
+                    // su longitud característica; con diffDiv en el rango 4..18 el
+                    // rasgo emergente es de un orden de magnitud por debajo del
+                    // recipiente, así que YA se repite varias veces por construcción
+                    // SIN remapeo -- validado esta ronda con una réplica en Python
+                    // del propio Gray-Scott simplificado (ver el informe): a
+                    // patronEscala bajo (diffDiv grande, ~18) Manchas/Laberinto se
+                    // leen bien incluso en un charco de ~30 celdas. A patronEscala
+                    // ALTO (diffDiv=4, el extremo de más difusión) la réplica en
+                    // Python colapsó a un tinte casi plano dentro de una mancha
+                    // AISLADA pequeña (sin masa vecina de la que arrastrar reactivo)
+                    // -- no es una réplica bit-exacta (SimStepper corre sobre la
+                    // grilla entera con vecinos de cualquier material, no sobre un
+                    // parche recortado), así que esto NO es una confirmación de bug,
+                    // pero sí una pista para quien toque SimStepper.cs a
+                    // continuación: comprobar Manchas a patronEscala=8 en un charco
+                    // pequeño y aislado de verdad, en el editor. Dendritas: longitud
                     // de rama = arranque(200..255) / decayStep(10+escala, 11..18)
-                    // ≈ 14..23 celdas -- del mismo orden que el ancho del
-                    // recipiente más pequeño (bandeja fría, 46), y con semillas
-                    // deliberadamente raras (1 entre ~600..3000 por turno de
-                    // celda) para que se lean como agujas aisladas, no una
-                    // alfombra. Ninguna de las tres coincide con el reporte del
-                    // jugador (que señaló Vetas y Celdas explícitamente) ni con
-                    // el diagnóstico de esta ronda -- se deja constancia aquí en
-                    // vez de tocar SimStepper.cs, fuera de los archivos
-                    // modificables de este encargo.
+                    // ≈ 14..23 celdas -- del mismo orden que el recipiente más
+                    // pequeño, y con semillas deliberadamente raras (1 entre
+                    // ~600..3000 por turno de celda) para que se lean como agujas
+                    // aisladas, no una alfombra -- eso ya es "reconocible" sin
+                    // necesitar repetición (una sola aguja se lee como Dendritas).
+                    // Ninguna de las tres coincide con el reporte de Cesar de esta
+                    // ronda (que señaló los frascos/redomas, resuelto en
+                    // StorageRack.cs/FlaskHud.cs) ni es un archivo tocable aquí --
+                    // se deja constancia en vez de tocar SimStepper.cs.
                     ApplyReactionDiffusion(morphVal, def, ref r, ref g, ref b);
                     break;
                 case PatronMorfologico.Dendritas:
@@ -962,6 +1011,48 @@ namespace Alkahest.Sim
         }
 
         /// <summary>
+        /// Periodo (en celdas) compartido por Vetas (banda senoidal) y Celdas
+        /// (lado de tesela Voronoi) -- las DOS ÚNICAS familias que en SimRenderer
+        /// dependen de patronEscala como un tamaño de rasgo explícito (Manchas/
+        /// Laberinto/Dendritas son reacción-difusión/crecimiento en SimStepper.cs,
+        /// que no es archivo modificable esta ronda; Pulso/Motas ni siquiera leen
+        /// patronEscala en ApplyPatron, ver el switch de arriba).
+        ///
+        /// HISTORIA (por qué el número ha cambiado dos veces):
+        ///  · Antes del playtest 13: 11+escala*3 (14..35 celdas) -- una
+        ///    sobrecorrección contra el miedo a que un rasgo de 1-2 celdas se
+        ///    leyera como ruido a 7.5px/celda de pantalla. Con periodo 14..35
+        ///    hacía falta MEDIA PANTALLA de materia para ver una sola repetición
+        ///    (regla 24: "un patrón se reconoce por su REPETICIÓN, no por su
+        ///    tamaño") -- el jugador solo lo reconocía en masas enormes.
+        ///  · Playtest 13: 4+escala (5..12 celdas), calibrado para 3-4
+        ///    repeticiones mínimo en el recipiente más estrecho del taller
+        ///    (bandeja fría). Corrección real, pero justa: en la escala más
+        ///    gruesa (12) apenas llegaba al mínimo (46/12≈3.8 con la medida de
+        ///    entonces) y en un charco pequeño (unas pocas decenas de celdas,
+        ///    muy por debajo del recipiente entero) 12 celdas de periodo seguían
+        ///    leyéndose como un borrón sin repetición -- exactamente lo que
+        ///    Cesar reportó la noche antes de este playtest: *"aún siento que
+        ///    necesito mucho material para ver las formas"*.
+        ///  · Playtest 20 (esta ronda): 3+(escala-1)/2 (3..6 celdas). Mismo suelo
+        ///    de "no confundir rasgo fino con ruido de un píxel" que ya validó el
+        ///    playtest 13 (3 sigue siendo varias veces mayor que 1 téxel), techo
+        ///    bajado de 12 a 6 -- la mitad. Verificado a OJO (no hay compilador
+        ///    en este entorno) con una réplica en Python de esta misma aritmética
+        ///    (hash/seno/Voronoi bit a bit iguales, ver el informe de la ronda):
+        ///    en un charco de ~30 celdas la escala más gruesa pasó de "un borrón
+        ///    sin repetición" a mostrar 1-2 repeticiones reales, y en el
+        ///    recipiente más estrecho (<see cref="RecipienteMasEstrechoAncho"/>,
+        ///    44 celdas, LEÍDO de SimLevelBuilder -- la cifra "46x6" que cita la
+        ///    regla 24 quedó vieja tras el playtest 19, que movió bandeja/estante
+        ///    sin cambiar su interior) pasa de 3.8-9.2 a 7.3-14.7 repeticiones:
+        ///    más margen, no menos. La guarda de <see cref="RecipienteMasEstrechoAncho"/>
+        ///    en Init() re-verifica esto en cada arranque, no solo en este
+        ///    comentario.
+        /// </summary>
+        private static int PatronPeriodoCeldas(byte patronEscala) => 3 + (patronEscala - 1) / 2;
+
+        /// <summary>
         /// Vetas: mármol veteado. PURAMENTE POSICIONAL (el contrato prohíbe que
         /// SimStepper toque morph aquí) -- se recalcula del todo cada vez que se
         /// pide, con (x, y, semillaPatron, patronEscala, tick). Técnica: bandas
@@ -972,30 +1063,7 @@ namespace Alkahest.Sim
         /// </summary>
         private static void ApplyVetas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
         {
-            // (fix playtest 13, "hace falta mucho material para apreciar el
-            // patrón") ANTES este remapeo era 11+escala*3 (14..35 celdas): una
-            // SOBRECORRECCIÓN de la ronda anterior contra el miedo a que a 7.5px/
-            // celda una veta de 1-2 celdas se leyera como ruido. El diagnóstico
-            // del playtest 13 es distinto: un patrón se reconoce por su
-            // REPETICIÓN, no por su tamaño -- con periodo 14..35 hacía falta
-            // MEDIA PANTALLA de materia para ver una sola repetición, y algo que
-            // no se repite no se percibe como patrón (el jugador solo lo vio en
-            // masas enormes). Un rasgo de 5 celdas son ~38px de pantalla:
-            // perfectamente legible, y ESE es el suelo real, no 14.
-            // Recalibrado a la masa real de trabajo (medida en SimLevelBuilder.cs,
-            // playtest 13): el recipiente más pequeño donde el jugador acumula
-            // materia es el interior de la bandeja fría, ~46x6 celdas
-            // (ChillTrayInteriorX0..X1 x ChillTrayInteriorY0..~96); la pila de
-            // recogida es ~48x15 y el interior de una cuba ~52x37. Con el suelo
-            // en 5 celdas (patronEscala=1) y el techo en 12 (patronEscala=8), la
-            // bandeja fría -- el caso más ajustado -- muestra 46/12≈3.8 y
-            // 46/5≈9.2 repeticiones horizontales; la cuba, 52/12≈4.3 a 52/5≈10.4.
-            // Siempre >=3-4 repeticiones incluso en el recipiente más pequeño y
-            // en la escala más grande, tal como pide el encargo. El suelo de 5
-            // celdas es deliberado y no se baja más: por debajo de eso ya no hay
-            // margen entre "rasgo fino" y "ruido de un píxel" (ver la cita
-            // exacta del playtest 13 en la cabecera de este comentario).
-            int veinScale = 4 + def.patronEscala; // 5..12 celdas.
+            int veinScale = PatronPeriodoCeldas(def.patronEscala);
 
             int warp = LatticeNoise(x, y, veinScale, 220 + def.semillaPatron) - 128; // -128..127, deformación suave.
 
@@ -1026,18 +1094,7 @@ namespace Alkahest.Sim
         /// </summary>
         private static void ApplyCeldas(int x, int y, MaterialDef def, int tick, ref byte r, ref byte g, ref byte b)
         {
-            // (fix playtest 13, mismo diagnóstico que ApplyVetas -- ver su
-            // comentario para la cita completa y la medición de recipientes en
-            // SimLevelBuilder.cs) ANTES 14+escala*4 (18..46 celdas): mismo error
-            // de sobrecorrección, y es justo la familia que el jugador identificó
-            // sin ambigüedad ("verde con líneas negras como piedras de Machu
-            // Picchu", solo en masas enormes -- con teselas de 18..46 celdas la
-            // bandeja fría de ~46 celdas de ancho apenas cabía UNA tesela).
-            // Mismo rango que Vetas y misma verificación en el recipiente más
-            // pequeño (bandeja fría ~46x6): 46/12≈3.8 y 46/5≈9.2 repeticiones
-            // horizontales de tesela, nunca menos de ~3.8 aunque el jugador
-            // ponga el máximo de escala en el recipiente más ajustado.
-            int cellSize = 4 + def.patronEscala; // 5..12 celdas.
+            int cellSize = PatronPeriodoCeldas(def.patronEscala);
 
             // Deriva de las teselas si la sustancia fluye (Liquid/Gas -- StaticSolid
             // siempre trae ritmoAnim=0 por Universe.Create, así que este bloque es

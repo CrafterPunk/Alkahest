@@ -120,7 +120,7 @@ namespace Alkahest.Game
     /// estrecho, no total: el propio filtro de aspirado de Flask
     /// (Flask.EsAspirable) YA excluye Piedra, así que apuntar el Cincel a
     /// piedra sólida no dispara nada en Flask salvo que haya OTRO material
-    /// aspirable a <= SuckRadius=4 celdas de ese punto (Flask.
+    /// aspirable a &lt;= SuckRadius=4 celdas de ese punto (Flask.
     /// BloquearMaterialBajoElCursor busca en anillos crecientes si lo que hay
     /// bajo el cursor no es aspirable) -- p.ej. tallar justo al borde de una
     /// cuba con agua SÍ puede hacer que el frasco empiece a aspirar esa agua a
@@ -190,6 +190,16 @@ namespace Alkahest.Game
             // (regla 12) sin repetir la comprobación.
             if (kb != null && kb.cKey.wasPressedThisFrame)
             {
+                // (playtest 19) TRES MODOS EXCLUSIVOS: frasco / cincel / mudanza.
+                // Al encender el cincel hay que APAGAR la mudanza explícitamente.
+                // Sin esto la exclusión era asimétrica: `Mudanza` sí cede ante
+                // `Cincel.ModoActivo`, pero pulsar C con la mudanza activa
+                // encendía el cincel dejando los dos en pie durante un frame,
+                // con un aparato agarrado en el aire y el cincel ya tallando.
+                // El encargo que escribió `Mudanza` no era dueño de ESTE archivo
+                // y lo dejó anotado como hueco; se cierra aquí.
+                if (!ModoActivo) Mudanza.ForzarSalida();
+
                 ModoActivo = !ModoActivo;
                 if (_flask != null)
                 {

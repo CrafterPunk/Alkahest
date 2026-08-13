@@ -248,6 +248,21 @@ namespace Alkahest.Game
             // cabecera de Game/Cincel.cs, que documenta el reparto de controles.
             if (Cincel.ModoActivo) { OcultarVisualesDeMundo(); return; }
 
+            // (playtest 19) LA MUDANZA TAMBIÉN ES UN MODO -- misma regla que el
+            // Cincel de arriba, y esta guarda es justo la que Cincel.cs dejó
+            // documentada como pendiente ("Game/Flask.cs es de solo lectura en
+            // este encargo... Pendiente para una ronda futura con propiedad de
+            // Flask.cs") pero para Mudanza, no para Cincel -- ESA guarda (la de
+            // arriba, Cincel.ModoActivo) ya se añadió en una ronda anterior a
+            // esta y sigue vigente sin cambios. REGLA DE LOS TRES MODOS
+            // EXCLUSIVOS: Frasco / Cincel / Mudanza nunca responden dos a la
+            // vez. Frasco cede a los otros dos (aquí). Mudanza cede al Cincel
+            // (Game/Mudanza.cs, propio). El Cincel NO cede a Mudanza todavía --
+            // Game/Cincel.cs sigue siendo de solo lectura en este encargo; ver
+            // el docblock de Game/Mudanza.cs, sección "LOS TRES MODOS
+            // EXCLUSIVOS", para el hueco que queda documentado.
+            if (Mudanza.ModoActivo) { OcultarVisualesDeMundo(); return; }
+
             // La estantería de redomas captura el ratón cuando el cursor está
             // sobre una redoma: ahí los clics son "guardar/recuperar", no
             // "aspirar/verter" sobre la grilla (si no, verter sobre el estante

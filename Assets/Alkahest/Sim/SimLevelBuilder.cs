@@ -18,20 +18,26 @@ namespace Alkahest.Sim
     /// 768x288 (3 pantallas de ancho x 2 de alto, `CellGrid.PantallaW/H` siguen
     /// midiendo 1 pantalla = 256x144 para pensar el plano en esa unidad).
     ///
-    /// CUATRO ZONAS, pedidas explícitamente por Cesar:
+    /// CUATRO ZONAS, pedidas explícitamente por Cesar. (playtest 19: el
+    /// diagrama de abajo es el PLANO ACTUAL, tras compactar LABORATORIO/
+    /// ENTREGA otra vez — ver la sección "EL TALLER SE COMPACTA AÚN MÁS"
+    /// más abajo para el porqué y las medidas completas; el reparto en
+    /// CUATRO zonas de Cesar sigue intacto, solo cambió la disposición
+    /// DENTRO de LABORATORIO y el ancho de ENTREGA.)
     ///
     ///                                     y=287 (muro/techo del mundo)
     ///   ┌──────────── SUPERFICIE (mitad de arriba, y=144..287) ─────────────────────┐
-    ///   │      CULTIVO        │      LABORATORIO       │        ENTREGA             │
-    ///   │      x16..250       │      x262..505         │  x517..767 (Tolva llega    │
-    ///   │      (20 °C)        │        (20 °C)          │  hasta el muro del mundo)  │
-    ///   │ cubaA        cubaB  │ banco+grifos+pila,      │  x517: Tolva PEGADA a      │
-    ///   │ x30          x187   │ bandeja fría, estante,  │  LABORATORIO (boca en      │
-    ///   │ LEJOS ·····► CERCA  │ ..........POZO..........│  x529..550) + contrafuerte │
-    ///   │ (placas ígneas en   │                          │  que SIGUE hasta x767:     │
-    ///   │  las dos cubas)     │                          │  cerca de usar, lejos de   │
-    ///   │                     │                          │  ver acabar (LEJOS·►)      │
-    ///   └─────────────────────┴──────────┬───────────────┴────────────────────────────┘
+    ///   │      CULTIVO        │  LABORATORIO (compacto) │        ENTREGA            │
+    ///   │      x16..250       │      x262..384          │  x380..767 (Tolva llega   │
+    ///   │      (20 °C)        │        (20 °C)           │  hasta el muro del mundo) │
+    ///   │ cubaA        cubaB  │ bandeja fría + estante   │  x380: contrafuerte       │
+    ///   │ x30          x187   │ x262..374, y236..245:    │  PEGADO a LABORATORIO     │
+    ///   │ LEJOS ·····► CERCA  │ FLOTAN sobre el banco     │  (boca en x392..413) +    │
+    ///   │ (placas ígneas en   │ (playtest 19). Debajo:    │  contrafuerte que SIGUE   │
+    ///   │  las dos cubas)     │ banco+grifos+pila,        │  hasta x767: cerca de     │
+    ///   │                     │ .....POZO (x343..382)..... │  usar, lejos de ver      │
+    ///   │                     │                            │  acabar (LEJOS·►)        │
+    ///   └─────────────────────┴──────────┬─────────────────┴───────────────────────────┘
     ///                     y=155/144 losa de superficie (con el pozo abierto)
     ///                            │
     ///   ┌──────────── SÓTANO (mitad de abajo, y=10..143, x220..530) ────────┐
@@ -46,8 +52,9 @@ namespace Alkahest.Sim
     /// placas ígneas hacen TODO el trabajo de calor: hasta el playtest 16 el
     /// clima de la zona ayudaba un poco, ya no — ver la sección del CLIMA).
     /// LABORATORIO = el centro de operaciones: banco de grifos + pila de
-    /// recogida, bandeja fría, estante de redomas, y el POZO por el que se
-    /// baja al sótano. ENTREGA = la Tolva
+    /// recogida, bandeja fría, estante de redomas (playtest 19: los dos
+    /// últimos ahora FLOTAN sobre el propio banco en vez de vivir aparte, ver
+    /// más abajo), y el POZO por el que se baja al sótano. ENTREGA = la Tolva
     /// del Maestro con margen de sobra alrededor. SÓTANO = una sala bajo el
     /// laboratorio a la que solo se llega volando (el aprendiz VUELA: no hace
     /// falta ninguna escalera, solo que los muros/plataformas den FORMA al
@@ -218,15 +225,16 @@ namespace Alkahest.Sim
     /// no hace falta para jugar la primera ronda del bucle básico.
     ///
     /// QUÉ SE QUEDA LEJOS A PROPÓSITO (permitido explícitamente por el
-    /// encargo): cuba A (`VatAX0`=30, la segunda cuba de cultivo), el SÓTANO
-    /// entero (solo se llega volando por el POZO, sin cambios — ES la razón
-    /// de que se sienta como una sala aparte) y, dentro de LABORATORIO
-    /// mismo, la bandeja fría y el estante de redomas (`ChillTrayX0`=390,
-    /// `RackX0`=447): NO se movieron — siguen donde estaban, que ya es
-    /// "cerca" en términos de distancia, pero no forman parte del bucle
-    /// básico (grifo/pila/cuba/Tolva) así que no hacía falta acercarlos más
-    /// ni alejarlos; se dejan quietos porque tocarlos sin necesidad es el
-    /// tipo de riesgo que el encargo pide evitar.
+    /// encargo, y SIGUE SIENDO CIERTO tras el playtest 19 de abajo): cuba A
+    /// (`VatAX0`=30, la segunda cuba de cultivo) y el SÓTANO entero (solo se
+    /// llega volando por el POZO, sin cambios — ES la razón de que se sienta
+    /// como una sala aparte). (playtest 19: este párrafo decía además que la
+    /// bandeja fría y el estante de redomas "no se movieron" — ESO YA NO ES
+    /// CIERTO, se movieron esa ronda porque SÍ acabaron formando parte del
+    /// bucle básico. Ver la sección "EL TALLER SE COMPACTA AÚN MÁS" más
+    /// abajo para el porqué completo; se deja esta nota aquí, en vez de
+    /// borrar el párrafo entero, para que quede constancia de que el
+    /// criterio de esta zona CAMBIÓ de una ronda a la siguiente y por qué.)
     ///
     /// INSINUACIÓN "SE VE HACIA LOS LADOS" (pedida literalmente por Cesar):
     ///  · Izquierda: cuba A, visible/alcanzable nada más salir de LABORATORIO
@@ -239,6 +247,106 @@ namespace Alkahest.Sim
     ///    taller también baja — exactamente el "una parte se puede ver hacia
     ///    los lados" que pedía Cesar, en las tres direcciones que tenía
     ///    sentido dar (los muros norte/sur del mundo son el borde real).
+    ///
+    /// =====================================================================
+    /// PLAYTEST 19: EL TALLER SE COMPACTA AÚN MÁS ("todo a mano")
+    /// =====================================================================
+    /// Cesar, la noche antes de este playtest, sobre por qué la corrección
+    /// del playtest 16 (arriba) no bastaba todavía: *"hacer las pruebas es
+    /// cansado donde todo está separado... debería transmitir la sensación
+    /// de estar yo en un lugar pequeño que luego quizás con los niveles se
+    /// me amplíe el espacio, pero ahora eso no es necesario"*. El playtest
+    /// 16 ya había acercado cuba B y la Tolva, pero dejó la bandeja fría y
+    /// el estante DONDE ESTABAN a propósito ("no forman parte del bucle
+    /// básico" era el argumento de aquella ronda) — y esos dos, más la
+    /// Tolva (que seguía siendo, con diferencia, lo más lejano), obligaban
+    /// a seguir cruzando buena parte de LABORATORIO para la primera hora de
+    /// juego. Esta ronda termina ese trabajo.
+    ///
+    /// EL MUNDO NO SE ENCOGE (repetido a propósito: es la restricción más
+    /// fácil de romper sin querer en una ronda de compactación).
+    /// `CellGrid.W/H` siguen en 768x288 — es el tamaño FINAL que el
+    /// desbloqueo de áreas por niveles va a usar. Lo que cambia es DÓNDE,
+    /// dentro de ese mundo, viven la bandeja fría, el estante y la boca de
+    /// la Tolva. Cuba A y el SÓTANO se quedan exactamente donde estaban:
+    /// lejos a propósito, sin ningún cambio (ver "QUÉ SE QUEDA LEJOS" arriba).
+    ///
+    /// TRES CAMBIOS, los tres dentro de este archivo:
+    ///
+    ///  1. BANDEJA FRÍA + ESTANTE FLOTAN AHORA SOBRE EL BANCO, EN VEZ DE
+    ///     VIVIR APARTE AL NIVEL DEL TECHO. Antes: `ChillTrayX0`=390,
+    ///     `RackX0`=447, ambos en `Y0`=246 (al nivel del techo de
+    ///     LABORATORIO) — 96 y 150 celdas del punto de aparición
+    ///     respectivamente. Ahora: `ChillTrayX0`=262 (la MISMA X que
+    ///     `TapPillarX0`/`BenchX0`, ambos = `LabX0`), `RackX0`=320,
+    ///     los dos en `Y0`=236 — FLOTANDO justo encima del pilar de grifos
+    ///     y la meseta del banco. No es una idea nueva: es la que ya
+    ///     predecía `Game/WorkshopBackdrop.cs` desde el playtest 4 ("vigas
+    ///     horizontales... explican los estantes flotantes"), aquí por fin
+    ///     aprovechada de verdad en vez de solo en el fondo pintado. Y=236
+    ///     deja 3 celdas de aire sobre `TapPillarTopY`=232 (el mismo margen
+    ///     de `WallThickness` que usa el resto del archivo para "cerca pero
+    ///     sin tocar") y 41 celdas de aire libre hasta el techo del mundo
+    ///     (y=286) — de sobra, no se pega al muro. Anchuras SIN TOCAR (regla
+    ///     del encargo: la calibración de patrones de otro encargo depende
+    ///     de la medida exacta del interior de la bandeja fría, regla 24).
+    ///
+    ///  2. LA TOLVA SE ACERCA OTRA VEZ. `EntregaX1`: 607 -&gt; 470 (y
+    ///     `EntregaX0`, que sigue sin alimentar ningún cálculo — solo
+    ///     documentación/ASCII —, se ajusta a 380 para seguir marcando de
+    ///     verdad dónde empieza el contrafuerte). `ChuteWallX0` (fórmula SIN
+    ///     TOCAR otra vez, `= EntregaX1 - 90`) baja de 517 a 380; la boca
+    ///     (`ChuteMouthX0/X1`) pasa de 529..550 a 392..413. Igual que en el
+    ///     playtest 16, el contrafuerte SIGUE dibujándose hasta
+    ///     `CellGrid.W` (`BuildDeliveryNiche` no cambió) — la piedra sigue
+    ///     viéndose llegar hasta el muro del mundo, 137 celdas más ancha
+    ///     todavía que en el playtest 16 (380..767 = 388 celdas, antes
+    ///     517..767 = 251).
+    ///
+    ///  3. `LabX1` (505 -&gt; 384) es SOLO documentación/ASCII, igual que
+    ///     `EntregaX0` (ninguno de los dos alimenta ningún cálculo — ver el
+    ///     grep del docblock): se actualiza para dejar de mentir sobre
+    ///     dónde termina de verdad el contenido de LABORATORIO ahora que
+    ///     nada suyo llega ya hasta la x=505 original (la pieza más a la
+    ///     derecha es el estante, que termina en 374).
+    ///
+    /// LO QUE **NO** SE TOCÓ, a propósito, para arriesgar lo mínimo posible
+    /// (el encargo pide comprobación exhaustiva de solapes precisamente
+    /// porque "en la ronda pasada un pilar invadió la pila y no se
+    /// detectó" — cuantas menos piezas validadas se muevan, menos
+    /// superficie de fallo): CULTIVO entero (`CultivoX0/X1`, `VatAX0/
+    /// VatBX0` — cuba B YA estaba a 64 celdas del punto de aparición con el
+    /// método de medida de esta ronda, sin tocar nada); el banco/pila/pilar
+    /// de grifos (`BenchX0/X1`, `BasinX0/Width/Height`, `TapPillarX1/
+    /// TopY` — la geometría que el playtest 16 ya marcó como "no tocar sin
+    /// necesidad" sigue sin necesidad); el POZO (`WellX0/X1`: su hueco solo
+    /// existe entre y=141..155 — muy por debajo de la nueva altura y=236 de
+    /// la bandeja/estante, así que no hacía falta reubicarlo para dejarles
+    /// sitio, comprobado por script, ver el informe de la ronda); y el
+    /// SÓTANO entero.
+    ///
+    /// DISTANCIAS, MEDIDAS POR SCRIPT (no a ojo — el informe de la ronda
+    /// trae el script completo; aquí solo el resultado, con un criterio de
+    /// medida fijo: distancia euclídea desde el punto de aparición hasta el
+    /// punto MÁS CERCANO del área realmente interactiva de cada aparato —
+    /// el segmento de la fila de la placa en cubas/bandeja, el rectángulo
+    /// del estante/boca, la boquilla más cercana en los grifos — nunca el
+    /// centro geométrico de la pieza, que sobreestima cuánto hay que
+    /// acercarse):
+    ///
+    ///   aparato                          antes (16)   ahora (19)
+    ///   grifos (boquilla más cercana)        25.0         25.0  (sin tocar)
+    ///   placa de cuba B                      64.4         64.4  (sin tocar)
+    ///   piedra gélida (bandeja fría)         107.2         49.0
+    ///   estante de redomas                   154.4         49.8
+    ///   boca de la Tolva                     225.5         88.5
+    ///   placa de cuba A (lejos, aposta)      215.7        215.7 (sin tocar)
+    ///
+    /// Los seis aparatos del bucle básico y su vecindad inmediata (grifos,
+    /// pila -- el propio punto de aparición --, cuba B, bandeja fría,
+    /// estante, Tolva) caen ahora dentro de los ~90 celdas que pide el
+    /// encargo; cuba A se queda fuera de ese radio a propósito, tal y como
+    /// permite el encargo.
     ///
     /// RECIPIENTES (regla 24, medido de nuevo tras el reparto — NINGUNA
     /// medida cambió, solo su posición en el mundo):
@@ -295,22 +403,36 @@ namespace Alkahest.Sim
         public const int CultivoX0 = 16;
         public const int CultivoX1 = 250;
         public const int LabX0 = 262;
-        public const int LabX1 = 505;
-        public const int EntregaX0 = 517;
         /// <summary>
-        /// 751 -> 607 (playtest 16, "CERCA DEL INICIO" en el docblock de la
-        /// clase). Solo alimenta <see cref="ChuteWallX0"/> (`= EntregaX1 -
-        /// 90`, fórmula SIN TOCAR): al bajar este valor, el zócalo de la
-        /// Tolva se acerca 144 celdas a LABORATORIO SIN dejar de dibujarse
+        /// 505 -> 384 (playtest 19, "EL TALLER SE COMPACTA AÚN MÁS" en el
+        /// docblock de la clase). Documentación/ASCII únicamente — igual que
+        /// <see cref="EntregaX0"/>, no alimenta ningún cálculo (ver el grep
+        /// del docblock) — se baja para dejar de mentir: desde este playtest
+        /// nada de LABORATORIO llega ya hasta la x=505 original (la pieza
+        /// más a la derecha es el estante, que termina en 374).
+        /// </summary>
+        public const int LabX1 = 384;
+        /// <summary>
+        /// 517 -> 380 (playtest 19). Documentación/ASCII únicamente, igual
+        /// que <see cref="LabX1"/> — se ajusta para seguir marcando de
+        /// verdad dónde empieza el contrafuerte de la Tolva ahora que
+        /// <see cref="ChuteWallX0"/> también bajó a 380.
+        /// </summary>
+        public const int EntregaX0 = 380;
+        /// <summary>
+        /// 751 -> 607 (playtest 16) -> 470 (playtest 19, "EL TALLER SE
+        /// COMPACTA AÚN MÁS" en el docblock de la clase). Solo alimenta
+        /// <see cref="ChuteWallX0"/> (`= EntregaX1 - 90`, fórmula SIN TOCAR
+        /// otra vez esta ronda): al bajar este valor, el zócalo de la Tolva
+        /// se acerca 137 celdas más a LABORATORIO SIN dejar de dibujarse
         /// hasta <c>CellGrid.W</c> (esa parte de <see cref="BuildDeliveryNiche"/>
         /// usa el ancho del mundo, no `EntregaX1`) — la boca queda cerca, el
         /// bloque de piedra que la sostiene se sigue viendo llegar hasta el
-        /// muro. `EntregaX0` no se tocó: sigue marcando donde EMPIEZA la
-        /// zona (documentación/ASCII, no alimenta ningún cálculo — ver el
-        /// grep del docblock) y por pura coincidencia de la nueva aritmética
-        /// queda pegado al nuevo `ChuteWallX0` (los dos caen en 517).
+        /// muro, exactamente el mismo efecto que ya buscaba el playtest 16,
+        /// llevado más lejos porque la boca (225.5 celdas del spawn) seguía
+        /// siendo, con diferencia, el aparato del bucle básico más alejado.
         /// </summary>
-        public const int EntregaX1 = 607;
+        public const int EntregaX1 = 470;
 
         // =================================================================
         // CULTIVO: dos cubas grandes (donde se cría el Vivium) + una placa
@@ -360,9 +482,13 @@ namespace Alkahest.Sim
 
         // =================================================================
         // LABORATORIO: "el centro de operaciones" — banco de trabajo (pila
-        // de recogida + columna de grifos), bandeja fría y estante de
-        // redomas, más el POZO que baja al SÓTANO. Todo cabe con margen en
-        // los 244 celdas de ancho de la zona (x262..505).
+        // de recogida + columna de grifos), y desde el playtest 19 la
+        // bandeja fría y el estante de redomas FLOTAN encima de ese mismo
+        // banco (antes vivían aparte, a la derecha, al nivel del techo —
+        // ver "EL TALLER SE COMPACTA AÚN MÁS" en el docblock de la clase),
+        // más el POZO que baja al SÓTANO. Todo cabe con margen en los 123
+        // celdas de ancho de la zona (x262..384, `LabX1`, solo documentación
+        // — el elemento más a la derecha es el estante, que termina en 374).
         // =================================================================
 
         /// <summary>Meseta maciza bajo la pila de recogida y el pilar de grifos — a diferencia de las cubas de Cultivo, el banco SÍ se eleva un poco sobre la losa (mismo lenguaje que el playtest 4 original).</summary>
@@ -394,28 +520,61 @@ namespace Alkahest.Sim
         public const int TapStepY = 10;
 
         // ---- Bandeja fría (estante) -------------------------------------------------------
-        public const int ChillTrayX0 = 390;
-        public const int ChillTrayWidth = 50; // antes 52: mismo orden de magnitud, ver medición de recipientes en el resumen.
-        public const int ChillTrayY0 = 246;
+        /// <summary>
+        /// X0: 390 -> 262 (playtest 19, "EL TALLER SE COMPACTA AÚN MÁS" en
+        /// el docblock de la clase). Y0: 246 -> 236 (ver más abajo). Antes
+        /// vivía a la derecha del banco, al nivel del techo (96 celdas del
+        /// spawn); ahora FLOTA justo encima del pilar de grifos y la meseta
+        /// (misma X que <see cref="TapPillarX0"/>/<see cref="BenchX0"/>,
+        /// ambos = LabX0), bajada del techo al primer hueco libre sobre el
+        /// pilar — mismo idioma visual que ya predecía
+        /// Game/WorkshopBackdrop.cs ("vigas... explican los estantes
+        /// flotantes"), aquí por fin aprovechado. Anchura SIN TOCAR (regla
+        /// del encargo: la calibración de patrones de otro encargo depende
+        /// de este número, ver <see cref="ChillTrayWidth"/>).
+        /// </summary>
+        public const int ChillTrayX0 = 262;
+        public const int ChillTrayWidth = 50; // antes 52: mismo orden de magnitud, ver medición de recipientes en el resumen. SIN TOCAR esta ronda (regla 24: otro encargo calibra patrones contra esta medida).
+        /// <summary>
+        /// 246 -> 236 (playtest 19). Dejamos 3 celdas de aire libre sobre
+        /// <see cref="TapPillarTopY"/>=232 (el mismo margen de
+        /// <see cref="WallThickness"/> que usa el resto del archivo para
+        /// "cerca pero sin tocar") y 41 celdas de aire libre hasta el techo
+        /// del mundo (y=286, la última fila que no es el borde macizo) — de
+        /// sobra, no se pega al muro.
+        /// </summary>
+        public const int ChillTrayY0 = 236;
         public const int ChillTrayHeight = 10;
-        public const int ChillTrayInteriorX0 = ChillTrayX0 + WallThickness;                       // 393
-        public const int ChillTrayInteriorX1 = ChillTrayX0 + ChillTrayWidth - 1 - WallThickness;  // 436
-        public const int ChillTrayInteriorY0 = ChillTrayY0 + WallThickness;                       // 249
+        public const int ChillTrayInteriorX0 = ChillTrayX0 + WallThickness;                       // 265
+        public const int ChillTrayInteriorX1 = ChillTrayX0 + ChillTrayWidth - 1 - WallThickness;  // 308
+        public const int ChillTrayInteriorY0 = ChillTrayY0 + WallThickness;                       // 239
         /// <summary>Fila donde vive la piedra fría (última de su suelo).</summary>
-        public const int ChillPlateRow = ChillTrayY0 + WallThickness - 1; // 248
+        public const int ChillPlateRow = ChillTrayY0 + WallThickness - 1; // 238
 
         // ---- Estante de redomas -------------------------------------------------------------
-        public const int RackX0 = 447;
-        public const int RackX1 = 501;
-        public const int RackY0 = 246; // mismo nivel que la bandeja fría — un único "estante superior" leído de un vistazo.
+        /// <summary>
+        /// 447 -> 320 (playtest 19). Pegado a <see cref="ChillTrayX0"/> con
+        /// el mismo hueco de 8 celdas que ya los separaba antes de moverse
+        /// (<c>320 - (262+50) = 8</c>) — el estante sigue siendo lo
+        /// inmediatamente contiguo a la bandeja fría, solo que ahora los dos
+        /// están a un vistazo vertical de la pila, no a un vuelo horizontal.
+        /// </summary>
+        public const int RackX0 = 320;
+        /// <summary>374 (antes 501): ancho SIN TOCAR (55 celdas, <c>RackX1-RackX0+1</c>), solo reubicado.</summary>
+        public const int RackX1 = 374;
+        public const int RackY0 = 236; // 246 -> 236 (playtest 19): mismo nivel que la bandeja fría — sigue siendo un único "estante superior" leído de un vistazo, solo que ahora sobre el banco en vez de sobre el techo.
         public const int RackHeight = 3;
-        public const int RackTopY = RackY0 + RackHeight; // 249
+        public const int RackTopY = RackY0 + RackHeight; // 239
 
         // ---- El POZO: la única conexión entre LABORATORIO y SÓTANO -------------------------
         // El aprendiz vuela, así que no hace falta una escalera — solo un
         // hueco vertical real que atraviese el techo del sótano Y la losa de
-        // superficie a la vez (ver BuildSotano). Centrado entre el banco y
-        // la bandeja fría/estante para no chocar con ninguno de los dos.
+        // superficie a la vez (ver BuildSotano). SIN TOCAR en el playtest 19
+        // pese a que la bandeja fría/el estante se mudaron encima del banco:
+        // el hueco del pozo solo existe entre y=141..155 (ver WellCarveY0/
+        // Y1 abajo), muy por debajo de la nueva altura y=236 de la bandeja/
+        // estante — no hacía falta reubicarlo para dejarles sitio (ver la
+        // tabla de solapes del informe de la ronda).
         public const int WellX0 = 343;
         public const int WellX1 = 382;
         /// <summary>Primera fila que se talla vacía: el techo del sótano (las WallThickness filas superiores de su caja).</summary>
@@ -427,9 +586,12 @@ namespace Alkahest.Sim
         // SÓTANO: sala bajo LABORATORIO, mitad inferior del mundo. Se llega
         // VOLANDO por el pozo — por eso no hay escaleras, solo muros y
         // plataformas que le dan FORMA al espacio (petición explícita del
-        // encargo). Más ancho que el propio Laboratorio (x220..530 vs.
-        // x262..505) para que se sienta como una sala propia, no un simple
-        // hueco bajo la huella exacta de arriba.
+        // encargo). Más ancho que el propio Laboratorio (x220..530; LabX1
+        // bajó a 384 en el playtest 19, así que ahora es AÚN más ancho en
+        // proporción) para que se sienta como una sala propia, no un simple
+        // hueco bajo la huella exacta de arriba. SIN TOCAR esta ronda: el
+        // sótano se queda lejos a propósito (ver "QUÉ SE QUEDA LEJOS" en el
+        // docblock de la clase).
         // =================================================================
 
         public const int SotanoX0 = 220;
@@ -473,13 +635,22 @@ namespace Alkahest.Sim
         // vez de 661 a 767, 107), no más corto. Es justo el efecto que pide
         // el encargo ("insinuar que se extiende"): la boca queda cerca de
         // usar, la piedra se ve seguir mucho más allá.
+        //
+        // (playtest 19) SE REPITE LA MISMA JUGADA, MÁS LEJOS: `ChuteWallX0`
+        // baja de 517 a 380 (mismo criterio: 11 celdas tras el nuevo `LabX1`
+        // =384, "EL TALLER SE COMPACTA AÚN MÁS" en el docblock de la clase)
+        // porque, medida la distancia real al punto de aparición, la boca
+        // seguía siendo con diferencia el aparato más lejano del bucle
+        // básico (225.5 celdas) pese a la corrección del playtest 16. El
+        // contrafuerte sigue sin encogerse (de 380 a 767, 388 celdas: MÁS
+        // ancho todavía que los 517-767=251 del playtest 16).
         // =================================================================
 
-        public const int ChuteWallX0 = EntregaX1 - 90; // 517 (antes 661)
-        public const int ChuteMouthX0 = ChuteWallX0 + 12; // 529 (antes 673)
-        public const int ChuteMouthX1 = ChuteMouthX0 + 21; // 550 (antes 694; 22 celdas de boca, igual que el playtest 4)
-        public const int ChuteMouthY0 = SurfaceFloorTop + 1 + ChuteBaseHeight + 3; // 189 (altura, sin cambios)
-        public const int ChuteMouthY1 = ChuteMouthY0 + 49; // 238 (altura, sin cambios)
+        public const int ChuteWallX0 = EntregaX1 - 90; // 380 (playtest 16: 517; antes: 661)
+        public const int ChuteMouthX0 = ChuteWallX0 + 12; // 392 (playtest 16: 529; antes: 673)
+        public const int ChuteMouthX1 = ChuteMouthX0 + 21; // 413 (playtest 16: 550; antes: 694; 22 celdas de boca, igual que el playtest 4)
+        public const int ChuteMouthY0 = SurfaceFloorTop + 1 + ChuteBaseHeight + 3; // 189 (altura, sin cambios desde el playtest 4)
+        public const int ChuteMouthY1 = ChuteMouthY0 + 49; // 238 (altura, sin cambios desde el playtest 4)
 
         /// <summary>
         /// Cuántas filas del FONDO del pozo son la "boca que traga" (ver

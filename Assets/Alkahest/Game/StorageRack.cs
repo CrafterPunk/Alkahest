@@ -78,12 +78,56 @@ namespace Alkahest.Game
         /// <summary>Alcance del aprendiz para operar la estantería (unidades de mundo).</summary>
         private const float RangoJugador = 4.5f;
 
-        // Medidas de una redoma en unidades de mundo.
-        private const float RedomaAncho = 0.62f;
-        private const float RedomaAlto = 1.52f;
-        private const float RedomaSeparacion = 1.18f;
-        /// <summary>Semi-anchura del área sensible al cursor (algo más generosa que el vidrio).</summary>
-        private const float RadioRatonX = 0.40f;
+        // -----------------------------------------------------------------
+        // MEDIDAS DE UNA REDOMA (playtest 20, "los frascos pueden ser más
+        // gordos para observar bien el patrón"). Antes eran tres constantes
+        // fijas (ancho 0.62, alto 1.52, separación 1.18 unidades de mundo) --
+        // AHORA se derivan en BuildVisual del ANCHO REAL DEL ESTANTE que
+        // llega por parámetro (cellX0/cellX1, que a su vez vienen de
+        // SimLevelBuilder.RackX0/RackX1 vía AlkahestGameBootstrap: ver
+        // Init/BuildVisual más abajo) -- nunca se supone un ancho de estante
+        // a mano (regla 24 de CLAUDE.md: medir el recipiente real, no
+        // copiarlo). El plano puede MOVER el estante sin que nadie tenga que
+        // volver aquí a ajustar nada; solo si algún día cambia su ANCHO
+        // interior cambiaría el tamaño de redoma resultante, que es
+        // exactamente lo que se quiere.
+        //
+        // Las dos constantes de abajo son las únicas magias que quedan, y
+        // son PROPORCIONES (adimensionales), no medidas de mundo:
+        //   · AnchoFraccionDeSlot: cuánto del hueco asignado a cada redoma
+        //     (ancho del estante / NumRedomas) ocupa el vidrio -- el resto es
+        //     el respiro entre botellas. Antes (con las constantes fijas) esa
+        //     fracción real era ~0.53 (0.62/1.18); subida a 0.86: botellas
+        //     mucho más anchas, todavía con un respiro visible entre ellas.
+        //   · AltoSobreAncho: proporción alto/ancho del vidrio. El sprite de
+        //     MaquinariaSprites.VidrioRedoma() está diseñado a 22:54 (~2.45,
+        //     CrearCapa estira sin más al ancho/alto que se le pida, así que
+        //     no hay problema técnico en desviarse de esa proporción) -- pero
+        //     Cesar pidió LITERALMENTE "más gordas", no "más altas", así que
+        //     aquí se baja a 1.9: la redoma crece más en anchura que en
+        //     altura, más rechoncha que el diseño original.
+        // Con el estante real de esta ronda (SimLevelBuilder.RackX0=320,
+        // RackX1=374, 55 celdas = 5.5 unidades de mundo): separación=1.10,
+        // ancho=0.946 (antes 0.62, +53%), alto=1.797 (antes 1.52, +18%) --
+        // área visible de contenido casi el DOBLE (0.94→1.70 antes de
+        // recortar por el nivel de llenado), y las 5 siguen cabiendo con
+        // margen (footprint total 5.35 de 5.50 disponibles).
+        // -----------------------------------------------------------------
+        private const float AnchoFraccionDeSlot = 0.86f;
+        private const float AltoSobreAncho = 1.9f;
+
+        /// <summary>Fracción de <see cref="_redomaAncho"/> que cuenta como área sensible al cursor (algo más generosa que el vidrio -- mismo criterio que antes, proporción en vez de constante fija porque el ancho ya no es fijo).</summary>
+        private const float RadioRatonXFraccion = 0.62f;
+
+        // Instanciadas en BuildVisual a partir del ancho real del estante --
+        // ver el bloque de comentario de arriba. Antes eran las constantes
+        // RedomaAncho/RedomaAlto/RedomaSeparacion/RadioRatonX; se leen desde
+        // TODOS los métodos que antes usaban esas constantes (ActualizarRedoma,
+        // RedomaBajoCursor, JugadorCerca, OnGUI...).
+        private float _redomaAncho;
+        private float _redomaAlto;
+        private float _redomaSeparacion;
+        private float _radioRatonX;
 
         private sealed class Redoma
         {
@@ -193,16 +237,28 @@ namespace Alkahest.Game
             float der = (cellX1 + 1) * celda;
             float baseY = cellYBase * celda;
 
-            transform.position = new Vector3((izq + der) * 0.5f, baseY + RedomaAlto * 0.5f, 0f);
+            // (playtest 20) Medidas de la redoma DERIVADAS del ancho real del
+            // estante que llega por parámetro -- ver el bloque de comentario
+            // grande junto a AnchoFraccionDeSlot/AltoSobreAncho más arriba.
+            // NUNCA se supone un ancho de estante a mano: si SimLevelBuilder
+            // cambia RackX0/RackX1 (el plano puede MOVER el estante, ver el
+            // aviso del encargo), este cálculo se entera solo.
+            float anchoDisponible = der - izq;
+            _redomaSeparacion = anchoDisponible / NumRedomas;
+            _redomaAncho = _redomaSeparacion * AnchoFraccionDeSlot;
+            _redomaAlto = _redomaAncho * AltoSobreAncho;
+            _radioRatonX = _redomaAncho * RadioRatonXFraccion;
+
+            transform.position = new Vector3((izq + der) * 0.5f, baseY + _redomaAlto * 0.5f, 0f);
 
             // Listón de madera: el mueble. Va DETRÁS de las redomas.
             var liston = MaquinariaSprites.CrearCapa(transform, "Liston",
                 MaquinariaSprites.ListonEstante(Mathf.RoundToInt((der - izq) * 20f)), 17,
                 der - izq, 0.24f);
-            liston.transform.position = new Vector3((izq + der) * 0.5f, baseY + RedomaAlto * 0.55f, 0f);
+            liston.transform.position = new Vector3((izq + der) * 0.5f, baseY + _redomaAlto * 0.55f, 0f);
 
             // Cinco redomas centradas sobre el listón.
-            float anchoTotal = RedomaSeparacion * (NumRedomas - 1);
+            float anchoTotal = _redomaSeparacion * (NumRedomas - 1);
             float x0 = (izq + der) * 0.5f - anchoTotal * 0.5f;
 
             for (int i = 0; i < NumRedomas; i++)
@@ -210,23 +266,23 @@ namespace Alkahest.Game
                 var r = new Redoma
                 {
                     Mat = MaterialId.Empty,
-                    MundoX = x0 + i * RedomaSeparacion,
+                    MundoX = x0 + i * _redomaSeparacion,
                     BaseY = baseY,
                 };
 
                 // Contenido DETRÁS del vidrio (orden menor): se ve "dentro".
                 r.Contenido = MaquinariaSprites.CrearCapa(transform, $"Contenido_{i}",
-                    MaquinariaSprites.ContenidoRedoma(), 21, RedomaAncho, RedomaAlto);
+                    MaquinariaSprites.ContenidoRedoma(), 21, _redomaAncho, _redomaAlto);
                 r.ContenidoTr = r.Contenido.transform;
                 r.Contenido.color = new Color(1f, 1f, 1f, 0f);
 
                 var vidrio = MaquinariaSprites.CrearCapa(transform, $"Vidrio_{i}",
-                    MaquinariaSprites.VidrioRedoma(), 22, RedomaAncho, RedomaAlto);
-                vidrio.transform.position = new Vector3(r.MundoX, baseY + RedomaAlto * 0.5f, 0f);
+                    MaquinariaSprites.VidrioRedoma(), 22, _redomaAncho, _redomaAlto);
+                vidrio.transform.position = new Vector3(r.MundoX, baseY + _redomaAlto * 0.5f, 0f);
 
                 r.Tapon = MaquinariaSprites.CrearCapa(transform, $"Tapon_{i}",
-                    MaquinariaSprites.TaponRedoma(), 23, RedomaAncho * 0.58f, RedomaAlto * 0.13f);
-                r.Tapon.transform.position = new Vector3(r.MundoX, baseY + RedomaAlto * 1.0f, 0f);
+                    MaquinariaSprites.TaponRedoma(), 23, _redomaAncho * 0.58f, _redomaAlto * 0.13f);
+                r.Tapon.transform.position = new Vector3(r.MundoX, baseY + _redomaAlto * 1.0f, 0f);
                 r.Tapon.color = new Color(1f, 1f, 1f, 0.75f);
 
                 _redomas[i] = r;
@@ -259,10 +315,10 @@ namespace Alkahest.Game
             // Un dedo de contenido siempre visible aunque quede poquísimo.
             float altura = Mathf.Lerp(0.10f, 1f, frac);
 
-            var baseEscala = RedomaAlto / MaquinariaSprites.ContenidoRedoma().rect.height;
+            var baseEscala = _redomaAlto / MaquinariaSprites.ContenidoRedoma().rect.height;
             var e = r.ContenidoTr.localScale;
             r.ContenidoTr.localScale = new Vector3(e.x, baseEscala * altura, 1f);
-            r.ContenidoTr.position = new Vector3(r.MundoX, r.BaseY + RedomaAlto * altura * 0.5f, 0f);
+            r.ContenidoTr.position = new Vector3(r.MundoX, r.BaseY + _redomaAlto * altura * 0.5f, 0f);
 
             // (fix playtest 13) El tinte plano de baseColor sobre la máscara
             // blanca se sustituye por la FIRMA VISUAL generada (ver
@@ -449,8 +505,8 @@ namespace Alkahest.Game
             {
                 var r = _redomas[i];
                 if (r == null) continue;
-                if (Mathf.Abs(mundo.x - r.MundoX) > RadioRatonX) continue;
-                if (mundo.y < r.BaseY - 0.15f || mundo.y > r.BaseY + RedomaAlto + 0.15f) continue;
+                if (Mathf.Abs(mundo.x - r.MundoX) > _radioRatonX) continue;
+                if (mundo.y < r.BaseY - 0.15f || mundo.y > r.BaseY + _redomaAlto + 0.15f) continue;
                 _hover = i;
                 break;
             }
@@ -506,7 +562,7 @@ namespace Alkahest.Game
         private bool JugadorCerca(Redoma r)
         {
             if (_jugador == null) return true;
-            Vector2 centro = new Vector2(r.MundoX, r.BaseY + RedomaAlto * 0.5f);
+            Vector2 centro = new Vector2(r.MundoX, r.BaseY + _redomaAlto * 0.5f);
             Vector2 p = _jugador.position;
             return (p - centro).sqrMagnitude <= RangoJugador * RangoJugador;
         }
@@ -587,7 +643,7 @@ namespace Alkahest.Game
                 var r = _redomas[i];
                 if (r == null) continue;
 
-                var cima = new Vector3(r.MundoX, r.BaseY + RedomaAlto, 0f);
+                var cima = new Vector3(r.MundoX, r.BaseY + _redomaAlto, 0f);
 
                 if (r.Cantidad > 0)
                 {
@@ -740,10 +796,41 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// Periodo/celda (en téxeles) compartido por Vetas/Manchas/Laberinto/
+        /// Celdas/Pulso -- las cinco familias de ESTE generador que usan
+        /// patronEscala como un tamaño de rasgo explícito (Dendritas/Motas no,
+        /// ver sus propios Apply* más abajo). ANTES cada una llevaba su propia
+        /// variante suelta (5+escala, 4+escala, 5+escala otra vez...) heredada
+        /// sin más de SimRenderer -- aquí se unifica en una función y se baja
+        /// el rango (playtest 20, mismo motivo y misma fórmula que
+        /// SimRenderer.PatronPeriodoCeldas: "aún siento que necesito mucho
+        /// material para ver las formas... cuando los meto en los frascos").
+        ///
+        /// Este lienzo (redoma: 66x162 téxeles fijos de MaquinariaSprites,
+        /// Escala=3 -- no ligado al tamaño de mundo de la redoma, ver
+        /// StorageRack.AnchoFraccionDeSlot/AltoSobreAncho; swatch de FlaskHud:
+        /// SwatchLado texeles, ver FlaskHud.cs) YA era generoso con el rango
+        /// viejo salvo en dos sitios medidos esta ronda con la réplica en
+        /// Python del informe: el SWATCH del frasco (18 téxeles antes de esta
+        /// ronda) con escala alta se volvía casi un blob sin repetición
+        /// visible -- justo la queja de Cesar sobre los frascos --, y la
+        /// REDOMA con poco contenido (el "dedo" mínimo del 10% de altura,
+        /// StorageRack.ActualizarRedoma) muestra solo una franja fina del
+        /// canvas, donde un periodo grande también deja ver menos de una
+        /// repetición completa. Bajar el techo de 12-13 a 6 (mismo número que
+        /// SimRenderer, DELIBERADO: un solo mental model de "patronEscala
+        /// vale 3-6 unidades" en todo el proyecto) arregla los dos sin
+        /// necesidad de canvas más grandes -- FlaskHud.SwatchLado también sube
+        /// esta ronda, pero por el motivo complementario (área visible, no
+        /// repetición: ver su docblock).
+        /// </summary>
+        private static int PatronPeriodoCeldas(byte patronEscala) => 3 + (patronEscala - 1) / 2;
+
         /// <summary>Vetas: bandas senoidales deformadas. `fase` desplaza la banda -- mármol que "se asienta" muy despacio, coherente con ritmoAnim capado bajo para esta familia (Universe.Create).</summary>
         private static void ApplyVetas(int x, int y, MaterialDef def, int fase, ref byte r, ref byte g, ref byte b)
         {
-            int periodo = 5 + def.patronEscala;
+            int periodo = PatronPeriodoCeldas(def.patronEscala);
             int warp = (int)(Hash2D(x / 3, y / 3, def.semillaPatron) % 41) - 20;
             int tiltY = 1 + (def.semillaPatron % 3);
             int drift = (int)(((uint)fase * (uint)def.ritmoAnim) >> 10);
@@ -755,7 +842,7 @@ namespace Alkahest.Game
         /// <summary>Manchas: discos de concentración alrededor de puntos jitterados. `fase` desliza el MUESTREO en X -- las manchas "flotan" como una balsa, sin recalcular los puntos semilla.</summary>
         private static void ApplyManchas(int x, int y, MaterialDef def, int fase, ref byte r, ref byte g, ref byte b)
         {
-            int celda = 4 + def.patronEscala;
+            int celda = PatronPeriodoCeldas(def.patronEscala);
             int driftX = (int)(((uint)fase * (uint)def.ritmoAnim) >> 9);
             int d2 = DistanciaMinimaAPunto2(x + driftX, y, celda, def.semillaPatron + 30, out _);
             int radio = Mathf.Max(1, celda / 2);
@@ -767,7 +854,7 @@ namespace Alkahest.Game
         /// <summary>Laberinto: dos ondas perpendiculares entrelazadas. `fase` desplaza una de las dos -- serpentinas que reptan, no bandas rectas.</summary>
         private static void ApplyLaberinto(int x, int y, MaterialDef def, int fase, ref byte r, ref byte g, ref byte b)
         {
-            int periodo = 5 + def.patronEscala;
+            int periodo = PatronPeriodoCeldas(def.patronEscala);
             int warp = (int)(Hash2D(x / 4, y / 4, def.semillaPatron + 60) % 61) - 30;
             int drift = (int)(((uint)fase * (uint)def.ritmoAnim) >> 10);
             double fx = (x + warp * 0.2 + drift) * (Math.PI * 2.0 / periodo);
@@ -780,7 +867,7 @@ namespace Alkahest.Game
         /// <summary>Celdas: teselas tipo Voronoi con borde marcado. `fase` desliza el MUESTREO en X, igual criterio (y mismo divisor &gt;&gt;9) que el driftX de SimRenderer.ApplyCeldas -- todo el campo se desliza como una balsa de espuma.</summary>
         private static void ApplyCeldas(int x, int y, MaterialDef def, int fase, ref byte r, ref byte g, ref byte b)
         {
-            int celda = 5 + def.patronEscala;
+            int celda = PatronPeriodoCeldas(def.patronEscala);
             int driftX = (int)(((uint)fase * (uint)def.ritmoAnim) >> 9);
             int sx = x + driftX;
             int mejorD2 = DistanciaMinimaAPunto2(sx, y, celda, def.semillaPatron + 90, out uint mejorId);
@@ -838,7 +925,7 @@ namespace Alkahest.Game
         {
             float cx = w * 0.5f, cy = h * 0.5f;
             float radio = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-            int periodo = 4 + def.patronEscala;
+            int periodo = PatronPeriodoCeldas(def.patronEscala);
             int drift = (int)(((uint)fase * (uint)def.ritmoAnim) >> 10);
             double faseOnda = radio * (Math.PI * 2.0 / periodo) + drift * (Math.PI * 2.0 / 256.0);
             int onda = (int)Math.Round(Math.Sin(faseOnda) * 127.0);

@@ -230,13 +230,28 @@ namespace Alkahest.Game
     /// El recorte es SIMÉTRICO (mismo margen a cada lado), así que el centro
     /// X no se mueve: <c>PuntoFoco</c> y el ancla de los rótulos siguen
     /// exactamente donde estaban, ningún otro número de este archivo depende
-    /// de si el aparato es ancho o estrecho. PROPUESTA para cuando el taller
-    /// sea de verdad movible por el jugador (fuera de alcance aquí): que
-    /// AlkahestGameBootstrap deje de pasar el interior completo de la cuba/
-    /// bandeja y en su lugar pase directamente una posición + un ancho
-    /// pequeño independientes, para poder colocar el aparato en cualquier
-    /// punto del fondo (no solo centrado) sin que este archivo tenga que
-    /// recortar lo que recibe.
+    /// de si el aparato es ancho o estrecho. PROPUESTA que había quedado
+    /// anotada aquí para "cuando el taller sea de verdad movible por el
+    /// jugador": YA CUMPLIDA, parcialmente distinta de como se anotó -- ver
+    /// más abajo "TALLER MOVIBLE". AlkahestGameBootstrap.Init sigue pasando
+    /// el interior completo de la bandeja tal cual (no se tocó, sigue fuera
+    /// de alcance de este encargo); lo que cambia es que ahora, DESPUÉS de
+    /// Init, Game/Mudanza.cs puede reposicionar el aparato ya construido a
+    /// cualquier punto del mundo sin pasar de nuevo por este recorte.
+    ///
+    /// ---------------------------------------------------------------------
+    /// TALLER MOVIBLE (playtest 19, Game/Mudanza.cs, tecla V)
+    /// ---------------------------------------------------------------------
+    /// Implementa <see cref="IMovible"/>: Mudanza puede agarrar esta piedra y
+    /// recolocarla en cualquier celda dentro del alcance del jugador. El
+    /// movimiento de verdad lo hace <see cref="Reposicionar"/>, que NO llama
+    /// ni a <see cref="Init"/> ni a <see cref="BuildVisual"/> otra vez --
+    /// ver el docblock de ese método para el porqué exacto (en corto:
+    /// MaquinariaSprites.CrearCapa siempre crea un GameObject nuevo, así que
+    /// una segunda llamada DUPLICARÍA el bloque/los cristales/el resalte en
+    /// vez de reemplazarlos, dejando los viejos huérfanos y visibles en el
+    /// sitio antiguo para siempre). El ancho del bloque es invariante tras
+    /// <see cref="Init"/> -- Mudanza solo TRASLADA, nunca redimensiona.
     ///
     /// Comparte con <see cref="HeatPlate"/> las decisiones del playtest 4/7:
     ///  · IDENTIDAD VISUAL PROPIA — bloque de roca escarchada con AGUJAS DE
@@ -258,7 +273,7 @@ namespace Alkahest.Game
     /// LIMITACIÓN: igual que HeatPlate, escribe _sim.Grid.temp[] directamente.
     /// TODO(ChaosAlchemy): canalizar por una API del sim de cara a netcode.
     /// </summary>
-    public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva
+    public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva, IMovible
     {
         private enum State { Off = 0, Fresca = 1, Helando = 2 }
 
@@ -404,6 +419,26 @@ namespace Alkahest.Game
         public Vector3 PuntoFoco => _centroBloque;
         public float RangoFoco => ProximityRange;
 
+        // ---------------------------------------------------------------
+        // IMovible (playtest 19, ver doc de clase "TALLER MOVIBLE" y
+        // Game/Mudanza.cs para el contrato completo).
+        // ---------------------------------------------------------------
+        public Vector3 CentroMundo => _centroBloque;
+        public Vector2 TamanoMundo => new Vector2(
+            (_cellX1 - _cellX0 + 1) * SimRenderer.CellWorldSize,
+            SimLevelBuilder.WallThickness * SimRenderer.CellWorldSize);
+        /// <summary>Celda de anclaje: borde IZQUIERDO del bloque (X0) + fila del SUELO bajo él (_plateRow). El ancho (span) no viaja en la ancla -- es invariante, ver Reposicionar.</summary>
+        public Vector2Int AnclaCelda => new Vector2Int(_cellX0, _plateRow);
+
+        /// <summary>¿Cabría el bloque (mismo ancho de siempre x WallThickness de alto) en esa ancla sin tocar el marco protegido del mundo? Puramente informativo -- Mudanza es quien decide si bloquea el drop con esto.</summary>
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            int span = _cellX1 - _cellX0 + 1;
+            int x0 = anclaCelda.x, x1 = x0 + span - 1;
+            int filaInferior = anclaCelda.y - SimLevelBuilder.WallThickness + 1;
+            return x0 >= 1 && x1 <= CellGrid.W - 2 && filaInferior >= 1 && anclaCelda.y <= CellGrid.H - 2;
+        }
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Transform player, int cellX0, int cellX1, int plateRow)
         {
@@ -438,23 +473,82 @@ namespace Alkahest.Game
             UpdateVisualTint();
             RebuildChapaEstado();
             MachineFocus.Registrar(this);
+            Mudanza.RegistrarMovible(this); // (playtest 19) ver doc de clase "TALLER MOVIBLE".
         }
 
-        private void OnDestroy() => MachineFocus.Olvidar(this);
+        private void OnDestroy()
+        {
+            MachineFocus.Olvidar(this);
+            Mudanza.OlvidarMovible(this);
+        }
+
+        /// <summary>
+        /// (playtest 19) Recalcula <see cref="_centroBloque"/> y mueve
+        /// transform.position a partir de _cellX0/_cellX1/_plateRow.
+        /// Extraído de BuildVisual para que <see cref="Reposicionar"/> pueda
+        /// reutilizarlo SIN volver a crear ningún GameObject: el ancho
+        /// (span) y el alto (WallThickness) del bloque son constantes tras
+        /// Init, así que "mover el aparato" es solo recalcular DÓNDE cae ese
+        /// rectángulo fijo -- nunca su tamaño.
+        /// </summary>
+        private void RecalcularCentro()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            int spanCeldas = _cellX1 - _cellX0 + 1;
+            int filaInferior = _plateRow - SimLevelBuilder.WallThickness + 1;
+            float centroX = (_cellX0 + spanCeldas * 0.5f) * celda;
+            float centroY = (filaInferior + (_plateRow + 1 - filaInferior) * 0.5f) * celda;
+            _centroBloque = new Vector3(centroX, centroY, 0f);
+            transform.position = _centroBloque;
+        }
+
+        /// <summary>
+        /// TALLER MOVIBLE (playtest 19, Game/Mudanza.cs): mueve el aparato YA
+        /// CONSTRUIDO a una nueva celda de anclaje, SIN volver a llamar a
+        /// Init ni a BuildVisual.
+        ///
+        /// POR QUÉ NO BuildVisual: MaquinariaSprites.CrearCapa siempre hace
+        /// `new GameObject` -- una segunda llamada NO reemplaza el bloque/
+        /// los cristales/el resalte, los DUPLICA: los hijos originales se
+        /// quedarían huérfanos y visibles en el sitio ANTIGUO para siempre
+        /// (nadie los destruye ni los mueve). Aquí no se toca ningún
+        /// GameObject: Resalte/Bloque/Cristales son hijos de `transform` con
+        /// localPosition (0,0,0) -- basta con mover `transform.position`
+        /// (ver RecalcularCentro) y los tres se arrastran solos con él.
+        ///
+        /// POR QUÉ NO Init: Init también recalibra _frescaRaw por seed
+        /// (inofensivo repetirlo dentro de la misma partida) pero, sobre
+        /// todo, este método deja _state, _lastActiveTarget y
+        /// _holdTicksRestantes completamente intactos a propósito: mover una
+        /// piedra ENCENDIDA no debe apagarla.
+        ///
+        /// EL ANCHO NUNCA CAMBIA en esta llamada -- Mudanza solo TRASLADA,
+        /// nunca redimensiona -- así que el sprite ya cacheado sigue siendo
+        /// válido sin tocarlo. Si algún día algo pidiera un ancho distinto,
+        /// el punto correcto sería reasignar `SpriteRenderer.sprite` desde
+        /// MaquinariaSprites (que cachea por ancho, así que no generaría
+        /// textura nueva) y re-escalar `transform.localScale` de cada capa
+        /// -- NUNCA llamar a CrearCapa otra vez, por la misma razón de
+        /// arriba.
+        /// </summary>
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            int span = _cellX1 - _cellX0 + 1; // invariante, ver doc de arriba.
+            _cellX0 = anclaCelda.x;
+            _cellX1 = _cellX0 + span - 1;
+            _plateRow = anclaCelda.y;
+            RecalcularCentro();
+        }
 
         private void BuildVisual()
         {
             float celda = SimRenderer.CellWorldSize;
             int spanCeldas = _cellX1 - _cellX0 + 1;
 
+            RecalcularCentro();
             int filaInferior = _plateRow - SimLevelBuilder.WallThickness + 1;
             float anchoMundo = spanCeldas * celda;
             float altoMundo = (_plateRow + 1 - filaInferior) * celda;
-
-            float centroX = (_cellX0 + spanCeldas * 0.5f) * celda;
-            float centroY = (filaInferior + (_plateRow + 1 - filaInferior) * 0.5f) * celda;
-            _centroBloque = new Vector3(centroX, centroY, 0f);
-            transform.position = _centroBloque;
 
             // (fix playtest 14) Ya NO hace falta un ancla de rótulo aparte
             // (el antiguo _anclaRotulo, colgado del labio de la bandeja): los

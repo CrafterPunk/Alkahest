@@ -139,6 +139,15 @@ namespace Alkahest.Game
             var cincel = go.AddComponent<Cincel>();
             cincel.Init(_sim);
 
+            // LA MUDANZA (playtest 19, "taller movible"): tercera herramienta,
+            // MISMO patrón que el Cincel de arriba -- mismo GameObject, mismo
+            // Init(sim), se alterna con V y mientras está inactiva no toca
+            // nada (ver Game/Mudanza.cs). Los aparatos movibles (HeatPlate/
+            // ChillStone/Dispenser) se registran solos en su propio Init, así
+            // que no hace falta pasarles nada más aquí.
+            var mudanza = go.AddComponent<Mudanza>();
+            mudanza.Init(_sim);
+
             // El conocimiento se crea ANTES que el HUD: el HUD del frasco lo
             // necesita para mostrar el nombre que el jugador le puso a cada
             // sustancia (o el nombre común) en vez del devName interno.

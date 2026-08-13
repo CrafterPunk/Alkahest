@@ -180,7 +180,21 @@ namespace Alkahest.Game
             // de la reingeniería del espacio) -- al leerlas por nombre en vez de
             // copiar el número, la viga baja sigue "pegada" al estante nuevo sin
             // tocar nada aquí.
-            int vigaBajaY = (SimLevelBuilder.ChillTrayY0 - 5) * Escala;   // celda 241..245, tocando el estante en 246
+            // (playtest 19, "EL TALLER SE COMPACTA AÚN MÁS", ver
+            // Sim/SimLevelBuilder.cs) ChillTrayY0 bajó de 246 a 236 -- al leerse
+            // por nombre, esta viga vuelve a seguir al estante SOLA, sin tocar
+            // nada aquí: ahora cae en la celda 231..235 (tocando el estante en
+            // 236), justo debajo del nuevo hueco donde flotan la bandeja fría y
+            // el estante, encima del pilar de grifos. Efecto lateral BUENO, no
+            // buscado a propósito pero coherente: como el pilar de grifos es
+            // sólido hasta la celda 232 (TapPillarTopY) en esa misma franja de
+            // X, la mitad izquierda de esta viga queda oculta tras la piedra del
+            // propio taller (el fondo se dibuja DETRÁS, sortingOrder -10) y solo
+            // se ve asomar a la derecha del pilar, exactamente donde el estante
+            // sí flota en aire libre -- "la viga sostiene lo que de verdad
+            // flota" en vez de dibujarse entera sobre piedra que ya se sostiene
+            // sola.
+            int vigaBajaY = (SimLevelBuilder.ChillTrayY0 - 5) * Escala;   // celda 231..235, tocando el estante en 236
             int vigaAltaY = (CellGrid.H - 18) * Escala;                  // celda 270
             const int vigaGrosorCeldas = 5;
             int vigaGrosor = vigaGrosorCeldas * Escala;

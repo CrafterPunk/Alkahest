@@ -45,8 +45,32 @@ namespace Alkahest.Game
     /// ChillStone.cs/HeatPlate.cs) — si un grep de esos dos símbolos en
     /// Game/{Dispenser,ChillStone,HeatPlate}.cs vuelve a dar cero resultados,
     /// es la MISMA regresión otra vez.
+    ///
+    /// ---------------------------------------------------------------------
+    /// TALLER MOVIBLE (playtest 19, Game/Mudanza.cs, tecla V)
+    /// ---------------------------------------------------------------------
+    /// Implementa <see cref="IMovible"/>: Mudanza puede agarrar este grifo y
+    /// recolocarlo en cualquier celda dentro del alcance del jugador. El
+    /// movimiento de verdad lo hace <see cref="Reposicionar"/>, que NO llama
+    /// ni a <see cref="Init"/> ni a <see cref="BuildVisual"/> otra vez.
+    /// PORQUÉ NO BuildVisual: MaquinariaSprites.CrearCapa siempre crea un
+    /// GameObject nuevo -- una segunda llamada DUPLICARÍA el caño/el halo/
+    /// la gota en vez de reemplazarlos. PORQUÉ NO Init: volver a llamarlo
+    /// RESELLARÍA el grifo (reiniciaría <see cref="Bloqueado"/> y
+    /// <c>favorCostPerActivation</c> a sus valores por defecto -- el sello
+    /// de Azoth volvería a cerrarse de golpe) y NO resetea <c>_on</c>, así
+    /// que un grifo abierto seguiría emitiendo, pero en la boquilla VIEJA,
+    /// mientras el resto del estado se corrompe. <see cref="Reposicionar"/>
+    /// solo toca lo posicional (transform, _spoutX/_spoutY, _anclaRotulo);
+    /// Bloqueado/favorCostPerActivation/_on quedan completamente intactos.
+    /// A diferencia de HeatPlate/ChillStone, el grifo no tiene un
+    /// "spanCeldas" variable (CanoGrifo() es un único sprite cacheado, sin
+    /// parámetro de ancho) -- así que Reposicionar nunca necesita
+    /// reasignar ningún sprite, solo mover transform.position (Cano/Halo/
+    /// Gota son hijos con localPosition relativo, así que se arrastran
+    /// solos con él).
     /// </summary>
-    public sealed class Dispenser : MonoBehaviour, IMaquinaInteractiva
+    public sealed class Dispenser : MonoBehaviour, IMaquinaInteractiva, IMovible
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
@@ -184,6 +208,46 @@ namespace Alkahest.Game
         public Vector3 PuntoFoco => _anclaRotulo;
         public float RangoFoco => ProximityRange;
 
+        // ---------------------------------------------------------------
+        // IMovible (playtest 19, ver doc de clase "TALLER MOVIBLE" y
+        // Game/Mudanza.cs para el contrato completo).
+        // ---------------------------------------------------------------
+
+        /// <summary>Centro visual del caño (la brida se ancla en transform.position, pero el caño en sí cuelga con un offset local de 2.5 celdas -- ver BuildVisual). Se usa como hitbox de agarre, no como PuntoFoco (ese sigue siendo _anclaRotulo, sin cambios).</summary>
+        public Vector3 CentroMundo => transform.position + new Vector3(2.5f * SimRenderer.CellWorldSize, 0f, 0f);
+        /// <summary>Tamaño del sprite del caño (8x5 celdas, fijo -- ver MaquinariaSprites.CanoGrifo). El grifo NUNCA cambia de ancho, a diferencia de HeatPlate/ChillStone.</summary>
+        public Vector2 TamanoMundo => new Vector2(8f * SimRenderer.CellWorldSize, 5f * SimRenderer.CellWorldSize);
+
+        /// <summary>
+        /// Celda de anclaje: mountCellX/mountCellY, la MISMA celda que recibía
+        /// Init -- se DERIVA de _spoutX/_spoutY (que sí se guardan) restando
+        /// los offsets fijos, en vez de guardar una copia nueva de
+        /// mountCellX/mountCellY (que Init nunca almacenaba, ver el survey de
+        /// este encargo).
+        /// </summary>
+        public Vector2Int AnclaCelda => new Vector2Int(_spoutX - SpoutOffsetCells, _spoutY + SpoutDropCells);
+
+        /// <summary>
+        /// ¿Cabría el grifo en esa celda de montaje sin que la boquilla, el
+        /// radio de emisión (<see cref="SpoutRadius"/>) o la búsqueda de
+        /// rebose (<see cref="OverflowSearchUp"/>) salgan del marco protegido
+        /// del mundo? Réplica de los mismos offsets que usa
+        /// <see cref="Reposicionar"/>/<see cref="EmitTick"/>, con un margen
+        /// extra de una celda por seguridad. Puramente informativo -- Mudanza
+        /// decide si bloquea el drop con esto.
+        /// </summary>
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            int spoutX = anclaCelda.x + SpoutOffsetCells;
+            int spoutY = anclaCelda.y - SpoutDropCells;
+            int izq = anclaCelda.x - 1;                                  // brida en voladizo hacia el mount.
+            int der = spoutX + SpoutRadius + 1;                          // boquilla + radio de emisión.
+            int abajo = spoutY - SpoutRadius - 1;                        // caudal cayendo bajo la boquilla.
+            int arriba = spoutY + OverflowSearchUp + SpoutRadius + 1;    // búsqueda de rebose hacia arriba.
+            return izq >= 1 && der <= CellGrid.W - 2 && abajo >= 1 && arriba <= CellGrid.H - 2
+                && anclaCelda.y >= 1 && anclaCelda.y <= CellGrid.H - 2;
+        }
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Transform player, int mountCellX, int mountCellY, byte materialId,
             OrderSystem orderSystem = null, int favorCost = 0, bool bloqueado = false)
@@ -200,9 +264,38 @@ namespace Alkahest.Game
 
             BuildVisual(mountCellX, mountCellY);
             MachineFocus.Registrar(this);
+            Mudanza.RegistrarMovible(this); // (playtest 19) ver doc de clase "TALLER MOVIBLE".
         }
 
-        private void OnDestroy() => MachineFocus.Olvidar(this);
+        private void OnDestroy()
+        {
+            MachineFocus.Olvidar(this);
+            Mudanza.OlvidarMovible(this);
+        }
+
+        /// <summary>
+        /// TALLER MOVIBLE (playtest 19, Game/Mudanza.cs): mueve el grifo YA
+        /// CONSTRUIDO a una nueva celda de montaje, SIN volver a llamar a
+        /// Init ni a BuildVisual -- ver el docblock de la clase para el
+        /// porqué exacto de cada uno (en corto: BuildVisual DUPLICARÍA el
+        /// caño/halo/gota; Init RESELLARÍA el grifo y perdería el estado
+        /// _on). Solo toca lo posicional: _spoutX/_spoutY (de donde
+        /// EmitTick lee para emitir, y de donde AnclaCelda los deriva de
+        /// vuelta), transform.position (Cano/Halo/Gota son hijos con
+        /// localPosition RELATIVO, así que se arrastran solos con él) y
+        /// _anclaRotulo (el punto del que cuelgan PuntoFoco y las chapas de
+        /// OnGUI). Bloqueado, favorCostPerActivation y _on -- justo los tres
+        /// campos que Init resetearía -- no se tocan.
+        /// </summary>
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            _spoutX = anclaCelda.x + SpoutOffsetCells;
+            _spoutY = anclaCelda.y - SpoutDropCells;
+            transform.position = _sim.CellToWorld(anclaCelda);
+
+            float celda = SimRenderer.CellWorldSize;
+            _anclaRotulo = transform.position + new Vector3(6.5f * celda, 0f, 0f);
+        }
 
         /// <summary>
         /// Nombre de verdad de lo que da este grifo: bautizado &gt; común de taller &gt; "???"
