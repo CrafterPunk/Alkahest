@@ -6,7 +6,8 @@ las leyes de un universo distinto por seed. Derivado del template `FriendsLoop-U
 Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `docs/SIM_NOTES.md`.
 
 ## Mapa del código (Assets/Alkahest/)
-- `Sim/` — autómata celular DETERMINISTA (grid **256x144**, 30Hz): `Universe` (materiales + leyes
+- `Sim/` — autómata celular DETERMINISTA (grid **768x288** desde el playtest 15 = 3x2 pantallas;
+  `CellGrid.PantallaW/H` siguen midiendo 1 pantalla = 256x144 para pensar el plano en esa unidad; 30Hz): `Universe` (materiales + leyes
   por seed + Edictos + sorteo de FIRMA VISUAL, ver regla 16), `SimStepper` (reglas por arquetipo +
   `MorphTick` que evoluciona el campo morfológico + ring buffer de eventos), `ReactionEngine`
   (tabla de reacciones), `CellGrid` (incluye `byte[] morph`/`morphScratch`, ver regla 16),
@@ -14,8 +15,10 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   (**EL PLANO del taller: única fuente de verdad de TODAS las coordenadas**).
   REGLA DE ORO: nada de UnityEngine.Random ni allocs en el hot path; solo `XorShift` sembrado
   por (tick,x,y). El determinismo es el plan para el futuro netcode.
-  Mundo = 25.6 x 14.4 unidades; cámara ortográfica centrada en (12.8, 7.2) con size 7.2 —
-  el `AlkahestSceneBuilder` lo deriva de `CellGrid.W/H`, nunca hardcodeado.
+  El `AlkahestSceneBuilder` deriva las medidas del mundo de `CellGrid.W/H`, nunca hardcodeadas; la
+  cámara SIGUE AL APRENDIZ desde el playtest 15 (con el mundo a 3x2 pantallas dejó de ser opcional).
+  `CellGrid.ambient` (temperatura ambiente por celda) existe y hoy es UNIFORME en todo el mundo —
+  el clima por zona se retiró en el playtest 17, ver regla 31 antes de reimplantarlo.
   `MaterialDef` lleva la FIRMA VISUAL de cada sustancia (playtest 12): `patron`
   (`PatronMorfologico`: Liso/Vetas/Manchas/Laberinto/Celdas/Dendritas/Pulso/Motas), `borde`
   (`BordeMorfologico`: Neto/Halo/Escarcha/Difuso), `patronEscala`, `patronFuerza`, `ritmoAnim`,
@@ -25,7 +28,10 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   BLOQUEO DE MATERIAL al pulsar aspirar, más el haz de mundo — el anillo de alcance que lo
   acompañaba se retiró en el playtest 11, ver regla 15), máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
   `MaquinariaSprites` y foco de interacción arbitrado por `MachineFocus` (solo el aparato más
-  cercano responde a E). `HeatPlate`/`ChillStone` (playtest 14): `FootprintFraction`=0.4 recorta el
+  cercano responde a E). `Cincel` (playtest 16): tecla **C** alterna frasco/cincel — es un MODO,
+  no otro botón (el frasco se desactiva mientras está activo); clic izq. talla piedra a vacío, der.
+  rellena vacío con piedra vía `PaintStable`. Primera pieza de la fase "taller movible".
+  `Dispenser` emite con `PaintStable`, no con `Paint` (regla 29). `HeatPlate`/`ChillStone` (playtest 14): `FootprintFraction`=0.4 recorta el
   ancho recibido del bootstrap a una fracción centrada ANTES de `BuildVisual` (placas más pequeñas,
   el centro no se mueve); al apagarse, la fila adyacente sigue empujada débilmente
   (`HoldStepRaw`=1) hacia el último objetivo durante `HoldTicksTrasApagar`=60 ticks mientras las
@@ -155,13 +161,13 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     un campo (p. ej. `201 + def.semillaPatron`, donde el campo es `byte` y se promueve a `int`)
     necesita cast explícito `(uint)(...)` — de `int` a `uint` no hay conversión implícita
     (`CS1503`, visto en `SimStepper.cs`).
-22. **`AlkahestSim.PaintStable(x, y, radius, materialId)` es el camino para pintar materia de la
-    nada (playtest 13, solo `DevPalette`)**: la celda nace a `StableBirthTempRaw(MaterialDef)`,
+22. **`AlkahestSim.PaintStable(x, y, radius, materialId)` es el camino para CREAR materia de la
+    nada (playtest 13; ampliada en el 17 — ya NO es "solo `DevPalette`", ver regla 29)**: la celda nace a `StableBirthTempRaw(MaterialDef)`,
     una temperatura en la que el material es ESTABLE (evita el bug de "pintar hielo produce
     agua": `Paint`/`SetCell` nunca tocan `temp`, y la celda heredaba ambiente=70raw, que cruza
     siempre `Ice.meltsAt` en cualquier seed). `Paint`/`PaintCell`/`PaintRect` NO cambiaron de
-    firma ni de comportamiento — siguen siendo los que usa el juego real (Flask, MasterSupplies,
-    DeliveryChute, Dispenser).
+    firma ni de comportamiento — siguen siendo los correctos para lo que MUEVE materia que ya
+    existía y lleva su propia temperatura consigo (Flask al verter, MasterSupplies, DeliveryChute).
 23. **LO INNOMINADO NACE OPACO (playtest 13, amplía la regla 19)**: `alfa = 255` siempre en
     `Universe.SortearFirmasVisuales`, sin excepción. El alfa <255 del roster (215-235 en Azoth/
     Acid/Slime) es vocabulario del taller y NO debe propagarse a la firma sorteada — si se
@@ -193,34 +199,81 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     ambos se desvanecen igual (lineal), un panel casi negro sobrevive perceptualmente mucho más
     que un texto claro y queda una caja negra vacía sin texto — el bug real detrás de "recuadros
     negros flotando en el taller" y "la etiqueta en negro antes de desaparecer".
+29. **SI ALGO *INTRODUCE* MATERIA EN EL MUNDO, USA `PaintStable`; `Paint` ES PARA LO QUE LA
+    *MUEVE* (playtest 17, generaliza la regla 22)**: `Paint`/`PaintCell`/`PaintRect` NO TOCAN
+    `temp`, así que una celda creada con ellos hereda la temperatura que ese hueco tuviera antes.
+    Eso convirtió el grifo de agua en un fabricante de hielo durante dos rondas: si la boquilla o
+    la pila se habían enfriado alguna vez, `Dispenser.EmitTick` emitía agua que nacía ya congelada
+    (en cualquier seed, sin que el clima interviniera). Es el MISMO fallo que "pintar hielo produce
+    agua" (regla 22), que se corrigió en `DevPalette` y nadie fue a buscar al resto de creadores de
+    materia. Consumidores actuales de `PaintStable`: `DevPalette`, `Dispenser` (chorro y rebose),
+    `Cincel` (rellenar piedra). Antes de añadir cualquier fuente nueva de materia, preguntarse si
+    CREA o si MUEVE.
+30. **DESCARTAR UN SOSPECHOSO NO ES IDENTIFICAR AL CULPABLE (playtest 17, la regla de método más
+    cara de la sesión)**: la investigación del playtest 16 sobre "el agua del grifo sale congelada"
+    midió BIEN (demostró con números que el degradado frío del sótano no llegaba a la boquilla: 41
+    filas de base garantizada de por medio como mínimo) y luego firmó una sentencia contra el
+    siguiente sospechoso disponible — "es varianza de semilla, es personalidad del universo, no
+    bug" — sin someterlo a la misma exigencia. El culpable real estaba en la línea que CREA el
+    agua. Cuando el síntoma sea "materia recién creada aparece en un estado imposible", el primer
+    sitio que hay que mirar es SIEMPRE quién la crea y a qué temperatura la deja, no el entorno
+    donde aparece. Corolario: una investigación que termina en "no es un bug, es diseño" tiene que
+    justificar por qué NO revisó el camino de creación, o no ha terminado.
+31. **EL CLIMA POR ZONA EXISTIÓ Y SE RETIRÓ — NO REIMPLANTARLO SIN LEER POR QUÉ (playtest 17)**:
+    `SimLevelBuilder` pintaba un CULTIVO templado (26°C) y un SÓTANO frío (4°C) con degradados;
+    hoy `PaintClimate` pinta `CellGrid.AmbientRaw` uniforme en todo el mundo. Dos razones: el
+    taller va a ser MOVIBLE (un clima atado a coordenadas fijas contradice la fase siguiente:
+    convierte una decisión del jugador en algo que el plano ya decidió), y dejar solo el cálido
+    reintroduciría la asimetría calor/frío del playtest 13 por la puerta de atrás (la ventaja la
+    da el APARATO, no la casilla). **El array `CellGrid.ambient` SE QUEDA a propósito**: cuesta lo
+    mismo que una constante y es el vehículo del clima que sí vuelve — el que CREA EL JUGADOR (una
+    fragua que entibia su alrededor), local por naturaleza. Efecto colateral valioso: con ambiente
+    uniforme a 20°C, `Water.freezesAt` (raw 52..67 en el rango real de seeds) NUNCA lo alcanza —
+    en ninguna seed puede el ambiente congelar agua solo, en ningún punto del mundo.
+32. **DOCUMENTAR LA RONDA NO ES OPCIONAL NI ES EL ÚLTIMO PASO SI SE ACABA EL TIEMPO (playtest
+    17)**: los playtests 15 y 16 se commitearon SIN sección en `docs/HANDOFF.md`, pese a que Cesar
+    tiene una instrucción permanente de documentarlo todo. Se reconstruyeron a posteriori leyendo
+    los diffs — se pudo porque los docblocks del código sí eran extensos, que es la red de
+    seguridad de la regla 15. Es el mismo mecanismo que produjo la regresión de las reglas 26-27:
+    trabajo que ocurre y no queda escrito deja de existir para quien venga después.
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
-M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 12: campo morfológico completo. Playtest 13: afinó esa base (Safe
-Mode, `PaintStable`, insumos/subproductos, remapeo de `patronEscala`, firma GENERADA, estado
-Fresca). **Playtest 14 (Opus 5 dirige, Sonnet 5 escribe en 2 encargos), ronda de recuperación,
-todo VALIDADO por Cesar en el editor**: se rastreó y recuperó (fusión a tres bandas) la regresión
-del playtest 7 perdida sin detectar durante tres rondas — máquinas + `UiStyles.PlacaMundoLateral`/
-`Cercania` (reglas 26-27); se corrigieron tres regresiones producidas por la propia fusión
-(recuadros negros por el desvanecimiento de panel sin cubo, regla 28; rótulo del frío invertido
-otra vez); Helando ahora se diferencia de Fresca (12 vs 5 raw/tick); el alcance térmico decae con
-la distancia en vez de cortarse en seco (`FilaEmpujePct`); orden de recuperación con `HoldTicks
-TrasApagar`; placas más pequeñas (`FootprintFraction`). Y una CONVERSACIÓN DE DIRECCIÓN clave:
-Cesar diagnosticó "falta morfología de comportamiento, no solo de aspecto" — trece rondas
-enriqueciendo cómo el juego SE LEE sobre una capa de sistemas delgada. Detalle técnico completo:
-`docs/HANDOFF.md` sección "Playtest 14" y `docs/SIM_NOTES.md`.
-FASE NUEVA acordada (orden): 1) cámara que sigue al aprendiz; 2) taller a 2-3 pantallas
-(rediseño de `SimLevelBuilder` con las zonas de Cesar + tres pasadas conscientes del viewport,
-hoy proporcionales al mundo entero: refresco completo, `MorphTick`, `DiffuseTemperature`);
-3) química generada por semilla (núcleo fijo + reacciones sorteadas + "leyes descubiertas: N de
-M" en el diario); 4) comportamiento variable por semilla, no solo aspecto (de ahí nacen los
-nombres que Cesar busca); 5) taller movible (grifos/estantes/placas anclados a bedrock);
-6) mundo persistente con semilla y progreso guardado.
-Backlog heredado aún vigente: consolidar `FirmaVisualFabrica` con `JournalHud` (regla 25);
-enganchar `HintSystem.PistasMostradas` en PROCEDIMIENTOS del diario; decidir si el audio se queda;
-renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`; resto de M5 (glow, agua con más
-cuerpo); ejecutar la build de Windows con la checklist (`docs/HANDOFF.md` sección "Playtest 11");
-CURVA DE PROGRESIÓN; multiplayer (sim solo-host + deltas RLE, el formato debe contemplar `morph`,
-regla 16); medir el coste real de `MorphTick` (más urgente con la fase 2, que multiplica el
-tamaño del mundo 6x).
+M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
+base. Playtest 14: ronda de recuperación de la regresión de tres rondas (reglas 26-28) + la
+conversación de dirección que abrió la fase actual.
+
+**Playtest 15** (Opus dirige, Sonnet escribe): EL MUNDO x6 — `CellGrid` 256x144 → **768x288**
+(3x2 pantallas, requisito de co-op de Cesar), cámara que sigue al aprendiz, `SimLevelBuilder`
+reescrito con las CUATRO ZONAS (CULTIVO x16..250 / LABORATORIO x262..505 / ENTREGA x517..767 en la
+mitad de arriba; SÓTANO x220..530 y10..143 debajo, sólo accesible volando por el POZO), y las tres
+pasadas que escalaban con el mundo entero (refresco de textura, `MorphTick`, `DiffuseTemperature`)
+pasadas a CONSCIENTES DEL VIEWPORT. Introdujo el clima por zona, retirado dos rondas después.
+**Playtest 16**: costura del bucle ambiental (el chasquido cada 4.5s), rótulos de mundo que ya no
+siguen a la cámara (`DentroDePantalla`, un bug que la cámara fija escondía), `OrdersHud` plegable
+con **O** (los encargos "estorbaban espacio construible"), lo básico redistribuido al 47% del
+ancho sin encoger el mundo ni mover geometría validada, y el **CINCEL** (`Game/Cincel.cs`, tecla
+**C**): primera pieza real del taller movible.
+**Playtest 17** (Opus dirige y escribe, revisión por agente independiente) — PENDIENTE DE VALIDAR
+EN EL EDITOR: la causa real del "agua del grifo congelada" (`Dispenser` emitía con `Paint`, que no
+toca `temp`: el agua heredaba el frío del hueco y nacía helada — regla 29), el clima por zona
+RETIRADO entero (regla 31, el array `ambient` se queda para el clima que cree el JUGADOR), barrido
+de siete comentarios que quedaron mintiendo, y las secciones 15/16 del HANDOFF escritas a
+posteriori porque se habían commiteado sin documentar (regla 32).
+**Los playtests 15, 16 y 17 siguen SIN PUSHEAR a GitHub**: el remoto está en el 14 (`f931e61`).
+El commit pendiente los cubre los tres de una vez.
+
+FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
+3) **química generada por semilla** (núcleo fijo + reacciones sorteadas + "leyes descubiertas:
+N de M" en el diario) ← SIGUIENTE; 4) comportamiento variable por semilla, no solo aspecto (de ahí
+nacen los nombres que Cesar busca); 5) taller movible (el cincel ya está; faltan grifos/estantes/
+placas anclados a bedrock, botón central del ratón); 6) mundo persistente con semilla y progreso.
+Backlog heredado aún vigente: separar en `Universe.cs` los rangos solapados de `waterFreezeC` y
+`crystallizeThresholdC` (hoy en algunas seeds cristalizar exige un frío que ya fabrica hielo);
+consolidar `FirmaVisualFabrica` con `JournalHud` (regla 25); enganchar `HintSystem.PistasMostradas`
+en PROCEDIMIENTOS del diario; descripción completa de encargos en el diario; decidir si el audio se
+queda; renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`; resto de M5 (glow, agua con
+más cuerpo); build de Windows con la checklist (`docs/HANDOFF.md` sección "Playtest 11"); CURVA DE
+PROGRESIÓN (jornadas cortas, una mecánica cada una); desbloqueo de áreas por nivel; multiplayer
+(sim solo-host + deltas RLE, el formato debe contemplar `morph`, regla 16); medir el coste real de
+`MorphTick` con el mundo 6x.

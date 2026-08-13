@@ -99,7 +99,38 @@ namespace Alkahest.Game
                    "se cultivan, no se entregan hechas.";
         }
 
-        /// <summary>Llamado por Game/DayCycle.cs al entrar en la intro de cada jornada.</summary>
+        /// <summary>
+        /// Llamado por Game/DayCycle.cs al entrar en la intro de cada jornada.
+        ///
+        /// (playtest 15, REVISIÓN DE ZONA tras el rediseño del plano a
+        /// 768x288/cuatro zonas) Las dos coordenadas de esta clase se leen
+        /// ÍNTEGRAMENTE de SimLevelBuilder (nunca un número propio), así que
+        /// ninguna de las dos necesitó tocarse -- solo comprobarse:
+        ///  · VatBX0 (118 entonces, 187 desde el playtest 16) es una de las
+        ///    DOS cubas que SimLevelBuilder.
+        ///    BuildCultivo levanta, y ambas viven dentro de CultivoX0..X1
+        ///    (16..250) -- el retoño de Vivium sigue naciendo en CULTIVO, que
+        ///    es exactamente donde el encargo lo pide (ahí se cría). (playtest
+        ///    17: esta línea decía además "y el clima ya nace templado, ver
+        ///    CultivoAmbientRaw" -- YA NO. El clima por zona se retiró; todo el
+        ///    mundo nace a CellGrid.AmbientRaw. No cambia nada aquí: los 26°C
+        ///    de CULTIVO nunca metían el Vivium dentro de su banda de
+        ///    crecimiento por sí solos (30..60°C ±shift), solo acortaban el
+        ///    salto -- quien lo cría sigue siendo la placa ígnea de la cuba.)
+        ///  · ChillTrayInteriorX0/X1/Y0 viven dentro de LabX0..X1 -- la
+        ///    semilla de cristal sigue naciendo sobre la bandeja fría de
+        ///    LABORATORIO, que es donde de verdad se cristaliza (ver la
+        ///    decisión, con su razonamiento completo, en
+        ///    AlkahestGameBootstrap.SpawnChillStone: SimLevelBuilder no le da
+        ///    al sótano ninguna cubeta con paredes donde la semilla/Azoth
+        ///    pudieran quedarse quietos. (playtest 17: aquí ponía "el sótano
+        ///    nace frío pero..." — ya no nace frío, el clima por zona se
+        ///    retiró; el argumento geométrico es el que manda y no cambia.)
+        /// Es decir: el rediseño de zonas NO desplazó ninguna de las dos
+        /// muestras -- ya estaban donde tenían que estar porque esta clase
+        /// nunca duplicó coordenadas propias, el mismo principio de diseño que
+        /// AlkahestGameBootstrap declara en su propio docblock.
+        /// </summary>
         public void AlEmpezarJornada(int dia)
         {
             if (dia < 1 || dia >= _entregado.Length) return;
@@ -112,7 +143,7 @@ namespace Alkahest.Game
             // 1) El grifo de Azoth deja de estar sellado.
             if (_grifoAzoth != null) _grifoAzoth.Desbloquear();
 
-            // 2) Retoño de Vivium en el fondo de la cuba derecha. Nace a
+            // 2) Retoño de Vivium en el fondo de la cuba B (CULTIVO). Nace a
             //    temperatura ambiente y DORMIDO (fuera de su banda de
             //    crecimiento): para que crezca hay que templar la placa — que es
             //    exactamente la lección de la jornada.
@@ -120,7 +151,7 @@ namespace Alkahest.Game
                              + SimLevelBuilder.VatInteriorX1(SimLevelBuilder.VatBX0)) / 2;
             _sim.Paint(centroCubaB, SimLevelBuilder.VatInteriorY0 + RadioRetonoVivium, RadioRetonoVivium, MaterialId.Vivium);
 
-            // 3) Saquito de semilla de cristal sobre la bandeja fría.
+            // 3) Saquito de semilla de cristal sobre la bandeja fría (LABORATORIO).
             int centroBandeja = (SimLevelBuilder.ChillTrayInteriorX0 + SimLevelBuilder.ChillTrayInteriorX1) / 2;
             _sim.PaintRect(centroBandeja - AnchoSaquito / 2, SimLevelBuilder.ChillTrayInteriorY0,
                 AnchoSaquito, AltoSaquito, MaterialId.CrystalSeed);

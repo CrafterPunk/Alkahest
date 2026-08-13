@@ -50,23 +50,55 @@ namespace Alkahest.EditorTools
             }
         }
 
+        /// <summary>
+        /// (playtest 15) YA NO encuadra el mundo entero. Hasta esta ronda
+        /// derivaba centro/orthographicSize de CellGrid.W/H para encajar la
+        /// grilla completa -- correcto mientras el mundo medía una pantalla,
+        /// pero con el taller a 768x288 (3x2 pantallas) eso dejaría cada celda
+        /// a 1/6 de su tamaño en pantalla, y de todos modos ya no hace falta:
+        /// Sim/SimRenderer.cs POSEE la cámara en runtime (FitMainCamera +
+        /// UpdateCameraFollow, ver su docblock) -- la sigue, con zona muerta y
+        /// suavizado, mostrando ~una pantalla, y la amplía temporalmente con
+        /// Tab. Este método solo tiene que dejarla en un estado INICIAL
+        /// razonable (ortográfica, en algún punto dentro del mundo, con el
+        /// color de fondo correcto) para que SimRenderer.Init() -- que llama a
+        /// FitMainCamera() y UpdateCameraFollow(snap:true) nada más arrancar,
+        /// ANTES del primer frame visible -- tenga algo coherente de lo que
+        /// partir; no pelea con ella (no fija tamaño ni centro finales, que
+        /// SimRenderer sobreescribe de todas formas en su primer Init()).
+        ///
+        /// REGLA 14 (CLAUDE.md): el builder de la build REGENERA la escena
+        /// antes de compilar, así que lo que este método deja aquí es
+        /// exactamente lo que arranca en el .exe -- SimRenderer.Init() corre
+        /// en el primer frame de juego real (Awake/Start de AlkahestSim) y
+        /// corrige tamaño/posición antes de que el jugador vea nada, así que
+        /// dejar aquí un tamaño "razonable pero no definitivo" no rompe la
+        /// build: es un placeholder de un frame, nunca lo que el jugador ve.
+        /// </summary>
         private static void BuildMainCamera()
         {
-            // La cámara encuadra EXACTAMENTE la grilla: se deriva de
-            // CellGrid.W/H para que nunca se quede desfasada si el tamaño del
-            // mundo vuelve a cambiar (con 256x144 sale centro (12.8, 7.2) y
-            // orthographicSize 7.2; antes eran (19.2, 10.8) y 10.8 hardcodeados).
-            float mundoW = CellGrid.W * SimRenderer.CellWorldSize;
-            float mundoH = CellGrid.H * SimRenderer.CellWorldSize;
-
             var camGO = new GameObject("Main Camera");
             camGO.tag = "MainCamera";
+            // Punto de partida razonable: el centro del mundo. SimRenderer
+            // la reposiciona sobre el aprendiz en su primer Init() (o al
+            // centro del mundo si el aprendiz todavía no existe, ver
+            // UpdateCameraFollow) -- este valor solo evita que la escena
+            // recién generada muestre una cámara en el origen (0,0), fuera de
+            // toda la grilla, si algo mirase la escena antes de que el juego
+            // arranque (p.ej. la vista de Editor sin Play).
+            float mundoW = CellGrid.W * SimRenderer.CellWorldSize;
+            float mundoH = CellGrid.H * SimRenderer.CellWorldSize;
             camGO.transform.position = new Vector3(mundoW * 0.5f, mundoH * 0.5f, -10f);
             camGO.transform.rotation = Quaternion.identity;
 
             var cam = camGO.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.orthographicSize = mundoH * 0.5f;
+            // Tamaño de partida = una pantalla de alto (mismo criterio que
+            // SimRenderer.FitMainCamera, sin duplicar su fórmula de aspect):
+            // más cercano al tamaño real que fijará SimRenderer que "el mundo
+            // entero", así que si algo llega a pintar un frame con este valor
+            // (antes de que Init() corra) no se ve una discontinuidad enorme.
+            cam.orthographicSize = CellGrid.PantallaH * 0.5f * SimRenderer.CellWorldSize;
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 100f;
             cam.clearFlags = CameraClearFlags.SolidColor;

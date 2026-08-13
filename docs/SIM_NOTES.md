@@ -100,6 +100,24 @@ Se guarda como `byte` "raw" 0..255 por celda; conversión con
 `CellGrid.RawToC`/`CToRaw`: `C = raw*2 - 120` (rango representable
 aproximado -120°C a 390°C). Ambiente = raw 70 (20°C).
 
+El ambiente NO es una constante en el hot path: es `CellGrid.ambient`, un
+byte por celda hacia el que `DiffuseTemperature` tira cada celda cuando nada
+la calienta ni la enfría (playtest 15, cuando el mundo pasó a 768x288). Hoy
+todas las celdas valen `AmbientRaw`: el CLIMA POR ZONA que motivó el array
+(un sótano a 4°C, un cultivo a 26°C, con degradados de decenas de celdas)
+**se retiró en el playtest 17** — ver el docblock de `SimLevelBuilder` y la
+regla 31 de `CLAUDE.md` antes de reimplantarlo. El array se conserva porque
+el clima que vuelve es el que crea el JUGADOR (una fragua que entibia su
+alrededor), que es local por naturaleza y no cabe en una constante global,
+y porque leerlo cuesta exactamente lo mismo que leer una constante.
+
+CONSECUENCIA ÚTIL DEL AMBIENTE UNIFORME: `Water.freezesAt` = `CToRaw(
+waterFreezeC)` con `waterFreezeC` uniforme en los enteros -15..15, o sea
+raw 52..67. El peor caso (raw 67) queda 3 unidades raw por debajo de la base
+(raw 70), así que **en ninguna seed puede el ambiente congelar agua por sí
+solo, en ningún punto del mundo**. Cualquier hielo que aparezca sin que el
+jugador lo provoque es un bug de quien creó esa celda, no del entorno.
+
 Difusión barata: cada tick solo se procesa 1/8 de las celdas
 (`offset = tick % 8`, paso 8), promediando con los 4 vecinos ortogonales
 en aritmética entera (todo `>>`/enteros, sin floats) y atrayendo
@@ -649,11 +667,27 @@ temperatura raw en la que `def` es estable, con las MISMAS comparaciones que
    caso normal — Agua, Cristal, Vivium, Azoth...): se deja ambiente sin
    tocar.
 
-Expuesto vía `AlkahestSim.PaintStable(x, y, radius, materialId)`, un método
-NUEVO usado SOLO por `DevPalette` (el pincel de desarrollo). `Paint`/
-`PaintCell`/`PaintRect` no cambiaron de firma ni de comportamiento: sus
-llamantes reales del juego (`Flask`, `MasterSupplies`, `DeliveryChute`,
-`Dispenser`) siguen sin tocar, y `Flask` sigue restituyendo la temperatura
-MEDIA de lo aspirado vía `PaintCell` (validado desde el playtest 4) — ese es
-un caso distinto (temperatura conocida del frasco), no el de "materia creada
-de la nada" que resuelve `StableBirthTempRaw`.
+Expuesto vía `AlkahestSim.PaintStable(x, y, radius, materialId)`.
+
+**AMPLIADO EN EL PLAYTEST 17 — la línea de arriba decía "usado SOLO por
+`DevPalette`", y esa restricción era el bug.** El criterio correcto no es
+"quién lo usa" sino qué hace la llamada:
+
+- **CREA materia de la nada** → `PaintStable`. La celda nace a una
+  temperatura donde el material es ESTABLE. Consumidores: `DevPalette`,
+  `Dispenser` (chorro y rebose), `Cincel` (rellenar piedra).
+- **MUEVE materia que ya existía** y que lleva su propia temperatura consigo
+  → `Paint`/`PaintCell`/`PaintRect`, que NO tocan `temp`. Consumidores:
+  `Flask` al verter (restituye la temperatura MEDIA de lo aspirado vía
+  `PaintCell`, validado desde el playtest 4), `MasterSupplies`,
+  `DeliveryChute`.
+
+Qué pasaba por no distinguirlo: `Dispenser.EmitTick` emitía con `Paint`, así
+que el agua recién salida del grifo heredaba la temperatura que ese hueco
+tuviera de antes. Si la boquilla o la pila se habían enfriado alguna vez, el
+grifo fabricaba HIELO — en cualquier seed, sin que el ambiente interviniera.
+Cesar lo reportó dos rondas seguidas y la primera investigación culpó al
+clima por zona (que era inocente: ver la sección "el grifo sale congelado"
+en el docblock de `SimLevelBuilder`). Es exactamente el mismo fallo que
+"pintar hielo produce agua" del playtest 13, que se arregló en un solo sitio
+en vez de arreglarse como clase.

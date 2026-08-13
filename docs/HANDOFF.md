@@ -104,6 +104,212 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 17 → FUERA EL CLIMA POR ZONA, Y LA CAUSA REAL DEL "AGUA DEL GRIFO CONGELADA"
+## (que NO era el clima) — pendiente de validar en el editor
+Ronda dirigida y escrita por Opus 5. Dos archivos de código real tocados, cinco de documentación.
+
+**Lo que pidió Cesar, literal:** *"yo creo que vamos a dejar lo del sótano frío fuera por ahora,
+quizás no sea necesario porque si van a construir su mapita como quieran pues puede que no quieran
+que esté condicionada la temperatura o caso contrario que roleen semilla hasta que les toque frío.
+Pero principalmente porque da problemas: actualmente el agua me sigue saliendo congelada y probando
+en la hornilla de la izquierda a media temperatura se volvía agua pero los bordes se hacían hielo.
+Solo corrige eso y hago un commit, el resto se ve bien."*
+
+**1. LA CAUSA REAL DEL AGUA CONGELADA — y por qué la investigación del playtest 16 se equivocó.**
+`Dispenser.EmitTick` llamaba a `AlkahestSim.Paint`, que **NO TOCA `temp`**. Una celda recién
+emitida heredaba la temperatura que ese hueco tuviera de antes: si la boquilla o la pila se habían
+enfriado alguna vez (un charco frío previo, hielo que estuvo ahí, la piedra gélida cerca), el agua
+del grifo nacía YA CONGELADA — en cualquier seed, con clima o sin él. Es literalmente el mismo
+fallo que "pintar hielo produce agua" (regla 22), que ya se corrigió una vez en `DevPalette` y
+nadie fue a buscar al resto de sitios que crean materia de la nada.
+Y explica el SEGUNDO síntoma de Cesar, el que descartaba definitivamente la teoría del clima:
+*"en la hornilla a media temperatura se volvía agua pero los bordes se hacían hielo"* — no es que
+los bordes se congelaran, es que **llegaba ya helada** y solo se derretía sobre el 40% del fondo
+que cubre la placa (`HeatPlate.FootprintFraction`, playtest 14). Un ambiente frío habría congelado
+el centro también; una placa caliente derritiendo una capa que llega helada deja exactamente ese
+patrón. El síntoma que parecía confirmar el clima era la prueba de que no era el clima.
+Corregido con `PaintStable` en los DOS puntos de emisión de `Dispenser` (el chorro y el rebose).
+`AlkahestSim.PaintStable` deja de ser "solo para la paleta de dev" y pasa a tener una regla
+general escrita en su docblock: **si algo INTRODUCE materia en el mundo en vez de moverla, usa
+`PaintStable`; `Paint`/`PaintCell`/`PaintRect` son para lo que MUEVE materia que ya existía y
+lleva su propia temperatura consigo** (Flask al verter, DeliveryChute, MasterSupplies).
+
+**LA LECCIÓN, que vale más que el bug** (escrita también en el docblock de `SimLevelBuilder`):
+la investigación del playtest 16 fue rigurosa y llegó a la conclusión equivocada. Midió bien —
+demostró con números que el degradado frío del sótano NO llegaba a la boquilla (41 filas de base
+garantizada de por medio como mínimo, 80 contra el frío puro) — y luego, en vez de parar ahí,
+firmó una sentencia contra el siguiente sospechoso disponible ("es varianza de semilla, un 38% de
+seeds congelan solas en el sótano, no es un bug sino personalidad del universo") sin someterlo a
+la misma exigencia. **Descartar un sospechoso no es identificar al culpable.** Cuando el síntoma
+es "materia recién creada aparece en un estado imposible", el primer sitio que hay que mirar es
+siempre QUIÉN LA CREA y a qué temperatura la deja — no el entorno donde aparece.
+
+**2. EL CLIMA POR ZONA, RETIRADO ENTERO (los dos, no solo el frío).**
+Se borran `CultivoAmbientRaw`(raw 73/26°C), `SotanoAmbientRaw`(raw 62/4°C), `ClimaGradienteX/Y`
+(45/40) y las funciones `AmbientForSurfaceX`/`AmbientForSotanoY`. `PaintClimate` sobrevive como
+único punto de entrada pero pinta `CellGrid.AmbientRaw` uniforme en todo el mundo.
+Cesar nombró solo el sótano; se quitan los dos por tres razones:
+- Su razón (1) es SIMÉTRICA: el clima por zona supone que las zonas son fijas, y la fase de
+  "taller movible" dice justo lo contrario. Un CULTIVO cálido deja de tener sentido en cuanto el
+  jugador puede poner la cuba donde quiera — y peor, convierte una decisión suya en algo que el
+  plano ya decidió por él.
+- Dejar solo el cálido reintroduciría por la puerta de atrás la **asimetría calor/frío** que Cesar
+  ya reportó en el playtest 13 ("la placa fría parece irradiar más fuerte que el calor"): las
+  placas ígneas empujarían desde 26°C regalados mientras la piedra gélida pelea desde los 20°C
+  base de LABORATORIO. La ventaja la tiene que dar el APARATO, no la casilla.
+- El coste de quitar el cálido está MEDIDO y es casi nulo: la banda de crecimiento del Vivium es
+  30..60°C ±shift (`Universe.growMinC/growMaxC`), así que los 26°C de CULTIVO nunca metían nada
+  DENTRO de la banda por sí solos — solo acortaban el salto en 6°C. Quien cría el Vivium sigue
+  siendo la placa.
+
+**LO QUE GARANTIZA AHORA UN AMBIENTE UNIFORME A 20°C:** `Water.freezesAt` = `CToRaw(waterFreezeC)`
+con `waterFreezeC` uniforme en los enteros -15..15, o sea raw 52..67 — el PEOR caso (raw 67) sigue
+3 unidades raw por debajo de la base (raw 70). **En NINGUNA seed puede el ambiente congelar agua
+por sí solo, en NINGÚN punto del mundo.** Antes esa garantía solo valía para LABORATORIO/ENTREGA;
+ahora vale para el mundo entero, y con ella desaparece de raíz la clase entera de "algo se congeló
+solo" — el clima deja de poder ser sospechoso nunca más.
+
+**LA INFRAESTRUCTURA SE QUEDA, y no por inercia.** `CellGrid.ambient` (un byte por celda) y el
+tirón por celda de `SimStepper.DiffuseTemperature` NO se tocan: hoy cuestan lo mismo que una
+constante (una lectura de array) y son el vehículo del clima que SÍ vuelve — el que **crea el
+jugador** (una fragua que entibia lo que tiene alrededor, una sala que se enfría porque él la
+selló). Eso es local por naturaleza y no cabe en una constante global. Clima ganado, no clima
+heredado del plano. Documentado en los tres sitios (regla 15: las ideas descartadas se escriben en
+el código, no solo las que se quedan) para que nadie lo reimplemente por zonas fijas creyendo que
+es una idea nueva.
+
+**3. BARRIDO DE DOCUMENTACIÓN OBSOLETA.** Quitar el clima dejaba SIETE comentarios mintiendo por
+el código (el diagrama ASCII de zonas con sus "26 °C"/"4 °C", el docblock de `CellGrid.ambient`
+que era la explicación canónica del campo, la justificación de las placas ígneas en
+`AlkahestGameBootstrap`, la de la piedra gélida —cuyo argumento geométrico sigue en pie y de hecho
+se refuerza—, la revisión de zona de `MasterSupplies`, el análisis de estabilidad de
+`DiffuseTemperature` y la propia línea de llamada a `PaintClimate`). Todos corregidos, cada uno
+diciendo QUÉ decía antes y por qué ya no vale, en vez de borrarlo sin dejar rastro. De paso se
+corrigió un `VatBX0 (118)` que llevaba obsoleto desde el playtest 16 (hoy 187) y se retiró el
+`using System;` de `SimLevelBuilder` (lo único que lo necesitaba era el `Math.Round` de los
+degradados).
+
+**Verificación:** dos pases de revisión con agente independiente (Sonnet 5) sobre el parche
+completo — (a) referencias colgantes a los símbolos borrados, firma real de `PaintStable` contra
+los dos puntos de llamada, accesibilidad de `CellGrid.ambient`, y **enumeración de TODO método y
+constante presente en HEAD y ausente en la copia de trabajo** (regla 26: `SimLevelBuilder.cs`
+encoge 5.701 bytes y hay que demostrar que la merma es exactamente la prosa reescrita más los seis
+símbolos nombrados, nada más — demostrado); (b) caza de errores de sintaxis, bloques `<summary>`
+rotos, XML mal formado en comentarios de documentación (CS1570) y balance de llaves. No hay
+compilador de C# en el sandbox: la verificación es por lectura, así que **la compilación real
+sigue pendiente del editor de Cesar**.
+
+---
+
+## Playtest 16 → EL CHASQUIDO DEL BUCLE, RÓTULOS QUE SE VAN DE PANTALLA, EL HUD QUE SE PLIEGA,
+## LO BÁSICO CERCA DEL INICIO Y EL CINCEL — escrito a posteriori (ver nota al final)
+Ronda dirigida por Opus 5; Sonnet 5 escribió el código. **Validada por Cesar** salvo el agua del
+grifo, que siguió fallando y se resolvió en el playtest 17.
+
+Los seis puntos de Cesar y qué se hizo con cada uno:
+
+**1. *"El sonido popea una vez cada 5 seg más o menos sin que haga nada yo."*** El lecho ambiental
+es un bucle de exactamente 4.5s y el chasquido era su costura. El `SuavizarBucle` del playtest 9
+mezclaba la cola hacia `buffer[i]` en vez de hacia `buffer[0]` — solo mejoraba el salto de VALOR
+2.7x y empeoraba el de PENDIENTE, que es justo lo que el oído detecta como clic. Reescrito en dos
+etapas (primero valor, después pendiente) en `SintetizadorSfx.SuavizarBucle`.
+
+**2. *"El título 'tolva del maestro' acompaña la pantalla"*** — el rótulo seguía a la cámara en
+vez de quedarse en su sitio. Causa: `UiStyles.Globo` recortaba la posición contra los bordes de
+pantalla, algo inofensivo con una cámara fija y un bug en cuanto la cámara sigue al jugador
+(playtest 15). Se añadieron `DentroDePantalla`/`MargenFueraDeCuadro` a `UiStyles`: un rótulo de
+mundo que se sale del cuadro simplemente NO SE DIBUJA, en vez de deslizarse al borde.
+
+**3. *"Los encargos del Maestro ahora se sienten como que estorban un espacio construible, ¿qué se
+te ocurre que puede ser lo mejor?"*** — pregunta abierta, no orden. Respuesta: **no ocultarlos**
+(son el objetivo del jugador) pero tampoco dejarlos ocupando una esquina entera de un taller que
+ahora se construye. `OrdersHud` reescrito con dos estados: COLAPSADO por defecto (una línea por
+encargo, solo el progreso "49/60") y EXPANDIDO con la tecla **O** (descripción completa + barra).
+Se expande solo cuando pasa algo que merece la atención: encargo nuevo del día o cambio de estado
+grueso (sin tocar → en progreso → completo). El pulso se rastrea por `Order.Id`, que sobrevive a un
+re-bautizo, así que renombrar una sustancia nunca dispara un falso positivo.
+
+**4. *"El espacio en general se siente bien, también se siente súper grande... tendría que estar
+lo básico en el primer cuarto."*** Sin encoger el mundo (el tamaño 3x2 es el pedido en el playtest
+15) se redistribuyó: `VatBX0` 118→187 y `EntregaX1` 751→607. Lo esencial (grifos, pila, una cuba,
+la Tolva) pasa de repartirse por el 75% del ancho a caber en el 47%. Medido desde el punto de
+aparición del aprendiz (x≈303): la cuba B pasa de 122 celdas a 53, la boca de la Tolva de 370 a
+226. **Sin mover ni una celda** del banco de grifos, la pila, el pilar, el pozo o el sótano — la
+geometría ya validada no se arriesga otra vez. Se quedan LEJOS a propósito la cuba A, el sótano
+entero y la bandeja fría/estante. Efecto secundario gratis: el contrafuerte de la Tolva ahora es
+MÁS ancho (251 celdas de piedra visible en vez de 107), así que se ve seguir lejos con más piedra,
+no menos, sin dibujar nada nuevo.
+
+**5. *"El grifo de agua solamente en la build de Unity aparece congelada el agua."*** Investigado
+a fondo, **con la conclusión equivocada** — ver el playtest 17, donde aparece la causa real. Lo
+que sí quedó bien medido y sigue siendo válido: el degradado frío del sótano nunca llegaba a la
+boquilla.
+
+**6. *"No olvides la parte de tener un cincel o algo así que permita editar el bedrock."***
+`Game/Cincel.cs`, nuevo (558 líneas). Tecla **C** alterna entre frasco y cincel: es un MODO, no
+otro botón — con el frasco desactivado mientras el cincel está activo, porque compartir los
+mismos clics entre dos herramientas es la receta del error accidental. Botón izquierdo talla
+piedra a vacío, el derecho rellena vacío con piedra (vía `PaintStable`, regla 22). Radio 2, 3
+celdas por tick, alcance el del frasco (`Flask.ReachWorld`) y doble protección del borde del
+mundo. Es la primera pieza real de la fase "taller movible".
+
+> **NOTA DE PROCESO (importante):** esta sección y la del playtest 15 se escribieron *a
+> posteriori*, en el playtest 17, al descubrir que ambas rondas se habían commiteado **sin pasar
+> por el HANDOFF**. Cesar tiene una instrucción permanente — *"asegúrate de que se documenta
+> todo"* — y se incumplió dos rondas seguidas. Es exactamente el mismo mecanismo que produjo la
+> regresión del playtest 10-14: trabajo que ocurre y no queda escrito deja de existir para quien
+> venga después. Reconstruido leyendo los diffs de `af94acb` y `bb0923b` y los docblocks que sí se
+> escribieron en el código, que por suerte son extensos.
+
+---
+
+## Playtest 15 → EL TALLER DEJA DE SER UNA PANTALLA: 768x288, CÁMARA QUE SIGUE AL APRENDIZ,
+## CLIMA POR ZONA (retirado después, ver playtest 17) — escrito a posteriori
+Ronda dirigida por Opus 5; Sonnet 5 escribió el código. La ronda más grande en superficie tocada
+desde la morfología: 1.346 líneas nuevas en 9 archivos, y toca el núcleo de la sim.
+
+Es la ejecución de los pasos 1 y 2 del plan de fase acordado en el playtest 14, motivada por Cesar
+con un requisito de CO-OP, no de estética: *"un laboratorio de 2-3 pantallas de ancho y 1,5-2 de
+alto... suficiente para que dos personas puedan estar trabajando en cosas distintas sin verse
+constantemente"*.
+
+**1. EL MUNDO x6.** `CellGrid` pasa de 256x144 a **768x288** (3 pantallas de ancho x 2 de alto).
+`PantallaW/PantallaH` se quedan valiendo 256x144 para poder seguir pensando el plano en unidades
+de pantalla. Chunks: CHUNK=16, 48x18 chunks.
+
+**2. LAS TRES PASADAS QUE ERAN PROPORCIONALES AL MUNDO ENTERO.** Multiplicar el grid por 6 no es
+gratis: había tres recorridos cuyo coste escalaba con el tamaño total y no con lo que se ve —
+refresco completo de textura, `MorphTick` y `DiffuseTemperature`. Las tres pasaron a ser
+CONSCIENTES DEL VIEWPORT. Es el trabajo invisible de la ronda y el que evita que el mundo grande
+cueste 6x en fotogramas.
+
+**3. CUATRO ZONAS**, pedidas por Cesar: CULTIVO (x16..250, las cubas de Vivium) — LABORATORIO
+(x262..505, banco de grifos + pila + bandeja fría + estante + el POZO) — ENTREGA (x517..767, la
+Tolva) en la mitad de arriba (y=144..287); y el SÓTANO (x220..530, y=10..143) debajo, al que solo
+se llega VOLANDO por el pozo, única conexión entre las dos mitades. `SimLevelBuilder` se reescribe
+como plano completo y sigue siendo la única fuente de verdad de todas las coordenadas.
+
+**4. CÁMARA QUE SIGUE AL APRENDIZ** (paso 1 del plan). Con el mundo a 3x2 pantallas deja de ser
+opcional.
+
+**5. CLIMA POR ZONA — RETIRADO EN EL PLAYTEST 17.** Se añadió `CellGrid.ambient` (un byte de
+temperatura ambiente por celda) y `SimLevelBuilder.PaintClimate` pintaba un CULTIVO templado
+(26°C) y un SÓTANO frío (4°C) con degradados de decenas de celdas. La idea: *"el espacio deja de
+ser distancia y pasa a ser recurso"* — cristalizar en el sótano cuesta menos frío activo, cultivar
+en cultivo menos calor. **Duró dos rondas.** Cesar lo mandó fuera en el playtest 17 porque
+contradice la fase siguiente (si el taller es movible, el clima no puede estar atado a
+coordenadas). El ARRAY se queda; lo que se fue es que el PLANO decida el clima. Razonamiento
+completo en el docblock de `SimLevelBuilder` y en la sección del playtest 17 de arriba.
+
+**Feedback de Cesar sobre esta ronda** (playtest 15, en su momento): *"Se recuperó la mayoría, los
+caños están bien... los dos carteles negros al iniciar... el cartel de HELANDO se volvió a colocar
+en la posición incorrecta... se volvió a congelar el agua del caño... yo esperaría que lo último en
+llegar a temperatura normal sea la placa. También pienso que si vamos a hacer el taller editable
+por el jugador convendría que las placas fueran mucho más pequeñas."* Los rótulos y las placas se
+atendieron en el 14/16; el agua del grifo tardó hasta el 17.
+
+---
+
 ## Playtest 14 → LA REGRESIÓN GRANDE Y SU RECUPERACIÓN A TRES BANDAS, LOS RECUADROS NEGROS
 ## EXPLICADOS, HELANDO VS FRESCA, PLACAS MÁS PEQUEÑAS, Y EL DIAGNÓSTICO DE FASE "FALTA
 ## MORFOLOGÍA" — TODO VALIDADO POR CESAR EN EL EDITOR

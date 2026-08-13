@@ -27,12 +27,42 @@ namespace Alkahest.Sim
         // existe la "fila de chunks recortada" que obligaba a SimRenderer a
         // mantener dos buffers scratch distintos (ver SimRenderer.Init).
         // -----------------------------------------------------------------
-        public const int W = 256;
-        public const int H = 144; // 256:144 == 16:9 exacto
+        // -----------------------------------------------------------------
+        // EL TALLER DEJA DE SER UNA PANTALLA (playtest 15)
+        //
+        // Hasta ahora el mundo medía exactamente un 16:9 y la cámara lo
+        // encuadraba entero. Cesar: *"el juego se siente atascado... hay que
+        // tirar cosas en otros lugares... esto es un problema serio de diseño y
+        // ubicación de las cosas en el espacio"*, y propuso un laboratorio de
+        // 2-3 pantallas de ancho y 1,5-2 de alto, con su razón exacta:
+        // *"suficiente para que dos personas puedan estar trabajando en cosas
+        // distintas sin verse constantemente"*. Eso no es estética: es el
+        // REQUISITO DEL CO-OP. Un taller de una pantalla donde los dos ven lo
+        // mismo todo el rato no es cooperativo.
+        //
+        // 768x288 = 3 pantallas de ancho x 2 de alto (256x144 cada una).
+        // Son 221.184 celdas, SEIS VECES las 36.864 anteriores.
+        //
+        // Por qué esto NO exigió refactorizar la simulación: los chunks con
+        // sueño (M1) ya procesaban solo lo activo. Lo que sí hubo que hacer es
+        // que las tres pasadas que costaban proporcional al MUNDO y no a lo
+        // VISIBLE (refresco completo del render, MorphTick, DiffuseTemperature)
+        // pasaran a ser conscientes del viewport y del sueño de chunks.
+        //
+        // 768/16 = 48 y 288/16 = 18, ambos EXACTOS: se conserva la propiedad
+        // que SimRenderer necesita (todos los chunks miden 16x16, un único
+        // buffer scratch). Ver la guarda de SimRenderer.Init.
+        // -----------------------------------------------------------------
+        public const int W = 768;
+        public const int H = 288; // 3x2 pantallas de 256x144
 
         public const int CHUNK = 16;
-        public const int ChunksX = (W + CHUNK - 1) / CHUNK; // 16 (256/16 exacto)
-        public const int ChunksY = (H + CHUNK - 1) / CHUNK; // 9  (144/16 exacto: ya no hay chunk de borde)
+        public const int ChunksX = (W + CHUNK - 1) / CHUNK; // 48 (768/16 exacto)
+        public const int ChunksY = (H + CHUNK - 1) / CHUNK; // 18 (288/16 exacto)
+
+        /// <summary>Ancho y alto de UNA pantalla en celdas: el tamaño del mundo antiguo, y la unidad en la que se piensa el plano del taller.</summary>
+        public const int PantallaW = 256;
+        public const int PantallaH = 144;
 
         /// <summary>Ticks consecutivos sin actividad antes de dormir un chunk.</summary>
         public const int SleepTicks = 30;
@@ -51,8 +81,39 @@ namespace Alkahest.Sim
         /// <summary>Último tick en el que un chunk recibió actividad (para no incrementar su sleepTimer más de una vez por tick).</summary>
         public readonly uint[] chunkTouchedTick;
 
-        /// <summary>Temperatura ambiente "raw" (20°C).</summary>
+        /// <summary>
+        /// Temperatura ambiente "raw" de referencia (20 °C). Sigue siendo la
+        /// BASE del taller y el valor por defecto de todo lo que no tiene una
+        /// temperatura propia (lo que lleva el frasco, una redoma vacía...).
+        /// Desde el playtest 17 es TAMBIÉN el ambiente real de todas y cada
+        /// una de las celdas: el clima por zonas se retiró (ver
+        /// <see cref="ambient"/>).
+        /// </summary>
         public const byte AmbientRaw = 70;
+
+        /// <summary>
+        /// EL CLIMA DEL TALLER (playtest 15, REPLANTEADO EN EL 17).
+        /// Temperatura ambiente por celda: el valor al que
+        /// `SimStepper.DiffuseTemperature` tira cada celda cuando nada la
+        /// calienta ni la enfría. Lo pinta `SimLevelBuilder.PaintClimate` una
+        /// vez, al construir el nivel; el hot-path de la difusión solo hace
+        /// una lectura de array — ni una rama más que con una constante.
+        ///
+        /// HOY ESTÁ UNIFORME: todas las celdas valen <see cref="AmbientRaw"/>.
+        /// En el playtest 15 este array nació para dar CLIMA POR ZONA (un
+        /// SÓTANO frío donde cristalizar costara menos frío activo, un CULTIVO
+        /// templado donde criar costara menos calor: "el espacio deja de ser
+        /// distancia y pasa a ser recurso"). Se retiró en el playtest 17 —
+        /// el razonamiento completo, con las dos razones de Cesar y el coste
+        /// medido de cada mitad, está en el docblock de `SimLevelBuilder`.
+        ///
+        /// EL ARRAY SE QUEDA, y no por inercia: el clima que vuelve es el que
+        /// CREA EL JUGADOR (una fragua que entibia lo que tiene alrededor, una
+        /// sala que se enfría porque él la selló). Eso es local por naturaleza
+        /// y no cabe en una constante global — este array es exactamente su
+        /// vehículo, y hoy no cuesta nada tenerlo listo.
+        /// </summary>
+        public readonly byte[] ambient;
 
         /// <summary>
         /// Bit de <see cref="aux"/> para celdas Organic (Vivium) fuera de su
@@ -95,6 +156,8 @@ namespace Alkahest.Sim
             aux = new byte[W * H];
             morph = new byte[W * H];
             morphScratch = new byte[W * H];
+            ambient = new byte[W * H];
+            for (int i = 0; i < ambient.Length; i++) ambient[i] = AmbientRaw;
             touchedTick = new uint[W * H];
             chunkSleepTimer = new byte[ChunksX * ChunksY];
             chunkTouchedTick = new uint[ChunksX * ChunksY];

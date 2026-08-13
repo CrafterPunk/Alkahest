@@ -52,6 +52,13 @@ namespace Alkahest.Sim
         private readonly SimNotableEvent[] _events = new SimNotableEvent[EventBufferSize];
         private int _eventHead;
 
+        // ---------------------------------------------------------------------------------
+        // (playtest 15 -- mundo a 768x288, 6x) Búfer reutilizado tick a tick por MorphTick
+        // para marcar qué chunks son "relevantes" este tick (ver MorphTick para el porqué).
+        // Preasignado UNA vez aquí -- CERO asignaciones en el hot path, igual que _events.
+        // ---------------------------------------------------------------------------------
+        private readonly bool[] _morphChunkRelevant = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
+
         /// <summary>Array fijo (no crece) de eventos notables; leer entre un "lastSeenHead" propio y <see cref="EventHead"/>, ambos módulo EventBufferSize.</summary>
         public SimNotableEvent[] Events => _events;
         public int EventHead => _eventHead;
@@ -1107,6 +1114,83 @@ namespace Alkahest.Sim
         ///     con o sin piedra gélida encendida. Arreglo: `diff / 4` (división
         ///     entera con truncamiento hacia cero, simétrica para signo positivo y
         ///     negativo) en vez de `diff >> 2`.
+        ///
+        /// (playtest 15 -- EL CLIMA POR CELDA, mundo a 768x288. AVISO AL LECTOR:
+        /// los tres puntos (a)/(b)/(c) de abajo se escribieron cuando el clima
+        /// era POR ZONA, con degradados; en el playtest 17 pasó a ser uniforme
+        /// -- ver el addendum al final de este bloque. Se conservan enteros
+        /// porque el análisis de estabilidad que hacen sigue siendo el que hay
+        /// que rehacer el día que el clima vuelva a variar por celda, y hoy es
+        /// simplemente un caso particular más fácil, no un análisis distinto.)
+        /// `CellGrid.ambient`
+        /// sustituye a la constante `AmbientRaw` como objetivo del tirón: cada celda
+        /// tira hacia SU PROPIO clima (`_grid.ambient[i]`, pintado una única vez por
+        /// `SimLevelBuilder.PaintClimate` al construir el nivel, nunca durante el
+        /// tick a tick), no hacia un 20°C fijo para todo el taller. Releída la
+        /// verificación de la regla 9 con este cambio, punto por punto:
+        ///  (a) COBERTURA 100%. `ambientSweep` sigue siendo exactamente
+        ///      `((_tick&gt;&gt;3)&amp;3u)==0u`, SIN TOCAR: decide CUÁNDO se aplica el
+        ///      tirón (una ronda de cada 4, uniforme para toda celda de offset fijo,
+        ///      razonamiento del punto 1 de arriba) y es enteramente independiente de
+        ///      CUÁL es el valor objetivo. Cambiar `CellGrid.AmbientRaw` por
+        ///      `_grid.ambient[i]` es una lectura de array en el sitio donde antes
+        ///      había una constante -- cero ramas nuevas, cero cambio de qué celdas
+        ///      entran en la guarda: el 100% de cobertura de antes sigue siendo el
+        ///      mismo 100%, celda por celda.
+        ///  (b) REDONDEO SIMÉTRICO. El tirón hacia ambiente nunca usó `diff/4`: es un
+        ///      paso de ±1 directo (`ad &gt; 0 ? 1 : -1`), simétrico por construcción
+        ///      para cualquier signo de `ad` -- y `ad` ahora se mide contra
+        ///      `_grid.ambient[i]` en vez de una constante, pero la operación de
+        ///      redondeo en sí (el `? 1 : -1`) no cambió ni una línea. La división
+        ///      entera `diff/4` de la difusión (paso 1 de esta función) tampoco se
+        ///      tocó.
+        ///  (c) FRONTERAS DE CLIMA -- ¿dos celdas vecinas con ambiente distinto se
+        ///      bombean energía entre sí? NO, por construcción: el tirón de la celda
+        ///      i SOLO lee `_grid.ambient[i]` (su propio objetivo fijo). En NINGÚN
+        ///      sitio de esta función el tirón de una celda lee el `ambient` de un
+        ///      VECINO -- no existe, por tanto, un lazo "A tira de B hacia el clima de
+        ///      A": cada celda converge de forma independiente hacia SU objetivo, sin
+        ///      que ese objetivo dependa de sus vecinos. La ÚNICA interacción ENTRE
+        ///      vecinos sigue siendo la difusión del paso 1 (`avg` de las 4
+        ///      TEMPERATURAS ACTUALES de los vecinos, nunca de sus ambientes), y esa
+        ///      difusión ya estaba probada estable antes de este cambio. Además, los
+        ///      dos términos que se suman a `cur` son contracciones que NUNCA
+        ///      sobrepasan su objetivo: el paso de difusión cumple `|step| &lt;=
+        ///      |diff|` con el mismo signo que `diff` (división entera truncada hacia
+        ///      cero, nunca mayor que la distancia a recorrer), así que `next` nunca
+        ///      cruza `avg`; el paso de ambiente es literalmente ±1 hacia el
+        ///      objetivo, así que tampoco lo cruza (un objetivo entero a distancia
+        ///      &gt;=1 nunca se sobrepasa moviéndose exactamente 1 unidad). Dos
+        ///      operaciones que nunca sobrepasan su objetivo, compuestas y recortadas
+        ///      a [0,255], no pueden producir una oscilación creciente ni una fuga de
+        ///      energía sin límite -- como mucho convergen más rápido o más despacio
+        ///      según cuánto difieran los climas de dos zonas. Por último,
+        ///      `SimLevelBuilder.PaintClimate` pinta el clima en DEGRADADOS de varias
+        ///      decenas de celdas (`ClimaGradienteX`/`ClimaGradienteY`), nunca un
+        ///      escalón: entre dos celdas ortogonalmente vecinas `ambient` difiere
+        ///      como mucho en 1 raw unit en la inmensa mayoría de las fronteras (el
+        ///      salto más brusco posible, sótano-base o cultivo-base, siempre queda
+        ///      repartido en ese degradado) -- la distancia entre los objetivos de dos
+        ///      vecinos es siempre pequeña frente al peso de la difusión, que además
+        ///      actúa 4x más a menudo que el tirón (cada 8 ticks contra cada 32): la
+        ///      difusión gana la partida y el campo real converge a una versión
+        ///      suavizada del degradado de clima, sin escalón visible y sin oscilar.
+        ///
+        /// (playtest 17 -- EL CLIMA POR ZONA SE RETIRÓ, esta función NO CAMBIA)
+        /// `SimLevelBuilder.PaintClimate` ya no pinta zonas: pinta `CellGrid.
+        /// AmbientRaw` uniforme en todo el mundo (el porqué, en el docblock de
+        /// esa clase -- resumen: el taller va a ser movible, así que un clima
+        /// atado a coordenadas fijas contradice la fase siguiente). El código de
+        /// aquí abajo se queda EXACTAMENTE igual, leyendo `_grid.ambient[i]` por
+        /// celda, por dos razones: cuesta lo mismo que una constante (una lectura
+        /// de array), y es el vehículo del clima que sí volverá -- el que crea el
+        /// JUGADOR (una fragua que entibia su alrededor), que por naturaleza es
+        /// local y no puede expresarse con una constante global.
+        /// El análisis (a)/(b)/(c) de arriba sigue siendo válido y hoy es además
+        /// trivialmente cierto: con todos los `ambient` iguales, el punto (c)
+        /// (fronteras de clima) no tiene ni siquiera una frontera que examinar.
+        /// NO SIMPLIFICAR esto de vuelta a la constante `CellGrid.AmbientRaw`:
+        /// se ganaría nada y se perdería el gancho.
         /// </summary>
         private void DiffuseTemperature()
         {
@@ -1135,9 +1219,12 @@ namespace Alkahest.Sim
 
                 // Atracción suave hacia la temperatura ambiente, poco frecuente, para
                 // TODA la grilla (fix playtest 9: antes solo 1/8 de las celdas, ver doc).
+                // (playtest 15) Objetivo por CELDA, no la constante global: ver punto (c)
+                // de la verificación de arriba para el porqué esto no crea un lazo entre
+                // vecinos con clima distinto.
                 if (ambientSweep)
                 {
-                    int ad = CellGrid.AmbientRaw - next;
+                    int ad = _grid.ambient[i] - next;
                     if (ad != 0) next += ad > 0 ? 1 : -1;
                 }
 
@@ -1155,27 +1242,24 @@ namespace Alkahest.Sim
         // Celdas son puramente posicionales y las calcula SimRenderer con hashes --
         // esas tres familias cuestan CERO aquí, ni una sola operación aparte del
         // chequeo del enum `patron` que ya se hace para descartarlas.
+        //
+        // (playtest 15 -- mundo a 768x288, 6x) A 256x144 el estriado 1/4 barría 9.216
+        // celdas/tick y los dos Array.Copy movían 2*36.864=73.728 bytes/tick: barato de
+        // sobra. A 768x288 esas mismas cifras suben a 55.296 celdas/tick y 2*221.184=
+        // 442.368 bytes/tick de copia PURA -- eso sí es un coste real y, a diferencia del
+        // estriado (aritmética entera barata, sigue siendo aceptable tal cual), crece con
+        // el tamaño del MUNDO en vez de con lo que hay que dibujar. Arreglo: en vez de
+        // copiar y recorrer el array entero cada tick, MorphTick ahora trabaja por CHUNK
+        // y se salta por completo cualquier chunk que no pueda haber cambiado este tick
+        // (ver `_morphChunkRelevant`/`ChunkOrNeighborsAwake` más abajo) -- en un taller
+        // típico (la mayor parte del mundo dormida) esto reduce el coste real a una
+        // fracción pequeña de esas cifras; en el peor caso (todo el mundo despierto a la
+        // vez) el coste iguala al de antes, nunca lo empeora en cifra de celdas (sí añade
+        // el overhead, pequeño y acotado, de trocear la copia en bloques de 16 elementos
+        // en vez de un único memcpy -- ver el comentario de la Fase 1).
         // ---------------------------------------------------------------------------------
         private void MorphTick()
         {
-            // ---- Doble búfer (obligatorio para Manchas/Laberinto, que leen vecinos) ----
-            // morphScratch arranca como copia exacta de morph: cualquier celda que esta
-            // ronda NO toquemos queda igual que estaba. TODAS las familias -- no solo las
-            // de reacción-difusión -- escriben en morphScratch y nunca en morph durante
-            // el recorrido, así el resultado no depende del orden en que se visitan las
-            // celdas dentro del tick (el mismo requisito de determinismo que ya obligó al
-            // fix de DiffuseTemperature del playtest 9, aplicado aquí desde el principio
-            // en vez de como parche posterior). Dendritas escribe en un VECINO (no en sí
-            // misma): con el búfer roto, dos ramas que compitieran por el mismo vecino en
-            // el mismo tick darían un resultado distinto según quién se recorriera antes;
-            // con morphScratch como único destino de escritura, la resolución de esa
-            // pugna (nos quedamos con la rama más fuerte, ver MorphDendrites) es
-            // conmutativa y no depende del orden de recorrido.
-            // Coste: dos memcpy de 256*144 = 36864 bytes sobre arrays PREASIGNADOS
-            // (System.Array.Copy, no crea memoria) -- del orden de microsegundos, muy por
-            // debajo de cualquier presupuesto de este método.
-            Array.Copy(_grid.morph, _grid.morphScratch, _grid.morph.Length);
-
             // ---- Estriado 1/4 -- VERIFICACIÓN ARITMÉTICA de cobertura uniforme ----
             // offset = tick % 4 recorre {0,1,2,3,0,1,2,3,...} en secuencia estricta.
             // Cada celda i tiene un offset FIJO o=i%4 para siempre (no depende del tick).
@@ -1192,7 +1276,13 @@ namespace Alkahest.Sim
             // (chunks dormidos) usa un contador de RONDA (`tick>>2`) que es el MISMO
             // número para TODAS las celdas visitadas en el mismo tick sin importar su
             // offset -- ver el comentario de `dormantActiveRound` -- así que tampoco
-            // introduce ese patrón de bug.
+            // introduce ese patrón de bug. (playtest 15) Reorganizar el recorrido por
+            // CHUNK en vez de en una única pasada plana no cambia este razonamiento: dentro
+            // de un chunk, x0 = cx*CHUNK y CHUNK=16 son ambos múltiplo de 4, y W=768
+            // también lo es, así que para cualquier fila `(y*W + x) % 4 == x % 4` --
+            // recorrer `x` desde `x0+offset` en pasos de 4 dentro del chunk visita
+            // EXACTAMENTE el mismo subconjunto de índices que el `i % 4 == offset` de
+            // siempre, célula por célula, solo que agrupado por chunk.
             int offset = (int)(_tick % 4u);
 
             // ---- Chunks dormidos: SÍ se respetan, pero a 1/8 de frecuencia ----
@@ -1225,46 +1315,169 @@ namespace Alkahest.Sim
             // el patrón converge igual, solo más despacio, tal como pide la premisa.
             bool dormantActiveRound = ((_tick >> 2) & 7u) == 0u;
 
-            int n = W * H;
-            for (int i = offset; i < n; i += 4)
+            int chunksX = CellGrid.ChunksX;
+            int chunksY = CellGrid.ChunksY;
+
+            // ---- Fase 0: marca los chunks "relevantes" este tick -----------------------
+            // Un chunk es relevante si ÉL MISMO o alguno de sus 8 vecinos está despierto
+            // (o si `dormantActiveRound` hace que TODOS lo sean este tick, ver más abajo).
+            // Ver `ChunkOrNeighborsAwake` para la prueba de que el radio 3x3 es exactamente
+            // suficiente -- ni de más ni de menos -- para capturar todo lo que puede
+            // modificar `morph` este tick.
+            for (int cy = 0; cy < chunksY; cy++)
             {
-                byte m = _grid.mat[i];
-                if (m == MaterialId.Empty) continue;
-
-                var def = _universe.Get(m);
-                var patron = def.patron;
-                bool needsEvolve = patron == PatronMorfologico.Manchas || patron == PatronMorfologico.Laberinto
-                    || patron == PatronMorfologico.Dendritas || patron == PatronMorfologico.Pulso
-                    || patron == PatronMorfologico.Motas;
-                if (!needsEvolve) continue; // Liso/Vetas/Celdas: coste cero, ver cabecera de MorphTick.
-
-                int x = i % W;
-                int y = i / W;
-
-                int cx = x / CellGrid.CHUNK, cy = y / CellGrid.CHUNK;
-                if (!_grid.IsChunkAwake(cx, cy) && !dormantActiveRound) continue;
-
-                switch (patron)
+                for (int cx = 0; cx < chunksX; cx++)
                 {
-                    case PatronMorfologico.Manchas:
-                        MorphReactionDiffusion(x, y, i, def, laberinto: false);
-                        break;
-                    case PatronMorfologico.Laberinto:
-                        MorphReactionDiffusion(x, y, i, def, laberinto: true);
-                        break;
-                    case PatronMorfologico.Dendritas:
-                        MorphDendrites(x, y, i, def);
-                        break;
-                    case PatronMorfologico.Pulso:
-                        MorphPulse(x, y, i, def);
-                        break;
-                    case PatronMorfologico.Motas:
-                        MorphSparkle(x, y, i, def);
-                        break;
+                    _morphChunkRelevant[CellGrid.ChunkIndex(cx, cy)] =
+                        dormantActiveRound || ChunkOrNeighborsAwake(cx, cy);
                 }
             }
 
-            Array.Copy(_grid.morphScratch, _grid.morph, _grid.morph.Length);
+            var morph = _grid.morph;
+            var scratch = _grid.morphScratch;
+
+            // ---- Fase 1: sincroniza morphScratch = morph, SOLO en chunks relevantes ----
+            // Obligatorio (doble búfer, regla 16): `morph` puede haber cambiado este mismo
+            // tick por SwapCells (movimiento, en la pasada de ProcessIfNeeded/Move que ya
+            // corrió antes de llegar aquí) o por SetCell (pintado del jugador, entre ticks)
+            // -- ninguno de los dos toca `morphScratch`, así que hace falta re-sincronizar
+            // ANTES de que la Fase 2 empiece a escribir, para que las familias de
+            // reacción-difusión lean vecinos actualizados y no un morph de hace 4 ticks.
+            // Trocear la copia en chunks de 16x16 en vez de un único Array.Copy del array
+            // entero significa 16 llamadas (una por fila, ya que las filas de un chunk NO
+            // son contiguas en memoria: stride W entre ellas) por chunk relevante en vez de
+            // 1 llamada gigante -- más llamadas, pero cada una solo copia lo que puede
+            // haber cambiado; en el peor caso (todo relevante) esto es más lento en
+            // constante que el memcpy único de antes pero sigue siendo un puñado de
+            // microsegundos frente al presupuesto de 33ms/tick a 30Hz, y en el caso típico
+            // (mundo mayormente dormido) es la ganancia real de este cambio.
+            for (int cy = 0; cy < chunksY; cy++)
+            {
+                for (int cx = 0; cx < chunksX; cx++)
+                {
+                    if (!_morphChunkRelevant[CellGrid.ChunkIndex(cx, cy)]) continue;
+                    CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+                    int len = x1 - x0;
+                    for (int y = y0; y < y1; y++)
+                    {
+                        int rowStart = y * W + x0;
+                        Array.Copy(morph, rowStart, scratch, rowStart, len);
+                    }
+                }
+            }
+
+            // ---- Fase 2: evoluciona -- SOLO escribe en morphScratch, NUNCA en morph ----
+            // Recorre TODOS los chunks relevantes que además estén despiertos (o que sea
+            // ronda dormida activa) y, dentro de cada uno, exactamente el 1/4 de celdas
+            // que le toca este tick (ver la verificación de estriado de arriba). Familias
+            // que solo escriben su propia celda (Manchas/Laberinto/Pulso/Motas) nunca
+            // salen del chunk que se está recorriendo; Dendritas puede escribir en UN
+            // vecino ortogonal que caiga en un chunk distinto -- por eso la Fase 1 ya
+            // sincronizó también los vecinos de cualquier chunk despierto (radio 3x3), y
+            // por eso esta fase entera corre COMPLETA antes de que la Fase 3 copie nada de
+            // vuelta: ningún chunk relevante puede recibir una escritura de Dendritas antes
+            // de tener su scratch sincronizado, sin importar en qué orden se recorran los
+            // chunks aquí (conmutativo, ver MorphDendrites).
+            for (int cy = 0; cy < chunksY; cy++)
+            {
+                for (int cx = 0; cx < chunksX; cx++)
+                {
+                    int ci = CellGrid.ChunkIndex(cx, cy);
+                    if (!_morphChunkRelevant[ci]) continue;
+                    if (!_grid.IsChunkAwake(cx, cy) && !dormantActiveRound) continue;
+
+                    CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+                    for (int y = y0; y < y1; y++)
+                    {
+                        int rowBase = y * W;
+                        for (int x = x0 + offset; x < x1; x += 4)
+                        {
+                            int i = rowBase + x;
+                            byte m = _grid.mat[i];
+                            if (m == MaterialId.Empty) continue;
+
+                            var def = _universe.Get(m);
+                            var patron = def.patron;
+                            bool needsEvolve = patron == PatronMorfologico.Manchas || patron == PatronMorfologico.Laberinto
+                                || patron == PatronMorfologico.Dendritas || patron == PatronMorfologico.Pulso
+                                || patron == PatronMorfologico.Motas;
+                            if (!needsEvolve) continue; // Liso/Vetas/Celdas: coste cero, ver cabecera de MorphTick.
+
+                            switch (patron)
+                            {
+                                case PatronMorfologico.Manchas:
+                                    MorphReactionDiffusion(x, y, i, def, laberinto: false);
+                                    break;
+                                case PatronMorfologico.Laberinto:
+                                    MorphReactionDiffusion(x, y, i, def, laberinto: true);
+                                    break;
+                                case PatronMorfologico.Dendritas:
+                                    MorphDendrites(x, y, i, def);
+                                    break;
+                                case PatronMorfologico.Pulso:
+                                    MorphPulse(x, y, i, def);
+                                    break;
+                                case PatronMorfologico.Motas:
+                                    MorphSparkle(x, y, i, def);
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- Fase 3: copia de vuelta morphScratch -> morph, SOLO chunks relevantes -
+            // Simétrica a la Fase 1. Cualquier chunk NO relevante quedó, por construcción,
+            // sin tocar en morph NI en morphScratch este tick (nada pudo escribir en él:
+            // ni él ni sus 8 vecinos estaban despiertos, y no es ronda dormida activa) --
+            // así que morph y morphScratch YA eran iguales ahí antes de este tick y lo
+            // siguen siendo después, sin necesidad de copiar nada (ver `ChunkOrNeighborsAwake`).
+            for (int cy = 0; cy < chunksY; cy++)
+            {
+                for (int cx = 0; cx < chunksX; cx++)
+                {
+                    if (!_morphChunkRelevant[CellGrid.ChunkIndex(cx, cy)]) continue;
+                    CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+                    int len = x1 - x0;
+                    for (int y = y0; y < y1; y++)
+                    {
+                        int rowStart = y * W + x0;
+                        Array.Copy(scratch, rowStart, morph, rowStart, len);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// (playtest 15) ¿Este chunk o alguno de sus 8 vecinos está despierto? Mismo
+        /// radio 3x3 que <see cref="CellGrid.WakeChunk"/> (documentado ahí: "para que las
+        /// reacciones que cruzan el borde de un chunk no se pierdan") -- aquí por el mismo
+        /// motivo pero para escrituras de `morph`: dentro de un mismo tick, una celda
+        /// puede moverse UNA celda de distancia (Move/SwapCells, dx,dy en {-1,0,1}) o
+        /// Dendritas puede propagar su rama a UN vecino ortogonal -- en ambos casos el
+        /// desplazamiento es de, como mucho, 1 celda, así que el chunk DESTINO de
+        /// cualquier escritura de `morph` originada en un chunk despierto es, por fuerza,
+        /// ese mismo chunk o uno de sus 8 vecinos directos (el tamaño de chunk, 16, es
+        /// mucho mayor que el alcance de 1 celda de cualquiera de las dos operaciones, así
+        /// que nunca se salta un chunk entero). Por eso el radio 3x3 es EXACTAMENTE
+        /// suficiente: ni hace falta más (nada llega más lejos de 1 celda) ni menos
+        /// (ambas operaciones sí cruzan la frontera de un chunk cuando la celda de origen
+        /// está en su borde).
+        /// </summary>
+        private bool ChunkOrNeighborsAwake(int cx, int cy)
+        {
+            int cy0 = cy > 0 ? cy - 1 : 0;
+            int cy1 = cy < CellGrid.ChunksY - 1 ? cy + 1 : CellGrid.ChunksY - 1;
+            int cx0 = cx > 0 ? cx - 1 : 0;
+            int cx1 = cx < CellGrid.ChunksX - 1 ? cx + 1 : CellGrid.ChunksX - 1;
+            for (int ny = cy0; ny <= cy1; ny++)
+            {
+                for (int nx = cx0; nx <= cx1; nx++)
+                {
+                    if (_grid.IsChunkAwake(nx, ny)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>

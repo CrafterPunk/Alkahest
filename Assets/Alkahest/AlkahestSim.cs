@@ -290,9 +290,20 @@ namespace Alkahest
         /// Igual que <see cref="Paint"/> (disco de radio `radius`), pero la
         /// celda nace a la temperatura de estabilidad de <paramref
         /// name="materialId"/> (ver <see cref="StableBirthTempRaw"/>) en vez
-        /// de heredar lo que hubiera antes en la celda. SOLO para la paleta de
-        /// dev (fix playtest 13): materia creada de la nada debe nacer siendo
-        /// lo que el jugador seleccionó, no otra cosa un tick después.
+        /// de heredar lo que hubiera antes en la celda: materia creada DE LA
+        /// NADA debe nacer siendo lo que la creó pretendía, no otra cosa un
+        /// tick después (fix playtest 13, "pintar hielo produce agua").
+        ///
+        /// (playtest 17) YA NO ES "SOLO PARA LA PALETA DE DEV", como decía
+        /// esta línea: `Game/Dispenser.EmitTick` es ahora el segundo
+        /// consumidor, y por el mismo motivo — un grifo también crea materia
+        /// de la nada, y con `Paint` el agua recién salida heredaba la
+        /// temperatura del hueco (si la boquilla se había enfriado alguna vez,
+        /// nacía congelada). REGLA GENERAL: si algo INTRODUCE materia en el
+        /// mundo en vez de moverla, usa esto, no `Paint`. `Paint`/`PaintCell`/
+        /// `PaintRect` siguen siendo lo correcto para lo que MUEVE materia que
+        /// ya existía y lleva su propia temperatura consigo (Flask al verter,
+        /// DeliveryChute, MasterSupplies).
         /// </summary>
         public void PaintStable(int x, int y, int radius, byte materialId)
         {

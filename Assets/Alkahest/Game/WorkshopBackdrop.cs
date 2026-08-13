@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using Alkahest.Sim;
 
@@ -30,8 +31,9 @@ namespace Alkahest.Game
     /// 1.6x0.7 unidades (ENORMES, planos, sin textura interior), juntas de 1
     /// téxel que en pantalla se veían como una banda gorda, y un fondo borroso
     /// contra un primer plano nítido — de ahí el "descuadrado". Fix:
-    ///   · Escala x3 (768x432): 9 téxeles por celda en vez de 1, sitio de sobra
-    ///     para bisel + grano + esquinas mordidas dentro de cada pieza.
+    ///   · Escala x3 (768x432 EN AQUEL MUNDO DE 1 PANTALLA): 9 téxeles por
+    ///     celda en vez de 1, sitio de sobra para bisel + grano + esquinas
+    ///     mordidas dentro de cada pieza.
     ///   · FilterMode.Point: casa con Sim/SimRenderer.cs y con MaquinariaSprites.
     ///   · Pieza más pequeña (10x5 celdas en vez de 16x7) con el MISMO lenguaje
     ///     de iluminación de canto que SimRenderer.ComputeCellColor usa para
@@ -40,19 +42,69 @@ namespace Alkahest.Game
     ///   · Junta de 1 TÉXEL (no 1 celda) y menos oscura (55% en vez de 75%):
     ///     mortero fino, no rejilla dura.
     /// La textura sigue midiendo EXACTAMENTE el tamaño de la grilla en téxeles
-    /// (ahora Escala téxeles por celda), así que las hiladas y vigas se pueden
+    /// (Escala téxeles por celda), así que las hiladas y vigas se pueden
     /// seguir situando en coordenadas del plano (Sim/SimLevelBuilder.cs)
-    /// multiplicadas por Escala.
+    /// multiplicadas por Escala. Deliberadamente NO se toca Escala en esta
+    /// ronda (sigue siendo x3, ver el porqué en "COSTE Y GENERACIÓN POR
+    /// TROZOS" más abajo): SimRenderer.ComputeCellColor documenta el caso
+    /// Difuso asumiendo "OTRA textura a triple resolución" — bajar Escala
+    /// dejaría ese comentario ajeno mintiendo sobre un archivo que no es
+    /// editable en este encargo.
+    ///
+    /// =====================================================================
+    /// COSTE Y GENERACIÓN POR TROZOS (playtest 15, "el mundo creció 6x")
+    /// =====================================================================
+    /// Con CellGrid pasando de 256x144 a 768x288 (SEIS veces más celdas) y
+    /// Escala sin tocar, la textura pasó de 768x432 = 331.776 téxeles a
+    /// 2304x864 = 1.990.656 téxeles (~6x, exactamente proporcional al
+    /// crecimiento del mundo — Escala es un factor multiplicativo constante).
+    /// Eso era un ÚNICO bucle de ~2 millones de iteraciones dentro de Start(),
+    /// cada una con varios hashes/lerps: de un coste que antes cabía cómodo en
+    /// un frame a uno que puede colgar el primer frame de la partida un buen
+    /// rato (el Player.log de una build de reparto no tiene margen para eso).
+    ///
+    /// SE DESCARTÓ bajar Escala (perdería nitidez ya validada en el playtest 7
+    /// y dejaría mintiendo el comentario de SimRenderer.cs citado arriba) y
+    /// también un tile pequeño repetido (SE DESCARTA por la razón que pide el
+    /// propio encargo: vigas y zócalo están posicionados con coordenadas REALES
+    /// del plano — SimLevelBuilder.ChillTrayY0/SurfaceFloorY0 — no con un
+    /// patrón periódico; un tile que se repite solo sabe dibujar mampostería
+    /// genérica, no "una viga exactamente donde está el estante" ni "un
+    /// zócalo exactamente donde empieza el suelo de la superficie").
+    ///
+    /// SOLUCIÓN: el TOTAL de trabajo no baja (sigue siendo ~2M iteraciones,
+    /// el coste real de pintar 1.990.656 téxeles a mano), pero deja de
+    /// pagarse en UN frame. <see cref="Start"/> es ahora una corrutina que
+    /// pinta el array de píxeles en TROZOS de <see cref="RowsPerBatch"/> filas
+    /// (~47 filas ≈ 110.000 téxeles por fragmento, calibrado para acercarse a
+    /// un presupuesto de frame cómodo) y cede el control (`yield return null`)
+    /// entre fragmento y fragmento -- Texture2D/Sprite.Create solo se llaman
+    /// UNA VEZ, al final, con el array ya completo (nadie ve un fondo a medio
+    /// pintar: la textura ni existe hasta entonces). Con 864 filas totales y
+    /// ~47 filas por fragmento, la pared tarda ~19 frames en completarse
+    /// (≈0.32 s a 60 fps, ≈0.63 s a 30 fps) -- imperceptible además porque
+    /// AlkahestGameBootstrap crea este objeto ANTES que DayCycle entre en la
+    /// pantalla de Título, que ya cubre la pantalla entera con un panel
+    /// (DayCycle.DrawFullscreenDim) mientras el jugador escribe la seed.
+    /// ANTES (mundo de 1 pantalla, sin trocear): ~331.776 iteraciones en un
+    /// único frame, sin queja de congelación reportada. AHORA sin trocear
+    /// habría sido ~1.990.656 iteraciones en un único frame (6x ese coste,
+    /// justo lo que el encargo pide arreglar). CON el troceo: el mismo total
+    /// de ~1.990.656 iteraciones, pero repartido en ~19 fragmentos de
+    /// ~110.000 cada uno -- ningún frame paga más que una fracción del coste
+    /// que antes preocupaba, y el arranque deja de notarse.
     /// </summary>
     public sealed class WorkshopBackdrop : MonoBehaviour
     {
         // (fix playtest 7) 1 téxel/celda hacía ladrillos de pantalla ENORMES y sin
         // detalle interior. A x3 hay 9 téxeles por celda: suficiente para bisel,
-        // grano de alta frecuencia y esquinas mordidas sin que la textura sea cara
-        // de generar (768x432 = 331.776 téxeles, una sola vez en Start).
+        // grano de alta frecuencia y esquinas mordidas. Con el mundo a 768x288
+        // (playtest 15) esto ya no es "una sola vez, barato de sobra" -- ver el
+        // bloque "COSTE Y GENERACIÓN POR TROZOS" arriba para por qué se mantiene
+        // igualmente (no se baja) y cómo se paga el coste sin congelar el arranque.
         private const int Escala = 3;
-        private const int TexW = CellGrid.W * Escala;  // 768
-        private const int TexH = CellGrid.H * Escala;  // 432
+        private const int TexW = CellGrid.W * Escala;  // 2304
+        private const int TexH = CellGrid.H * Escala;  // 864
 
         // Mampostería: pieza de 10x5 CELDAS (antes 16x7 celdas a 1 téxel/celda,
         // es decir, ladrillos casi del doble de grandes y sin margen para
@@ -62,7 +114,38 @@ namespace Alkahest.Game
         private const int PiezaAncho = PiezaAnchoCeldas * Escala; // 30
         private const int PiezaAlto = PiezaAltoCeldas * Escala;   // 15
 
-        private void Start()
+        /// <summary>
+        /// (playtest 15) Presupuesto de téxeles por fragmento de la corrutina de
+        /// <see cref="Start"/>: ~110.000 téxeles/frame, calibrado para que el
+        /// coste por frame se acerque al que ya se pagaba cómodamente ANTES de
+        /// que el mundo creciera x6 (331.776 téxeles de una sola vez), sin
+        /// pasarse mucho por arriba. Se expresa en FILAS (no en téxeles sueltos)
+        /// porque el bucle interior ya está organizado por filas y así no hace
+        /// falta romper esa estructura ni contar téxeles uno a uno.
+        /// </summary>
+        private const int TexelBudgetPerFrame = 110_000;
+        private static readonly int RowsPerBatch = Mathf.Max(1, TexelBudgetPerFrame / TexW); // 47
+
+        /// <summary>
+        /// (playtest 15) LUZ DE FRAGUA: antes centrada en fracciones fijas
+        /// (0.46, 0.22) del lienzo ENTERO -- correcto mientras el mundo medía
+        /// una pantalla y las cubas/hornillas vivían cerca del centro de ese
+        /// lienzo. Con el taller a 3 pantallas de ancho, CULTIVO (las dos
+        /// cubas + las placas ígneas -- el ÚNICO calor activo real del
+        /// taller) vive en el TERCIO IZQUIERDO (Sim/SimLevelBuilder.CultivoX0
+        /// .. CultivoX1), no en el centro -- con las fracciones viejas el halo
+        /// cálido flotaba sobre LABORATORIO, que no tiene ningún fuego. Se
+        /// deriva del plano (en celdas, convertido a fracción de textura) en
+        /// vez de mantener números fijos, así que sigue "iluminando" la zona
+        /// que de verdad calienta.
+        /// </summary>
+        private const float FraguaCxFrac = (SimLevelBuilder.CultivoX0 + SimLevelBuilder.CultivoX1) * 0.5f / CellGrid.W; // ~0.173
+        private const float FraguaCyFrac = (SimLevelBuilder.VatBaseY0 + SimLevelBuilder.VatInteriorY1) * 0.5f / CellGrid.H; // ~0.61, altura media de las cubas
+        /// <summary>Radio del halo en fracción de textura -- del orden del ancho/alto de CULTIVO, no del taller entero (antes 0.55/0.42, pensados para cubrir un mundo de una pantalla).</summary>
+        private const float FraguaRadioX = 0.19f;
+        private const float FraguaRadioY = 0.21f;
+
+        private IEnumerator Start()
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
             {
@@ -92,12 +175,13 @@ namespace Alkahest.Game
             // que los estantes descansan sobre ella y dejan de parecer losas
             // flotando en el vacío); la alta cruza el cielo del taller, que es
             // donde flota el HUD, para que no sea un rectángulo negro.
-            // (fix playtest 7) Todas estas constantes vivían en CELDAS y se usaban
-            // directamente como índice de téxel cuando la textura era 1:1. Ahora
-            // hay que escalarlas x Escala o las vigas/zócalo quedan comprimidos en
-            // la esquina superior-izquierda de la textura.
-            int vigaBajaY = (SimLevelBuilder.ChillTrayY0 - 5) * Escala;   // celda 83..87, tocando el estante en 88
-            int vigaAltaY = (CellGrid.H - 18) * Escala;                  // celda 126
+            // (playtest 15) ChillTrayY0/CellGrid.H ya son las constantes NUEVAS
+            // del plano rediseñado (246 y 288 respectivamente, no las de antes
+            // de la reingeniería del espacio) -- al leerlas por nombre en vez de
+            // copiar el número, la viga baja sigue "pegada" al estante nuevo sin
+            // tocar nada aquí.
+            int vigaBajaY = (SimLevelBuilder.ChillTrayY0 - 5) * Escala;   // celda 241..245, tocando el estante en 246
+            int vigaAltaY = (CellGrid.H - 18) * Escala;                  // celda 270
             const int vigaGrosorCeldas = 5;
             int vigaGrosor = vigaGrosorCeldas * Escala;
             const int mensulaPeriodoCeldas = 48;
@@ -106,7 +190,24 @@ namespace Alkahest.Game
             int mensulaAncho = mensulaAnchoCeldas * Escala;
 
             // Zócalo: sillares grandes al nivel del suelo de piedra.
-            int zocaloTop = (SimLevelBuilder.FloorHeight + 6) * Escala;   // celda 20
+            // (playtest 15) ANTES esto era `(FloorHeight + 6) * Escala`: correcto
+            // mientras FloorHeight (10) era el suelo del ÚNICO piso del taller.
+            // Ahora FloorHeight sostiene el SÓTANO (bajo tierra, no el taller
+            // visible) y el suelo de verdad de CULTIVO/LABORATORIO/ENTREGA es
+            // SurfaceFloorY0 (144) -- con el número viejo el zócalo se quedaba
+            // pegado al fondo del sótano, 134 celdas por debajo de donde el
+            // aprendiz realmente pisa. Efecto lateral BUENO de este fix, dejado
+            // a propósito: como `enZocalo` sigue siendo verdad para TODO y<zocaloTop,
+            // ahora la mitad inferior entera del lienzo (sótano + bedrock) queda
+            // pintada con el sillar GRANDE de zócalo en vez del ladrillo fino de
+            // taller -- lee como "piedra de cimentación pesada" bajo tierra,
+            // que es exactamente la sensación que le falta a una sala subterránea
+            // sin tener que diseñar una paleta de cueva aparte (fuera de alcance
+            // de este encargo; documentado aquí por si alguien quiere darle más
+            // carácter al sótano en una ronda futura).
+            int zocaloTop = (SimLevelBuilder.SurfaceFloorY0 + 6) * Escala;   // celda 150
+
+            int rowsSinCeder = 0;
 
             for (int y = 0; y < TexH; y++)
             {
@@ -193,14 +294,22 @@ namespace Alkahest.Game
                     }
 
                     // Viñeta: cierra el encuadre y evita que las esquinas compitan.
+                    // (playtest 15) Sigue en fracciones fijas del lienzo entero A
+                    // PROPÓSITO: es un efecto de ENCUADRE genérico, no ligado a
+                    // ninguna zona concreta del plano, así que no necesita
+                    // derivarse de SimLevelBuilder como sí lo necesitan la viga/
+                    // el zócalo/la fragua (que sí representan estructuras reales
+                    // con coordenadas reales).
                     float tx = x / (float)(TexW - 1);
                     float nx = tx - 0.5f, ny = ty - 0.52f;
                     float vig = Mathf.Clamp01(1f - (nx * nx * 2.3f + ny * ny * 2.0f));
                     c *= 0.62f + 0.38f * vig;
 
                     // Luz de fragua a la altura de las cubas (donde se juega).
-                    float gx = (tx - 0.46f) / 0.55f;
-                    float gy = (ty - 0.22f) / 0.42f;
+                    // (playtest 15) Centro/radio derivados de CULTIVO -- ver
+                    // FraguaCxFrac/CyFrac/RadioX/RadioY en el doc de clase.
+                    float gx = (tx - FraguaCxFrac) / FraguaRadioX;
+                    float gy = (ty - FraguaCyFrac) / FraguaRadioY;
                     float halo = Mathf.Clamp01(1f - (gx * gx + gy * gy));
                     c += rescoldo * (halo * halo);
 
@@ -208,6 +317,18 @@ namespace Alkahest.Game
                         Mathf.Clamp01(c.r),
                         Mathf.Clamp01(c.g),
                         Mathf.Clamp01(c.b), 1f);
+                }
+
+                // (playtest 15, ver "COSTE Y GENERACIÓN POR TROZOS" en el doc de
+                // clase) Cede el control a Unity cada RowsPerBatch filas en vez de
+                // pintar el lienzo entero en un único frame -- el mundo x6 hace
+                // que esa única pasada sea ~2M iteraciones, suficiente para
+                // congelar el primer frame de la partida.
+                rowsSinCeder++;
+                if (rowsSinCeder >= RowsPerBatch)
+                {
+                    rowsSinCeder = 0;
+                    yield return null;
                 }
             }
 
@@ -220,8 +341,8 @@ namespace Alkahest.Game
             // (fix build) SpriteRenderer en vez de quad+URP/Unlit: ese shader se eliminaba de la build.
             // (fix playtest 7) TexW ahora es CellGrid.W * Escala, así que pixelsPerUnit
             // (TexW / worldW) sube en la misma proporción: el sprite sigue midiendo
-            // EXACTAMENTE 25.6 x 14.4 unidades de mundo, solo cambia la densidad de
-            // téxeles por unidad.
+            // EXACTAMENTE CellGrid.W/H * CellWorldSize unidades de mundo (76.8 x 28.8
+            // tras el playtest 15), solo cambia la densidad de téxeles por unidad.
             sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
             go.transform.position = Vector3.zero;

@@ -69,6 +69,62 @@ namespace Alkahest.Game
     ///  4. Un PULSO de alfa en el labio + rótulo con fondo oscuro; al tragar
     ///     algo, destello verde ("entrega aceptada") o ámbar (no contó).
     ///
+    /// EL RÓTULO YA NO PERSIGUE AL JUGADOR, Y CALLA (fix playtest 16, reporte
+    /// con captura: "el título me acompaña al desplazarme a la izquierda, en
+    /// vez de quedarse en su lugar; debería desaparecer tras unas pocas veces
+    /// y ser más discreto"). CAUSA RAÍZ: el señalamiento 4 de arriba se apoyaba
+    /// en <see cref="UiStyles.EtiquetaMundo"/>/<see cref="UiStyles.Globo"/>,
+    /// que hasta esta ronda ACOTABAN la posición del rótulo a los bordes de la
+    /// pantalla con Mathf.Clamp -- una salvaguarda inocua mientras la cámara
+    /// enmarcaba el mundo entero (todo punto de mundo estaba siempre en
+    /// pantalla, el clamp nunca se disparaba de verdad) que con la cámara
+    /// SIGUIENDO al aprendiz (pantalla de tres) se convirtió en el bug: la
+    /// boca de la Tolva, pegada al muro derecho, queda fuera de cuadro en
+    /// cuanto el jugador se aleja hacia la izquierda, y el clamp "traía de
+    /// vuelta" su rótulo al borde derecho de la pantalla -- pegado ahí,
+    /// siguiendo al jugador como si el aparato lo persiguiera. Arreglado EN
+    /// GENERAL en UiStyles.cs (ver <c>DentroDePantalla</c>/
+    /// <c>MargenFueraDeCuadro</c>): un rótulo de mundo cuyo ancla cae fuera del
+    /// rectángulo visible (con un margen para no parpadear en el borde) ya no
+    /// se dibuja en absoluto, así que esta clase no necesitó ningún cambio
+    /// para ese primer síntoma.
+    ///
+    /// LO QUE SÍ SE TOCÓ AQUÍ es la otra mitad del reporte -- "que aparezca
+    /// menos veces y de forma más discreta". El texto fijo "TOLVA DEL MAESTRO
+    /// — vierte AQUÍ" (rama de reposo de <see cref="OnGUI"/>, cuando no hay
+    /// destello ni aviso de chatarra) es, en esencia, el MISMO tipo de rótulo
+    /// que el prompt "E — regular el fuego"/"E — encender el frío"/"E — abrir"
+    /// de placa ígnea/piedra gélida/grifos: una instrucción de "así se usa
+    /// este aparato" que solo hace falta enseñar las primeras veces del
+    /// taller. Por eso NO se inventa un contador nuevo -- se reutiliza
+    /// <see cref="MachineFocus.MostrarPromptE"/> tal cual, el mismo flag
+    /// GLOBAL y compartido que ya usan esos tres aparatos (ver
+    /// <c>UsosParaAprender</c>=2 en Game/MachineFocus.cs): en cuanto el
+    /// jugador ha aprendido a pulsar E en CUALQUIER máquina del taller (dos
+    /// veces), el texto de la Tolva deja de aparecer para siempre en esa
+    /// partida, exactamente igual que los prompts de las demás máquinas. La
+    /// Tolva no usa E -- se vierte, no se pulsa -- así que nunca LLAMA a
+    /// <c>MachineFocus.RegistrarUsoE()</c>, solo LEE el flag: es una
+    /// consumidora más de la misma lección aprendida, no una fuente. El
+    /// candidato descartado fue duplicar aquí el patrón de <c>_yaConocida</c>
+    /// de HeatPlate/ChillStone (un booleano de instancia que se fija la
+    /// primera vez que el jugador entra de lleno en un anillo de cercanía):
+    /// encajaría igual de bien, pero el jugador pidió literalmente "unas
+    /// pocas veces", y <c>MostrarPromptE</c> ya cuenta usos (dos) en vez de
+    /// fijarse con una sola visita, así que es el criterio existente que
+    /// mejor encaja con lo pedido -- no había que inventar ninguno.
+    ///
+    /// LA SEÑAL QUE QUEDA es puramente visual: <see cref="AnimarMarco"/> ahora
+    /// también ilumina jambas/labio/flecha según la cercanía del aprendiz
+    /// (<see cref="UiStyles.Cercania"/>, el mismo criterio compartido que usa
+    /// el halo de foco de las demás máquinas) -- de lejos el marco se ve
+    /// apagado pero encontrable, y se enciende a su brillo pleno según el
+    /// jugador entra en el radio de verter (ver <c>BrilloRangoPleno</c>,
+    /// calibrado contra <see cref="Flask.ReachWorld"/>). Ni la animación de
+    /// volcado (destello de aceptado/rechazado, el bamboleo de la flecha) ni
+    /// <see cref="ArrastreTick"/> se tocaron -- ambos siguen validados tal
+    /// cual del playtest 3/8.
+    ///
     /// LIMITACIÓN: lee _sim.Grid.temp[] directamente para evaluar los encargos
     /// Hot/Cold (mismo patrón que HeatPlate/ChillStone).
     /// TODO(ChaosAlchemy): canalizar por una API de lectura del sim.
@@ -115,6 +171,23 @@ namespace Alkahest.Game
         private OrderSystem _orderSystem;
         private float _accumulator;
 
+        /// <summary>
+        /// (fix playtest 16) Transform del aprendiz, para <see cref="AnimarMarco"/>
+        /// -- la señal visual de "vierte aquí" que sustituye al rótulo
+        /// permanente necesita saber la distancia del jugador, igual que
+        /// <see cref="UiStyles.Cercania"/> en el resto de las máquinas.
+        /// AlkahestGameBootstrap.cs (fuera del alcance de este fix, no es
+        /// editable aquí) llama a <see cref="Init"/> solo con `sim` y
+        /// `orderSystem` -- a diferencia de HeatPlate/ChillStone/Dispenser, que
+        /// SÍ reciben el Transform del jugador por inyección directa -- así que
+        /// se busca aquí con <c>FindAnyObjectByType</c> (regla 1 de CLAUDE.md;
+        /// mismo patrón defensivo que ya usa Dev/DevPalette.cs para su propio
+        /// Sim). El aprendiz ya existe en la escena cuando se llama a Init
+        /// (TrySpawn lo crea antes de SpawnDeliveryChute), pero por si ese
+        /// orden cambiara algún día, Update() reintenta hasta encontrarlo.
+        /// </summary>
+        private Transform _player;
+
         // Aviso educativo "una vez por material" (fix playtest 8, ver
         // "Además"; ampliado en playtest 9 para llevar también el MOTIVO):
         // un array plano indexado por MaterialId, sin listas ni asignaciones
@@ -146,6 +219,7 @@ namespace Alkahest.Game
         {
             _sim = sim;
             _orderSystem = orderSystem;
+            _player = FindAnyObjectByType<ApprenticeController>()?.transform; // (fix playtest 16, ver doc del campo _player)
 
             // El transform se ancla al CENTRO DEL LABIO de la boca: es el punto
             // al que apuntan flecha y rótulo.
@@ -276,8 +350,37 @@ namespace Alkahest.Game
             }
             if (_accumulator > TickDt * MaxStepsPerFrame) _accumulator = TickDt * MaxStepsPerFrame;
 
+            // (fix playtest 16) Reintento perezoso si Init() se llamó antes de
+            // que el aprendiz existiera -- no debería pasar con el orden actual
+            // de AlkahestGameBootstrap.TrySpawn(), pero es gratis y evita que
+            // un reordenamiento futuro deje el marco sin señal de cercanía para
+            // siempre. Una vez encontrado, no se vuelve a buscar.
+            if (_player == null) _player = FindAnyObjectByType<ApprenticeController>()?.transform;
+
             AnimarMarco();
         }
+
+        /// <summary>
+        /// (fix playtest 16, ver BrilloRangoPleno/Desvanece más abajo)
+        /// Distancia a partir de la cual el marco/flecha llegan a su brillo
+        /// PLENO -- deliberadamente dentro de <see cref="Flask.ReachWorld"/>
+        /// (el alcance real de verter), para que "se enciende del todo"
+        /// coincida con "ya puedo verter aquí", no antes.
+        /// </summary>
+        private const float BrilloRangoPleno = 4.0f;
+
+        /// <summary>Distancia a la que el brillo ya ha caído del todo a <see cref="BrilloLejos"/>.</summary>
+        private const float BrilloRangoDesvanece = 8.0f;
+
+        /// <summary>
+        /// Brillo mínimo (alfa relativo) cuando el aprendiz está lejos: NO cero
+        /// -- la Tolva sigue siendo un HUECO REAL en la pared con su marco
+        /// dorado (rediseño playtest 3), así que debe seguir siendo
+        /// encontrable de un vistazo aunque el jugador esté al otro lado del
+        /// taller. Lo que cambia con la cercanía no es "visible sí/no" sino
+        /// "apagado y quieto" -> "vivo y latiendo con fuerza".
+        /// </summary>
+        private const float BrilloLejos = 0.22f;
 
         private void AnimarMarco()
         {
@@ -287,12 +390,24 @@ namespace Alkahest.Game
             // Pulso lento y constante: "esto está vivo, esto espera algo".
             float pulso = 0.55f + 0.45f * Mathf.Sin(t * 3.2f);
 
+            // (fix playtest 16: "ilumina la flecha/el embudo al acercarse, en
+            // vez de un texto") Sustituye al rótulo permanente como señal
+            // discreta de "vierte aquí": el marco y la flecha se atenúan de
+            // lejos y se encienden a su brillo pleno según el aprendiz entra en
+            // el radio de verter -- mismo criterio de cercanía que usa el resto
+            // del taller para su halo de foco (UiStyles.Cercania). Durante un
+            // destello (aceptado/rechazado) el brillo NO se aplica -- ese
+            // feedback tiene que leerse a plena intensidad pase lo que pase,
+            // es la animación de volcado validada y no se toca.
+            float cercania = UiStyles.Cercania(transform.position, _player, BrilloRangoPleno, BrilloRangoDesvanece);
+            float brillo = Mathf.Lerp(BrilloLejos, 1f, cercania);
+
             Color oro = UiStyles.Oro;
             Color acento = destello ? (_flashAceptado ? UiStyles.Exito : UiStyles.Aviso) : oro;
 
-            if (_jambaIzq != null) _jambaIzq.color = destello ? acento : new Color(oro.r, oro.g, oro.b, 0.85f);
+            if (_jambaIzq != null) _jambaIzq.color = destello ? acento : new Color(oro.r, oro.g, oro.b, 0.85f * brillo);
             if (_jambaDer != null) _jambaDer.color = _jambaIzq != null ? _jambaIzq.color : oro;
-            if (_labio != null) _labio.color = new Color(acento.r, acento.g, acento.b, destello ? 1f : 0.35f + 0.55f * pulso);
+            if (_labio != null) _labio.color = new Color(acento.r, acento.g, acento.b, destello ? 1f : (0.35f + 0.55f * pulso) * brillo);
 
             if (_flechaTr != null)
             {
@@ -300,7 +415,7 @@ namespace Alkahest.Game
                 p.y = _flechaY + Mathf.Sin(t * 2.6f) * 0.16f;
                 _flechaTr.position = p;
             }
-            if (_flecha != null) _flecha.color = new Color(acento.r, acento.g, acento.b, 0.55f + 0.45f * pulso);
+            if (_flecha != null) _flecha.color = new Color(acento.r, acento.g, acento.b, (0.55f + 0.45f * pulso) * (destello ? 1f : brillo));
         }
 
         /// <summary>
@@ -447,14 +562,36 @@ namespace Alkahest.Game
                     : "material equivocado (ningún encargo lo pide)";
                 color = _flashAceptado ? UiStyles.Exito : UiStyles.Aviso;
             }
-            else
+            else if (MachineFocus.MostrarPromptE)
             {
+                // (fix playtest 16: "debería desaparecer tras unas pocas
+                // veces") Reutiliza TAL CUAL el mismo flag global que ya usa
+                // el resto del taller para callar su prompt de texto ("E —
+                // regular el fuego", "E — abrir"...) tras UsosParaAprender=2
+                // usos -- ver Game/MachineFocus.cs y el docblock de esta
+                // clase. La Tolva nunca LLAMA a RegistrarUsoE (no se
+                // interactúa con E), solo LEE si el jugador ya se graduó del
+                // tutorial en CUALQUIER aparato del taller; en cuanto lo hace,
+                // esta rama deja de alcanzarse para el resto de la partida.
                 texto = "TOLVA DEL MAESTRO — vierte AQUÍ";
                 color = UiStyles.Oro;
             }
+            else
+            {
+                // (fix playtest 16) Enseñado: nada que escribir. La única
+                // señal que queda es visual -- ver AnimarMarco, que ilumina
+                // jambas/labio/flecha según la cercanía del aprendiz, igual
+                // que el halo dorado de foco sustituye al prompt de texto en
+                // el resto de las máquinas.
+                return;
+            }
 
-            // Anclado sobre la flecha; UiStyles recorta el globo al borde de la
-            // pantalla (la boca está pegadísima al muro derecho).
+            // Anclado sobre la flecha. UiStyles YA NO acota el rótulo al borde
+            // de la pantalla (fix playtest 16, ver UiStyles.cs): con la cámara
+            // siguiendo al aprendiz, la boca -pegadísima al muro derecho- pasa
+            // buena parte del tiempo fuera de cuadro, y ahora su rótulo
+            // simplemente no se dibuja en ese caso, en vez de perseguir al
+            // jugador clavado en el borde de la pantalla.
             UiStyles.EtiquetaMundo(new Vector3(transform.position.x, _flechaY, 0f), texto, color, UiStyles.S(26f));
         }
     }

@@ -60,6 +60,56 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class ApprenticeController : MonoBehaviour
     {
+        // =====================================================================
+        // VELOCIDAD DE VUELO CONTRA EL TALLER x6 (playtest 15) -- MEDIDO, NO
+        // SUBIDO A CIEGAS
+        // =====================================================================
+        // El encargo pedía revisar si moveSpeed seguía siendo adecuado con el
+        // mundo a 768x288 (antes 256x144) y explícitamente avisaba de NO
+        // subirla sin medir: el jugador ya validó este manejo, y con
+        // Sim/SimRenderer.cs seguiendo a la cámara (en vez de encuadrar el
+        // mundo entero), un aprendiz más rápido puede marear -- la cámara
+        // reacciona a la velocidad REAL del personaje, no a una fracción del
+        // mundo visible.
+        //
+        // MEDICIÓN (a moveSpeed=11.2, sin contar la rampa de aceleración,
+        // CellWorldSize=0.1u/celda):
+        //  · Cruzar UNA PANTALLA (256 celdas = 25.6u, lo que la cámara
+        //    encuadra de verdad la mayor parte del tiempo -- ver
+        //    SimRenderer.FitMainCamera): 25.6/11.2 ≈ 2.3s. IDÉNTICO al de
+        //    ANTES del playtest 15 (el mundo entero medía una pantalla, así
+        //    que "cruzar el taller" y "cruzar una pantalla" eran la misma
+        //    medida) -- el manejo que el jugador validó, en la escala en la
+        //    que de verdad lo experimenta, NO CAMBIÓ.
+        //  · Cruzar una ZONA de la superficie (LABORATORIO, LabX0..X1, 244
+        //    celdas = 24.4u): ≈2.2s -- mismo orden que una pantalla, esperable
+        //    (las zonas se diseñaron del tamaño de una pantalla, ver el
+        //    docblock de Sim/SimLevelBuilder.cs).
+        //  · Cruzar el MUNDO ENTERO de punta a punta (768 celdas = 76.8u,
+        //    CULTIVO a ENTREGA): 76.8/11.2 ≈ 6.9s -- ANTES (mundo de 256
+        //    celdas) esto tardaba los mismos ≈2.3s que cruzar una pantalla, de
+        //    donde sale el "3x" (el mundo creció 3x de ancho en x, 2x en y).
+        //
+        // DECISIÓN: NO SUBIR moveSpeed. El único número que de verdad se
+        // triplicó es el de un trayecto de punta a punta del taller ENTERO --
+        // y eso es LITERALMENTE lo que pidió Cesar al motivar el tamaño nuevo
+        // ("un laboratorio de 2-3 pantallas... para que dos personas puedan
+        // estar trabajando en cosas distintas sin verse constantemente", ver
+        // Sim/CellGrid.cs): que cruzar de un extremo a otro cueste más no es
+        // una regresión de manejo, es la separación de zonas funcionando como
+        // se pidió. El manejo que el jugador SÍ validó -- aproximarse a un
+        // grifo, apuntar con precisión al frasco, maniobrar dentro de una
+        // cuba -- ocurre a la escala de "una pantalla", que no cambió ni un
+        // texel: subir moveSpeed "arreglaría" un problema que no existe
+        // (nadie se quejó de que cruzar un taller de 2.3s fuera lento) a costa
+        // de empeorar SÍ un problema real (el mareo con cámara de seguimiento
+        // que el propio encargo advierte). Si en un playtest futuro el
+        // trayecto largo entre zonas se reporta como pesado, la palanca
+        // correcta no es esta constante global (que también acelera la
+        // maniobra fina) sino algo específico del viaje largo -- p.ej. un
+        // acelerón extra tras Nx segundos en línea recta, o un atajo de
+        // teletransporte entre zonas ya visitadas -- deliberadamente NO
+        // implementado aquí por quedar fuera de lo que este encargo pidió.
         [Header("Movimiento")]
         [SerializeField] private float moveSpeed = 11.2f;
         [SerializeField] private float acceleration = 44f; // unidades/s^2 de suavizado hacia la velocidad objetivo (escalado con la velocidad nueva para que el arranque siga siendo igual de nítido)
@@ -69,8 +119,10 @@ namespace Alkahest.Game
         [SerializeField] private int sortingOrder = 50;
 
         // Límites del mundo, derivados del tamaño real de la grilla de simulación
-        // (CellGrid.W/H * SimRenderer.CellWorldSize == 25.6 x 14.4 tras la
-        // reingeniería del espacio). Nunca hardcodear: se derivan solos.
+        // (CellGrid.W/H * SimRenderer.CellWorldSize == 76.8 x 28.8 desde el
+        // playtest 15, antes 25.6 x 14.4). Nunca hardcodear: se derivan solos,
+        // así que el clamp ya cubre el mundo x6 sin tocar nada aquí -- el
+        // aprendiz vuela y puede llegar a cualquier esquina, SÓTANO incluido.
         private const float WorldMinX = 0f;
         private const float WorldMinY = 0f;
         private const float WorldMaxX = CellGrid.W * SimRenderer.CellWorldSize;

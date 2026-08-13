@@ -54,11 +54,38 @@ namespace Alkahest.Game
     /// va sobre <c>UiStyles.Panel</c>, un panel IMGUI opaco, así que
     /// <see cref="FirmaVisualFabrica.GenerarPixeles"/> se llama con
     /// <c>sobreMundo: false</c> (regla 19 de CLAUDE.md).
+    ///
+    /// (fix playtest 16) LA LÍNEA DE AYUDA ENCOGE A MEDIDA QUE SE APRENDE:
+    /// mismo criterio que ya usa el proyecto en todas partes (el prompt "E"
+    /// de <see cref="MachineFocus.MostrarPromptE"/> desaparece tras dos usos,
+    /// da igual en qué aparato) -- un contador de gestos reales de frasco
+    /// (aspirar/verter/vaciar, CUALQUIER combinación de los tres, igual que
+    /// MachineFocus no distingue de qué aparato vino el uso) apaga
+    /// <see cref="TextoAyuda"/> a partir de <see cref="UsosParaAprender"/>.
+    /// Ver <see cref="ActualizarUsosAyuda"/>. También se aprieta el relleno
+    /// del panel ("doble espaciado innecesario", reporte del jugador): SIN
+    /// volver al apiñamiento que ya se quejó en el playtest 10 -- el ancho de
+    /// fila y el tamaño del swatch de firma NO se tocan (están validados,
+    /// "el punto de luz del color de material está increíble"), solo se
+    /// aprietan los márgenes/huecos entre secciones.
     /// </summary>
     public sealed class FlaskHud : MonoBehaviour
     {
         private const int MaxSwatches = 4;
         private const string TextoAyuda = "clic izq. aspirar · clic der. verter · Q vaciar";
+
+        // -----------------------------------------------------------------
+        // Aprendizaje de la ayuda (fix playtest 16, ver docblock de la
+        // clase). MachineFocus usa 2 usos para "E"; aquí el gesto es más
+        // sutil (tres acciones distintas bajo una sola línea de texto, no
+        // una tecla), así que se dan 3 antes de callarlo -- mismo espíritu,
+        // umbral algo más generoso porque hay más que aprender de un vistazo.
+        // -----------------------------------------------------------------
+        private const int UsosParaAprender = 3;
+        private int _usosAyuda;
+        private bool _aspirandoPrevio; // Flask.EstaAspirando es un NIVEL (true mientras se mantiene el botón), no un flanco: hace falta guardar el frame anterior para contar UNA vez por pulsación, no una vez por frame mantenido.
+
+        private bool MostrarAyuda => _usosAyuda < UsosParaAprender;
 
         private AlkahestSim _sim;
         private Flask _flask;
@@ -85,6 +112,40 @@ namespace Alkahest.Game
             _sim = sim;
             _flask = flask;
             _knowledge = knowledge;
+        }
+
+        /// <summary>
+        /// (fix playtest 16) Cuenta gestos REALES de frasco para apagar
+        /// <see cref="TextoAyuda"/> -- ver <see cref="UsosParaAprender"/>.
+        /// Vive en Update() (una vez por frame de verdad), NUNCA en OnGUI:
+        /// OnGUI se ejecuta más de una vez por frame (Layout + Repaint como
+        /// mínimo) y <c>wasPressedThisFrame</c> sigue en true durante las dos
+        /// pasadas, así que contar ahí duplicaría cada pulsación.
+        /// Mismas guardas que <c>Flask.Update</c> para no contar entrada que
+        /// no es en realidad una acción de frasco (bautizando un nombre, con
+        /// el diario abierto o bajo un overlay de jornada).
+        /// </summary>
+        private void Update()
+        {
+            ActualizarUsosAyuda();
+        }
+
+        private void ActualizarUsosAyuda()
+        {
+            if (_usosAyuda >= UsosParaAprender || _flask == null) return;
+            if (DayCycle.InputLocked || UiStyles.EscribiendoTexto || JournalHud.Abierto) return;
+            if (Alkahest.Dev.DevPalette.IsOpen) return; // con la paleta dev abierta el frasco no actúa (ver Flask.Update): tampoco cuenta como "uso".
+
+            bool aspirando = _flask.EstaAspirando;
+            bool aspirarUsado = aspirando && !_aspirandoPrevio; // flanco de subida: una vez por pulsación, no por frame mantenido.
+            _aspirandoPrevio = aspirando;
+
+            var mouse = Mouse.current;
+            var kb = Keyboard.current;
+            bool verterUsado = mouse != null && mouse.rightButton.wasPressedThisFrame && _flask.Total > 0;
+            bool vaciarUsado = kb != null && kb.qKey.wasPressedThisFrame;
+
+            if (aspirarUsado || verterUsado || vaciarUsado) _usosAyuda++;
         }
 
         /// <summary>
@@ -202,22 +263,34 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void DibujarPanel()
         {
+            // (fix playtest 16) Márgenes/huecos apretados un escalón --
+            // "doble espaciado innecesario" del reporte. altoFila (y por
+            // tanto el swatch de firma, `lado` más abajo) se deja EXACTAMENTE
+            // igual: eso está validado y no se toca. El punto medio buscado:
+            // menos aire ENTRE secciones, no menos aire DENTRO de cada fila
+            // (que es donde vivía la queja de apiñamiento del playtest 10).
             float margen = UiStyles.S(10f);
-            float pad = UiStyles.S(8f);
+            float pad = UiStyles.S(6f);           // antes 8.
             float ancho = UiStyles.S(300f);
-            float altoLinea = UiStyles.S(19f);
-            float altoBarra = UiStyles.S(13f);
-            float altoFila = UiStyles.S(16f);
+            float altoLinea = UiStyles.S(17f);    // antes 19.
+            float altoBarra = UiStyles.S(11f);    // antes 13.
+            float altoFila = UiStyles.S(16f);     // SIN CAMBIOS: aquí vive el swatch validado.
+            float gapChico = UiStyles.S(3f);      // antes 4 (bajo el título).
+            float gapSeccion = UiStyles.S(4f);    // antes 6 (antes de las filas y antes de la ayuda).
+
+            bool mostrarAyuda = MostrarAyuda;
             // La línea de ayuda se MIDE (podría necesitar dos líneas a resoluciones
-            // raras): así el panel siempre la contiene entera.
-            float altoAyuda = UiStyles.Alto(UiStyles.CuerpoTenue, TextoAyuda, ancho - pad * 2f);
+            // raras): así el panel siempre la contiene entera. Si ya se aprendió
+            // (fix playtest 16) ni se mide ni se reserva alto para ella.
+            float altoAyuda = mostrarAyuda ? UiStyles.Alto(UiStyles.CuerpoTenue, TextoAyuda, ancho - pad * 2f) : 0f;
 
             int filas = 0;
             for (int i = 0; i < MaxSwatches; i++) if (_topCounts[i] > 0) filas++;
 
-            float alto = pad + altoLinea + UiStyles.S(4f) + altoBarra
-                       + (filas > 0 ? UiStyles.S(6f) + filas * altoFila : 0f)
-                       + UiStyles.S(6f) + altoAyuda + pad;
+            float alto = pad + altoLinea + gapChico + altoBarra
+                       + (filas > 0 ? gapSeccion + filas * altoFila : 0f)
+                       + (mostrarAyuda ? gapSeccion + altoAyuda : 0f)
+                       + pad;
 
             var panel = new Rect(margen, margen, ancho, alto);
             UiStyles.Panel(panel);
@@ -230,7 +303,7 @@ namespace Alkahest.Game
             GUI.Label(new Rect(x, y, anchoInterior * 0.5f, altoLinea), "FRASCO", UiStyles.Titulo);
             GUI.Label(new Rect(x + anchoInterior * 0.4f, y, anchoInterior * 0.6f, altoLinea),
                 total + " / " + Flask.Capacity, UiStyles.Numero);
-            y += altoLinea + UiStyles.S(4f);
+            y += altoLinea + gapChico;
 
             // La barra se tiñe con la MEZCLA de lo que llevas: de un vistazo sabes
             // si cargas agua, aceite o el mejunje verde de turno.
@@ -240,7 +313,7 @@ namespace Alkahest.Game
 
             if (filas > 0)
             {
-                y += UiStyles.S(6f);
+                y += gapSeccion;
                 float lado = altoFila - UiStyles.S(4f);
                 for (int i = 0; i < MaxSwatches; i++)
                 {
@@ -263,8 +336,15 @@ namespace Alkahest.Game
                 }
             }
 
-            y += UiStyles.S(6f);
-            GUI.Label(new Rect(x, y, anchoInterior, altoAyuda), TextoAyuda, UiStyles.CuerpoTenue);
+            // (fix playtest 16) A partir de UsosParaAprender gestos reales de
+            // frasco, la línea desaparece del todo -- ni se dibuja ni deja
+            // hueco (ver el cálculo de `alto` más arriba): el rectángulo
+            // encoge de verdad, no solo se queda con una línea en blanco.
+            if (mostrarAyuda)
+            {
+                y += gapSeccion;
+                GUI.Label(new Rect(x, y, anchoInterior, altoAyuda), TextoAyuda, UiStyles.CuerpoTenue);
+            }
         }
 
         /// <summary>Nombre a mostrar: el que le puso el jugador, si no el nombre común de taller, si no "???".</summary>

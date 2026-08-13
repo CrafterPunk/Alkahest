@@ -389,38 +389,107 @@ namespace Alkahest.Audio
         }
 
         /// <summary>
-        /// Suaviza el punto de bucle de un buffer de ruido arrastrando SOLO la COLA
-        /// hacia el valor que va a sonar justo después al reiniciar el bucle (la
-        /// CABEZA, `buffer[0..crossfadeSamples)`), en vez de mezclar y sobrescribir
-        /// los dos lados a la vez.
+        /// Suaviza el punto de bucle de un buffer de ruido cerrando la costura real
+        /// (última muestra `buffer[n-1]` -&gt; primera `buffer[0]` al hacer wrap) EN
+        /// VALOR Y EN PENDIENTE, tocando solo la COLA.
         ///
-        /// (fix playtest 9, causa 1a) La versión anterior igualaba `buffer[i]` y
-        /// `buffer[colaInicio+i]` al MISMO valor mezclado -- eso desplazaba también la
-        /// cabeza real del clip, y el desplazamiento paraba en seco justo en el borde
-        /// de la ventana de crossfade (`buffer[crossfadeSamples]`, la primera muestra
-        /// SIN tocar), clavando un salto nuevo ahí que no existía antes de "arreglar"
-        /// la costura -- exactamente el tipo de clic que el jugador describe como más
-        /// audible al solaparse con otro sonido (más energía de alta frecuencia sumada
-        /// a la mezcla). Dejando la cabeza intacta, el único punto que cambia de
-        /// comportamiento es la propia costura (última muestra -> primera al hacer
-        /// wrap), que es justo lo que hay que suavizar.
+        /// (fix playtest 9, causa 1a) La versión ORIGINAL igualaba `buffer[i]` y
+        /// `buffer[colaInicio+i]` al MISMO valor mezclado -- desplazaba también la
+        /// cabeza real del clip y clavaba un salto nuevo justo en el borde de la
+        /// ventana. Se corrigió dejando la cabeza intacta y mezclando SOLO la cola
+        /// hacia `buffer[i]` (mismo índice que la cabeza).
         ///
-        /// El peso usa un smoothstep (3w²-2w³) en vez de una rampa lineal: su derivada
-        /// es CERO en los dos extremos de la ventana, así que tampoco crea un
-        /// escalón de pendiente ni al empezar la mezcla ni al terminarla (coincide con
-        /// la muestra original con pendiente 0 en ambos bordes de la ventana).
+        /// (fix playtest 16) ESE SEGUNDO ARREGLO TAMPOCO CERRABA LA COSTURA:
+        /// mezclar `buffer[colaInicio+i]` hacia `buffer[i]` con peso -&gt;1 en
+        /// `i=crossfadeSamples-1` hace que la ÚLTIMA muestra del buffer
+        /// (`buffer[n-1]`) converja hacia `buffer[crossfadeSamples-1]` -- un punto
+        /// de la CABEZA, sí, pero NO el punto `buffer[0]` que en realidad suena
+        /// justo después al hacer wrap. Para ruido muy filtrado (paso-bajo a
+        /// 130-220Hz, tiempo de correlación de pocas decenas de muestras) una
+        /// ventana de 150-220ms (miles de muestras) es muchísimo más larga que esa
+        /// correlación, así que `buffer[crossfadeSamples-1]` es esencialmente
+        /// independiente de `buffer[0]`: el "arreglo" dejaba el salto casi del
+        /// mismo tamaño que sin tocar nada (medido en el diagnóstico de este
+        /// playtest sobre LechoAmbiental: salto de valor -0.0343 sin tocar frente a
+        /// +0.0128 con el "arreglo" de playtest 9 -- una mejora de ~2.7x, no un
+        /// cierre real -- y la PENDIENTE en la costura salía PEOR, 0.0066 de
+        /// desajuste frente a 0.0025 sin tocar nada). Esto explica el "pop" del
+        /// playtest 16: el bucle de ambiente dura exactamente 4.5s (ver
+        /// ConstruirLechoAmbiental) y suena SIEMPRE, así que su costura sin cerrar
+        /// se oía cada 4.5s con periodo constante, sin relación con nada que
+        /// hiciera el jugador -- justo el síntoma reportado ("cada 5 segundos más o
+        /// menos... sin que haga nada yo").
+        ///
+        /// SOLUCIÓN (dos etapas, ambas solo sobre la cola):
+        ///  1) VALOR: en vez de tirar de la cola hacia una muestra arbitraria de la
+        ///     cabeza, se le suma una rampa smoothstep que reparte EXACTAMENTE el
+        ///     hueco real `buffer[0]-buffer[n-1]` a lo largo de toda la ventana,
+        ///     con peso 1.0 EXACTO en `i=crossfadeSamples-1` -- `buffer[n-1]` queda
+        ///     IGUAL a `buffer[0]` con precisión de punto flotante, no "cerca".
+        ///  2) PENDIENTE: con el valor ya exacto, la pendiente en la costura
+        ///     (`buffer[n-1]-buffer[n-2]` frente a `buffer[1]-buffer[0]`) seguía sin
+        ///     coincidir -- un "pico" de segunda derivada que también se oye como
+        ///     clic (más agudo, menos grave que un salto de valor puro). Se corrige
+        ///     con una SEGUNDA rampa, mucho más CORTA (`microVentana`, como mucho
+        ///     64 muestras = ~3ms a SR_LOOP), que ajusta solo `buffer[n-2]` (y una
+        ///     rampa de entrada hacia atrás desde ahí) al valor exacto que hace
+        ///     coincidir la pendiente. IDEA DESCARTADA (regla 15, CLAUDE.md):
+        ///     probar primero un spline de Hermite que igualara valor Y pendiente
+        ///     en una sola rampa sobre TODA la ventana grande -- la pendiente
+        ///     objetivo, expresada en unidades por muestra, hay que multiplicarla
+        ///     por el ancho de la ventana (miles de muestras) para convertirla a
+        ///     "por unidad de t normalizado", lo que amplifica un desajuste de
+        ///     pendiente minúsculo (~0.002) en un bulto de amplitud ~10 a mitad de
+        ///     la ventana -- mucho más audible que el clic que se quería arreglar
+        ///     (verificado numéricamente al diseñar este fix). Repartir la
+        ///     pendiente en una ventana corta e independiente de la del valor evita
+        ///     ese problema: el ajuste por muestra en una ventana de 64 muestras es
+        ///     órdenes de magnitud menor que el mismo ajuste repartido en una de
+        ///     miles.
+        ///
+        /// Ambas rampas usan smoothstep (derivada cero en el extremo donde
+        /// empiezan) para no clavar un escalón de pendiente nuevo al ARRANCAR cada
+        /// ventana -- mismo criterio que el fix de playtest 9.
         /// </summary>
         private static void SuavizarBucle(float[] buffer, int crossfadeSamples)
         {
             int n = buffer.Length;
-            crossfadeSamples = Mathf.Clamp(crossfadeSamples, 1, n / 2);
+            crossfadeSamples = Mathf.Clamp(crossfadeSamples, 2, n / 2);
             int colaInicio = n - crossfadeSamples;
+
+            // Etapa 1: cierra el salto de VALOR real de la costura (n-1 -> 0), no
+            // uno aproximado hacia una muestra cualquiera de la cabeza.
+            float saltoValor = buffer[0] - buffer[n - 1];
             for (int i = 0; i < crossfadeSamples; i++)
             {
-                float t = (i + 1) / (float)(crossfadeSamples + 1); // 0..1
+                float t = i / (float)(crossfadeSamples - 1); // 0 en el arranque de la ventana, 1 EXACTO en la última muestra.
                 float w = t * t * (3f - 2f * t); // smoothstep.
-                buffer[colaInicio + i] = Mathf.Lerp(buffer[colaInicio + i], buffer[i], w);
+                buffer[colaInicio + i] += saltoValor * w;
             }
+
+            // Etapa 2: con el valor ya exacto, cierra la PENDIENTE ajustando
+            // buffer[n-2] (y una rampa corta hacia atrás desde ahí) para que
+            // buffer[n-1]-buffer[n-2] coincida con buffer[1]-buffer[0] -- la
+            // pendiente con la que el bucle arranca de verdad al hacer wrap.
+            // Ventana deliberadamente corta (ver doc de arriba, idea descartada
+            // del spline de Hermite sobre toda la ventana).
+            int microVentana = Mathf.Clamp(crossfadeSamples / 8, 2, 64);
+            microVentana = Mathf.Min(microVentana, crossfadeSamples / 2);
+            int microInicio = n - 1 - microVentana;
+            float penultimaDeseada = buffer[0] - (buffer[1] - buffer[0]);
+            float saltoPendiente = penultimaDeseada - buffer[n - 2];
+            for (int i = 0; i < microVentana; i++)
+            {
+                float t = microVentana > 1 ? i / (float)(microVentana - 1) : 1f; // 1 EXACTO en la muestra n-2.
+                float w = t * t * (3f - 2f * t);
+                buffer[microInicio + i] += saltoPendiente * w;
+            }
+
+            // Guarda defensiva (regla del proyecto: toda muestra en [-1,1]): las
+            // dos correcciones son pequeñas frente al pico normalizado del clip,
+            // pero un Clamp aquí es gratis y cubre cualquier llamador futuro que
+            // invoque SuavizarBucle ANTES de su propio Clamp/Normalizar.
+            Clamp(buffer);
         }
 
         private static AudioClip CrearClip(string nombre, float[] datosMono, int sampleRate)

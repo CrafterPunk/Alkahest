@@ -240,6 +240,14 @@ namespace Alkahest.Game
             // Av Pág y el jugador tiene el ratón encima del papel, no del taller.
             if (JournalHud.Abierto) { OcultarVisualesDeMundo(); return; }
 
+            // (playtest 16) EL CINCEL ES UN MODO, NO OTRO BOTÓN. Con la tecla C el
+            // aprendiz cambia lo que lleva en la mano: o el frasco o el cincel,
+            // nunca los dos. Sin esta guarda, tallar justo al borde de un charco
+            // haría que el frasco empezara a aspirarlo a la vez que se pica la
+            // piedra — dos herramientas actuando sobre el mismo clic. Ver la
+            // cabecera de Game/Cincel.cs, que documenta el reparto de controles.
+            if (Cincel.ModoActivo) { OcultarVisualesDeMundo(); return; }
+
             // La estantería de redomas captura el ratón cuando el cursor está
             // sobre una redoma: ahí los clics son "guardar/recuperar", no
             // "aspirar/verter" sobre la grilla (si no, verter sobre el estante

@@ -100,24 +100,44 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (taller 256x144).");
+            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (taller 768x288, playtest 15).");
         }
 
         private ApprenticeController SpawnApprentice()
         {
             var go = new GameObject("Apprentice");
-            // Arranca flotando sobre la cuba izquierda, entre el banco de grifos
-            // y la Tolva: desde ahí se ve el taller entero sin volar a ninguna
-            // parte (antes aparecía en el centro geométrico de un mundo el doble
-            // de ancho, lejos de todo).
+            // (playtest 15) ANTES arrancaba flotando sobre la cuba izquierda de
+            // CULTIVO -- tenía sentido cuando la cámara encuadraba el mundo
+            // ENTERO (una pantalla) y "estar sobre la cuba" bastaba para ver el
+            // taller entero de un vistazo. Con SimRenderer siguiendo al aprendiz
+            // y mostrando solo ~una pantalla (Tab la amplía), lo que importa ya
+            // no es "verlo todo" sino EMPEZAR donde están las herramientas: el
+            // encargo pide explícitamente que arranque en LABORATORIO, "el
+            // centro de operaciones". Se posiciona flotando sobre el centro de
+            // la pila de recogida (BasinInterior), justo bajo la columna de
+            // grifos y a un lado del pozo que baja al sótano (WellX0=343..382,
+            // fuera de este rango) -- así el jugador ve grifos + pila + estante
+            // sin tener que volar a ningún sitio para empezar a trabajar, y
+            // Cultivo/Entrega quedan a un vuelo corto a cada lado (igual de
+            // accesibles que antes, solo que ya no hace falta "estar encima" de
+            // ninguna de las dos para empezar).
             float celda = SimRenderer.CellWorldSize;
-            float x = (SimLevelBuilder.VatAX0 + SimLevelBuilder.VatWidth * 0.5f) * celda;
-            float y = (SimLevelBuilder.VatInteriorY1 + 10) * celda;
+            float x = (SimLevelBuilder.BasinInteriorX0 + SimLevelBuilder.BasinInteriorX1) * 0.5f * celda;
+            float y = (SimLevelBuilder.BasinInteriorY1 + 10) * celda;
             go.transform.position = new Vector3(x, y, 0f);
 
             var apprentice = go.AddComponent<ApprenticeController>();
             var flask = go.AddComponent<Flask>();
             flask.Init(_sim);
+
+            // EL CINCEL (playtest 16): segunda herramienta que lleva el
+            // aprendiz, en el MISMO GameObject que el frasco (comparte
+            // ApprenticeController para alcance/CarryAnchor, ver Game/Cincel.cs).
+            // Se alterna con C; mientras está inactivo no toca la grilla ni
+            // pinta nada, así que crearlo aquí no cambia el comportamiento por
+            // defecto (el frasco sigue mandando desde el primer frame).
+            var cincel = go.AddComponent<Cincel>();
+            cincel.Init(_sim);
 
             // El conocimiento se crea ANTES que el HUD: el HUD del frasco lo
             // necesita para mostrar el nombre que el jugador le puso a cada
@@ -131,7 +151,28 @@ namespace Alkahest.Game
             return apprentice;
         }
 
-        /// <summary>Una placa ígnea bajo cada una de las dos cubas centrales.</summary>
+        /// <summary>
+        /// Una placa ígnea bajo cada una de las dos cubas de CULTIVO (playtest
+        /// 15: SIN CAMBIOS de fondo -- VatAX0/VatBX0 ya viven dentro de
+        /// SimLevelBuilder.CultivoX0..X1, es la propia BuildCultivo la que las
+        /// coloca ahí). Coordenadas 100% dinámicas (VatInteriorX0/X1 por cuba),
+        /// así que el rediseño del plano no exige tocar nada aquí -- exactamente
+        /// donde tienen que estar: es donde se cría el Vivium.
+        /// (playtest 17: aquí decía además "Y donde el clima ya nace templado
+        /// (CultivoAmbientRaw), así que la placa solo tiene que EMPUJAR desde
+        /// ese punto de partida en vez de pelear contra un ambiente frío como
+        /// haría en LABORATORIO/ENTREGA". ESO YA NO ES CIERTO: el clima por
+        /// zona se retiró y el mundo entero nace a CellGrid.AmbientRaw, 20°C
+        /// -- ver el docblock de SimLevelBuilder. La placa ahora empuja desde
+        /// los mismos 20°C aquí que en cualquier otro sitio, que era justo el
+        /// objetivo: que la ventaja la dé el APARATO, no la casilla. Coste
+        /// medido: 6°C más de salto sobre una banda de crecimiento que empieza
+        /// en ~30°C y que los 26°C de CULTIVO no alcanzaban de todos modos.)
+        /// Se mantienen CENTRADAS en cada
+        /// cuba (FootprintFraction de HeatPlate.Init ya las recorta al 40% del
+        /// interior recibido) -- no hay razón de diseño para descentrarlas: la
+        /// cuba es simétrica y la placa debe calentar su centro.
+        /// </summary>
         private void SpawnHeatPlates(Transform player)
         {
             SpawnOneHeatPlate(player, 0, SimLevelBuilder.VatAX0);
@@ -148,7 +189,44 @@ namespace Alkahest.Game
                 SimLevelBuilder.VatPlateRow);
         }
 
-        /// <summary>La piedra gélida vive bajo la bandeja fría del estante superior.</summary>
+        /// <summary>
+        /// La piedra gélida vive bajo la bandeja fría del estante superior, EN
+        /// LABORATORIO -- decisión tomada y no cambiada en el playtest 15 tras
+        /// comprobar el SÓTANO explícitamente (el encargo lo pedía):
+        ///
+        /// (playtest 17: el argumento de abajo empezaba por "el SÓTANO nace
+        /// frío de verdad (SotanoAmbientRaw ~4°C) y sería el sitio gratis para
+        /// cristalizar". Esa premisa YA NO EXISTE -- el clima por zona se
+        /// retiró y el sótano nace a los mismos 20°C que el resto, ver el
+        /// docblock de SimLevelBuilder. La conclusión NO cambia, y de hecho se
+        /// refuerza: si ni siquiera queda el frío gratis, menos razón todavía
+        /// para mover el aparato a una sala sin cubeta. El razonamiento
+        /// geométrico completo se conserva porque sigue siendo el motivo real:)
+        ///
+        /// El SÓTANO sería, si tuviera clima frío, el sitio "gratis" para
+        /// cristalizar -- PERO SimLevelBuilder.BuildSotano solo levanta una
+        /// PLATAFORMA MACIZA bajo el pozo (SotanoPlinthX0..X1, construida con
+        /// DrawSolidRect: un bloque SIN PAREDES), no una cubeta como
+        /// ChillTray/las cubas de Cultivo (esas sí usan DrawUShape: paredes +
+        /// suelo). CrystalSeed es Powder (cae, se puede desparramar) y Azoth es
+        /// Liquid (fluye libremente): vertidos sobre una losa plana sin muros,
+        /// en medio de una sala abierta por los cuatro costados, se saldrían
+        /// del alcance de la piedra (3 filas de empuje térmico, FilaEmpujePct)
+        /// en cuanto tocaran el borde de la plataforma -- Azoth en particular
+        /// no tiene NADA que lo retenga y se derramaría de inmediato fuera de
+        /// la zona fría, justo donde SÍ hace falta para que la reacción
+        /// Azoth+CrystalSeed->Crystal ocurra. SimLevelBuilder no expone ninguna
+        /// cubeta en el sótano y es de solo lectura en este encargo, así que
+        /// mover el aparato ahí rompería la mecánica que debería facilitar en
+        /// vez de mejorarla. Se queda en LABORATORIO, en ChillTray (SÍ es una
+        /// cubeta con paredes, ver SimLevelBuilder.BuildLaboratorio) -- y
+        /// FRESCA/HELANDO (ChillStone.cs) ya se calibran por seed para cruzar
+        /// los umbrales de congelación/cristalización con margen de sobra
+        /// desde CUALQUIER ambiente de partida, así que el coste real es solo
+        /// "unos ticks más para llegar", no "no llega". El sótano queda como
+        /// destino de una FASE FUTURA (backlog: "taller movible", CLAUDE.md)
+        /// para cuando SimLevelBuilder pueda darle una cubeta propia.
+        /// </summary>
         private void SpawnChillStone(Transform player)
         {
             var go = new GameObject("ChillStone_Bandeja");
@@ -163,6 +241,12 @@ namespace Alkahest.Game
         /// Los cinco grifos, en COLUMNA VERTICAL sobre el pilar del banco, todos
         /// vertiendo en la misma pila de recogida. Devuelve el de Azoth, que
         /// nace sellado y lo abre el Maestro en la jornada 2.
+        ///
+        /// (playtest 15) SIN CAMBIOS de fondo: TapMountX/TapFirstY/TapStepY se
+        /// leen de SimLevelBuilder (TapMountX=TapPillarX1, dentro de
+        /// LabX0..LabX1) igual que antes -- la columna de grifos, la pila de
+        /// recogida y el pilar que los sostiene siguen siendo, todos, del
+        /// mismo LABORATORIO que el encargo pide ("centro de operaciones").
         ///
         /// Coste de Favor por activación: los básicos son gratis, los versátiles
         /// cuestan — fijado aquí, no en el propio Dispenser, para tener toda la
@@ -191,6 +275,7 @@ namespace Alkahest.Game
             return dispenser;
         }
 
+        /// <summary>(playtest 15) SIN CAMBIOS de fondo: RackX0/X1/TopY viven dentro de LabX0..LabX1 -- el estante de redomas sigue en LABORATORIO.</summary>
         private void SpawnStorageRack(Transform player, Flask flask, SubstanceKnowledge knowledge)
         {
             var go = new GameObject("StorageRack");
@@ -207,6 +292,7 @@ namespace Alkahest.Game
             return orderSystem;
         }
 
+        /// <summary>(playtest 15) SIN CAMBIOS de fondo: DeliveryChute lee su propia copia de las constantes de la boca (ChuteMouthX0..Y1, ver Game/DeliveryChute.cs) directamente de SimLevelBuilder, que las sitúa dentro de EntregaX0..X1 -- la Tolva sigue en ENTREGA sin que este método tenga que pasarle ninguna coordenada.</summary>
         private void SpawnDeliveryChute(OrderSystem orderSystem)
         {
             var go = new GameObject("DeliveryChute");

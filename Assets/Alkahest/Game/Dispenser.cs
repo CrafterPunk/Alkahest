@@ -475,7 +475,20 @@ namespace Alkahest.Game
                     if (!CellGrid.InBounds(x, y)) continue;
                     if (_sim.SampleMaterial(x, y) != MaterialId.Empty) continue;
 
-                    _sim.Paint(x, y, 0, _matId);
+                    // (fix playtest 17) UN GRIFO NACE ESTABLE. Antes esto era
+                    // `Paint`, que NO toca `temp`: la celda heredaba la
+                    // temperatura que tuviera antes. Si la boquilla o la pila se
+                    // habían enfriado alguna vez (la piedra gélida cerca, un
+                    // charco frío previo, hielo que estuvo ahí), el agua RECIÉN
+                    // SALIDA del grifo nacía congelada — el bug que Cesar
+                    // reportó dos rondas seguidas como "el agua del grifo sale
+                    // congelada", y que también explica su "en la hornilla se
+                    // volvía agua pero los bordes se hacían hielo": llegaba ya
+                    // helada y solo se derretía sobre el 40% que cubre la placa.
+                    // Es exactamente la misma clase de fallo que "pintar hielo
+                    // produce agua" (regla 22): materia creada de la nada tiene
+                    // que nacer a una temperatura donde ese material sea ESTABLE.
+                    _sim.PaintStable(x, y, 0, _matId);
                     budget--;
                 }
             }
@@ -492,7 +505,7 @@ namespace Alkahest.Game
                 if (!CellGrid.InBounds(_spoutX, y)) break;
                 if (_sim.SampleMaterial(_spoutX, y) != MaterialId.Empty) continue;
 
-                _sim.Paint(_spoutX, y, 0, _matId);
+                _sim.PaintStable(_spoutX, y, 0, _matId); // (fix playtest 17) mismo criterio que arriba: el rebose también nace estable.
                 _rebosando = false;
                 return;
             }

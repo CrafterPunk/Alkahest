@@ -1,13 +1,19 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using Alkahest.Game;
 
 namespace Alkahest.Sim
 {
     /// <summary>
     /// Traduce el estado de <see cref="CellGrid"/> a una textura y la
     /// muestra sobre un quad en espacio de mundo. Solo redibuja los chunks
-    /// despiertos cada frame (más un refresco completo periódico, por si
-    /// algo se desincronizase) para mantener el coste de subida a GPU bajo.
+    /// despiertos DENTRO DEL RANGO QUE TOCA LA CÁMARA (más un refresco
+    /// completo periódico de esa misma vista, por si algo se desincronizase
+    /// -- ver RenderFrame) para mantener el coste de subida a GPU proporcional
+    /// a la PANTALLA, no al mundo entero (playtest 15: el mundo pasó a medir
+    /// 3x2 pantallas). También posee la cámara: la sigue con zona muerta y
+    /// suavizado (ver UpdateCameraFollow).
     /// </summary>
     public sealed class SimRenderer : MonoBehaviour
     {
@@ -48,6 +54,54 @@ namespace Alkahest.Sim
 
         private const int FullRefreshEveryFrames = 30;
 
+        // =====================================================================
+        // CÁMARA QUE SIGUE AL APRENDIZ (playtest 15)
+        // =====================================================================
+        // Hasta esta ronda FitMainCamera encajaba el mundo ENTERO en pantalla.
+        // Con el taller a 768x288 (3x2 pantallas) eso dejaría cada celda a una
+        // sexta parte de su tamaño en pantalla -- inservible. La cámara pasa a
+        // encuadrar aproximadamente UNA pantalla (CellGrid.PantallaW x
+        // PantallaH, el encuadre que el jugador lleva 14 rondas validando) y a
+        // seguir al aprendiz con zona muerta + suavizado exponencial.
+
+        /// <summary>
+        /// Fracción del MEDIO ancho/alto de pantalla que el jugador puede
+        /// recorrer desde el centro antes de que la cámara empiece a
+        /// corregir (zona muerta). 0.30 = el aprendiz puede moverse en un
+        /// rectángulo central del 60% de la pantalla sin que la cámara se
+        /// entere; solo al salirse de ese rectángulo la cámara empieza a
+        /// perseguirlo. Un juego de observar (falling-sand) se lee mejor con
+        /// una cámara que NO reacciona a cada pixel de movimiento del
+        /// aprendiz -- eso es exactamente lo que evita la zona muerta.
+        /// </summary>
+        private const float DeadZoneHalfFraction = 0.30f;
+
+        /// <summary>
+        /// Constante de suavizado exponencial (más alto = más rígido/menos
+        /// inercia). Fórmula independiente del framerate:
+        /// t = 1 - e^(-k*dt); pos = Lerp(pos, objetivo, t). A 30fps y 144fps
+        /// converge a la MISMA posición en el MISMO tiempo real -- a
+        /// diferencia de un Lerp con un factor fijo por frame (que depende
+        /// del framerate y "tiembla" distinto según la máquina).
+        /// </summary>
+        private const float CameraFollowSharpness = 6f;
+
+        /// <summary>
+        /// Multiplicador del tamaño ortográfico base mientras se mantiene
+        /// pulsado Tab (vista ampliada, ver Update()). x2.2 muestra sobre 2
+        /// pantallas de ancho -- suficiente para orientarse en el taller de
+        /// 3x2 sin llegar a encuadrar el mundo entero (que volvería a hacer
+        /// cada celda diminuta, el problema original de esta ronda).
+        /// </summary>
+        private const float WideViewMultiplier = 2.2f;
+
+        /// <summary>Colchón de chunks fuera del rectángulo visible que el barrido de render sigue considerando "cerca de la vista" (ver RenderFrame). En chunks, no celdas: 2 = 32 celdas de margen a cada lado.</summary>
+        private const int ViewMarginChunks = 2;
+
+        private Camera _mainCam;
+        private ApprenticeController _apprentice;
+        private float _baseOrthoSize;
+
         private Universe _universe;
         private CellGrid _grid;
 
@@ -66,6 +120,25 @@ namespace Alkahest.Sim
         // RenderFrame para decidir si vale la pena saltárselo aunque esté
         // dormido. Ver el porqué completo en RenderFrame.
         private bool[] _chunkContinuousAnim;
+        // =====================================================================
+        // CHUNKS SUCIOS FUERA DE CÁMARA (playtest 15)
+        // =====================================================================
+        // Con el barrido de RenderFrame acotado al rango de chunks que toca la
+        // vista (ver RenderFrame), un chunk que cambia MIENTRAS está fuera de
+        // ese rango nunca se visita -- si además le da tiempo a dormirse otra
+        // vez (SleepTicks=30) antes de que la cámara llegue, entraría en vista
+        // con "awake=false" y pintado con colores VIEJOS para siempre (nadie
+        // volvería a redibujarlo). Mecanismo: CellGrid.chunkTouchedTick YA se
+        // actualiza en CADA WakeChunk para TODOS los chunks, estén o no en
+        // cámara (lo necesita el propio stepper) -- así que basta con que este
+        // renderer recuerde, por chunk, en qué "touchedTick" lo pintó por
+        // última vez. Si el valor actual de CellGrid difiere del recordado (o
+        // el chunk no se ha pintado nunca), el chunk está sucio y se fuerza su
+        // redibujado la PRIMERA vez que el barrido vuelve a visitarlo -- sin
+        // coste alguno mientras permanece fuera de rango (no se evalúa hasta
+        // que entra). Ver el chequeo completo en RenderFrame.
+        private uint[] _chunkLastRenderTick;
+        private bool[] _chunkEverRendered;
         private Transform _quad;
 
         private int _frameCounter;
@@ -97,6 +170,12 @@ namespace Alkahest.Sim
             _pixels = new Color32[CellGrid.W * CellGrid.H];
             _chunkScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
             _chunkContinuousAnim = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
+            _chunkLastRenderTick = new uint[CellGrid.ChunksX * CellGrid.ChunksY];
+            // (playtest 15) `_chunkEverRendered` arranca todo en false por
+            // defecto -- exactamente la semántica que hace falta ("nunca se
+            // pintó, fuerza el primer redibujado sin importar el tick"), sin
+            // necesidad de un valor centinela para el array de ticks.
+            _chunkEverRendered = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
 
             // Guardia explícita: todo el render por chunks asume que CHUNK divide
             // los dos ejes. Si alguien vuelve a cambiar CellGrid.W/H a un tamaño
@@ -115,32 +194,167 @@ namespace Alkahest.Sim
             _texture.Apply(false);
 
             BuildQuad();
+
+            // (playtest 15) El aprendiz puede no existir todavía en este punto
+            // (AlkahestGameBootstrap.Start() y AlkahestSim.Start() viven en
+            // objetos distintos, sin orden garantizado -- ver el comentario de
+            // AlkahestGameBootstrap). UpdateCameraFollow ya sabe caer al centro
+            // del mundo si _apprentice sigue null; Update() reintentará la
+            // búsqueda cada frame SOLO mientras siga sin encontrarlo (ver el
+            // comentario de Update()), así que esto se autocorrige sin más
+            // intervención en cuanto el aprendiz aparece.
+            _mainCam = Camera.main;
             FitMainCamera();
+            UpdateCameraFollow(snap: true);
             RenderFrame(0, true);
         }
 
         /// <summary>
-        /// (fix playtest 5: "pantalla descuadrada") La cámara guardada en la escena
-        /// tenía el encuadre del mundo antiguo (384x216). En vez de depender de
-        /// regenerar la escena, la cámara se AUTOAJUSTA al mundo actual en cada
-        /// arranque: centro y tamaño ortográfico derivados de CellGrid, siempre.
+        /// (playtest 15, reemplaza el fix de playtest 5) Antes esto encajaba el
+        /// mundo ENTERO en pantalla -- correcto mientras el mundo medía una
+        /// pantalla, inservible con el taller a 768x288 (cada celda a 1/6 de su
+        /// tamaño). Ahora solo calcula el TAMAÑO base: una pantalla
+        /// (CellGrid.PantallaW x PantallaH, NUNCA hardcodeado), encajando la
+        /// dimensión limitante exactamente igual que el fix de playtest 6 (ese
+        /// arreglo costó dos playtests -- se conserva intacto, solo cambia qué
+        /// medidas de mundo alimentan la fórmula: pantalla en vez de mundo
+        /// entero). La POSICIÓN de la cámara ya no se toca aquí -- la fija
+        /// UpdateCameraFollow cada frame seguido al aprendiz.
         /// </summary>
-        private static void FitMainCamera()
+        private void FitMainCamera()
         {
-            var cam = Camera.main;
+            var cam = _mainCam;
             if (cam == null) return;
+            float pantallaW = CellGrid.PantallaW * CellWorldSize;
+            float pantallaH = CellGrid.PantallaH * CellWorldSize;
+            cam.orthographic = true;
+            // (fix playtest 6, intacto) Si el viewport es más ESTRECHO que el
+            // aspecto de la pantalla objetivo, encajar solo la altura RECORTA
+            // los lados. Se encaja la dimensión limitante: sobra arriba/abajo
+            // antes que cortar.
+            float aspect = cam.aspect > 0.01f ? cam.aspect : 16f / 9f;
+            float sizeForHeight = pantallaH * 0.5f;
+            float sizeForWidth = (pantallaW * 0.5f) / aspect;
+            _baseOrthoSize = Mathf.Max(sizeForHeight, sizeForWidth);
+            cam.backgroundColor = BackgroundColor;
+        }
+
+        /// <summary>
+        /// Cámara con seguimiento (playtest 15): zona muerta + suavizado
+        /// exponencial + vista ampliada opcional (Tab) + acotado a los bordes
+        /// del mundo. Se llama cada frame visual desde Update() (independiente
+        /// del tick de simulación, para que el suavizado no dependa de a qué
+        /// framerate cae el acumulador de AlkahestSim -- ver su comentario) y
+        /// una vez con snap=true desde Init().
+        /// </summary>
+        /// <param name="snap">true = coloca la cámara EXACTAMENTE en el
+        /// objetivo sin suavizar (arranque, o el primer frame en que el
+        /// aprendiz aparece tras no haberse encontrado -- evitar un paneo
+        /// lento desde el centro del mundo hasta el aprendiz al empezar la
+        /// partida).</param>
+        private void UpdateCameraFollow(bool snap)
+        {
+            if (_mainCam == null) return;
+
+            // (playtest 15) Búsqueda perezosa: el orden Start() entre
+            // AlkahestGameBootstrap (crea al aprendiz) y AlkahestSim (crea
+            // este SimRenderer) NO está garantizado. Se reintenta cada frame
+            // SOLO mientras siga sin encontrarlo -- en cuanto aparece, se
+            // cachea para siempre y esta rama deja de ejecutarse (nunca busca
+            // por frame en el caso normal, que es el 100% de la partida salvo
+            // el primer frame o dos).
+            bool aprendizNuevo = false;
+            if (_apprentice == null)
+            {
+                _apprentice = FindAnyObjectByType<ApprenticeController>();
+                aprendizNuevo = _apprentice != null;
+            }
+            bool snapAhora = snap || aprendizNuevo;
+
+            // VISTA AMPLIADA (Tab, mantener pulsado): atajo del MUNDO -- debe
+            // respetar la regla 12 de CLAUDE.md (UiStyles.EscribiendoTexto +
+            // JournalHud.Abierto). Comprobado libre en docs/HANDOFF.md sección
+            // "Playtest 10" (tabla de atajos: no aparece ninguna T-A-B). Solo
+            // ORIENTA -- no cambia gameplay ni desbloquea nada -- así que basta
+            // con las dos guardas estándar, sin InputLocked (no es una acción
+            // de juego, es un "alejar la cámara para mirar el plano").
+            var kb = Keyboard.current;
+            bool wide = kb != null && kb.tabKey.isPressed
+                        && !UiStyles.EscribiendoTexto && !JournalHud.Abierto;
+            float targetSize = wide ? _baseOrthoSize * WideViewMultiplier : _baseOrthoSize;
+
+            float dt = Time.deltaTime;
+            float t = snapAhora ? 1f : (1f - Mathf.Exp(-CameraFollowSharpness * dt));
+
+            // El tamaño se suaviza con la MISMA curva que la posición: entrar y
+            // salir de la vista ampliada de golpe sería un latigazo tan brusco
+            // como una cámara que salta de posición.
+            _mainCam.orthographicSize = Mathf.Lerp(_mainCam.orthographicSize, targetSize, t);
+
+            float orthoH = _mainCam.orthographicSize;
+            float aspect = _mainCam.aspect > 0.01f ? _mainCam.aspect : 16f / 9f;
+            float orthoW = orthoH * aspect;
+
+            Vector3 playerPos = _apprentice != null
+                ? _apprentice.transform.position
+                : new Vector3(CellGrid.W * CellWorldSize * 0.5f, CellGrid.H * CellWorldSize * 0.5f, 0f);
+
+            Vector3 camPos = _mainCam.transform.position;
+
+            // ZONA MUERTA: el aprendiz se mueve libre dentro del rectángulo
+            // central sin que la cámara reaccione; solo al cruzar el borde la
+            // cámara se desplaza lo justo para devolver al aprendiz al borde
+            // de la zona (nunca lo "recentra" de golpe -- eso sería el propio
+            // salto brusco que la zona muerta existe para evitar).
+            float halfDeadW = orthoW * DeadZoneHalfFraction;
+            float halfDeadH = orthoH * DeadZoneHalfFraction;
+            float dx = playerPos.x - camPos.x;
+            float dy = playerPos.y - camPos.y;
+            float targetX = camPos.x;
+            float targetY = camPos.y;
+            if (dx > halfDeadW) targetX = playerPos.x - halfDeadW;
+            else if (dx < -halfDeadW) targetX = playerPos.x + halfDeadW;
+            if (dy > halfDeadH) targetY = playerPos.y - halfDeadH;
+            else if (dy < -halfDeadH) targetY = playerPos.y + halfDeadH;
+
+            float newX = Mathf.Lerp(camPos.x, targetX, t);
+            float newY = Mathf.Lerp(camPos.y, targetY, t);
+
+            // ACOTADO AL MUNDO: la cámara nunca debe enseñar fuera de los
+            // bordes -- salvo que el propio eje del mundo sea más ESTRECHO que
+            // el viewport (el mundo mide 768x288, no siempre 16:9 exacto según
+            // aspect/vista ampliada), en cuyo caso no hay "dentro" posible y se
+            // centra en ese eje en vez de forzar un clamp que oscilaría.
             float worldW = CellGrid.W * CellWorldSize;
             float worldH = CellGrid.H * CellWorldSize;
-            cam.orthographic = true;
-            // (fix playtest 6) Si el viewport es más ESTRECHO que el aspecto del mundo,
-            // encajar solo la altura RECORTA los lados (los grifos quedaban fuera).
-            // Se encaja la dimensión limitante: sobra arriba/abajo antes que cortar.
-            float aspect = cam.aspect > 0.01f ? cam.aspect : 16f / 9f;
-            float sizeForHeight = worldH * 0.5f;
-            float sizeForWidth = (worldW * 0.5f) / aspect;
-            cam.orthographicSize = Mathf.Max(sizeForHeight, sizeForWidth);
-            cam.transform.position = new Vector3(worldW * 0.5f, worldH * 0.5f, -10f);
-            cam.backgroundColor = BackgroundColor;
+            float clampedX = worldW <= orthoW * 2f ? worldW * 0.5f : Mathf.Clamp(newX, orthoW, worldW - orthoW);
+            float clampedY = worldH <= orthoH * 2f ? worldH * 0.5f : Mathf.Clamp(newY, orthoH, worldH - orthoH);
+
+            _mainCam.transform.position = new Vector3(clampedX, clampedY, -10f);
+        }
+
+        /// <summary>
+        /// Update() de Unity, INDEPENDIENTE del tick de simulación (playtest
+        /// 15): AlkahestSim solo llama a RenderFrame cuando el acumulador de
+        /// Time.deltaTime completa un paso de 30Hz, así que a framerates altos
+        /// se saltan frames de render -- moviendo la cámara solo ahí se vería
+        /// a tirones. Aquí se actualiza SIEMPRE, cada frame visual, igual que
+        /// se movería cualquier cámara de seguimiento en un juego que no fuera
+        /// de simulación a tick fijo.
+        /// </summary>
+        private void Update()
+        {
+            if (_texture == null) return; // Init() todavía no ha corrido.
+            if (_mainCam == null) _mainCam = Camera.main;
+            if (_mainCam == null) return;
+
+            float aspectNow = _mainCam.aspect;
+            if (!Mathf.Approximately(aspectNow, _lastAspect))
+            {
+                _lastAspect = aspectNow;
+                FitMainCamera();
+            }
+            UpdateCameraFollow(snap: false);
         }
 
         private void BuildQuad()
@@ -161,23 +375,77 @@ namespace Alkahest.Sim
             _quad.position = Vector3.zero; // pivot en (0,0): el sprite cubre 25.6 x 14.4 exacto (256x144 celdas de 0.1).
         }
 
-        /// <summary>Redibuja los chunks despiertos (o todos, si toca refresco completo) y sube la textura a GPU.</summary>
+        /// <summary>
+        /// Rango de chunks [cx0,cx1) x [cy0,cy1) que la cámara actual puede
+        /// ver, más <see cref="ViewMarginChunks"/> chunks de colchón a cada
+        /// lado (para que un chunk ya esté fresco al llegar el jugador, en
+        /// vez de "popear" justo en el borde de pantalla). Clampado a los
+        /// límites reales de la grilla. Si no hay cámara (herramientas de
+        /// Editor sin escena de juego), cae al rango completo -- mismo
+        /// espíritu que el fallback de UpdateCameraFollow al centro del
+        /// mundo: nunca dejar el render roto por falta de cámara.
+        /// </summary>
+        private void ComputeVisibleChunkRange(out int cx0, out int cy0, out int cx1, out int cy1)
+        {
+            if (_mainCam == null)
+            {
+                cx0 = 0; cy0 = 0; cx1 = CellGrid.ChunksX; cy1 = CellGrid.ChunksY;
+                return;
+            }
+
+            float halfH = _mainCam.orthographicSize;
+            float halfW = halfH * (_mainCam.aspect > 0.01f ? _mainCam.aspect : 16f / 9f);
+            Vector3 p = _mainCam.transform.position;
+
+            // Clampar en CELDAS antes de dividir por CHUNK: con el mundo más
+            // estrecho que el viewport en algún eje (cámara centrada, ver
+            // UpdateCameraFollow) el rectángulo de cámara puede sobresalir por
+            // fuera de la grilla, y la división entera de un negativo trunca
+            // hacia cero en vez de hacer floor -- se evita el caso especial
+            // recortando a [0,W]/[0,H] primero, donde la división entera ya
+            // coincide con floor.
+            int cellX0 = Mathf.Clamp(Mathf.FloorToInt((p.x - halfW) / CellWorldSize), 0, CellGrid.W);
+            int cellX1 = Mathf.Clamp(Mathf.CeilToInt((p.x + halfW) / CellWorldSize), 0, CellGrid.W);
+            int cellY0 = Mathf.Clamp(Mathf.FloorToInt((p.y - halfH) / CellWorldSize), 0, CellGrid.H);
+            int cellY1 = Mathf.Clamp(Mathf.CeilToInt((p.y + halfH) / CellWorldSize), 0, CellGrid.H);
+
+            cx0 = Mathf.Max(0, cellX0 / CellGrid.CHUNK - ViewMarginChunks);
+            cy0 = Mathf.Max(0, cellY0 / CellGrid.CHUNK - ViewMarginChunks);
+            int lastCellX = Mathf.Max(cellX0, cellX1 - 1);
+            int lastCellY = Mathf.Max(cellY0, cellY1 - 1);
+            cx1 = Mathf.Min(CellGrid.ChunksX, lastCellX / CellGrid.CHUNK + 1 + ViewMarginChunks);
+            cy1 = Mathf.Min(CellGrid.ChunksY, lastCellY / CellGrid.CHUNK + 1 + ViewMarginChunks);
+        }
+
+        /// <summary>
+        /// Redibuja los chunks que tocan la vista actual (despiertos, con
+        /// animación puramente posicional, o sucios de un cambio mientras
+        /// estaban fuera de cámara -- ver el mecanismo en la cabecera de
+        /// _chunkLastRenderTick), o TODOS los que tocan la vista si toca
+        /// refresco completo periódico. Sube la textura a GPU solo si de
+        /// verdad se pintó algo.
+        /// </summary>
         private float _lastAspect;
         public void RenderFrame(uint tick, bool forceFull = false)
         {
-            var camNow = Camera.main;
-            if (camNow != null && !Mathf.Approximately(camNow.aspect, _lastAspect))
-            {
-                _lastAspect = camNow.aspect;
-                FitMainCamera();
-            }
             _frameCounter++;
             bool full = forceFull || (_frameCounter % FullRefreshEveryFrames) == 0;
 
-            for (int cy = 0; cy < CellGrid.ChunksY; cy++)
+            // (playtest 15) EL BARRIDO YA NO RECORRE LOS 48x18=864 CHUNKS DEL
+            // MUNDO: se acota al rectángulo que toca la vista (más margen).
+            // Antes, con el mundo a una pantalla, barrer todo era barrer lo
+            // visible -- ahora son cosas distintas y barrer de más cuesta
+            // proporcional al MUNDO en vez de a la PANTALLA, justo lo que este
+            // encargo pide evitar.
+            ComputeVisibleChunkRange(out int cx0, out int cy0, out int cx1, out int cy1);
+
+            bool anyDrawn = false;
+            for (int cy = cy0; cy < cy1; cy++)
             {
-                for (int cx = 0; cx < CellGrid.ChunksX; cx++)
+                for (int cx = cx0; cx < cx1; cx++)
                 {
+                    int ci = CellGrid.ChunkIndex(cx, cy);
+
                     // (playtest 12) "Un patrón animado en un chunk DORMIDO no se
                     // verá animar" -- el problema real y por qué NO basta con
                     // subir FullRefreshEveryFrames:
@@ -200,24 +468,50 @@ namespace Alkahest.Sim
                     //     throttle de MorphTick -- ver el comentario junto a
                     //     `continuousAnim` en ComputeCellColor.)
                     //   · Subir la frecuencia de refresco completo "arreglaría" esto
-                    //     a costa de redibujar TODA la grilla (16x9 chunks) más a
-                    //     menudo por un puñado de sustancias innominadas que quizá
-                    //     ocupen 2 o 3 chunks -- caro de más para el problema real.
+                    //     a costa de redibujar TODA LA VISTA más a menudo por un
+                    //     puñado de sustancias innominadas que quizá ocupen 2 o 3
+                    //     chunks -- caro de más para el problema real.
                     // Solución elegida: marcar por chunk (RenderChunk, abajo) si
                     // contiene materia con patrón puramente temporal + ritmoAnim>0,
                     // y eximir SOLO esos chunks del sueño para el REDIBUJADO (la
                     // física de esa celda se queda dormida igual; solo se repinta).
+                    // Al vivir DENTRO del rango ya acotado a la vista, un chunk
+                    // animado fuera de cámara simplemente no se evalúa -- no se
+                    // anima nada que nadie ve (la otra mitad del encargo).
                     bool awake = _grid.IsChunkAwake(cx, cy);
-                    bool animado = _chunkContinuousAnim[CellGrid.ChunkIndex(cx, cy)];
-                    if (!full && !awake && !animado) continue;
-                    RenderChunk(cx, cy, tick);
+                    bool animado = _chunkContinuousAnim[ci];
+
+                    // CHUNKS SUCIOS FUERA DE CÁMARA (ver la cabecera de
+                    // _chunkLastRenderTick para el mecanismo completo): un
+                    // chunk que cambió mientras el barrido no lo visitaba y ya
+                    // volvió a dormirse (30 ticks sin cambios) entraría en
+                    // vista con awake=false y colores viejos si no fuera por
+                    // este chequeo -- se compara contra chunkTouchedTick, que
+                    // CellGrid mantiene al día para TODOS los chunks siempre,
+                    // los visite o no este renderer.
+                    bool sucioFueraDeCamara = !_chunkEverRendered[ci]
+                        || _grid.chunkTouchedTick[ci] != _chunkLastRenderTick[ci];
+
+                    if (!full && !awake && !animado && !sucioFueraDeCamara) continue;
+                    RenderChunk(cx, cy, tick, ci);
+                    anyDrawn = true;
                 }
             }
 
-            _texture.Apply(false);
+            // (playtest 15) Texture2D.Apply() sube la textura ENTERA (no solo
+            // los rectángulos tocados por SetPixels32) cada vez que se llama --
+            // antes se llamaba en TODOS los frames con al menos un tick de sim,
+            // incluso los que no pintaban ni un chunk (mundo entero dormido,
+            // cámara quieta). Con el mundo asentado eso es tirar ~864KB de
+            // ancho de banda a GPU por nada, cada frame. Ahora solo sube si
+            // este mismo RenderFrame pintó de verdad algo.
+            if (anyDrawn)
+            {
+                _texture.Apply(false);
+            }
         }
 
-        private void RenderChunk(int cx, int cy, uint tick)
+        private void RenderChunk(int cx, int cy, uint tick, int chunkIndex)
         {
             CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
             int w = x1 - x0;
@@ -239,7 +533,14 @@ namespace Alkahest.Sim
                     scratch[scratchI++] = c;
                 }
             }
-            _chunkContinuousAnim[CellGrid.ChunkIndex(cx, cy)] = chunkAnimado;
+            _chunkContinuousAnim[chunkIndex] = chunkAnimado;
+
+            // (playtest 15) Marca este chunk como "al día" con el estado que
+            // CellGrid conoce en este instante -- ver la cabecera de
+            // _chunkLastRenderTick para el porqué (mecanismo de chunks sucios
+            // fuera de cámara).
+            _chunkLastRenderTick[chunkIndex] = _grid.chunkTouchedTick[chunkIndex];
+            _chunkEverRendered[chunkIndex] = true;
 
             _texture.SetPixels32(x0, y0, w, h, scratch);
         }

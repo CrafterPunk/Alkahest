@@ -187,6 +187,51 @@ namespace Alkahest.Game
         /// </summary>
         private static float AlfaPanel(float alfa) => alfa * alfa * alfa;
 
+        /// <summary>
+        /// (fix playtest 16: "el título de la Tolva me sigue por la pantalla al
+        /// moverme a la izquierda") Margen, en píxeles de pantalla, alrededor
+        /// del rectángulo visible dentro del cual un rótulo de mundo TODAVÍA se
+        /// dibuja aunque su ancla haya cruzado el borde -- solo para que un
+        /// objeto justo en el borde de cuadro no parpadee al entrar y salir por
+        /// un píxel de más o de menos con cada frame de movimiento de cámara.
+        /// Fuera de este margen no se dibuja NADA: ni panel, ni texto, ni un
+        /// clamp que lo "traiga" de vuelta a la pantalla.
+        ///
+        /// CAUSA RAÍZ del bug: hasta la fase de mundo grande la cámara
+        /// enmarcaba el mundo ENTERO (ver AlkahestSceneBuilder), así que todo
+        /// punto de mundo estaba siempre en pantalla y el Mathf.Clamp que
+        /// tenían <see cref="Globo"/> y <see cref="PlacaMundo"/> (en X) nunca
+        /// se disparaba -- era una salvaguarda inocua contra un rótulo que se
+        /// dibujara un pelín fuera del área de juego, no una regla de
+        /// visibilidad. Con la cámara SIGUIENDO al aprendiz (pantalla de tres)
+        /// ese clamp se convirtió en el bug real: la Tolva, en cuanto queda
+        /// fuera de cuadro por moverse hacia la izquierda, tenía su rótulo
+        /// clavado en el borde derecho de la pantalla en vez de desaparecer --
+        /// el "objeto fuera de cuadro" no importaba, el clamp lo dibujaba
+        /// siempre en alguna parte visible, así que parecía perseguir al
+        /// jugador. La regla correcta con cámara móvil es la contraria: fuera
+        /// de vista es fuera de vista, punto.
+        /// </summary>
+        private static float MargenFueraDeCuadro => S(24f);
+
+        /// <summary>
+        /// ¿Cae (x, y) -- un punto ya proyectado a coordenadas de PANTALLA,
+        /// cualquiera de las dos convenciones de origen sirve porque el
+        /// rectángulo [0,ancho]x[0,alto] es el mismo volteado en Y -- dentro de
+        /// la pantalla, con <paramref name="margenPx"/> de colchón? Único sitio
+        /// donde vive el criterio de "¿el ancla de este rótulo de mundo sigue
+        /// siendo visible?", compartido por TODA la familia de rótulos de mundo
+        /// (<see cref="Globo"/> vía <see cref="EtiquetaMundo"/>,
+        /// <see cref="PlacaMundo"/>, <see cref="PlacaMundoLateral"/>) -- ver
+        /// <see cref="MargenFueraDeCuadro"/> para la causa raíz del fix
+        /// playtest 16.
+        /// </summary>
+        private static bool DentroDePantalla(float x, float y, float margenPx)
+        {
+            return x >= -margenPx && x <= Screen.width + margenPx
+                && y >= -margenPx && y <= Screen.height + margenPx;
+        }
+
         /// <summary>Rellena un rectángulo con un color plano (usa la textura blanca de Unity tintada con GUI.color).</summary>
         public static void Rellenar(Rect r, Color c)
         {
@@ -221,7 +266,24 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>Chip flotante centrado en una posición de PANTALLA IMGUI (origen arriba-izquierda), recortado a los bordes.</summary>
+        /// <summary>
+        /// Chip flotante centrado en una posición de PANTALLA IMGUI (origen
+        /// arriba-izquierda). `centroGui` puede venir de dos sitios muy
+        /// distintos: un punto de MUNDO ya proyectado (vía
+        /// <see cref="EtiquetaMundo"/> -- máquinas, Tolva) o una posición de
+        /// PANTALLA pura, como el cursor del ratón (FlaskHud/SubstanceKnowledge,
+        /// que por definición nunca sale del rectángulo visible). El
+        /// Mathf.Clamp de más abajo SOLO existe para el segundo caso: mantener
+        /// una burbuja diminuta pegada al cursor totalmente legible aunque el
+        /// ratón esté justo en el borde. NUNCA decide si algo se ve -- eso lo
+        /// decide <see cref="DentroDePantalla"/> primero (fix playtest 16, ver
+        /// <see cref="MargenFueraDeCuadro"/>): si el ancla ya viene de fuera
+        /// del rectángulo con su margen, no se dibuja nada, ni recortado al
+        /// borde ni de ninguna otra forma -- así un rótulo de mundo cuyo
+        /// objeto está fuera de cuadro (la Tolva al desplazarse la cámara)
+        /// desaparece de verdad en vez de quedarse pegado al borde siguiendo
+        /// al jugador.
+        /// </summary>
         public static void Globo(Vector2 centroGui, string texto, Color color)
         {
             Preparar();
@@ -233,6 +295,9 @@ namespace Alkahest.Game
             // desvanece un Globo, no reintroduzca el mismo bug de "recuadro
             // negro vacío" que PlacaMundo/PlacaMundoLateral sí tenían.
             if (color.a <= AlfaMinimaVisible) return;
+            // (fix playtest 16) ver doc de la clase justo arriba -- causa raíz
+            // del rótulo de la Tolva persiguiendo al jugador por el borde.
+            if (!DentroDePantalla(centroGui.x, centroGui.y, MargenFueraDeCuadro)) return;
 
             float w = Ancho(Chip, texto) + S(16f);
             float h = Chip.lineHeight + S(10f);
@@ -252,7 +317,19 @@ namespace Alkahest.Game
         /// <summary>
         /// Etiqueta anclada a un punto del MUNDO (máquinas, Tolva): se convierte
         /// a pantalla, se centra sobre el objeto y se desplaza `subirPx` píxeles
-        /// hacia arriba. Devuelve sin dibujar si no hay cámara o queda detrás.
+        /// hacia arriba. Devuelve sin dibujar si no hay cámara, si el punto
+        /// queda detrás de la cámara (`s.z <= 0`), o si el ancla cae fuera del
+        /// rectángulo visible (fix playtest 16, ver
+        /// <see cref="UiStyles.MargenFueraDeCuadro"/>): con la cámara siguiendo
+        /// al aprendiz, "fuera de cuadro" ya no es un caso raro (era imposible
+        /// con la cámara fija que enmarcaba el mundo entero), así que un objeto
+        /// fuera de pantalla debe dejar de anunciarse, no quedarse clavado en
+        /// el borde -- eso es justo lo que hacía antes <see cref="Globo"/> con
+        /// su Mathf.Clamp, y era la causa del rótulo de la Tolva "persiguiendo"
+        /// al jugador reportada en el playtest 16. <see cref="Globo"/> repite
+        /// esta misma comprobación (defensa en profundidad si algún día se le
+        /// llama con un punto de mundo sin pasar por aquí), así que este
+        /// rechazo temprano es sobre todo documentación de la causa.
         /// </summary>
         public static void EtiquetaMundo(Vector3 posicionMundo, string texto, Color color, float subirPx)
         {
@@ -261,6 +338,7 @@ namespace Alkahest.Game
 
             Vector3 s = cam.WorldToScreenPoint(posicionMundo);
             if (s.z <= 0f) return;
+            if (!DentroDePantalla(s.x, s.y, MargenFueraDeCuadro)) return; // (fix playtest 16)
 
             // Mouse/cámara usan origen abajo-izquierda; IMGUI arriba-izquierda.
             Globo(new Vector2(s.x, Screen.height - s.y - subirPx), texto, color);
@@ -269,8 +347,8 @@ namespace Alkahest.Game
         /// <summary>
         /// RÓTULO FIJO DE APARATO. Pequeño, sin fondo opaco de aviso, anclado a
         /// un punto del mundo con un desplazamiento en píxeles (positivo = hacia
-        /// arriba, NEGATIVO = hacia abajo) y SIN recortarse contra los bordes
-        /// verticales de la pantalla.
+        /// arriba, NEGATIVO = hacia abajo) y SIN recortarse contra ningún borde
+        /// de la pantalla, ni en X ni en Y (fix playtest 16, ver más abajo).
         ///
         /// POR QUÉ EXISTE (playtest 4: "el label de las placas tapa la
         /// interacción al aspirar"): <see cref="Globo"/> centra su chip sobre el
@@ -280,6 +358,22 @@ namespace Alkahest.Game
         /// atornilladas al aparato: van SIEMPRE en el mismo sitio relativo a él
         /// (típicamente por debajo, sobre la piedra, fuera de la zona de trabajo),
         /// son diminutos y no se mueven nunca.
+        ///
+        /// ACOTADO A BORDES, HERENCIA DE LA CÁMARA FIJA (fix playtest 16): este
+        /// método SÍ acotaba antes la X con Mathf.Clamp ("para que una chapa
+        /// junto al muro derecho siguiera siendo legible"), mientras que en Y
+        /// nunca se acotó a propósito. Esa asimetría solo era inocua con la
+        /// cámara fija de antes (enmarcaba el mundo entero: el clamp en X nunca
+        /// llegaba a dispararse de verdad). Con la cámara siguiendo al aprendiz
+        /// el clamp en X reproducía EXACTAMENTE el mismo bug que <see cref="Globo"/>
+        /// tenía con el rótulo de la Tolva: una chapa cuyo aparato queda fuera
+        /// de cuadro por la izquierda o la derecha se quedaba clavada en ese
+        /// borde en vez de desaparecer. Se quita el clamp en X y se añade el
+        /// mismo rechazo temprano que ya tenía Y de forma implícita (dibujar
+        /// fuera del rectángulo de pantalla ya no se veía, pero ahora es
+        /// explícito y con margen, ver <see cref="DentroDePantalla"/>): las dos
+        /// coordenadas comparten HOY el mismo criterio -- si el aparato está
+        /// fuera de cuadro, su chapa también lo está, punto.
         /// </summary>
         public static void PlacaMundo(Vector3 posicionMundo, string texto, Color color, float desplazarPx)
         {
@@ -309,13 +403,16 @@ namespace Alkahest.Game
 
             Vector3 s = cam.WorldToScreenPoint(posicionMundo);
             if (s.z <= 0f) return;
+            if (!DentroDePantalla(s.x, s.y, MargenFueraDeCuadro)) return; // (fix playtest 16)
 
             float w = Ancho(ChipMini, texto) + S(10f);
             float h = ChipMini.lineHeight + S(6f);
-            // Solo se acota en X (para que una chapa junto al muro derecho siga
-            // siendo legible); en Y NUNCA se mueve: si el aparato está fuera de
-            // cuadro su chapa también debe estarlo.
-            float x = Mathf.Clamp(s.x - w * 0.5f, S(2f), Mathf.Max(S(2f), Screen.width - w - S(2f)));
+            // (fix playtest 16) Ni X ni Y se acotan ya al borde -- ver doc de
+            // la clase. El rechazo de arriba ya garantiza que solo llegamos
+            // aquí con un ancla dentro de pantalla (o dentro del margen de
+            // colchón), así que dibujar sin clamp no puede "salirse" de forma
+            // perceptible.
+            float x = s.x - w * 0.5f;
             float y = Screen.height - s.y - desplazarPx - h * 0.5f;
             var r = new Rect(x, y, w, h);
 
@@ -348,8 +445,15 @@ namespace Alkahest.Game
         ///
         /// `aLaIzquierda` = true pone el borde DERECHO de la chapa a
         /// `separacionPx` de la posición; false pone el borde IZQUIERDO.
-        /// A diferencia de <see cref="PlacaMundo"/> no se acota en X: si el
-        /// aparato está fuera de cuadro su chapa también debe estarlo.
+        /// A diferencia de <see cref="PlacaMundo"/> (antes del fix playtest 16)
+        /// esta nunca acotó en X -- ya tenía el criterio correcto de "si el
+        /// aparato está fuera de cuadro su chapa también debe estarlo". Lo que
+        /// le faltaba, y ahora comparte con el resto de la familia, es el
+        /// rechazo TEMPRANO y explícito por estar fuera del rectángulo visible
+        /// (ver <see cref="DentroDePantalla"/>): antes confiaba en que dibujar
+        /// un Rect fuera de pantalla simplemente "no se viera", lo cual es
+        /// cierto pero no documenta la regla ni ahorra el trabajo de medir/
+        /// pintar un rótulo que nadie va a ver.
         /// </summary>
         public static void PlacaMundoLateral(Vector3 posicionMundo, string texto, Color color,
                                              float separacionPx, float desplazarYPx, float alfa, bool aLaIzquierda)
@@ -370,6 +474,7 @@ namespace Alkahest.Game
 
             Vector3 s = cam.WorldToScreenPoint(posicionMundo);
             if (s.z <= 0f) return;
+            if (!DentroDePantalla(s.x, s.y, MargenFueraDeCuadro)) return; // (fix playtest 16)
 
             float w = Ancho(ChipMini, texto) + S(10f);
             float h = ChipMini.lineHeight + S(6f);
