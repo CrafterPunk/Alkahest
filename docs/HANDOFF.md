@@ -18,8 +18,10 @@ en el proyecto pero no integrado con la sim.
 | Leyes/reacciones/cultivo (M3) | ✅ Compila y arranca; Edictos sortean y se muestran; reacciones/cultivo SIN prueba de juego profunda aún |
 | Loop de juego (M4) | ✅ Título → Jornada 1 con pedidos generados VISTO en pantalla; el resto del flujo (entregas→Favor→jornadas 2-3→final) SIN probar |
 | Color de fuego + shimmer líquidos | ✅ código desplegado, PENDIENTE verificación visual (feedback del usuario: "el fuego no tenía color fuego") |
-| Firma morfológica por seed (M12) | código desplegado, PENDIENTE verificar en editor: jugar dos universos seguidos y comprobar legibilidad a escala de celda (ver "Playtest 12"); playtest 13 rehizo el remapeo de escala (5..12 celdas, antes 14..46) y corrigió el alfa heredado de lo innominado — SIGUE sin verse en pantalla |
-| Firma visual GENERADA en redomas/frasco + `PaintStable` + Fresca de `ChillStone` (playtest 13) | código desplegado, SIN VERIFICAR en editor (ver "Playtest 13") |
+| Firma morfológica por seed (M12) | ✅ verificada en editor (playtest 14): Cesar confirma que la piel varía por seed, pero DIAGNOSTICA que eso no basta — ver "Playtest 14" §4, "falta morfología de comportamiento" |
+| Firma visual GENERADA en redomas/frasco + `PaintStable` + Fresca de `ChillStone` (playtest 13) | ✅ verificado en editor (playtest 14), sin reportes nuevos de bug sobre esta parte |
+| Regresión playtest 7→10 en máquinas y `UiStyles` (chapa lateral, halo de foco, límite de usos de E, `PlacaMundoLateral`/`Cercania`) | ✅ RECUPERADA por fusión a tres bandas y validada por Cesar en el editor (playtest 14, ver sección completa — es el hallazgo mayor de la ronda) |
+| Recuadros negros al arrancar / rótulo del frío invertido / Helando redundante / placas de tamaño completo (regresiones de la propia fusión + ajustes pedidos) | ✅ corregidos y validados por Cesar en el editor (playtest 14) |
 | Commits | M1+M2 en `001a9a1`; M3+M4+rebranding PENDIENTE de commit (script `ca_commit.cmd` listo en la raíz del proyecto) |
 
 ## Cómo continuar (receta operativa)
@@ -32,34 +34,49 @@ en el proyecto pero no integrado con la sim.
    Ese es el circuito crítico sin probar.
 4. Balancea lo que chirríe (cantidades de pedido vs capacidad del frasco 900, timer 6 min).
 
-## Backlog priorizado (actualizado tras playtest 13)
-1. **Verificar en Unity y jugar DOS universos seguidos** para juzgar si (a) la variación de la
-   firma morfológica (playtest 12) se PERCIBE de verdad y (b) los patrones se leen ya con poca
-   materia tras el remapeo de escala del playtest 13 — es la pregunta que motivó ambas rondas.
-2. **Comprobar si la piedra en modo Fresca (`ChillStone`, playtest 13) se siente manejable** a
-   diario, o si sigue haciendo falta Helando como opción rápida por defecto.
-3. **Consolidar `FirmaVisualFabrica`** (`Game/StorageRack.cs`) **con el generador de
+## Backlog priorizado (actualizado tras playtest 14)
+**FASE NUEVA — plan de dirección acordado con Cesar tras el diagnóstico "falta morfología"
+(ver "Playtest 14" §4-5), en este orden y por esta razón:**
+1. **Cámara que sigue al aprendiz**: barata, requisito de todo lo demás, y desbloquea probar el
+   taller grande por partes en vez de todo de golpe.
+2. **El taller a 2-3 pantallas**: rediseñar `SimLevelBuilder` con las zonas que bocetó Cesar
+   (cultivo — laboratorio principal — entrega, más un sótano) y hacer conscientes del viewport las
+   tres pasadas que hoy cuestan proporcional al MUNDO entero y no a lo VISIBLE (el refresco
+   completo cada 30 frames, `MorphTick`, `DiffuseTemperature`) — a 768x288 (~221.184 celdas, 6x
+   las 36.864 actuales) dejan de ser gratis.
+3. **La química generada por semilla**: un núcleo fijo que garantice que los encargos siguen
+   siendo posibles + reacciones sorteadas encima, y el diario mostrando "leyes descubiertas: 3 de
+   11" para que se sepa que hay más por descubrir.
+4. **El comportamiento varía por semilla, no solo el aspecto**: que una sustancia trepe en un
+   universo y se hunda en otro; que lo que crece con calor aquí crezca con frío allá. Ahí es donde
+   nacen los nombres que Cesar busca — hoy el color es la única variable, y por eso los nombres
+   salen "amarillo brillante".
+5. **El taller movible**: mover grifos, estantes, placas y botellas con el botón central del
+   ratón, anclados a bedrock, con el grifo orientándose según el lado por el que se ancla.
+6. **El mundo persistente con semilla y progreso guardado**, estilo Minecraft — *"donde sienta que
+   el conocimiento de un universo me suma"*.
+
+**Backlog heredado, aún vigente:**
+7. **Consolidar `FirmaVisualFabrica`** (`Game/StorageRack.cs`) **con el generador de
    `JournalHud`**: duplican las siete funciones de patrón y los hashes (deuda técnica anotada en
    el playtest 13 §4) — mover a un único `Game/FirmaVisualFabrica.cs` compartido.
-4. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
+8. **Enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario**
    (`JournalHud`): la API ya existe, escrita en paralelo en el playtest 10, pero nadie la consume
    todavía (arrastrado sin tocar desde el playtest 10).
-5. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
+9. **Decidir el destino del audio M5**: ¿se queda o se apaga con `SistemaActivo = false` en
    `DirectorDeAudio`? Depende de feedback de Cesar.
-6. **CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una** (playtest 11 §4): no hay
-   onboarding, es diseño y no un ajuste de números. Ver detalle en la sección "Playtest 11".
-7. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` + `productName` en
-   ProjectSettings (los namespaces `Alkahest.*` se quedan — decisión registrada).
-8. **Replantear las redomas** (`StorageRack`): Cesar sugirió que quizás deberían ir abajo, más
-   accesibles, para levantar el gameplay de reacciones/experimentación.
-9. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
-10. **Ejecutar la build de Windows y validarla con la checklist del playtest 11**: el builder ya
+10. **Renombrar repo GitHub** `Alkahest`→`ChaosAlchemy` + `git remote set-url` + `productName` en
+    ProjectSettings (los namespaces `Alkahest.*` se quedan — decisión registrada).
+11. **Resto de M5**: glow aditivo fuego/Vivium, agua con más cuerpo (metaballs/post-blur).
+12. **Ejecutar la build de Windows y validarla con la checklist del playtest 11**: el builder ya
     regenera la escena antes de compilar y deja el resumen en consola + diálogo — falta EJECUTARLO
     y pasar el `.exe` por la checklist (`docs/HANDOFF.md` sección "Playtest 11").
-11. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado. Se decidió hacer la
-    morfología (playtest 12) ANTES por dos razones: de diseño, el co-op multiplica una experiencia
-    (y si la experiencia se agota en una partida, el co-op multiplica el agotamiento); y técnica —
-    el plan de netcode ya añadía un campo nuevo por celda (`CellGrid.morph`), y si se hubiera hecho
+13. **CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada una** (playtest 11 §4): no hay
+    onboarding; probablemente se resuelve junto con el rediseño del taller de la fase 2.
+14. **Multiplayer (riesgo técnico nº1)**: plan diseñado, NO implementado. Se decidió hacer antes la
+    morfología (playtest 12) por dos razones: de diseño, el co-op multiplica una experiencia (y si
+    la experiencia se agota en una partida, el co-op multiplica el agotamiento); y técnica — el
+    plan de netcode ya añadía un campo nuevo por celda (`CellGrid.morph`), y si se hubiera hecho
     después del multiplayer habría obligado a rehacer el formato de deltas.
     - Sim corre SOLO en el host. Clientes: render + input remoto (aspirar/verter/E como RPCs).
     - Estado: deltas de chunks despiertos, RLE por filas del byte mat[] (+temp cuantizada cada 4º
@@ -71,11 +88,12 @@ en el proyecto pero no integrado con la sim.
       `mat[]` que no lo lleve dejará la textura interna desincronizada entre host y clientes.
     - Reusar TODO el FriendsLoop: `SessionCoordinator` para lobby/transporte; el gameplay solo
       habla con él. NO rediseñar el template.
-12. **Medir el coste real de `SimStepper.MorphTick`** con el overlay de dev (F3): estimado
+15. **Medir el coste real de `SimStepper.MorphTick`** con el overlay de dev (F3): estimado
     <0,5 ms/tick sobre un presupuesto de 33 ms, SIN VERIFICAR en Unity (arrastrado desde el
-    playtest 12).
-13. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
-    NO para taller de una pantalla — ver DECISIONS §17).
+    playtest 12) — más urgente ahora que la fase 2 multiplica el tamaño del mundo 6x.
+16. Ideas aparcadas: mercado de ofertas secuenciales, tamiz/filtro, más Edictos, voz (evaluada:
+    NO para taller de una pantalla — ver DECISIONS §17); replantear las redomas del estante (queda
+    absorbido por el taller movible de la fase 5).
 
 ## Riesgos y trampas conocidas
 - El puente Cowork NO puede borrar archivos ni tocar refs de git en el FS montado → scripts .cmd.
@@ -85,6 +103,147 @@ en el proyecto pero no integrado con la sim.
 - SetPixels32 por chunks: hay UN buffer scratch preasignado de 16x16 y el render asume que CHUNK
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
+
+## Playtest 14 → LA REGRESIÓN GRANDE Y SU RECUPERACIÓN A TRES BANDAS, LOS RECUADROS NEGROS
+## EXPLICADOS, HELANDO VS FRESCA, PLACAS MÁS PEQUEÑAS, Y EL DIAGNÓSTICO DE FASE "FALTA
+## MORFOLOGÍA" — TODO VALIDADO POR CESAR EN EL EDITOR
+Ronda dirigida por Opus 5 (rastreo en git de la regresión perdida en tres rondas, especificación
+de 2 encargos con propiedad de archivos disjunta y revisión); Sonnet 5 escribió el código en esos
+2 encargos.
+
+**1. LA REGRESIÓN GRANDE: se perdió el trabajo del playtest 7 y nadie lo notó en tres rondas.**
+Cesar: *"perdimos un update en alguna build, los caños con los títulos apilados nuevamente
+mostrando palabra 'grifo' en todos los títulos y sin brillar al acercarme."*
+Rastreado en git con los tamaños exactos: en el commit **`e3fed6f` (playtest 10)** `Dispenser.cs`
+pasó de **26.866 a 18.186 bytes**, y con él se perdió TODO el trabajo del playtest 7 sobre
+máquinas: la chapa lateral por grifo, el halo de resalte del aparato enfocado, y el límite de 2
+usos del prompt "E". Lo mismo en `ChillStone.cs` (16.950→9.676 bytes) y `HeatPlate.cs`
+(16.858→11.211 bytes). **Y también `UiStyles.PlacaMundoLateral` y `UiStyles.Cercania`**
+(`UiStyles.cs` cayó de 18.876 a 15.970 bytes), **y la sección "Playtest 7" entera de este mismo
+HANDOFF** — no existe hoy ninguna sección con ese nombre; se perdió con lo demás.
+CAUSA: el sandbox de trabajo en la nube se reinició a mitad de la ronda 10; los agentes editaron
+una copia obsoleta y se desplegó encima de lo bueno.
+POR QUÉ NADIE LO VIO EN TRES RONDAS (10, 11, 12): **el juego seguía compilando**, porque se
+perdieron a la vez la API y todos sus consumidores. La única huella era
+`MachineFocus.MostrarPromptE`, declarado y sin un solo llamante durante tres rondas.
+RECUPERACIÓN: fusión a tres bandas — base = versión del commit `2ef67e5` (playtest 9, la última
+buena), encima las decisiones posteriores que sí eran buenas (`Dispenser.ResolverNombre()` y los
+nombres innominados de la regla 13/17, las guardas de atajos de la regla 12, y el estado Fresca de
+`ChillStone` del playtest 13). NO fue un copy-paste del pasado. `UiStyles.PlacaMundoLateral`/
+`Cercania` restauradas desde el historial con sus firmas originales, y los duplicados locales que
+se habían creado como parche se eliminaron después.
+**REGLA DE PROCESO NUEVA, la lección más importante de la ronda**: antes de desplegar hay que
+hacer `git diff` contra el remoto y **desconfiar de TODO archivo que ENCOJA de tamaño**. Un
+archivo que pierde miles de bytes sin que el cambio lo justifique es una regresión hasta que se
+demuestre lo contrario. Que el proyecto compile NO es señal de que no se ha perdido nada.
+
+**2. Las regresiones que produjo la propia fusión (y su arreglo).** Recuperar trabajo de tres
+rondas atrás reintroduce decisiones antiguas que ya se habían corregido después. Salieron tres,
+todas reportadas por Cesar y todas ya arregladas:
+- **Recuadros negros vacíos flotando en el taller al arrancar**, y *"al alejarme del calor se
+  muestra la etiqueta en negro antes de desaparecer"*. CAUSA REAL: `UiStyles.PlacaMundo` **nunca
+  aplicaba el desvanecimiento al panel** — pintaba el fondo a la opacidad fija de `TintaFuerte`
+  ignorando el alfa del llamante, y solo desvanecía el texto. Caso reproducido con las constantes
+  reales: al arrancar, el aprendiz aparece a ~4,75 u de `HeatPlate_0` (dentro de
+  `RangoEstadoDesvanece`=6.5 pero fuera de `RangoNombreDesvanece`=3.6), así que el anillo de
+  NOMBRE pedía dibujar con alfa exactamente 0: texto invisible, panel opaco. Esos eran los dos
+  recuadros. FIX general en `UiStyles` (afecta a `PlacaMundo`, `PlacaMundoLateral` y `Globo`): el
+  panel se desvanece **al cubo** mientras el texto va lineal, así la caja siempre muere antes que
+  la letra; y el umbral de no-dibujar subió de 0,02 a **0,12** (`AlfaMinimaVisible`), que es donde
+  el texto deja de leerse.
+- **El rótulo del frío volvió a la posición incorrecta.** La versión del playtest 7 anclaba los
+  rótulos de `ChillStone` al labio de la bandeja con desplazamiento HACIA ARRIBA; en el playtest
+  13 Cesar validó explícitamente la posición HACIA ABAJO, coherente con `HeatPlate`. La fusión lo
+  invirtió. FIX: `ChillStone` usa ahora el mismo punto (`_centroBloque`, análogo a
+  `HeatPlate._centroChasis`) y el mismo signo negativo (`-S(17f)`/`-S(34f)`). Medición: el offset
+  mayor lleva el rótulo a la fila ~82,7, dentro del hueco de 35 filas de aire (y=53..88), con
+  ~29,7 filas de margen. **La cronología completa quedó escrita en el header del archivo**
+  (playtest 7 → validado en el 13 → invertido por la restauración → corregido), para que no gire
+  una tercera vez.
+- Deja escrito el patrón general: **al recuperar trabajo antiguo, revisar qué decisiones de ese
+  trabajo fueron corregidas después** — una fusión a tres bandas puede deshacer correcciones
+  validadas.
+
+**3. Ajustes pedidos y aplicados.**
+- **Helando no servía para nada que Fresca no hiciera** (medido: Fresca ya cruza el umbral de
+  congelación del agua y el de cristalización con margen en cualquier seed). Ahora Helando
+  conserva su destino de −80 °C pero empuja **12 raw/tick contra los 5 de Fresca**: es el modo "lo
+  necesito YA", a cambio de sobreenfriar y tardar más en volver. El rótulo lo insinúa:
+  `HELANDO -80° · más rápido`.
+- **Se quitó el texto `(alcanza N filas)`**, que no comunicaba. En su lugar la influencia térmica
+  DECAE con la distancia en vez de cortarse en seco. Perfil final `FilaEmpujePct = {100, 45, 15}`
+  (3 filas), tras un primer intento de `{100,60,35,20,10}` (5 filas) que seguía llegando demasiado
+  lejos: −29% de energía inyectada. Idéntico en los dos aparatos, la simetría entre ellos es un
+  principio del proyecto. Distancias medidas al grifo de agua: ChillStone ≈40,5 celdas euclídeas,
+  HeatPlate ≈73,2.
+- **Orden de recuperación térmica** (petición de Cesar: *"lo último en llegar a temperatura normal
+  debería ser la placa"*): al apagarse, la fila ADYACENTE al aparato sigue empujada débilmente
+  (`HoldStepRaw=1`) hacia el último objetivo durante `HoldTicksTrasApagar=60` ticks (2 s), mientras
+  las filas exteriores se sueltan de inmediato. La fuente es ahora lo último en normalizarse.
+  Determinista, sin asignaciones, y sin tocar `SimStepper.DiffuseTemperature` (regla 9).
+- **Placas mucho más pequeñas**, de cara al taller movible: ambos aparatos recortan el ancho que
+  reciben del bootstrap a una fracción centrada del 40% (`FootprintFraction`), aplicada ANTES de
+  `BuildVisual` para que sprite y zona de efecto queden coherentes. HeatPlate 52→21 celdas,
+  ChillStone 46→18. El centro no se mueve, así que foco y rótulos no requieren ajuste.
+  **Propuesta anotada en el código**: que `AlkahestGameBootstrap` pase en el futuro posición +
+  ancho pequeño en vez del interior completo, para poder colocar el aparato en cualquier punto del
+  fondo.
+
+**4. LA CONVERSACIÓN DE DIRECCIÓN — esto es lo más valioso de la ronda.** Cesar reportó que el
+juego **se siente atascado**: cuatro grifos y uno bloqueado, hay que tirar cosas en otros sitios
+para seguir, no ve cómo progresar a combinaciones complejas, solo descubre dos o tres reacciones,
+y *"al cambiar de semilla solo cambio la textura de una de ellas pero no su comportamiento ni su
+aplicación"*. Y lo más agudo: *"me hace más falta morfología, porque si no las texturas solo me
+inducen a poner nombres como 'rojo bonito' o 'amarillo brillante'; quizás si cambia la forma
+entonces sí podría tener otras palabras en mente"*.
+DIAGNÓSTICO ACORDADO, tesis de la fase siguiente: **se ha construido una capa de presentación muy
+rica sobre una capa de sistemas muy delgada.** Trece rondas mejorando cómo el juego SE LEE
+(patrones, audio, diario, rótulos, firmas) mientras el número de cosas que se pueden HACER apenas
+ha crecido: los mismos cuatro grifos, las mismas dos o tres reacciones alcanzables, el mismo
+taller clavado, los mismos tres días. Una semilla nueva solo cambia la piel porque **la piel es lo
+único que se genera**: la química es fija y escrita a mano. Y por eso los nombres salen "amarillo
+brillante": el color es lo único que distingue una sustancia de otra, así que es lo único que se
+puede decir de ella. **El nombre sale del comportamiento, no de la paleta.**
+PROPUESTAS DE CESAR, aceptadas: (a) **taller editable por el jugador** — mover grifos, estantes,
+placas y botellas con el botón central del ratón, anclados a bedrock, con el grifo orientándose
+según el lado por el que se ancla; (b) **mundo persistente con semilla y progreso guardado**,
+estilo Minecraft, *"donde sienta que el conocimiento de un universo me suma"*; (c) **un taller de
+2-3 pantallas de ancho y 1,5-2 de alto**, con su boceto de zonas: cultivo — laboratorio principal —
+entrega, y un sótano. Su razón, que es la correcta y hay que dejarla escrita: *"suficiente para que
+dos personas puedan estar trabajando en cosas distintas sin verse constantemente"* — **eso no es
+estética, es el requisito del co-op**; un taller de una pantalla donde los dos ven lo mismo no es
+cooperativo.
+
+**5. RESPUESTA TÉCNICA: ¿está la simulación desacoplada del viewport?** Pregunta literal de
+Cesar. Respuesta documentada, porque es la base del plan de fase.
+**Sí, y la pieza difícil ya está hecha**: el sistema de chunks con sueño (M1) ya procesa solo lo
+activo, no la grilla entera — es exactamente el mecanismo "de crecer sin simular un tablero
+monstruoso" que él describía.
+Lo que SÍ está acoplado, tres cosas acotadas y ninguna arquitectónica:
+1. `SimRenderer.FitMainCamera()` enmarca el mundo entero a propósito. Una cámara que siga al
+   jugador es un cambio pequeño ahí.
+2. Tres pasadas cuestan proporcional al MUNDO y no a lo VISIBLE: el refresco completo cada 30
+   frames, `MorphTick` (un cuarto de todas las celdas por tick) y `DiffuseTemperature` (toda la
+   grilla). Con 768x288 —3 pantallas x 2, unas **221.184 celdas, 6x las 36.864 actuales**— dejan de
+   ser gratis. Solución: hacerlas conscientes del viewport, igual que ya lo son de los chunks. NO
+   es refactorización.
+3. `SimLevelBuilder` tiene las coordenadas escritas para una pantalla; eso no es refactorizar, es
+   rediseñar el taller, y vive en un solo archivo.
+Lo que NO es problema: una textura de 768x288 son 221k téxeles (trivial para GPU) y los arrays por
+campo pasan de 36k a 221k bytes.
+
+**PENDIENTE tras esta ronda** (ver Backlog arriba para el detalle completo): 1) cámara que sigue
+al aprendiz; 2) el taller a 2-3 pantallas (rediseño de `SimLevelBuilder` + zonas + tres pasadas
+conscientes del viewport); 3) química generada por semilla con núcleo fijo + reacciones sorteadas
++ "leyes descubiertas: N de M" en el diario; 4) comportamiento (no solo aspecto) variable por
+semilla; 5) taller movible; 6) mundo persistente con semilla y progreso; más el backlog heredado
+(consolidar `FirmaVisualFabrica`, enganchar `HintSystem.PistasMostradas`, decidir el audio,
+renombrar el repo, medir `MorphTick`, resto de M5, build de Windows, multiplayer).
+Preguntas abiertas para el próximo playtest: ¿la cámara siguiendo al aprendiz se siente bien sin
+romper la lectura del taller actual? ¿el núcleo fijo de química es suficiente para que los
+encargos generados por semilla sigan siendo siempre resolubles? ¿"leyes descubiertas: N de M"
+comunica que hay más por encontrar sin abrumar?
+
 
 ## Playtest 13 → SAFE MODE, EL HIELO QUE SE FUNDÍA SOLO, HUMO-COMO-BORRADOR ES CORRECTO,
 ## PATRONES SIN SOBRECARGAR MATERIA, FIRMA VISUAL GENERADA EN REDOMAS Y FRASCO, Y LA
@@ -729,6 +888,11 @@ gradual dentro del mismo día 1?
   Cesar, incluida la nota de arranque tras Safe Mode y los dos `CS1503` de compilación,
   especificación de 4 encargos paralelos con propiedad de archivos disjunta y revisión); **Sonnet
   5 escribió el código** en esos 4 encargos, más 1 pase de revisión de compilación.
+- **Playtest 14**: mismo reparto, ronda de recuperación — **Opus 5 dirigió** (rastreo en git de la
+  regresión del playtest 7 perdida durante tres rondas, diagnóstico de las regresiones producidas
+  por la propia fusión de recuperación, especificación de 2 encargos con propiedad de archivos
+  disjunta y revisión, y la conversación de dirección con Cesar sobre la fase siguiente); **Sonnet
+  5 escribió el código** en esos 2 encargos. Todo VALIDADO por Cesar en el editor.
 
 ## Playtest 1 del usuario (post-M4) y fixes aplicados
 Hallazgos de Cesar jugando: (1) el fuego "no parecía fuego": moría a humo gris en ~1.5 s y no

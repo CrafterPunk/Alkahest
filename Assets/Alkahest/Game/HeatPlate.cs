@@ -10,6 +10,24 @@ namespace Alkahest.Game
     /// ARDIENTE) que se ciclan pulsando E cerca de ella.
     ///
     /// ---------------------------------------------------------------------
+    /// AVISO DE PÉRDIDA DE TRABAJO (restaurado playtest 7 / fix playtest 14)
+    /// ---------------------------------------------------------------------
+    /// En el commit e3fed6f (playtest 10) este archivo se SOBRESCRIBIÓ con una
+    /// copia obsoleta anterior al playtest 7 durante un despliegue, y se perdió
+    /// TODO ese trabajo: los tres anillos de rótulo por cercanía, el halo de
+    /// resalte del aparato enfocado y el límite de dos usos del prompt
+    /// "E — ...". Reconstruido aquí a partir de
+    /// /home/claude/restore/p9/HeatPlate.cs (commit 2ef67e5, último bueno antes
+    /// de la pérdida), fusionado a mano con lo que se hizo después (guardas de
+    /// atajos, regla 12). La MISMA regresión también se llevó por delante
+    /// <see cref="UiStyles.Cercania"/> en UiStyles.cs -- ya RESTAURADA ahí (fix
+    /// playtest 14), así que este archivo la usa directamente en vez de una
+    /// copia local. SEÑAL DE ALARMA si esto vuelve a perderse: un grep de
+    /// MachineFocus.MostrarPromptE en Game/{Dispenser,ChillStone,HeatPlate}.cs
+    /// debe dar TRES resultados (uno por archivo) — si vuelve a dar cero, es la
+    /// MISMA regresión otra vez.
+    ///
+    /// ---------------------------------------------------------------------
     /// CAMBIOS DEL PLAYTEST 4
     /// ---------------------------------------------------------------------
     /// 1. IDENTIDAD VISUAL PROPIA. Antes la placa era literalmente una barra de
@@ -23,7 +41,13 @@ namespace Alkahest.Game
     ///    aspirar"). La chapa de identificación va SIEMPRE debajo del chasis,
     ///    sobre la piedra del suelo — nunca dentro de la cuba, que es donde se
     ///    aspira — y es diminuta (UiStyles.PlacaMundo). El prompt "E — regular"
-    ///    solo aparece si estás cerca Y no tienes ningún botón del ratón pulsado.
+    ///    solo aparece si estás cerca, con las manos libres, y solo las dos
+    ///    primeras veces del taller (restaurado playtest 7:
+    ///    MachineFocus.MostrarPromptE — a partir de ahí lo sustituye el RESALTE
+    ///    dorado del aparato enfocado, ver ActualizarResalte). El chasis se
+    ///    apoya en el suelo, al pie de la cuba, justo donde el aprendiz se
+    ///    planta para pulsar E: _centroChasis SÍ está donde el jugador trabaja
+    ///    (a diferencia de ChillStone, no hizo falta un ancla de labio aparte).
     ///
     /// 3. TEMPLADA = LA BANDA DE CRECIMIENTO DE ESTE UNIVERSO. Antes "Tibia"
     ///    fijaba raw 140 (¡160 °C!) y "Caliente" raw 220 (320 °C): el Vivium
@@ -40,31 +64,47 @@ namespace Alkahest.Game
     /// AlkahestSim.InjectHeat de cara al netcode.
     ///
     /// ---------------------------------------------------------------------
-    /// MEDICIÓN CONTRA ChillStone (fix playtest 13): "la placa fría parece
-    /// irradiar más fuerte, tardar más en recuperarse y tener más alcance".
-    /// Comprobado con números reales (detalle completo en la doc de
-    /// ChillStone.cs, que es donde se hizo el fix): RowsAffected (3) y
-    /// TempStepPerTick (5) YA eran IDÉNTICOS a los de ChillStone -- no hay
-    /// nada que igualar aquí en alcance/velocidad de empuje. El ancho real
-    /// del área calentada (VatInteriorX1-X0+1 = 52 celdas por cuba) es
-    /// incluso ALGO MAYOR que el de la bandeja fría (ChillTrayInteriorX1-X0+1
-    /// = 46 celdas) — en celdas absolutas, esta placa cubre más área, no
-    /// menos. La asimetría real estaba en que ChillStone SOLO tenía un
-    /// estado activo (el extremo, -80 °C) mientras esta clase ya ofrecía
-    /// TEMPLADA como opción cercana a ambiente para el uso diario; se
-    /// corrigió añadiendo FRESCA a ChillStone (ver esa clase), NO tocando
-    /// nada de esta.
+    /// MEDICIÓN CONTRA ChillStone (playtest 13, NO TOCADA por este fix salvo el
+    /// perfil de caída de abajo): "la placa fría parece irradiar más fuerte,
+    /// tardar más en recuperarse y tener más alcance". RowsAffected (3, ahora
+    /// sustituido por el perfil de caída, ver más abajo) y TempStepPerTick (5)
+    /// YA eran IDÉNTICOS a los de ChillStone -- no había nada que igualar aquí
+    /// en alcance/velocidad de empuje. La asimetría real estaba en que
+    /// ChillStone SOLO tenía un estado activo (el extremo) mientras esta clase
+    /// ya ofrecía TEMPLADA como opción cercana a ambiente; se corrigió
+    /// añadiendo FRESCA a ChillStone (ver esa clase), NO tocando nada de esta.
+    /// A diferencia de ChillStone, aquí NO hay una versión "rápida" de
+    /// ARDIENTE: ARDIENTE es genuinamente necesaria para encender fuego de
+    /// verdad (temperatura que TEMPLADA nunca alcanza), así que ya tenía una
+    /// razón de ser propia -- el análisis de "¿hace falta un estado extra
+    /// rápido?" (fix playtest 14) solo aplicaba a ChillStone.
+    ///
+    /// ---------------------------------------------------------------------
+    /// PERFIL DE CAÍDA DE TEMPERATURA (fix playtest 14, "esperaría que el calor
+    /// irradie moderadamente alrededor" / "el frío sigue llegando al grifo")
+    /// ---------------------------------------------------------------------
+    /// El texto "(alcanza N filas)" del playtest 13 se ha QUITADO (no
+    /// comunicaba nada). El empuje de temperatura por tick DECAE con la
+    /// distancia a la placa en vez de ser uniforme y cortarse en seco: fila
+    /// adyacente al 100% del empuje, cada fila siguiente más débil (ver
+    /// <see cref="FilaEmpujePct"/> para los números viejos/nuevos y la
+    /// distancia medida al grifo, MISMO array que ChillStone.cs, duplicado a
+    /// propósito -- "aplícalo IGUAL en los dos aparatos"). SEGUNDA pasada de
+    /// este mismo playtest 14: la primera extendió el perfil de 3 a 5 filas;
+    /// esta lo recorta a 3 filas con caída más agresiva (ver
+    /// <see cref="FilaEmpujePct"/>). SimStepper.DiffuseTemperature (regla 9 de
+    /// CLAUDE.md) NO se toca: el perfil vive enteramente en
+    /// <see cref="ApplyHeatTick"/>.
     ///
     /// Aparte, y esto NO se toca porque es geometría de nivel (Sim/
     /// SimLevelBuilder.cs, fuera de estos dos archivos): la bandeja fría
     /// (9 filas de alto, 6 útiles) es mucho más DELGADA que una cuba (40
-    /// filas de alto, 36 útiles), así que estas 3 filas de calor cubren un
-    /// 8% de la profundidad útil de la cuba (156 de ~1872 celdas) frente al
-    /// 50% que las mismas 3 filas de frío cubren en la bandeja (138 de 276
-    /// celdas). Es la diferencia física esperable entre "bandeja fina apoyada
-    /// sobre un enfriador" y "caldero hondo sobre una hornilla que calienta
-    /// desde el fondo" — no es un desequilibrio entre estos dos scripts, es
-    /// el contenedor que Sim/SimLevelBuilder.cs les da a cada uno.
+    /// filas de alto, 36 útiles), así que estas filas de calor cubren una
+    /// fracción menor de la profundidad útil de la cuba que las mismas filas
+    /// de frío en la bandeja. Es la diferencia física esperable entre "bandeja
+    /// fina apoyada sobre un enfriador" y "caldero hondo sobre una hornilla
+    /// que calienta desde el fondo" — no es un desequilibrio entre estos dos
+    /// scripts, es el contenedor que Sim/SimLevelBuilder.cs les da a cada uno.
     ///
     /// Y algo geométricamente IMPOSIBLE que el jugador esperaba sin saberlo:
     /// esta placa calienta la cuba en la que vive (y=14..53); la bandeja fría
@@ -72,6 +112,42 @@ namespace Alkahest.Game
     /// Empty no participa en la difusión de temperatura (docs/SIM_NOTES.md).
     /// Ninguna hornilla puede combatir el frío de la bandeja por difusión —
     /// son cubetas sin contacto térmico entre sí.
+    ///
+    /// ---------------------------------------------------------------------
+    /// ORDEN DE RECUPERACIÓN: "LO ÚLTIMO EN NORMALIZARSE ES LA PLACA" (fix
+    /// playtest 14)
+    /// ---------------------------------------------------------------------
+    /// Mismo reporte y mismo mecanismo que en <see cref="ChillStone"/> (ver
+    /// esa clase para la explicación completa): no se puede tocar
+    /// SimStepper.DiffuseTemperature (regla 9), así que al apagarse (ARDIENTE
+    /// -&gt; APAGADA) la fila adyacente (índice 0 del perfil) sigue sujeta
+    /// hacia el último objetivo activo durante <see cref="HoldTicksTrasApagar"/>
+    /// ticks más, con un empuje mínimo (<see cref="HoldStepRaw"/>, ver
+    /// <see cref="ApplyHoldTick"/>) que solo contrarresta el tirón de vuelta a
+    /// ambiente sin seguir calentando nada nuevo (mismo clamp que
+    /// <see cref="ApplyHeatTick"/>). Las filas 1 y 2 se sueltan de inmediato,
+    /// así que se enfrían ANTES que la fila 0 -- la placa siempre es la
+    /// última en volver a temperatura normal. Números idénticos a
+    /// ChillStone.cs a propósito.
+    ///
+    /// ---------------------------------------------------------------------
+    /// TAMAÑO DEL APARATO (fix playtest 14, "las placas son demasiado
+    /// grandes")
+    /// ---------------------------------------------------------------------
+    /// AlkahestGameBootstrap.cs (NO EDITABLE en este encargo) pasa a
+    /// <see cref="Init"/> el interior ÚTIL COMPLETO de la cuba
+    /// (<see cref="SimLevelBuilder.VatInteriorX0"/>/X1, 52 celdas) como
+    /// <c>cellX0</c>/<c>cellX1</c> -- antes el aparato ocupaba ese ancho
+    /// entero, una losa que cubría todo el fondo de la cuba. Ahora
+    /// <see cref="Init"/> lo recorta a una FRACCIÓN centrada
+    /// (<see cref="FootprintFraction"/>=0.4, ~21 de 52 celdas) ANTES de que
+    /// <see cref="BuildVisual"/> calcule nada, así que el sprite (chasis +
+    /// resistencias) Y la zona de efecto (<see cref="ApplyHeatTick"/>, que
+    /// recorre <c>_cellX0.._cellX1</c>) quedan automáticamente coherentes
+    /// entre sí. Recorte SIMÉTRICO: el centro X no se mueve, así que
+    /// <c>PuntoFoco</c> y el ancla de los rótulos siguen exactamente donde
+    /// estaban. Mismo criterio y misma fracción que ChillStone.cs (ver esa
+    /// clase para la propuesta de cara al taller movible).
     /// </summary>
     public sealed class HeatPlate : MonoBehaviour, IMaquinaInteractiva
     {
@@ -79,17 +155,46 @@ namespace Alkahest.Game
 
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
+        /// <summary>Radio de interacción con E (ESCALA COMPARTIDA con Dispenser/ChillStone, ver ambos archivos).</summary>
         private const float ProximityRange = 3.2f;
         private const byte ArdienteRaw = 220; // ~320 °C
         private const int TempStepPerTick = 5;
 
         /// <summary>
-        /// Filas por encima de la placa que reciben calor. Subido de 2 a 3 en el
-        /// pase de reingeniería: las cubas son más profundas y la bandeja fría
-        /// solo tiene 6 filas útiles; con 2 filas el gradiente tardaba tanto en
-        /// subir que "calentar la cuba" no se sentía como una acción.
+        /// (fix playtest 14, SEGUNDA pasada: "el frío sigue llegando al
+        /// grifo" -- mismo criterio aplicado aquí por simetría, ver doc de la
+        /// clase) Perfil de caída del empuje térmico por fila de distancia al
+        /// aparato, en PORCENTAJE de <see cref="TempStepPerTick"/>. Índice 0 =
+        /// fila adyacente (100%, máximo empuje), cada índice siguiente una
+        /// fila más lejos y más débil; la longitud del array ES el número de
+        /// filas afectadas.
+        ///
+        /// NÚMEROS VIEJOS Y NUEVOS: la primera pasada de este playtest 14
+        /// sustituyó el corte plano original (3 filas al 100%) por
+        /// <c>{100,60,35,20,10}</c> (5 filas, hasta y=21 sobre esta cuba).
+        /// Distancia real medida contra Sim/SimLevelBuilder.cs (NO TOCADO)
+        /// entre el punto de esa zona MÁS CERCANO al grifo de AGUA (interior
+        /// de VatA arranca en x=75; la fila más alta que tocaba el perfil
+        /// viejo era y=21) y la boquilla del grifo (x=13, y=60):
+        /// dx=75-13=62, dy=60-21=39, euclídea ≈73.2 celdas, manhattan 101 --
+        /// todavía más lejos que ChillStone (≈40.5 celdas), así que el
+        /// argumento se aplica con MÁS margen aquí, no menos. Recortado
+        /// IGUAL que ChillStone.cs a <c>{100,45,15}</c> -- SOLO 3 filas
+        /// (antes 5, ahora hasta y=19), suma total del perfil de 225 a 160
+        /// (-29%): mismo criterio de simetría entre los dos aparatos del
+        /// taller (ver doc de la clase, "la simetría entre los dos aparatos
+        /// es un principio del proyecto"), no porque el calor por sí solo
+        /// necesitara acortarse más que el frío.
         /// </summary>
-        private const int RowsAffected = 3;
+        private static readonly int[] FilaEmpujePct = { 100, 45, 15 };
+
+        /// <summary>(fix playtest 14, ver doc de clase "TAMAÑO DEL APARATO") Fracción del ancho recibido en Init que ocupa de verdad el aparato, centrada. Mismo valor que ChillStone.cs.</summary>
+        private const float FootprintFraction = 0.4f;
+
+        /// <summary>(fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN") Empuje mínimo que sujeta la fila adyacente tras apagarse. Mismo valor que ChillStone.cs.</summary>
+        private const int HoldStepRaw = 1;
+        /// <summary>(fix playtest 14) Ticks tras apagarse durante los que la fila adyacente sigue sujeta (2 s a 30 Hz). Mismo valor que ChillStone.cs.</summary>
+        private const int HoldTicksTrasApagar = 60;
 
         private AlkahestSim _sim;
         private Transform _player;
@@ -100,8 +205,44 @@ namespace Alkahest.Game
         /// <summary>Objetivo de TEMPLADA: centro de la banda de crecimiento del Vivium de ESTA seed (ver doc de la clase).</summary>
         private byte _templadaRaw = 82;
 
+        /// <summary>(fix playtest 14) Objetivo activo justo antes de apagarse, hacia el que sigue sujeta la fila adyacente durante el hold -- ver ApplyHoldTick.</summary>
+        private byte _lastActiveTarget;
+        /// <summary>(fix playtest 14) Cuenta atrás de ticks del hold de apagado -- 0 = suelto del todo. Ver ApplyHoldTick.</summary>
+        private int _holdTicksRestantes;
+
         private SpriteRenderer _resistencias;
         private Vector3 _centroChasis;
+
+        /// <summary>(restaurado playtest 7) Capa de resalte dorado del aparato enfocado, ver ActualizarResalte.</summary>
+        private SpriteRenderer _resalte;
+        private float _alfaResalte;
+
+        // ---------------------------------------------------------------
+        // ESCALA COMPARTIDA DE CERCANÍA DEL TALLER (restaurado playtest 7,
+        // duplicada a propósito en ChillStone.cs; usa UiStyles.Cercania,
+        // restaurada en UiStyles.cs en el fix playtest 14).
+        //  · RangoEstado: de lejos, SOLO el estado de trabajo (si lo hay).
+        //  · RangoNombre: de cerca, además el nombre del aparato — pero solo
+        //    hasta que el aprendiz ya lo conoce (ver _yaConocida).
+        // ---------------------------------------------------------------
+        private const float RangoEstadoPleno = 5.0f;
+        private const float RangoEstadoDesvanece = 6.5f;
+        private const float RangoNombrePleno = 2.6f;
+        private const float RangoNombreDesvanece = 3.6f;
+
+        /// <summary>
+        /// Aprendizaje del taller (restaurado playtest 7): el aprendiz ya ha
+        /// estado lo bastante cerca como para saber qué es este aparato, así
+        /// que su rótulo de NOMBRE no vuelve a dibujarse en lo que dure la
+        /// partida. Campo de instancia a propósito — NO estático, NO
+        /// PlayerPrefs: cada partida nueva empieza sin nada aprendido.
+        /// </summary>
+        private bool _yaConocida;
+
+        /// <summary>Chapa del anillo de ESTADO, cacheada: solo se reconstruye al cambiar de estado (nunca dentro de OnGUI, regla de cero asignaciones por frame).</summary>
+        private string _chapaEstado;
+
+        private const string ChapaNombre = "placa ígnea";
 
         // Foco de interacción: solo el aparato MÁS CERCANO responde a E y
         // muestra su prompt (ver Game/MachineFocus.cs).
@@ -113,8 +254,17 @@ namespace Alkahest.Game
         {
             _sim = sim;
             _player = player;
-            _cellX0 = cellX0;
-            _cellX1 = cellX1;
+
+            // (fix playtest 14, ver doc de clase "TAMAÑO DEL APARATO") Recorta
+            // el ancho recibido (interior COMPLETO de la cuba) a una fracción
+            // centrada ANTES de que BuildVisual/ApplyHeatTick lean
+            // _cellX0/_cellX1 -- sprite y zona de efecto quedan coherentes
+            // entre sí sin duplicar el cálculo del recorte.
+            int spanTotal = cellX1 - cellX0 + 1;
+            int spanReducido = Mathf.Max(8, Mathf.RoundToInt(spanTotal * FootprintFraction));
+            int margen = (spanTotal - spanReducido) / 2;
+            _cellX0 = cellX0 + margen;
+            _cellX1 = _cellX0 + spanReducido - 1;
             _plateRow = plateRow;
 
             if (_sim != null && _sim.Universe != null)
@@ -125,6 +275,7 @@ namespace Alkahest.Game
 
             BuildVisual();
             UpdateVisualTint();
+            RebuildChapaEstado();
             MachineFocus.Registrar(this);
         }
 
@@ -149,6 +300,16 @@ namespace Alkahest.Game
             float centroY = (filaInferior + (_plateRow + 1 - filaInferior) * 0.5f) * celda;
             _centroChasis = new Vector3(centroX, centroY, 0f);
             transform.position = _centroChasis;
+
+            // Resalte de foco (restaurado playtest 7, ver ActualizarResalte):
+            // capa DETRÁS de las demás (sortingOrder menor que Chasis=18),
+            // copia del sprite principal agrandada ~15%/35% y teñida de oro; al
+            // ser mayor asoma por los bordes del chasis como un halo. Se crea
+            // UNA vez aquí; en Update solo se le cambia el color (cero
+            // allocs/frame).
+            _resalte = MaquinariaSprites.CrearCapa(transform, "Resalte", MaquinariaSprites.ChasisPlaca(spanCeldas), 16,
+                anchoMundo * 1.15f, altoMundo * 1.35f);
+            _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
             MaquinariaSprites.CrearCapa(transform, "Chasis", MaquinariaSprites.ChasisPlaca(spanCeldas), 18,
                 anchoMundo, altoMundo);
@@ -183,6 +344,22 @@ namespace Alkahest.Game
                 }
                 if (_accumulator > TickDt * MaxStepsPerFrame) _accumulator = TickDt * MaxStepsPerFrame;
             }
+            else if (_holdTicksRestantes > 0)
+            {
+                // (fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN")
+                // Apagada, pero la fila adyacente todavía sujeta un rato:
+                // mismo bucle de acumulador que arriba, sobre una sola fila.
+                _accumulator += Time.deltaTime;
+                int steps = 0;
+                while (_accumulator >= TickDt && steps < MaxStepsPerFrame && _holdTicksRestantes > 0)
+                {
+                    ApplyHoldTick();
+                    _holdTicksRestantes--;
+                    _accumulator -= TickDt;
+                    steps++;
+                }
+                if (_accumulator > TickDt * MaxStepsPerFrame) _accumulator = TickDt * MaxStepsPerFrame;
+            }
 
             AnimarResistencias();
         }
@@ -192,13 +369,35 @@ namespace Alkahest.Game
 
         private void CycleState()
         {
+            bool estabaActiva = _state != State.Off;
+            byte objetivoPrevio = TargetRaw(); // objetivo del estado ANTES de cambiarlo.
             _state = (State)(((int)_state + 1) % 3);
+
+            if (_state == State.Off && estabaActiva)
+            {
+                // (fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN")
+                // Al apagarse de verdad (siempre se llega a Off desde ARDIENTE
+                // en este ciclo), arma el hold de la fila adyacente.
+                _lastActiveTarget = objetivoPrevio;
+                _holdTicksRestantes = HoldTicksTrasApagar;
+            }
+
             UpdateVisualTint();
+            RebuildChapaEstado();
+            MachineFocus.RegistrarUsoE(); // (restaurado playtest 7) el estado cambió de verdad: cuenta como un uso aprendido de E.
             Debug.Log($"[ChaosAlchemy] Placa ígnea -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
         }
 
         private byte TargetRaw() => _state == State.Ardiente ? ArdienteRaw : _templadaRaw;
 
+        /// <summary>
+        /// (fix playtest 14) Empuja la temperatura de las filas por encima de
+        /// la placa hacia <see cref="TargetRaw"/>, con un empuje por tick que
+        /// DECAE con la distancia (ver <see cref="FilaEmpujePct"/> y el bloque
+        /// de doc de la clase). El suelo de <c>Mathf.Max(1, ...)</c> garantiza
+        /// que ninguna fila del perfil quede completamente inerte por
+        /// redondeo entero a 0.
+        /// </summary>
         private void ApplyHeatTick()
         {
             byte target = TargetRaw();
@@ -207,16 +406,46 @@ namespace Alkahest.Game
 
             for (int x = _cellX0; x <= _cellX1; x++)
             {
-                for (int dy = 1; dy <= RowsAffected; dy++)
+                for (int fila = 0; fila < FilaEmpujePct.Length; fila++)
                 {
-                    int y = _plateRow + dy;
+                    int y = _plateRow + fila + 1;
                     if (!CellGrid.InBounds(x, y)) continue;
                     int idx = CellGrid.Idx(x, y);
+                    int step = Mathf.Max(1, TempStepPerTick * FilaEmpujePct[fila] / 100);
                     int cur = grid.temp[idx];
-                    int next = cur < target ? Mathf.Min(target, cur + TempStepPerTick) : Mathf.Max(target, cur - TempStepPerTick);
+                    int next = cur < target ? Mathf.Min(target, cur + step) : Mathf.Max(target, cur - step);
                     grid.temp[idx] = (byte)next;
                     grid.WakeChunk(x, y, tick);
                 }
+            }
+        }
+
+        /// <summary>
+        /// (fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN") Tras
+        /// apagarse, sujeta SOLO la fila adyacente (índice 0 del perfil)
+        /// hacia <see cref="_lastActiveTarget"/> con un empuje mínimo
+        /// (<see cref="HoldStepRaw"/>) durante <see cref="_holdTicksRestantes"/>
+        /// ticks más. Mismo clamp que <see cref="ApplyHeatTick"/>: nunca deja
+        /// pasar el objetivo, así que solo MANTIENE la celda donde ya estaba
+        /// mientras las filas 1 y 2 (no tocadas aquí) ya vuelven a ambiente
+        /// libremente.
+        /// </summary>
+        private void ApplyHoldTick()
+        {
+            var grid = _sim.Grid;
+            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+            int y = _plateRow + 1; // solo la fila adyacente.
+
+            for (int x = _cellX0; x <= _cellX1; x++)
+            {
+                if (!CellGrid.InBounds(x, y)) continue;
+                int idx = CellGrid.Idx(x, y);
+                int cur = grid.temp[idx];
+                int next = cur < _lastActiveTarget
+                    ? Mathf.Min(_lastActiveTarget, cur + HoldStepRaw)
+                    : Mathf.Max(_lastActiveTarget, cur - HoldStepRaw);
+                grid.temp[idx] = (byte)next;
+                grid.WakeChunk(x, y, tick);
             }
         }
 
@@ -226,12 +455,39 @@ namespace Alkahest.Game
             _resistencias.color = ColorResistencia(1f);
         }
 
-        /// <summary>Las resistencias respiran: apagadas son metal frío, templadas laten ámbar, ardientes laten blanco-naranja.</summary>
+        /// <summary>
+        /// Las resistencias respiran: apagadas son metal frío, templadas laten
+        /// ámbar, ardientes laten blanco-naranja. Ya se llama en TODOS los
+        /// frames (a diferencia de ChillStone, aquí no vivía dentro de la rama
+        /// "encendida"), así que basta con colgarle el resalte de foco al final
+        /// para que también lata siempre (restaurado playtest 7).
+        /// </summary>
         private void AnimarResistencias()
         {
-            if (_resistencias == null || _state == State.Off) return;
-            float pulso = 0.82f + 0.18f * Mathf.Sin(Time.time * (_state == State.Ardiente ? 8f : 3.4f));
-            _resistencias.color = ColorResistencia(pulso);
+            if (_resistencias != null && _state != State.Off)
+            {
+                float pulso = 0.82f + 0.18f * Mathf.Sin(Time.time * (_state == State.Ardiente ? 8f : 3.4f));
+                _resistencias.color = ColorResistencia(pulso);
+            }
+
+            ActualizarResalte();
+        }
+
+        /// <summary>
+        /// RESALTE del aparato enfocado (restaurado playtest 7: sustituye al
+        /// prompt de texto permanente como señal de "puedes actuar aquí" — ver
+        /// MachineFocus.MostrarPromptE). Alfa 0 sin foco; con foco, late entre
+        /// 0.40 y 0.80. Se interpola con MoveTowards en vez de asignar el
+        /// objetivo directamente para que un objetivo que oscila en cada frame
+        /// (el propio latido) y las entradas/salidas de foco no produzcan
+        /// parpadeos bruscos. Sin allocs: Color es struct.
+        /// </summary>
+        private void ActualizarResalte()
+        {
+            if (_resalte == null) return;
+            float objetivo = EstaEnfocada() ? 0.60f + 0.20f * Mathf.Sin(Time.time * 4f) : 0f;
+            _alfaResalte = Mathf.MoveTowards(_alfaResalte, objetivo, 6f * Time.deltaTime);
+            _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, _alfaResalte);
         }
 
         private Color ColorResistencia(float pulso)
@@ -251,14 +507,41 @@ namespace Alkahest.Game
             return "APAGADA";
         }
 
+        /// <summary>
+        /// Reconstruye la chapa del anillo de ESTADO. Se llama SOLO al cambiar
+        /// de estado (restaurado playtest 7, nunca desde OnGUI): el raw objetivo
+        /// de cada estado es constante mientras dura ese estado, así que el
+        /// texto no cambia frame a frame (regla de cero asignaciones por
+        /// frame). Ya NO incluye "(alcanza N filas)" (playtest 13, quitado en
+        /// el fix playtest 14: no comunicaba nada -- ver el perfil de caída
+        /// real en ApplyHeatTick).
+        /// </summary>
+        private void RebuildChapaEstado()
+        {
+            _chapaEstado = _state == State.Off
+                ? null // apagada: nada que anunciar de lejos.
+                : $"{StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
+        }
+
+        /// <summary>
+        /// (restaurado playtest 7) Reescrito para volver a los TRES anillos de
+        /// rótulo por cercanía (estado / nombre / prompt), en vez del booleano
+        /// "cerca"/"lejos" que trajo la copia obsoleta del playtest 10.
+        /// </summary>
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked) return;
 
-            bool cerca = EstaEnfocada();
-            // De lejos solo se anuncia si está trabajando (una placa encendida es
-            // información que el jugador necesita aunque esté al otro lado).
-            if (!cerca && _state == State.Off) return;
+            // Salida temprana: si el aprendiz está fuera de los dos anillos, no
+            // hay nada que dibujar -- ni siquiera Preparar().
+            float cercaniaEstado = UiStyles.Cercania(_centroChasis, _player, RangoEstadoPleno, RangoEstadoDesvanece);
+            float cercaniaNombre = UiStyles.Cercania(_centroChasis, _player, RangoNombrePleno, RangoNombreDesvanece);
+            if (cercaniaEstado <= 0f && cercaniaNombre <= 0f) return;
+
+            // Aprendizaje: una vez el aprendiz entra de lleno en el anillo de
+            // nombre, la placa queda "conocida" para el resto de la partida y
+            // su chapa de nombre deja de dibujarse.
+            if (!_yaConocida && cercaniaNombre >= 0.98f) _yaConocida = true;
 
             UiStyles.Preparar();
 
@@ -266,22 +549,32 @@ namespace Alkahest.Game
                         : _state == State.Templada ? UiStyles.Aviso
                         : UiStyles.TextoTenue;
 
-            // 1) CHAPA FIJA: siempre debajo del chasis, sobre la piedra. Nunca
-            //    dentro de la cuba, que es la zona de trabajo del jugador.
-            // (fix playtest 13) "(alcanza N filas)" solo cerca y encendida, igual que
-            // ChillStone.cs -- mismo texto, mismo número (3), para que el jugador pueda
-            // comprobar por sí mismo que el alcance de ambos aparatos es idéntico.
-            string chapa = _state == State.Off
-                ? "placa ígnea"
-                : cerca
-                    ? $"placa ígnea · {StateLabel()} {CellGrid.RawToC(TargetRaw())}° (alcanza {RowsAffected} filas)"
-                    : $"placa ígnea · {StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
-            UiStyles.PlacaMundo(_centroChasis, chapa, color, -UiStyles.S(17f));
-
-            // 2) PROMPT: solo cerca y con las manos libres (ver doc de la clase).
-            if (cerca && !UiStyles.RatonOcupado)
+            // 1) Anillo de ESTADO: solo mientras trabaja, y SOLO el estado — nunca
+            //    el nombre del aparato aquí (eso es información de reconocimiento,
+            //    no de "¿dejé esto encendido?"). Desplazamiento NEGATIVO = hacia
+            //    abajo, sobre la piedra del suelo, nunca dentro de la cuba.
+            if (_state != State.Off && _chapaEstado != null)
             {
-                UiStyles.PlacaMundo(_centroChasis, "E — regular el fuego", UiStyles.Oro, -UiStyles.S(34f));
+                UiStyles.PlacaMundo(_centroChasis, _chapaEstado,
+                    new Color(color.r, color.g, color.b, color.a * cercaniaEstado), -UiStyles.S(17f));
+            }
+
+            // 2) Anillo de NOMBRE: solo hasta que el aprendiz ya sabe qué es esto.
+            if (!_yaConocida)
+            {
+                Color tenue = UiStyles.TextoTenue;
+                UiStyles.PlacaMundo(_centroChasis, ChapaNombre,
+                    new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercaniaNombre), -UiStyles.S(34f));
+            }
+
+            // 3) PROMPT: además de foco + manos libres, solo las dos primeras
+            //    veces del taller (MachineFocus.MostrarPromptE); a partir de ahí
+            //    la única señal de "puedes actuar aquí" es el RESALTE dorado
+            //    (ver ActualizarResalte), no un texto permanente.
+            if (MachineFocus.MostrarPromptE && EstaEnfocada() && !UiStyles.RatonOcupado)
+            {
+                UiStyles.PlacaMundo(_centroChasis, "E — regular el fuego",
+                    new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, cercaniaNombre), -UiStyles.S(34f));
             }
         }
     }

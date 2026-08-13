@@ -25,13 +25,19 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
   BLOQUEO DE MATERIAL al pulsar aspirar, más el haz de mundo — el anillo de alcance que lo
   acompañaba se retiró en el playtest 11, ver regla 15), máquinas (`HeatPlate`/`ChillStone`/`Dispenser`/`StorageRack`) con sprites generados en
   `MaquinariaSprites` y foco de interacción arbitrado por `MachineFocus` (solo el aparato más
-  cercano responde a E), `SubstanceKnowledge` (descubrir/bautizar/observaciones; dos clases de
-  material, ver regla 12), `OrderSystem`+`DeliveryChute` (pedidos por EFECTO, Favor),
-  `MasterSupplies` (muestras de la jornada 2: azoth/vivium/semilla), `HintSystem` (pistas por
-  jornada, una línea ejecutable cada una), `JournalHud` (el diario: libro a pantalla completa,
-  `GUI.depth = -1000`, propiedad `Abierto`), `UiStyles` (estilo IMGUI compartido; propiedad
-  `EscribiendoTexto`, ver regla 12), `DayCycle` (Título→3 jornadas→final, seed vía
-  `AlkahestSim.NextRunSeed`).
+  cercano responde a E). `HeatPlate`/`ChillStone` (playtest 14): `FootprintFraction`=0.4 recorta el
+  ancho recibido del bootstrap a una fracción centrada ANTES de `BuildVisual` (placas más pequeñas,
+  el centro no se mueve); al apagarse, la fila adyacente sigue empujada débilmente
+  (`HoldStepRaw`=1) hacia el último objetivo durante `HoldTicksTrasApagar`=60 ticks mientras las
+  filas exteriores se sueltan de inmediato, para que el aparato sea lo último en normalizarse
+  (`ApplyHoldTick`, en ambos archivos por simetría). `SubstanceKnowledge` (descubrir/bautizar/
+  observaciones; dos clases de material, ver regla 12), `OrderSystem`+`DeliveryChute` (pedidos por
+  EFECTO, Favor), `MasterSupplies` (muestras de la jornada 2: azoth/vivium/semilla), `HintSystem`
+  (pistas por jornada, una línea ejecutable cada una), `JournalHud` (el diario: libro a pantalla
+  completa, `GUI.depth = -1000`, propiedad `Abierto`), `UiStyles` (estilo IMGUI compartido;
+  propiedad `EscribiendoTexto`, ver regla 12; el panel de un rótulo se desvanece al CUBO y el texto
+  lineal, umbral `AlfaMinimaVisible`=0.12, ver regla 26), `DayCycle` (Título→3 jornadas→final, seed
+  vía `AlkahestSim.NextRunSeed`).
 - `Audio/` — `SintetizadorSfx` (fábrica estática de `AudioClip` por código, cero assets: ruido,
   filtros, ondas, envolventes) y `DirectorDeAudio` (MonoBehaviour: pool fijo de voces, limitador
   de ritmo por tipo de evento, tecla M para silenciar, interruptor `SistemaActivo`).
@@ -168,33 +174,53 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
 25. **DEUDA TÉCNICA: `Game/StorageRack.cs::FirmaVisualFabrica` duplica el generador de patrones
     de `JournalHud`** (playtest 13, ambos archivos de propiedad disjunta en la ronda que la creó).
     Consolidar en un `Game/FirmaVisualFabrica.cs` compartido en una ronda futura.
+26. **ANTES DE DESPLEGAR, `git diff` CONTRA EL REMOTO Y DESCONFIAR DE TODO ARCHIVO QUE ENCOJA
+    (playtest 14, la regla más importante de la ronda)**: el sandbox de trabajo en la nube se
+    reinició a mitad del playtest 10 y los agentes desplegaron una copia obsoleta encima de lo
+    bueno — `Dispenser.cs` pasó de 26.866 a 18.186 bytes (y `ChillStone.cs`/`HeatPlate.cs`/
+    `UiStyles.cs` igual) sin que nadie lo notara durante TRES rondas, porque **el proyecto seguía
+    compilando**: se perdieron a la vez la API y todos sus consumidores. Un archivo que pierde
+    miles de bytes sin que el cambio lo justifique es una regresión hasta que se demuestre lo
+    contrario. Que compile NO es señal de que no se ha perdido nada.
+27. **AL RECUPERAR TRABAJO ANTIGUO CON UNA FUSIÓN, REVISAR QUÉ DECISIONES DE ESE TRABAJO SE
+    CORRIGIERON DESPUÉS (playtest 14)**: una fusión a tres bandas puede deshacer correcciones ya
+    validadas. Caso real: el rótulo del frío se ancló ARRIBA en el playtest 7, se corrigió a ABAJO
+    y Cesar lo validó en el playtest 13, y la restauración de la regresión (regla 26) lo volvió a
+    invertir a ARRIBA sin querer — se corrigió una segunda vez, con la cronología completa dejada
+    en el header de `ChillStone.cs` para que no gire una tercera.
+28. **EN `UiStyles`, EL PANEL DE UN RÓTULO SE DESVANECE AL CUBO Y EL TEXTO LINEAL (playtest 14)**:
+    umbral de no-dibujar `AlfaMinimaVisible`=0.12 (`PlacaMundo`/`PlacaMundoLateral`/`Globo`). Si
+    ambos se desvanecen igual (lineal), un panel casi negro sobrevive perceptualmente mucho más
+    que un texto claro y queda una caja negra vacía sin texto — el bug real detrás de "recuadros
+    negros flotando en el taller" y "la etiqueta en negro antes de desaparecer".
 
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial: audio (`Audio/SintetizadorSfx`+`DirectorDeAudio`) y aprendiz rediseñado (imp), SIN
-VERIFICAR en editor. Playtest 12: campo morfológico completo (`CellGrid.morph`/`morphScratch` +
-`SimStepper.MorphTick` + firma visual sorteada en `Universe.Create` + render en `SimRenderer` +
-catálogo con miniaturas en `JournalHud`). Playtest 13 (Opus 5 dirige, Sonnet 5 escribe en 4
-encargos + 1 revisión) afinó esa base y cerró bugs reales de la ronda anterior: nota de arranque
-tras Safe Mode (regla 20) + 2 fixes de compilación `CS1503` (regla 21); `AlkahestSim.PaintStable`
-arregla "pintar hielo produce agua" (regla 22); `DevPalette` separa insumos/subproductos (el humo
-como "borrador" era comportamiento correcto, no bug); remapeo de `patronEscala` a 5..12 celdas
-por tamaño real de recipiente (regla 24) + fix del alfa heredado de lo innominado (regla 23);
-firma visual GENERADA (no una foto del mundo) en `StorageRack`/`FlaskHud` vía
-`FirmaVisualFabrica` (deuda técnica anotada, regla 25); `ChillStone` gana el estado intermedio
-Fresca, cerrando la asimetría real con `HeatPlate` (que ya tenía Templada); documentado que las
-hornillas NO pueden calentar la bandeja fría (35 filas de `Empty` de por medio, información de
-diseño, no bug). Todo SIN VERIFICAR en editor. Detalle técnico completo: `docs/HANDOFF.md`
-sección "Playtest 13" y `docs/SIM_NOTES.md`.
-PENDIENTE (orden): 1) verificar en Unity y jugar DOS universos seguidos para juzgar si la
-variación morfológica se percibe y si los patrones se leen ya con poca materia; 2) comprobar si
-Fresca se siente manejable a diario; 3) consolidar `FirmaVisualFabrica` con `JournalHud` (regla
-25); 4) enganchar `HintSystem.PistasMostradas` en la sección PROCEDIMIENTOS del diario (API ya
-existe, sin consumidor desde el playtest 10); 5) decidir si el audio se queda o se apaga
-(`DirectorDeAudio.SistemaActivo`); 6) CURVA DE PROGRESIÓN — jornadas cortas de una mecánica cada
-una; 7) renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`; 8) replantear las
-redomas (`StorageRack`, sugerencia de Cesar); 9) resto de M5 (glow, agua con más cuerpo);
-10) ejecutar la build de Windows y validarla con la checklist (`docs/HANDOFF.md` sección
-"Playtest 11"); 11) multiplayer: sim solo-host + deltas RLE por chunks despiertos a 10-15Hz — el
-formato de deltas debe contemplar el campo `morph` (regla 16) — MEDIR antes de decidir; 12) medir
-el coste real de `MorphTick` (F3, estimado <0,5 ms/tick, arrastrado desde el playtest 12).
+VERIFICAR en editor. Playtest 12: campo morfológico completo. Playtest 13: afinó esa base (Safe
+Mode, `PaintStable`, insumos/subproductos, remapeo de `patronEscala`, firma GENERADA, estado
+Fresca). **Playtest 14 (Opus 5 dirige, Sonnet 5 escribe en 2 encargos), ronda de recuperación,
+todo VALIDADO por Cesar en el editor**: se rastreó y recuperó (fusión a tres bandas) la regresión
+del playtest 7 perdida sin detectar durante tres rondas — máquinas + `UiStyles.PlacaMundoLateral`/
+`Cercania` (reglas 26-27); se corrigieron tres regresiones producidas por la propia fusión
+(recuadros negros por el desvanecimiento de panel sin cubo, regla 28; rótulo del frío invertido
+otra vez); Helando ahora se diferencia de Fresca (12 vs 5 raw/tick); el alcance térmico decae con
+la distancia en vez de cortarse en seco (`FilaEmpujePct`); orden de recuperación con `HoldTicks
+TrasApagar`; placas más pequeñas (`FootprintFraction`). Y una CONVERSACIÓN DE DIRECCIÓN clave:
+Cesar diagnosticó "falta morfología de comportamiento, no solo de aspecto" — trece rondas
+enriqueciendo cómo el juego SE LEE sobre una capa de sistemas delgada. Detalle técnico completo:
+`docs/HANDOFF.md` sección "Playtest 14" y `docs/SIM_NOTES.md`.
+FASE NUEVA acordada (orden): 1) cámara que sigue al aprendiz; 2) taller a 2-3 pantallas
+(rediseño de `SimLevelBuilder` con las zonas de Cesar + tres pasadas conscientes del viewport,
+hoy proporcionales al mundo entero: refresco completo, `MorphTick`, `DiffuseTemperature`);
+3) química generada por semilla (núcleo fijo + reacciones sorteadas + "leyes descubiertas: N de
+M" en el diario); 4) comportamiento variable por semilla, no solo aspecto (de ahí nacen los
+nombres que Cesar busca); 5) taller movible (grifos/estantes/placas anclados a bedrock);
+6) mundo persistente con semilla y progreso guardado.
+Backlog heredado aún vigente: consolidar `FirmaVisualFabrica` con `JournalHud` (regla 25);
+enganchar `HintSystem.PistasMostradas` en PROCEDIMIENTOS del diario; decidir si el audio se queda;
+renombrar repo GitHub `Alkahest`→`ChaosAlchemy` + `productName`; resto de M5 (glow, agua con más
+cuerpo); ejecutar la build de Windows con la checklist (`docs/HANDOFF.md` sección "Playtest 11");
+CURVA DE PROGRESIÓN; multiplayer (sim solo-host + deltas RLE, el formato debe contemplar `morph`,
+regla 16); medir el coste real de `MorphTick` (más urgente con la fase 2, que multiplica el
+tamaño del mundo 6x).

@@ -152,6 +152,41 @@ namespace Alkahest.Game
         // Primitivas de dibujo
         // -----------------------------------------------------------------
 
+        /// <summary>
+        /// (fix playtest 14: "recuadros negros vacíos") Alfa por debajo del
+        /// cual un rótulo desvanecido NO SE DIBUJA -- ni panel ni borde ni
+        /// texto, `return` inmediato. El valor anterior de
+        /// <see cref="PlacaMundoLateral"/> (0.02) era tan bajo que dejaba
+        /// pasar rótulos con texto YA ILEGIBLE (alfa lineal 0.02-0.1) cuyo
+        /// panel se seguía dibujando -- y <see cref="PlacaMundo"/> ni
+        /// siquiera TENÍA un corte, dibujaba el panel a cualquier alfa,
+        /// incluido 0 exacto (ver caso real más abajo). 0.12 es
+        /// aproximadamente el punto por debajo del cual `Texto`/`TextoTenue`
+        /// sobre `TintaFuerte` ya no se lee en la práctica a 720p -- por
+        /// debajo de eso no compensa dibujar nada.
+        /// </summary>
+        private const float AlfaMinimaVisible = 0.12f;
+
+        /// <summary>
+        /// (fix playtest 14) Curva de desvanecimiento del FONDO de un rótulo,
+        /// separada de la del TEXTO. Causa real de los "recuadros negros
+        /// vacíos" reportados (dos al arrancar + el rótulo de HELANDO
+        /// quedándose en negro un instante al alejarse del frío):
+        /// `TintaFuerte` es casi negra con alfa 0.96 -- perceptualmente un
+        /// panel a alfa lineal 0.3 SIGUE leyéndose como una caja opaca,
+        /// mientras que el texto claro sobre él a esa misma alfa ya es
+        /// ilegible. Elevar el fondo al CUBO (mucho más rápido que la caída
+        /// lineal del texto, que no cambia) hace que el panel se apague
+        /// bastante ANTES de que el texto deje de leerse, así que durante
+        /// TODO el desvanecimiento hay letra dentro de la caja o no hay caja
+        /// -- nunca una caja vacía. (Antes de este fix, PlacaMundo ni
+        /// siquiera aplicaba ESTA curva al panel: lo dibujaba siempre a la
+        /// opacidad fija de TintaFuerte, sin importar la alfa del texto que
+        /// recibía -- ver el caso real de las dos cubetas en el doc de
+        /// HeatPlate.cs/ChillStone.cs.)
+        /// </summary>
+        private static float AlfaPanel(float alfa) => alfa * alfa * alfa;
+
         /// <summary>Rellena un rectángulo con un color plano (usa la textura blanca de Unity tintada con GUI.color).</summary>
         public static void Rellenar(Rect r, Color c)
         {
@@ -191,6 +226,13 @@ namespace Alkahest.Game
         {
             Preparar();
             if (Chip == null || string.IsNullOrEmpty(texto)) return; // defensivo: fuera de OnGUI no hay estilos.
+            // (fix playtest 14) mismo umbral/curva que PlacaMundo -- ver
+            // AlfaMinimaVisible/AlfaPanel. Hoy TODOS los llamantes de Globo
+            // pasan alfa 1 (no hay fundido), así que esto es un no-op en la
+            // práctica; se deja preparado para que si algún día alguien
+            // desvanece un Globo, no reintroduzca el mismo bug de "recuadro
+            // negro vacío" que PlacaMundo/PlacaMundoLateral sí tenían.
+            if (color.a <= AlfaMinimaVisible) return;
 
             float w = Ancho(Chip, texto) + S(16f);
             float h = Chip.lineHeight + S(10f);
@@ -198,7 +240,9 @@ namespace Alkahest.Game
             float y = Mathf.Clamp(centroGui.y - h * 0.5f, S(4f), Mathf.Max(S(4f), Screen.height - h - S(4f)));
             var r = new Rect(x, y, w, h);
 
-            Panel(r, TintaFuerte, new Color(color.r, color.g, color.b, 0.55f));
+            float alfaPanel = AlfaPanel(color.a);
+            Panel(r, new Color(TintaFuerte.r, TintaFuerte.g, TintaFuerte.b, TintaFuerte.a * alfaPanel),
+                new Color(color.r, color.g, color.b, 0.55f * alfaPanel));
             var previo = Chip.normal.textColor;
             Chip.normal.textColor = color;
             GUI.Label(r, texto, Chip);
@@ -243,6 +287,26 @@ namespace Alkahest.Game
             var cam = Camera.main;
             if (cam == null || ChipMini == null || string.IsNullOrEmpty(texto)) return;
 
+            // (fix playtest 14: "recuadros negros vacíos") ANTES este método no
+            // comprobaba `color.a` en absoluto: el panel se dibujaba SIEMPRE a
+            // la opacidad fija de TintaFuerte, sin importar lo transparente que
+            // viniera `color` (que es donde HeatPlate/ChillStone codifican el
+            // desvanecimiento por cercanía, `color.a * cercania`). Caso real
+            // reproducido con las constantes de SimLevelBuilder: al arrancar,
+            // el aprendiz spawnea a ~4.75 UNIDADES DE MUNDO de HeatPlate_0
+            // (dentro de RangoEstadoDesvanece=6.5, cercaniaEstado>0 así que el
+            // OnGUI del aparato NO retorna pronto) pero a ~4.75 >
+            // RangoNombreDesvanece=3.6 (cercaniaNombre=0 EXACTO); el anillo de
+            // NOMBRE llamaba a PlacaMundo con texto NO vacío ("placa ígnea") y
+            // alfa 0 -- texto invisible, panel opaco: un recuadro negro sin
+            // letra. Lo mismo le pasaba a ChillStone_Bandeja (~5.17 unidades,
+            // mismo patrón) -- los DOS recuadros reportados. Ahora el panel se
+            // corta con el mismo umbral que el texto (return si color.a es
+            // demasiado bajo para leerse) y además se apaga MÁS RÁPIDO que el
+            // texto mientras SÍ es visible (ver AlfaPanel) -- por eso también
+            // ya no queda una caja residual un instante al alejarse (HELANDO).
+            if (color.a <= AlfaMinimaVisible) return;
+
             Vector3 s = cam.WorldToScreenPoint(posicionMundo);
             if (s.z <= 0f) return;
 
@@ -255,11 +319,97 @@ namespace Alkahest.Game
             float y = Screen.height - s.y - desplazarPx - h * 0.5f;
             var r = new Rect(x, y, w, h);
 
-            Panel(r, TintaFuerte, new Color(color.r, color.g, color.b, 0.45f));
+            float alfaPanel = AlfaPanel(color.a);
+            Panel(r, new Color(TintaFuerte.r, TintaFuerte.g, TintaFuerte.b, TintaFuerte.a * alfaPanel),
+                new Color(color.r, color.g, color.b, 0.45f * alfaPanel));
             var previo = ChipMini.normal.textColor;
             ChipMini.normal.textColor = color;
             GUI.Label(r, texto, ChipMini);
             ChipMini.normal.textColor = previo;
+        }
+
+        // -----------------------------------------------------------------
+        // RESTAURADO (playtest 14). Estos dos miembros se escribieron en el
+        // playtest 7 y DESAPARECIERON en el commit e3fed6f (playtest 10), al
+        // desplegar sobre una copia de trabajo obsoleta del sandbox. Nadie lo
+        // notó durante tres rondas porque el juego seguía compilando: los
+        // consumidores se habían perdido en el mismo golpe. Si vuelven a
+        // desaparecer, es el mismo fallo de proceso — ver CLAUDE.md.
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// (fix playtest 7: "el rótulo del agua está escrito sobre el grifo de
+        /// arena") Chapa anclada a un LADO del punto de mundo en vez de encima.
+        /// Los cinco grifos están en columna a 1 unidad de mundo unos de otros,
+        /// así que cualquier desplazamiento vertical cae inevitablemente sobre
+        /// el aparato vecino. Anclando la chapa a la IZQUIERDA (contra el pilar
+        /// de piedra, que es espacio muerto) cada grifo tiene su propio carril y
+        /// no hay colisión posible.
+        ///
+        /// `aLaIzquierda` = true pone el borde DERECHO de la chapa a
+        /// `separacionPx` de la posición; false pone el borde IZQUIERDO.
+        /// A diferencia de <see cref="PlacaMundo"/> no se acota en X: si el
+        /// aparato está fuera de cuadro su chapa también debe estarlo.
+        /// </summary>
+        public static void PlacaMundoLateral(Vector3 posicionMundo, string texto, Color color,
+                                             float separacionPx, float desplazarYPx, float alfa, bool aLaIzquierda)
+        {
+            // (fix playtest 14: "recuadros negros vacíos") El umbral anterior
+            // (0.02) era demasiado bajo -- a esa alfa el texto lineal ya
+            // llevaba un buen rato siendo ilegible mientras el panel (que
+            // desvanecía con el MISMO factor lineal que el texto, no más
+            // rápido) todavía se leía como una caja sólida. Subido a
+            // AlfaMinimaVisible (0.12, ver doc del campo): por debajo de eso
+            // ni se dibuja el panel ni el texto.
+            if (alfa <= AlfaMinimaVisible) return;
+            alfa = alfa > 1f ? 1f : alfa;
+
+            Preparar();
+            var cam = Camera.main;
+            if (cam == null || ChipMini == null || string.IsNullOrEmpty(texto)) return;
+
+            Vector3 s = cam.WorldToScreenPoint(posicionMundo);
+            if (s.z <= 0f) return;
+
+            float w = Ancho(ChipMini, texto) + S(10f);
+            float h = ChipMini.lineHeight + S(6f);
+            float x = aLaIzquierda ? s.x - separacionPx - w : s.x + separacionPx;
+            float y = Screen.height - s.y - desplazarYPx - h * 0.5f;
+            var r = new Rect(x, y, w, h);
+
+            // (fix playtest 14) El panel se apaga con `alfa` AL CUBO
+            // (AlfaPanel) mientras el texto sigue en LINEAL (color.a * alfa,
+            // sin cambios) -- a mitad de desvanecimiento el panel ya es
+            // mucho más tenue que la letra, así que nunca sobrevive una caja
+            // negra sin texto legible dentro.
+            float alfaPanel = AlfaPanel(alfa);
+            Panel(r,
+                new Color(TintaFuerte.r, TintaFuerte.g, TintaFuerte.b, TintaFuerte.a * alfaPanel),
+                new Color(color.r, color.g, color.b, 0.45f * alfaPanel));
+            var previo = ChipMini.normal.textColor;
+            ChipMini.normal.textColor = new Color(color.r, color.g, color.b, color.a * alfa);
+            GUI.Label(r, texto, ChipMini);
+            ChipMini.normal.textColor = previo;
+        }
+
+        /// <summary>
+        /// CURVA DE CERCANÍA compartida por todos los aparatos del taller
+        /// (fix playtest 6). Devuelve 1 cuando el aprendiz está dentro de
+        /// `rangoPleno`, baja suavemente hasta 0 al llegar a `rangoDesvanece`,
+        /// y 0 más allá. Un único sitio donde vive el criterio de "cerca", para
+        /// que placa ígnea, piedra gélida, grifos y Tolva se comporten igual.
+        /// </summary>
+        public static float Cercania(Vector3 puntoMundo, Transform jugador, float rangoPleno, float rangoDesvanece)
+        {
+            if (jugador == null) return 0f;
+            float d2 = (puntoMundo - jugador.position).sqrMagnitude;
+            float pleno2 = rangoPleno * rangoPleno;
+            if (d2 <= pleno2) return 1f;
+            float fuera2 = rangoDesvanece * rangoDesvanece;
+            if (d2 >= fuera2 || fuera2 <= pleno2) return 0f;
+            // Suavizado en distancia real (no cuadrada): la aparición se siente lineal.
+            float t = (Mathf.Sqrt(d2) - rangoPleno) / (rangoDesvanece - rangoPleno);
+            return Mathf.SmoothStep(1f, 0f, t);
         }
 
         /// <summary>
