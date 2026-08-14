@@ -191,7 +191,9 @@ namespace Alkahest.Game
 
         private void OnGUI()
         {
-            if (_orderSystem == null || DayCycle.InputLocked) return;
+            // (playtest 21, EL PIVOT) HudSilenciado, hermano de InputLocked
+            // -- misma línea, ver el docblock de DayCycle.HudSilenciado.
+            if (_orderSystem == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return;
 
             UiStyles.Preparar();
             ActualizarFavorTexto();

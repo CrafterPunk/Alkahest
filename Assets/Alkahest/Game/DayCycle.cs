@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using Alkahest.Sim;
 
 namespace Alkahest.Game
 {
@@ -57,6 +58,35 @@ namespace Alkahest.Game
         /// </summary>
         private const float DayEndAutoCloseSeconds = 12f;
 
+        // =================================================================
+        // TERCERA RONDA DEL PIVOT -- "LA APERTURA NO PUEDE EMPEZAR CON
+        // 'JORNADA 1 DE 3' Y UNA LISTA DE ENCARGOS" (Cesar, tras jugarlo en
+        // su Unity). Dos piezas, las dos aquí:
+        //  (a) La primera pantalla del cuarto íntimo NO pasa por
+        //      Phase.DayIntro -- ver <see cref="EnterCuartoIntimoSilencioso"/>,
+        //      que bifurca <see cref="EnterDayIntro"/>/<see cref="DrawDayIntro"/>
+        //      (SIN TOCARLOS, regla 26 de CLAUDE.md: siguen íntegros para el
+        //      día en que la sesión cronometrada clásica vuelva).
+        //  (b) Los encargos no EXISTEN hasta que el jugador cava un camino
+        //      real hasta la Tolva -- "el Maestro no puede pedirte nada
+        //      mientras no haya un agujero por donde hablarte". Ver
+        //      <see cref="TolvaAlcanzable"/>/<see cref="ActualizarDesbloqueoDeEncargos"/>.
+        // =================================================================
+
+        /// <summary>
+        /// Cada cuánto se comprueba si la Tolva es alcanzable (ver
+        /// <see cref="TolvaAlcanzable"/>) -- NUNCA cada frame: mientras nadie
+        /// ha cavado nada la respuesta no cambia, así que barrer el anillo de
+        /// la boca 30 veces por segundo sería gastar ciclos en una pregunta
+        /// que ya se sabe la respuesta. 1.5s: rápido de sobra para que "que
+        /// se note" no tarde perceptiblemente después del golpe de cincel que
+        /// abre el último muro.
+        /// </summary>
+        private const float TolvaCheckIntervalSeconds = 1.5f;
+
+        /// <summary>Cuánto dura en pantalla el aviso de "los encargos han llegado" (ver <see cref="DrawEncargosDesbloqueadosBanner"/>) -- de sobra para leerlo una vez, sin quedarse clavado para siempre.</summary>
+        private const float EncargosDesbloqueadosBannerSeconds = 6f;
+
         // Nota IMGUI: los overlays de esta clase usan GUILayout.BeginArea
         // (no GUILayout.Window), así que no necesitan un id constante --
         // BeginArea no lo pide. Los HUD que sí usan Window (DevPalette,
@@ -82,6 +112,32 @@ namespace Alkahest.Game
         /// juego debe considerarse "congelado" (estamos en Título).
         /// </summary>
         public static bool InputLocked { get; private set; } = true;
+
+        /// <summary>
+        /// (playtest 21, EL PIVOT) Silencia TODO el HUD de mundo para el
+        /// arranque del cuarto íntimo -- HERMANO de <see cref="InputLocked"/>,
+        /// se comprueba en la MISMA línea (contrato CONTRATO_PIVOT.md):
+        /// <c>if (DayCycle.InputLocked || DayCycle.HudSilenciado) return;</c>,
+        /// añadido a la guarda que YA tenía la primera línea de cada
+        /// <c>OnGUI</c> en Game/OrdersHud.cs, FlaskHud.cs, HintSystem.cs,
+        /// SubstanceKnowledge.cs, StorageRack.cs, HeatPlate.cs, ChillStone.cs,
+        /// Dispenser.cs, DeliveryChute.cs.
+        ///
+        /// Arranca en `true` A PROPÓSITO: la primera pantalla del cuarto
+        /// íntimo tiene que estar completamente limpia -- sin reloj (ya no
+        /// existe, ver <see cref="DrawPlayingHud"/>), sin encargos, sin
+        /// frasco, sin pistas, sin rótulos de máquina -- hasta que el
+        /// jugador haga algo de verdad. Se apaga sola en
+        /// <see cref="DetectarPrimeraAccion"/> (primer movimiento o primer
+        /// clic de aspirar/verter), NO con una tecla dedicada: no es un
+        /// atajo nuevo que aprender, es la propia partida empezando. Se
+        /// reafirma a `true` en <see cref="Init"/> (no solo el inicializador
+        /// estático de arriba, que en Unity NO se re-ejecuta entre recargas
+        /// de escena dentro de la misma sesión de Play) para que un
+        /// "Reintentar" desde la pantalla final vuelva a arrancar en
+        /// silencio, igual que la primera vez.
+        /// </summary>
+        public static bool HudSilenciado { get; private set; } = true;
 
         private AlkahestSim _sim;
         private OrderSystem _orderSystem;
@@ -121,6 +177,18 @@ namespace Alkahest.Game
         private int _cierreSegundos = -1;
         private string _cierreTexto = "";
 
+        // Desbloqueo de encargos al cavar hasta la Tolva (tercera ronda del
+        // pivot, ver el bloque de constantes de arriba): _encargosDesbloqueados
+        // corta la comprobación periódica para siempre en cuanto se dispara
+        // una vez (cavar es permanente en Sim/ -- nunca vuelve a sellarse
+        // solo). _tolvaCheckTimer cae a <=0 en el primer Update() de Playing
+        // a propósito (arranca en 0f): la primera comprobación es barata (el
+        // mundo nace sellado, así que sale que "no" al instante) y así no
+        // hay que esperar el primer intervalo completo sin motivo.
+        private bool _encargosDesbloqueados;
+        private float _tolvaCheckTimer;
+        private float _encargosBannerCountdown;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, OrderSystem orderSystem, SubstanceKnowledge knowledge,
             MasterSupplies supplies = null, HintSystem hints = null)
@@ -131,10 +199,21 @@ namespace Alkahest.Game
             _supplies = supplies;
             _hints = hints;
 
+            // (playtest 21) Cada partida nueva (primera carga o "Reintentar"
+            // tras un reload de escena, ver RestartRun) arranca con el HUD
+            // silenciado -- ver el docblock de HudSilenciado para el porqué.
+            HudSilenciado = true;
+
             if (_skipTitleOnLoad)
             {
                 _skipTitleOnLoad = false;
-                EnterDayIntro(1);
+                // (tercera ronda del pivot) EnterDayIntro(1) -- que dibuja
+                // "Jornada 1 de 3" + "ENCARGOS DE HOY" -- SE BIFURCA aquí en
+                // vez de llamarse: ver el docblock de
+                // EnterCuartoIntimoSilencioso. EnterDayIntro/DrawDayIntro
+                // siguen íntegros más abajo, sin tocar, para cuando la
+                // sesión cronometrada clásica vuelva.
+                EnterCuartoIntimoSilencioso(1);
             }
             else
             {
@@ -148,23 +227,73 @@ namespace Alkahest.Game
 
             if (_phase == Phase.Playing)
             {
-                _timeRemaining -= Time.deltaTime;
-                if (_timeRemaining <= 0f)
-                {
-                    _timeRemaining = 0f;
-                    EnterDayEnd();
-                    return;
-                }
-
-                UpdateAllOrdersDoneEarlyClose();
+                // (playtest 21, EL PIVOT) SESIÓN SIN RELOJ (CONTRATO_PIVOT.md,
+                // decisión de Cesar: "el cuarto íntimo pasa a ser EL juego").
+                // Los CUATRO cambios que pide ese contrato, todos aquí:
+                //  1) `_timeRemaining` YA NO SE DECREMENTA -- se queda en
+                //     `float.PositiveInfinity`, fijado en EnterPlaying.
+                //  2) NO se comprueba `<= 0f` ni se llama a EnterDayEnd desde
+                //     aquí (con el reloj infinito, esa rama nunca dispararía
+                //     de todos modos, pero se retira la comprobación entera
+                //     en vez de dejar una condición que nunca es cierta).
+                //  3) NO se llama a UpdateAllOrdersDoneEarlyClose() -- el
+                //     cierre anticipado de jornada NO SE BORRA (regla 11 de
+                //     CLAUDE.md: ya se perdió una vez al reescribir esta
+                //     clase, playtest 8->9), el método sigue definido
+                //     íntegro más abajo, solo deja de invocarse: sin reloj
+                //     que cerrar antes de tiempo, "anticipado" no significa
+                //     nada.
+                //  4) (el cuarto punto, "no dibujar el reloj", vive en
+                //     DrawPlayingHud -- ver ese método).
+                //
+                // Lo único que SÍ sigue corriendo cada frame de Playing: la
+                // detección de la primera acción del jugador, que apaga
+                // HudSilenciado (ver su docblock), y el desbloqueo de
+                // encargos al cavar hasta la Tolva (tercera ronda del pivot,
+                // ver ActualizarDesbloqueoDeEncargos -- este último SÍ está
+                // throttleado internamente, no corre de verdad cada frame).
+                DetectarPrimeraAccion();
+                ActualizarDesbloqueoDeEncargos();
             }
         }
 
         /// <summary>
+        /// (playtest 21) Apaga <see cref="HudSilenciado"/> en cuanto el
+        /// jugador hace algo de verdad: el primer movimiento (WASD/flechas,
+        /// las mismas teclas que ya escucha ApprenticeController por su
+        /// cuenta) o el primer clic de aspirar/verter (las mismas teclas que
+        /// ya escucha Flask). Es una LECTURA PASIVA -- no dispara ninguna
+        /// acción de juego, solo revela el HUD que ya estaba a punto de
+        /// aparecer por sí solo -- así que NO necesita las guardas de la
+        /// regla 12 de CLAUDE.md (EscribiendoTexto/JournalHud.Abierto): no
+        /// es un atajo nuevo que pueda "dispararse sin querer" mientras el
+        /// jugador escribe un nombre, solo confirma algo que ApprenticeController
+        /// o Flask ya iban a hacer con la misma pulsación.
+        /// </summary>
+        private void DetectarPrimeraAccion()
+        {
+            if (!HudSilenciado) return;
+
+            var kb = Keyboard.current;
+            bool movimiento = kb != null && (
+                kb.wKey.isPressed || kb.aKey.isPressed || kb.sKey.isPressed || kb.dKey.isPressed ||
+                kb.upArrowKey.isPressed || kb.downArrowKey.isPressed ||
+                kb.leftArrowKey.isPressed || kb.rightArrowKey.isPressed);
+
+            var mouse = Mouse.current;
+            bool clic = mouse != null && (mouse.leftButton.isPressed || mouse.rightButton.isPressed);
+
+            if (movimiento || clic) HudSilenciado = false;
+        }
+
+        /// <summary>
         /// Cierre anticipado de jornada (restaurado playtest 9, ver docblock
-        /// de la clase). Se llama solo mientras _phase == Playing y el reloj
-        /// normal todavía no ha llegado a 0 (ver Update). En cuanto detecta
-        /// que ya no quedan encargos pendientes arma una cuenta atrás de
+        /// de la clase). (playtest 21) YA NO SE LLAMA desde <see cref="Update"/>
+        /// -- ver el comentario de ahí, punto 3 -- pero se conserva íntegro
+        /// (regla 11 de CLAUDE.md) para cuando la sesión cronometrada vuelva.
+        /// Se llamaba solo mientras _phase == Playing y el reloj normal
+        /// todavía no había llegado a 0. En cuanto detecta que ya no quedan
+        /// encargos pendientes arma una cuenta atrás de
         /// <see cref="DayEndAutoCloseSeconds"/>; ENTER la corta antes.
         /// </summary>
         private void UpdateAllOrdersDoneEarlyClose()
@@ -195,6 +324,117 @@ namespace Alkahest.Game
             {
                 EnterDayEnd();
             }
+        }
+
+        /// <summary>
+        /// (tercera ronda del pivot) Arranque SILENCIOSO del cuarto íntimo:
+        /// bifurca <see cref="EnterDayIntro"/> en vez de tocarlo -- ese
+        /// método y <see cref="DrawDayIntro"/> se CONSERVAN íntegros (regla
+        /// 26 de CLAUDE.md) para el día en que el taller clásico vuelva a
+        /// excavarse y la sesión cronometrada regrese. La primera pantalla
+        /// del pivot no puede decir "Jornada 1 de 3" ni listar encargos, ni
+        /// mencionar una Tolva sepultada tras 23 celdas de roca que el
+        /// jugador ni siquiera puede ver -- "el primer contacto es
+        /// silencioso: un cuarto oscuro y algo vivo" (encargo). Dos
+        /// diferencias con <see cref="EnterDayIntro"/>:
+        ///  1) NO genera encargos aquí -- eso lo hace
+        ///     <see cref="ActualizarDesbloqueoDeEncargos"/> cuando el
+        ///     jugador cava un camino real hasta la Tolva, nunca antes ("el
+        ///     Maestro no puede pedirte nada mientras no haya un agujero por
+        ///     donde hablarte").
+        ///  2) NO pasa por Phase.DayIntro -- entra directo en Phase.Playing,
+        ///     en silencio (HudSilenciado ya arranca en true, ver su
+        ///     docblock, así que ningún HUD de mundo se enseña hasta que el
+        ///     jugador haga algo).
+        /// Las muestras del Maestro y las pistas de la jornada SÍ se dejan
+        /// igual que siempre (mismo comportamiento que EnterDayIntro): son
+        /// estado del MUNDO, no del panel que se quita.
+        /// </summary>
+        private void EnterCuartoIntimoSilencioso(int day)
+        {
+            _day = day;
+            if (_supplies != null) _supplies.AlEmpezarJornada(day);
+            if (_hints != null) _hints.ReiniciarParaJornada(day);
+            EnterPlaying();
+        }
+
+        /// <summary>
+        /// (tercera ronda del pivot) Desbloquea los encargos del día en
+        /// cuanto <see cref="TolvaAlcanzable"/> dice que sí, UNA sola vez
+        /// (cavar es permanente en Sim/: el mundo nunca vuelve a sellarse
+        /// solo, así que no hace falta volver a comprobar tras el primer
+        /// "sí" -- <see cref="_encargosDesbloqueados"/> corta la
+        /// comprobación para siempre). Throttleada a
+        /// <see cref="TolvaCheckIntervalSeconds"/>, nunca por frame.
+        /// </summary>
+        private void ActualizarDesbloqueoDeEncargos()
+        {
+            if (_encargosDesbloqueados)
+            {
+                if (_encargosBannerCountdown > 0f) _encargosBannerCountdown -= Time.deltaTime;
+                return;
+            }
+
+            _tolvaCheckTimer -= Time.deltaTime;
+            if (_tolvaCheckTimer > 0f) return;
+            _tolvaCheckTimer = TolvaCheckIntervalSeconds;
+
+            if (!TolvaAlcanzable()) return;
+
+            _encargosDesbloqueados = true;
+            if (_orderSystem != null) _orderSystem.GenerateOrdersForDay(_day);
+            // "Que se note (es la recompensa de cavar)": aviso breve, ver
+            // DrawEncargosDesbloqueadosBanner. OrdersHud (encargo aparte,
+            // guardado por HudSilenciado, no por esto) recogerá la lista
+            // nueva en su próximo OnGUI sin que este archivo tenga que
+            // tocarlo -- ActiveOrders se lee en vivo.
+            _encargosBannerCountdown = EncargosDesbloqueadosBannerSeconds;
+        }
+
+        /// <summary>
+        /// CRITERIO BARATO Y HONESTO para "la Tolva es alcanzable" (pedido
+        /// explícito: "no hace falta un pathfinding"). La boca de la Tolva
+        /// (<see cref="SimLevelBuilder.ChuteMouthX0"/>..Y1) nace TOTALMENTE
+        /// rodeada de <see cref="MaterialId.Stone"/> maciza -- se talla
+        /// DESPUÉS de rellenar el mundo entero de piedra, ver
+        /// `Sim/SimLevelBuilder.BuildDeliveryNiche`/`FillWorldStone`. Basta
+        /// con mirar el ANILLO de celdas inmediatamente FUERA de ese
+        /// rectángulo (un margen de una celda a cada lado): mientras siga
+        /// siendo Stone puro, nadie ha llegado hasta ahí con el cincel. En
+        /// cuanto <see cref="Cincel"/> convierte UNA sola celda de ese
+        /// anillo en Empty (TALLAR solo actúa sobre Stone exacto, ver su
+        /// docblock), esta comprobación pasa a true -- no demuestra que
+        /// exista un camino de aire TERMINADO hasta la boca, pero si el
+        /// jugador ya tocó el anillo que la rodea, está lo bastante cerca
+        /// para que el Maestro empiece a hablar: es literalmente el
+        /// disparador alternativo que el encargo dejaba aceptar ("el
+        /// jugador ha tallado piedra a menos de N celdas de la boca").
+        /// O(perímetro) ~144 celdas (2*(24+52) aprox.), solo lecturas de
+        /// <see cref="CellGrid.GetMat(int,int)"/> -- cero allocs, y ni
+        /// siquiera eso corre cada frame (ver
+        /// <see cref="ActualizarDesbloqueoDeEncargos"/>).
+        /// </summary>
+        private bool TolvaAlcanzable()
+        {
+            if (_sim == null || _sim.Grid == null) return false;
+            var grid = _sim.Grid;
+
+            int x0 = SimLevelBuilder.ChuteMouthX0 - 1;
+            int x1 = SimLevelBuilder.ChuteMouthX1 + 1;
+            int y0 = SimLevelBuilder.ChuteMouthY0 - 1;
+            int y1 = SimLevelBuilder.ChuteMouthY1 + 1;
+
+            for (int x = x0; x <= x1; x++)
+            {
+                if (CellGrid.InBounds(x, y0) && grid.GetMat(x, y0) != MaterialId.Stone) return true;
+                if (CellGrid.InBounds(x, y1) && grid.GetMat(x, y1) != MaterialId.Stone) return true;
+            }
+            for (int y = y0 + 1; y < y1; y++)
+            {
+                if (CellGrid.InBounds(x0, y) && grid.GetMat(x0, y) != MaterialId.Stone) return true;
+                if (CellGrid.InBounds(x1, y) && grid.GetMat(x1, y) != MaterialId.Stone) return true;
+            }
+            return false;
         }
 
         private void ApplyPause()
@@ -234,10 +474,21 @@ namespace Alkahest.Game
 
         private void EnterPlaying()
         {
-            _timeRemaining = DayDurationSeconds;
+            // (playtest 21, EL PIVOT) `DayDurationSeconds` (la vieja "6:00")
+            // NO SE BORRA -- se queda arriba, sin usar, para cuando la
+            // sesión cronometrada vuelva. `_timeRemaining` nace en
+            // `+Infinity` en vez de ese valor: un valor SANO para cualquier
+            // código que lo lea o lo acote (Mathf.Clamp/comparaciones con
+            // infinito se comportan bien; lo que NO se hace en este modo es
+            // decrementarlo ni compararlo contra 0, ver Update()).
+            _timeRemaining = float.PositiveInfinity;
             // Reinicio del aviso de cierre anticipado (playtest 9): cada
             // jornada nueva empieza "sin anunciar", aunque la anterior se
-            // cerrase por completar todos los encargos.
+            // cerrase por completar todos los encargos. (playtest 21: en
+            // sesión sin reloj UpdateAllOrdersDoneEarlyClose ya no se llama,
+            // así que estos dos campos no vuelven a leerse, pero se dejan
+            // reiniciados igual -- coste cero, y es lo que ya hacía este
+            // método antes de esta ronda.)
             _allOrdersDoneAnnounced = false;
             _cierreSegundos = -1;
             _phase = Phase.Playing;
@@ -463,6 +714,31 @@ namespace Alkahest.Game
 
         private void DrawPlayingHud()
         {
+            // (tercera ronda del pivot) El aviso de "los encargos han
+            // llegado" (ver ActualizarDesbloqueoDeEncargos/
+            // DrawEncargosDesbloqueadosBanner) vive FUERA del `return` de
+            // abajo a propósito: es independiente del reloj (no existe
+            // reloj en este modo, ver el punto 4 más abajo) y tiene que
+            // poder dibujarse aunque _timeRemaining sea infinito. Sigue
+            // respetando HudSilenciado -- no se cuela antes de la primera
+            // acción del jugador, igual que el resto del HUD de mundo.
+            if (!HudSilenciado && _encargosBannerCountdown > 0f)
+            {
+                UiStyles.Preparar();
+                DrawEncargosDesbloqueadosBanner();
+            }
+
+            // (playtest 21, EL PIVOT, punto 4 de "sesión sin reloj" del
+            // contrato: "no dibujar el reloj"). `_timeRemaining` vive en
+            // `+Infinity` en este modo (ver EnterPlaying) -- calcular
+            // `Mathf.CeilToInt` de infinito y trocearlo en minutos:segundos
+            // más abajo no tiene ningún sentido, así que se corta aquí. El
+            // cuerpo del método NO SE BORRA (regla 26 de CLAUDE.md): sigue
+            // íntegro debajo de este `return`, listo para cuando la sesión
+            // cronometrada vuelva y `_timeRemaining` vuelva a ser un número
+            // finito de verdad.
+            if (float.IsPositiveInfinity(_timeRemaining)) return;
+
             UiStyles.Preparar();
 
             // El texto del reloj solo se reconstruye cuando cambia el segundo
@@ -509,6 +785,26 @@ namespace Alkahest.Game
 
             UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.Exito);
             GUI.Label(r, _cierreTexto, UiStyles.CuerpoCentrado);
+        }
+
+        /// <summary>
+        /// (tercera ronda del pivot) "Que se note (es la recompensa de
+        /// cavar)": aviso breve, arriba centrado (no hay reloj del que
+        /// colgarse en este modo, así que va solo, en la misma posición que
+        /// ocuparía el reloj clásico), cuando <see cref="TolvaAlcanzable"/>
+        /// pasa a true por primera vez y el Maestro empieza a pedir
+        /// encargos. Mismo idioma visual que <see cref="DrawAllOrdersDoneBanner"/>
+        /// (panel de tinta con filete dorado, texto centrado), con su propia
+        /// cuenta atrás (<see cref="EncargosDesbloqueadosBannerSeconds"/>)
+        /// para no quedarse clavado en pantalla para siempre.
+        /// </summary>
+        private void DrawEncargosDesbloqueadosBanner()
+        {
+            float w = UiStyles.S(460f), h = UiStyles.S(30f);
+            var r = new Rect((Screen.width - w) * 0.5f, UiStyles.S(8f), w, h);
+
+            UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.Oro);
+            GUI.Label(r, "El Maestro os ha oído cavar -- primeros encargos disponibles.", UiStyles.CuerpoCentrado);
         }
 
         private void DrawDayEnd()

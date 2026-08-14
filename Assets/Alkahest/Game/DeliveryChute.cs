@@ -128,6 +128,44 @@ namespace Alkahest.Game
     /// LIMITACIÓN: lee _sim.Grid.temp[] directamente para evaluar los encargos
     /// Hot/Cold (mismo patrón que HeatPlate/ChillStone).
     /// TODO(ChaosAlchemy): canalizar por una API de lectura del sim.
+    ///
+    /// =====================================================================
+    /// VERIFICADO (playtest 21, EL PIVOT): "LA RECOMPENSA DE CAVAR" NO SE CALLA
+    /// =====================================================================
+    /// <see cref="OnGUI"/> añadió la guarda <c>|| DayCycle.HudSilenciado</c>
+    /// (hermana de <c>DayCycle.InputLocked</c>, ver su docblock en
+    /// Game/DayCycle.cs). Se comprobó explícitamente que esto NO calla el
+    /// rótulo de la Tolva justo cuando el jugador por fin cava hasta ella:
+    ///  · <c>HudSilenciado</c> se apaga (para siempre, en toda la partida) en
+    ///    el primer <c>DayCycle.DetectarPrimeraAccion</c> que vea movimiento
+    ///    (WASD/flechas) O clic de ratón.
+    ///  · Cavar (Game/Cincel.cs, líneas ~220-221) usa exactamente
+    ///    <c>mouse.leftButton.isPressed</c> (tallar) / <c>rightButton.isPressed</c>
+    ///    (rellenar) -- el MISMO gesto que ya cuenta como "clic" para
+    ///    <c>DetectarPrimeraAccion</c>. La Tolva está sellada tras 23-35
+    ///    celdas de roca (ver Sim/SimLevelBuilder.cs, "EL CUARTO ÍNTIMO"): es
+    ///    IMPOSIBLE llegar a ella sin haber tallado antes, así que
+    ///    <c>HudSilenciado</c> ya lleva rato en <c>false</c> (desde el primer
+    ///    golpe de cincel) mucho antes de que el jugador asome a la boca del
+    ///    pozo. Su rótulo llega intacto a ese momento.
+    ///  · Es un pestillo de un solo sentido (true -> false, nunca al revés
+    ///    salvo <c>DayCycle.Init()</c> en una partida nueva): nada se queda
+    ///    mudo para siempre -- todos los HUD guardados por HudSilenciado
+    ///    (los otros 9 archivos listados en su docblock) se reactivan solos
+    ///    con la misma pulsación, sin ningún paso manual adicional.
+    ///  · Hallazgo lateral (no un bug, documentado por si sorprende en el
+    ///    futuro): <see cref="MachineFocus.MostrarPromptE"/> solo se apaga
+    ///    tras <c>UsosParaAprender</c>=2 llamadas a
+    ///    <c>MachineFocus.RegistrarUsoE()</c>, y esas llamadas viven SOLO en
+    ///    HeatPlate/ChillStone/Dispenser (grep confirmado) -- los tres
+    ///    aparatos que el pivot deja de instanciar en
+    ///    AlkahestGameBootstrap.TrySpawn(). Con ellos ausentes, nada más en
+    ///    el cuarto íntimo llama a RegistrarUsoE (Criatura/Capullo tampoco lo
+    ///    hacen), así que <c>MostrarPromptE</c> se queda en <c>true</c> el
+    ///    resto de la partida: el texto "TOLVA DEL MAESTRO — vierte AQUÍ" NO
+    ///    se retira tras dos usos como en el taller clásico, sino que sigue
+    ///    disponible siempre que no haya destello/aviso activo -- si acaso
+    ///    RESPALDA la "recompensa de cavar" en vez de arriesgarla.
     /// </summary>
     public sealed class DeliveryChute : MonoBehaviour
     {
@@ -536,7 +574,7 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void OnGUI()
         {
-            if (_sim == null || DayCycle.InputLocked) return;
+            if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
             UiStyles.Preparar();
 

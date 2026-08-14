@@ -27,6 +27,29 @@ namespace Alkahest.Game
     /// Update() en los componentes ya creados NO debe importarle a ninguno de
     /// ellos (cada uno lee del otro por referencia guardada, no asume haberse
     /// actualizado ya en este mismo frame).
+    ///
+    /// =====================================================================
+    /// EL CUARTO ÍNTIMO (playtest 21, EL PIVOT): TrySpawn() ES UNA LISTA
+    /// PLANA DE LLAMADAS, Y ESO YA BASTABA PARA BIFURCARLA.
+    /// =====================================================================
+    /// `Sim/AlkahestSim.cs` ya no construye el taller clásico
+    /// (`SimLevelBuilder.BuildTestLevel`) sino el cuarto íntimo excavado en
+    /// piedra (`SimLevelBuilder.BuildCuartoIntimo`, ver su docblock). Este
+    /// archivo sigue esa misma decisión SIN BORRAR ni una línea: las placas
+    /// ígneas, la piedra gélida, los grifos, el estante y las muestras del
+    /// Maestro no tienen sitio en una sala "grande y casi vacía" -- sus
+    /// métodos (`SpawnHeatPlates`/`SpawnChillStone`/`SpawnDispensers`/
+    /// `SpawnStorageRack`, más la creación de `MasterSupplies`) se QUEDAN
+    /// definidos, tal cual, para el día en que el jugador excave hasta el
+    /// taller clásico enterrado y haga falta volver a llamarlos -- solo se
+    /// SALTAN sus llamadas dentro de `TrySpawn()`, comentadas ahí mismo con
+    /// el porqué. Lo que SÍ se instancia: el aprendiz (frasco+cincel+
+    /// mudanza), el conocimiento de sustancias, el diario, la Tolva
+    /// (`DeliveryChute` -- su boca existe aunque esté sellada tras la roca,
+    /// ver `SimLevelBuilder.BuildDeliveryNiche`), el sistema de encargos, y
+    /// LAS DOS CRIATURAS (`Criatura`/`Capullo`, `Game/Criatura.cs` y
+    /// `Game/Capullo.cs`, propiedad del otro encargo de esta ronda -- API
+    /// congelada en CONTRATO_PIVOT.md, copiada VERBATIM más abajo).
     /// </summary>
     public sealed class AlkahestGameBootstrap : MonoBehaviour
     {
@@ -72,25 +95,61 @@ namespace Alkahest.Game
             var flask = apprentice.GetComponent<Flask>();
             var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
 
-            SpawnHeatPlates(apprentice.transform);
-            SpawnChillStone(apprentice.transform);
+            // (playtest 21, EL PIVOT) LA MAQUINARIA DEL TALLER CLÁSICO SE
+            // SALTA, NO SE BORRA -- ver el docblock de la clase. Placas
+            // ígneas, piedra gélida, grifos y estante no tienen sitio en el
+            // cuarto íntimo (SimLevelBuilder.BuildCuartoIntimo no excava
+            // hueco para ninguno de los cuatro): sus métodos siguen
+            // definidos más abajo, intactos, para cuando el jugador excave
+            // hasta el taller enterrado.
+            //   SpawnHeatPlates(apprentice.transform);
+            //   SpawnChillStone(apprentice.transform);
 
             var orderSystem = SpawnOrderSystem(knowledge);
-            var grifoAzoth = SpawnDispensers(apprentice.transform, orderSystem);
-            SpawnDeliveryChute(orderSystem);
-            SpawnStorageRack(apprentice.transform, flask, knowledge);
+            // SpawnDispensers necesitaba ir aquí (grifoAzoth alimentaba
+            // MasterSupplies.Init más abajo) -- ambos se saltan juntos, ver
+            // el bloque de "muestras del Maestro" unas líneas más abajo.
+            //   var grifoAzoth = SpawnDispensers(apprentice.transform, orderSystem);
+            SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
+            //   SpawnStorageRack(apprentice.transform, flask, knowledge);
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
             SpawnOrdersHud(orderSystem);
 
-            // Fondo del taller + pistas + muestras del Maestro se crean ANTES que
-            // el ciclo de jornadas: DayCycle avisa a los dos últimos en cuanto
-            // entra en la intro de la jornada 1 (ver DayCycle.Init).
+            // Fondo del taller + pistas se crean ANTES que el ciclo de
+            // jornadas: DayCycle avisa a HintSystem en cuanto entra en la
+            // intro de la jornada 1 (ver DayCycle.Init). LAS MUESTRAS DEL
+            // MAESTRO NO SE INSTANCIAN EN ESTE MODO (contrato: "nadie te la
+            // dio", no hay Maestro al principio) -- `supplies` se queda en
+            // `null` y se pasa así a DayCycle/SpawnDayCycle, que ya
+            // contemplaba ese caso (`Init(..., supplies = null, ...)`).
+            // EFECTO COLATERAL (comprobado, ver el informe de la ronda): con
+            // la sesión sin reloj (Game/DayCycle.cs) la partida nunca avanza
+            // a la jornada 2, así que MasterSupplies.AlEmpezarJornada(2)
+            // JAMÁS se dispararía aunque `supplies` existiera -- da igual en
+            // este modo (la criatura es la vida del juego, no el grifo de
+            // Azoth), pero no dejarlo al azar: es la razón real, no una
+            // casualidad de que el campo se haya quedado en null.
             new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
             var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
-            var supplies = new GameObject("MasterSupplies").AddComponent<MasterSupplies>();
-            supplies.Init(_sim, grifoAzoth);
+            MasterSupplies supplies = null;
+            //   var supplies = new GameObject("MasterSupplies").AddComponent<MasterSupplies>();
+            //   supplies.Init(_sim, grifoAzoth);
+
+            // LAS DOS CRIATURAS (contrato CONTRATO_PIVOT.md, firma VERBATIM
+            // -- ver Game/Criatura.cs/Capullo.cs, propiedad del otro
+            // encargo de esta ronda). Después del aprendiz (necesitan su
+            // Transform) y antes del ciclo de jornadas, mismo criterio que
+            // el resto de este método: todo lo que otro sistema pueda leer
+            // por referencia se crea antes que ese sistema.
+            var criaturaGo = new GameObject("Criatura");
+            var criatura = criaturaGo.AddComponent<Criatura>();
+            criatura.Init(_sim, apprentice.transform, SimLevelBuilder.CunaCriaturaX, SimLevelBuilder.CunaCriaturaY);
+
+            var capulloGo = new GameObject("Capullo");
+            var capullo = capulloGo.AddComponent<Capullo>();
+            capullo.Init(_sim, apprentice.transform, SimLevelBuilder.CapulloX, SimLevelBuilder.CapulloY);
 
             SpawnDayCycle(orderSystem, knowledge, supplies, hints);
 
@@ -100,30 +159,36 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (taller 768x288, playtest 15).");
+            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (cuarto íntimo, playtest 21 -- taller clásico 768x288 enterrado bajo la roca).");
         }
 
         private ApprenticeController SpawnApprentice()
         {
             var go = new GameObject("Apprentice");
-            // (playtest 15) ANTES arrancaba flotando sobre la cuba izquierda de
-            // CULTIVO -- tenía sentido cuando la cámara encuadraba el mundo
-            // ENTERO (una pantalla) y "estar sobre la cuba" bastaba para ver el
-            // taller entero de un vistazo. Con SimRenderer siguiendo al aprendiz
-            // y mostrando solo ~una pantalla (Tab la amplía), lo que importa ya
-            // no es "verlo todo" sino EMPEZAR donde están las herramientas: el
-            // encargo pide explícitamente que arranque en LABORATORIO, "el
-            // centro de operaciones". Se posiciona flotando sobre el centro de
-            // la pila de recogida (BasinInterior), justo bajo la columna de
-            // grifos y a un lado del pozo que baja al sótano (WellX0=343..382,
-            // fuera de este rango) -- así el jugador ve grifos + pila + estante
-            // sin tener que volar a ningún sitio para empezar a trabajar, y
-            // Cultivo/Entrega quedan a un vuelo corto a cada lado (igual de
-            // accesibles que antes, solo que ya no hace falta "estar encima" de
-            // ninguna de las dos para empezar).
+            // (playtest 21, EL PIVOT) Nace en SimLevelBuilder.AprendizX/Y --
+            // una celda de aire del CUARTO ÍNTIMO, entre la cuna y la
+            // repisa, con las dos a la vista sin que ninguna la tape (ver el
+            // docblock de BuildCuartoIntimo). REEMPLAZA el criterio de
+            // playtest 15 de abajo (flotar sobre la pila de recogida de
+            // LABORATORIO, "el centro de operaciones" del taller CLÁSICO):
+            // se conserva el párrafo, sin borrar, porque sigue siendo el
+            // criterio correcto para cuando el jugador excave hasta ese
+            // taller y el spawn vuelva a vivir ahí.
+            //
+            // (playtest 15, taller clásico) "arrancaba flotando sobre la cuba
+            // izquierda de CULTIVO -- tenía sentido cuando la cámara
+            // encuadraba el mundo ENTERO (una pantalla) y 'estar sobre la
+            // cuba' bastaba para ver el taller entero de un vistazo. Con
+            // SimRenderer siguiendo al aprendiz y mostrando solo ~una
+            // pantalla (Tab la amplía), lo que importa ya no es 'verlo todo'
+            // sino EMPEZAR donde están las herramientas: el encargo pide
+            // explícitamente que arranque en LABORATORIO, 'el centro de
+            // operaciones'. Se posiciona flotando sobre el centro de la pila
+            // de recogida (BasinInterior)... Cultivo/Entrega quedan a un
+            // vuelo corto a cada lado."
             float celda = SimRenderer.CellWorldSize;
-            float x = (SimLevelBuilder.BasinInteriorX0 + SimLevelBuilder.BasinInteriorX1) * 0.5f * celda;
-            float y = (SimLevelBuilder.BasinInteriorY1 + 10) * celda;
+            float x = (SimLevelBuilder.AprendizX + 0.5f) * celda;
+            float y = (SimLevelBuilder.AprendizY + 0.5f) * celda;
             go.transform.position = new Vector3(x, y, 0f);
 
             var apprentice = go.AddComponent<ApprenticeController>();

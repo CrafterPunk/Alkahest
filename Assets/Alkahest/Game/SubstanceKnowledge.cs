@@ -691,7 +691,7 @@ namespace Alkahest.Game
 
         private void OnGUI()
         {
-            if (DayCycle.InputLocked) return;
+            if (DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
             bool hayLey = _leyBannerActual != null;
             // El aviso de bautizo nunca compite por atención con el banner de ley (que

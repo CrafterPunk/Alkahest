@@ -118,6 +118,75 @@ namespace Alkahest.Sim
         /// <summary>Colchón de chunks fuera del rectángulo visible que el barrido de render sigue considerando "cerca de la vista" (ver RenderFrame). En chunks, no celdas: 2 = 32 celdas de margen a cada lado.</summary>
         private const int ViewMarginChunks = 2;
 
+        /// <summary>
+        /// (playtest 21, EL PIVOT) Acerca la cámara respecto al encuadre de
+        /// "una pantalla" de siempre -- pedido por el contrato del cuarto
+        /// íntimo (768x288 con TODO el mundo enterrado en piedra salvo una
+        /// cámara excavada, ver `Sim/SimLevelBuilder.BuildCuartoIntimo`): una
+        /// sala pequeña se lee mejor con la cámara más cerca, y el zoom vive
+        /// en UNA sola multiplicación sobre `_baseOrthoSize` (ver
+        /// <see cref="FitMainCamera"/>) para que quede expuesto como un
+        /// número con nombre, no un literal suelto en medio de la fórmula.
+        ///
+        /// TERCERA RONDA -- CESAR LO VIO CORRER EN SU UNITY: "dos tercios de
+        /// la pantalla son roca". El valor anterior (0.7) mostraba
+        /// 144*0.7=100.8 celdas de alto para una sala interior de 42 --
+        /// menos de la mitad del encuadre era la sala, el resto piedra
+        /// maciza sin nada, y la criatura un puntito. Baja a **5/16 =
+        /// 0.3125** -- con `CellGrid.PantallaH`=144 celdas de referencia,
+        /// eso son EXACTAMENTE 144*5/16 = **45 celdas de alto** visibles
+        /// (dentro del 45-55 pedido; se eligió el extremo BAJO del rango a
+        /// propósito, ver el porqué dos párrafos más abajo). El ancho sigue
+        /// la misma proporción 16:9 que el resto del archivo (256*5/16=80
+        /// celdas), no se toca ninguna otra fórmula.
+        ///
+        /// POR QUÉ NO BAJA A CERO LA ROCA VISIBLE (documentado en vez de
+        /// fingido): <see cref="UpdateCameraFollow"/> usa una cámara de
+        /// SEGUIMIENTO con zona muerta del 30% (<see cref="DeadZoneHalfFraction"/>),
+        /// y en el primer frame (snap=true) eso ancla al aprendiz al 65% de
+        /// la altura del encuadre (más margen por DEBAJO que por encima --
+        /// mismo comportamiento en TODA cámara de seguimiento del juego, no
+        /// algo nuevo de esta ronda). El aprendiz nace a solo 12 celdas del
+        /// suelo real de la sala (`SimLevelBuilder.AprendizY` = `CunaTopY`+1
+        /// = 180, suelo en `CuartoY0`=168) porque tiene que seguir leyéndose
+        /// "junto a la criatura", así que ese 65%-por-debajo consume parte
+        /// de esa franja en piedra de verdad, sin excavar. Calculado exacto
+        /// (réplica en Python de esta misma aritmética, ver el informe de la
+        /// ronda) desde el punto de aparición real: de las 45 celdas de
+        /// alto, 16.75 son roca por DEBAJO del suelo de la sala y 16.25 son
+        /// sala excavada VACÍA por encima del grupo cuna/repisa -- las
+        /// ~12 restantes son el propio grupo cuna/charco/repisa/criatura.
+        /// Bajar más el zoom (fuera del 45-55 pedido) reduciría esa franja
+        /// de roca en términos absolutos pero también recortaría la sala
+        /// entera -- el extremo bajo del rango (45, no 50 ni 55) es
+        /// precisamente el que MINIMIZA la roca visible sin salirse de lo
+        /// pedido (ver la tabla de la ronda: a zoom más alto la franja de
+        /// roca crece en proporción con `_baseOrthoSize`). TODO lo demás que
+        /// depende de `_baseOrthoSize` (zona muerta, acotado al mundo,
+        /// rótulos de UiStyles, alcance del Frasco -- que no lee tamaño de
+        /// cámara en absoluto) se deriva de él y se adapta solo, sin tocar
+        /// nada más en este archivo.
+        /// </summary>
+        /// (playtest 21, TERCERA CALIBRACIÓN — la definitiva la dio Cesar mirándolo)
+        /// Cronología, porque este número ya ha girado dos veces y conviene que no
+        /// gire una tercera a ciegas:
+        ///  · 0.7 (100 celdas de alto): el director lo vio correr y diagnosticó
+        ///    "dos tercios de la pantalla son roca". El diagnóstico era correcto
+        ///    PERO la causa que le atribuyó no: no sobraba zoom, sobraba roca
+        ///    DEBAJO — la sala quedaba en la franja de arriba y el hueco estaba
+        ///    todo en el mismo lado. Era un problema de ENCUADRE, no de distancia.
+        ///  · 5/16 = 0.3125 (45 celdas): la sobrecorrección. Cesar, al verlo:
+        ///    *"la camara me quedo super zoomeada y se ve horrible, necesito como
+        ///    el doble de distancia al menos"*.
+        ///  · 5/8 = 0.625 (90 celdas): exactamente el doble que pidió, y muy cerca
+        ///    del 0.7 original — porque el original nunca fue el problema.
+        /// LA LECCIÓN, para quien toque esto: si media pantalla es roca, mira
+        /// primero DÓNDE está el hueco antes de tocar el zoom. Aquí la roca se
+        /// reparte ahora arriba y abajo (ver el anclaje vertical más abajo) y a
+        /// esta distancia la cámara lee como "una cámara excavada en la montaña",
+        /// que es justo lo que el pivot quiere.
+        private const float CuartoIntimoZoomFactor = 5f / 8f; // 0.625 -- 90 celdas de alto.
+
         private Camera _mainCam;
         private ApprenticeController _apprentice;
         private float _baseOrthoSize;
@@ -270,7 +339,11 @@ namespace Alkahest.Sim
             float aspect = cam.aspect > 0.01f ? cam.aspect : 16f / 9f;
             float sizeForHeight = pantallaH * 0.5f;
             float sizeForWidth = (pantallaW * 0.5f) / aspect;
-            _baseOrthoSize = Mathf.Max(sizeForHeight, sizeForWidth);
+            // (playtest 21) La única línea del zoom del cuarto íntimo -- ver
+            // CuartoIntimoZoomFactor. Zona muerta, acotado al mundo, rótulos
+            // y alcance del Frasco leen `_baseOrthoSize`/`orthographicSize`
+            // ya multiplicados, así que se adaptan solos sin tocar nada más.
+            _baseOrthoSize = Mathf.Max(sizeForHeight, sizeForWidth) * CuartoIntimoZoomFactor;
             cam.backgroundColor = BackgroundColor;
         }
 

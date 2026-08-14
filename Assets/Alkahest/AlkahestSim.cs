@@ -76,7 +76,16 @@ namespace Alkahest
 
             _universe = Universe.Create(seed);
             _grid = new CellGrid();
-            SimLevelBuilder.BuildTestLevel(_grid);
+            // (playtest 21, EL PIVOT) La partida arranca en el CUARTO ÍNTIMO,
+            // no en el taller clásico -- "el cuarto íntimo pasa a ser EL
+            // juego", decisión de Cesar, CONTRATO_PIVOT.md. `BuildTestLevel`
+            // NO se borra (el taller grande sigue entero, solo que ahora
+            // ENTERRADO bajo la piedra que rellena `BuildCuartoIntimo`): la
+            // rama existe aquí, en el ÚNICO sitio del proyecto donde se
+            // decide qué plano construir, para el día en que el taller
+            // clásico vuelva a excavarse de verdad en vez de generarse de
+            // fábrica ya abierto.
+            SimLevelBuilder.BuildCuartoIntimo(_grid);
             _stepper = new SimStepper(_universe, _grid);
 
             if (_renderer == null)

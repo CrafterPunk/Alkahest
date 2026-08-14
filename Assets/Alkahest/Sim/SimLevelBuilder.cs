@@ -670,6 +670,393 @@ namespace Alkahest.Sim
         // volver a enchufarla sin leer POR QUÉ se desenchufó.
         // =================================================================
 
+        // =====================================================================
+        // EL CUARTO ÍNTIMO (playtest 21, EL PIVOT) — "el taller grande no
+        // desaparece, está ENTERRADO". `BuildTestLevel` (arriba, SIN TOCAR
+        // ni una constante) sigue existiendo íntegro porque el plano clásico
+        // vuelve a construirse en cuanto el jugador excave lo bastante lejos
+        // con el cincel: nada de lo de arriba era trabajo perdido. Lo que
+        // arranca la partida AHORA es `BuildCuartoIntimo`: TODO el mundo
+        // (768x288, sin excepción) nace de `MaterialId.Stone`, y se excava a
+        // mano UNA sola cámara pequeña alrededor de donde el aprendiz
+        // aparecía en el plano viejo (x≈303, y≈189 -- ver el comentario de
+        // `SpawnApprentice` en `Game/AlkahestGameBootstrap.cs`, que sigue
+        // siendo la referencia histórica aunque ese código ya no se llame en
+        // este modo): así la cámara (`SimRenderer.FitMainCamera`, que sigue
+        // sin tocar ninguna coordenada) no tiene que aprender nada nuevo, el
+        // encuadre de siempre cae justo encima de la cámara íntima.
+        //
+        // QUÉ HAY DENTRO, Y NADA MÁS (pedido explícito: "la sala tiene que
+        // sentirse grande y casi vacía"):
+        //  · la CUNA (`DrawUShape`, la misma primitiva de las cubas de
+        //    Cultivo del plano viejo) donde se asienta el Rescoldo
+        //    (`Game/Criatura.cs`, propiedad del otro encargo -- este archivo
+        //    solo expone el ANCLA, `CunaCriaturaX/Y`, "celda de SUELO sobre
+        //    la que se asienta" según el contrato).
+        //  · la REPISA (una plataforma flotante, mismo lenguaje visual que
+        //    `RackX0`/`ChillTrayX0` del plano viejo: "las vigas horizontales
+        //    de WorkshopBackdrop ya explican los estantes flotantes") donde
+        //    se apoya el Capullo (`CapulloX/Y`). REUBICADA (ronda de
+        //    integración tras la primera entrega): el otro encargo le dio al
+        //    Rescoldo calor PROPIO -- una criatura contenta empuja
+        //    temperatura a su alrededor, y "cuidar produce vida" depende de
+        //    que ese calor LLEGUE al capullo. Midieron con una réplica de
+        //    `SimStepper.DiffuseTemperature` que el alcance útil son 10-14
+        //    celdas (más allá, el tirón hacia ambiente levanta un muro que
+        //    no se cruza). TERCERA RONDA (ver la sección de abajo): la
+        //    repisa YA NO vive encima de la cuna, vive AL LADO, en el MISMO
+        //    suelo (`RepisaY0`==`CuartoY0`) -- la separación de 12 celdas es
+        //    ahora horizontal, medida con la métrica REAL que usa
+        //    `Game/Criatura.ApplyCalorTick` (Chebyshev, no euclídea: ver
+        //    `CapulloDistanciaX` más abajo para la cuenta completa).
+        //  · un MONTÓN de `MaterialId.Nutrient` TOCANDO el lado IZQUIERDO de
+        //    la cuna (ver `NutrienteMoundX0`, más abajo): CRÍTICO, según el
+        //    contrato -- `Sim/SimStepper.GrowthTick` (NO TOCADO por este
+        //    encargo) solo hace crecer una célula de Vivium si tiene
+        //    Nutrient en una celda ORTOGONALMENTE ADYACENTE, nunca "cerca"
+        //    en radio. El sembrado inicial de `Criatura.SembrarCuerpoInicial`
+        //    (disco de radio 2, ver ese archivo) llega hasta la columna
+        //    `CunaCriaturaX-2`; el montón termina en `CunaCriaturaX-3`, así
+        //    que su columna derecha queda literalmente pegada al borde del
+        //    disco desde el tick 0 -- el primer estirón no depende de que el
+        //    jugador haga nada primero. LADO IZQUIERDO A PROPÓSITO: la
+        //    repisa vive arriba-derecha de la cuna, así que sembrar el
+        //    nutriente al lado CONTRARIO maximiza la distancia real entre
+        //    "donde crece la masa de Vivium" y "donde se apoya el capullo"
+        //    (ver la comprobación de separación en el informe de la ronda:
+        //    varios cientos de celdas de margen antes de que el crecimiento
+        //    pudiera alcanzar la repisa): el Rescoldo no puede crecer hasta
+        //    tragarse el capullo sin que antes se le acabe el nutriente
+        //    local, que está del lado de donde nunca va.
+        //  · un CHARCO pequeño de `MaterialId.Water` -- CERCA del grupo
+        //    cuna/repisa (segunda ronda de integración, "AJUSTE
+        //    COMPOSICIÓN": antes vivía en la esquina opuesta de la sala,
+        //    exiliado a 57 celdas; ahora a un puñado de celdas de la pared
+        //    de la cuna, "algo con lo que experimentar" que de verdad
+        //    invita porque se ve junto a lo demás en el primer plano) -- en
+        //    una cubeta en miniatura (misma primitiva `DrawUShape` que la
+        //    cuna, sobre el mismo suelo `CuartoY0`) para que se lea como un
+        //    charco y no como una mancha que se desparrama por todo el
+        //    suelo llano (Water es Liquid de verdad, fluye). TERCERA RONDA:
+        //    pasa del lado DERECHO de la cuna (compartido con la repisa) al
+        //    IZQUIERDO -- la lectura de izquierda a derecha queda charco ->
+        //    cuna/criatura -> repisa/capullo, ver la sección de abajo.
+        //  · nada de grifos, placas, piedra gélida ni estante: ese
+        //    equipamiento sigue viviendo en `BuildTestLevel`/
+        //    `AlkahestGameBootstrap` tal cual, a la espera de la fase en la
+        //    que el jugador excave hasta él.
+        //
+        // SEGUNDA RONDA DE INTEGRACIÓN -- "AJUSTE COMPOSICIÓN" (Cesar vio el
+        // PNG de la cámara ampliada y encontró la geometría correcta pero la
+        // COMPOSICIÓN mal: todo apelotonado en la esquina inferior izquierda
+        // de una caja de 70 celdas de alto, con dos tercios del encuadre
+        // vacíos arriba y el aprendiz flotando solo en esa nada). Dos
+        // cambios, los dos de constantes, geometría interna intacta salvo
+        // traducción de posición:
+        //  1. LA SALA BAJA DE ALTO: `CuartoY1-CuartoY0+1` pasa de 70 a 42
+        //     celdas (dentro del 40-45 pedido). El ANCHO (110) no se toca,
+        //     ni tampoco `CuartoX1`/`ChuteWallX0`: la distancia a la Tolva
+        //     (23/35 celdas, ver más abajo) queda exactamente igual, tal
+        //     como se pidió explícitamente.
+        //  2. TODO SE RECOMPONE ALREDEDOR DE LA CRIATURA en vez de en la
+        //     esquina: la cuna pasa del borde izquierdo (antes a 15 celdas
+        //     del muro) al centro-izquierda de la sala; la repisa/capullo
+        //     sigue arriba-derecha DENTRO del mismo alcance térmico 10-14
+        //     (la traducción no cambia ninguna distancia relativa, solo el
+        //     origen); el charco se acerca de 57 a 10 celdas del muro de la
+        //     cuna (antes exiliado al otro extremo); y el aprendiz nace
+        //     DENTRO de la boca abierta de la cuna, a ~6.4 celdas del centro
+        //     del disco sembrado del Rescoldo, en vez de sobrevolando el
+        //     centro geométrico del vacío. Cálculo del encuadre de cámara
+        //     real desde ese punto de aparición: ver el docblock de
+        //     `AprendizX/Y` más abajo.
+        //
+        // =====================================================================
+        // TERCERA RONDA: CESAR LO VIO CORRER EN SU UNITY -- tres correcciones
+        // concretas tras jugarlo de verdad (el zoom vive en SimRenderer, las
+        // otras dos aquí)
+        // =====================================================================
+        // (1) EL ZOOM ERA INSUFICIENTE. `SimRenderer.CuartoIntimoZoomFactor`
+        //     (0.7) mostraba ~100 celdas de alto para una sala de 42 -- "dos
+        //     tercios de la pantalla son roca". Baja a 5/16=0.3125 (45 celdas
+        //     de alto exactas, dentro del 45-55 pedido) -- ver el docblock de
+        //     esa constante para la derivación completa y por qué NO llega a
+        //     cero roca visible (la cámara de seguimiento con zona muerta
+        //     ancla al aprendiz al 65% de la altura del encuadre, así que con
+        //     el aprendiz cerca del suelo de la sala una parte de roca de
+        //     verdad SIGUE entrando por abajo -- se documenta la cifra real,
+        //     no se finge que desaparece).
+        // (2) LA COMPOSICIÓN SE ALINEA EN UNA LÍNEA. Antes la repisa flotaba
+        //     13 celdas por ENCIMA de la cuna (mismo plano solo de nombre);
+        //     ahora `RepisaY0` = `CuartoY0`, el MISMO suelo que usan la cuna y
+        //     el charco -- las tres estructuras comparten fila de suelo
+        //     exacta (`CapulloY` == `CunaCriaturaY`, diferencia CERO), leídas
+        //     de izquierda a derecha: charco -> cuna/criatura -> repisa/
+        //     capullo, con el aprendiz naciendo a la izquierda de la
+        //     criatura sobre el mismo grupo. El alcance térmico 10-14 (real:
+        //     distancia CHEBYSHEV desde `Game/Criatura.ApplyCalorTick`, NO
+        //     euclídea como decía el comentario de la ronda anterior -- ver
+        //     `CapulloX` más abajo) se conserva empujando la separación a
+        //     HORIZONTAL casi pura (dx=12, dy=2). El montón de Nutrient y su
+        //     adyacencia ortogonal al disco sembrado NO se tocan (siguen
+        //     midiendo desde `CunaCriaturaX/Y`, que no se movió).
+        // (3) LA REPISA SOLAPA EL SUELO DE LA CUNA A PROPÓSITO. Con la
+        //     repisa en el suelo y el capullo a solo 12 celdas en X del
+        //     centro de la cuna (`CunaCriaturaX`=295, cuna de 20 de ancho =
+        //     9 celdas de radio a su pared derecha), una repisa de 16 celdas
+        //     de ancho NO CABE sin tocar la huella de la cuna sin romper el
+        //     alcance térmico -- la aritmética no da (9 + hueco + 8 > 14 para
+        //     cualquier hueco positivo). Se acepta el solape (`RepisaX0`=299
+        //     pisa las columnas 299-304 de la cuna): es INOFENSIVO porque esas
+        //     columnas, en esas filas (168-170), YA eran el mismo suelo
+        //     macizo de piedra que dibuja `BuildCuna` -- repisa y cuna
+        //     comparten literalmente la misma losa, que es justo la lectura
+        //     de "mismo plano" que pedía Cesar, no un error de solapamiento.
+        //
+        // LA TOLVA, SELLADA (el gancho del final del primer compás, SIN
+        // TOCAR en esta ronda): `BuildDeliveryNiche` (sin tocar una sola
+        // línea) se llama DESPUÉS de excavar la cámara, así que su hueco
+        // (boca en `ChuteMouthX0..Y1`) queda tallado dentro de piedra que ya
+        // era maciza -- ENTERRADO, exactamente como el resto del mundo.
+        // Distancia real, medida por script: del borde derecho de la cámara
+        // (`CuartoX1`=357, SIN CAMBIOS en esta ronda) al primer muro sólido
+        // de la Tolva (`ChuteWallX0`=380) hay 23 celdas de piedra lisa;
+        // hasta el hueco real de la boca (`ChuteMouthX0`=392, ya dentro del
+        // propio contrafuerte, que también hay que atravesar) hay 35. Las
+        // dos cifras caen dentro del "trecho corto pero real" que pedía el
+        // encargo (20-40 celdas), y el rango vertical de la boca
+        // (`ChuteMouthY0..Y1` = 189..238) SIGUE solapando con la cámara, ya
+        // más baja (`CuartoY0..CuartoY1` = 168..209): la franja de solape
+        // pasa de 35 a 21 filas (189..209) -- más corta que antes, pero
+        // sigue siendo una franja real desde la que cavar en línea recta
+        // hacia la derecha lleva a la Tolva, no a piedra eterna.
+        // =====================================================================
+
+        /// <summary>
+        /// Límites de la cámara íntima (interior EXCAVADO, sin contar los
+        /// muros de piedra que la rodean por fuera -- fuera de este
+        /// rectángulo, todo el mundo es Stone macizo). Centro geométrico
+        /// ((CuartoX0+CuartoX1)/2, (CuartoY0+CuartoY1)/2) = (302, 188), a una
+        /// celda del punto histórico x≈303/y≈189 donde nacía el aprendiz en
+        /// el plano viejo -- a propósito, para no pelearse con la cámara ni
+        /// el encuadre.
+        ///
+        /// ALTURA REDUCIDA (2ª ronda de integración, "AJUSTE COMPOSICIÓN"):
+        /// 70 celdas de alto con todo el contenido viviendo en las ~20
+        /// celdas de abajo se leía como una caja vacía, no como una sala
+        /// íntima -- ver el docblock de la clase. 42 celdas (dentro del
+        /// 40-45 pedido) deja aire de sobra sobre la criatura (la sala
+        /// SIGUE pudiendo sentirse "grande pero mayormente vacía": con el
+        /// grupo cuna/repisa/aprendiz terminando en Y=183 y el techo en
+        /// Y=209, quedan 26 filas -- el 62% de la altura -- de aire libre
+        /// arriba) sin que la mitad del encuadre sea negro. El ANCHO (110)
+        /// no se toca -- Cesar lo confirmó explícitamente correcto.
+        /// </summary>
+        public const int CuartoX0 = 248;
+        public const int CuartoX1 = 357; // ancho 110, sin cambios
+        public const int CuartoY0 = 168; // (2ª ronda) antes 154
+        public const int CuartoY1 = 209; // (2ª ronda) antes 223; alto 42, antes 70
+
+        // ---- La cuna --------------------------------------------------------
+        // (2ª ronda, "AJUSTE COMPOSICIÓN") Antes a 15 celdas del muro
+        // izquierdo (esquina, no centro). Ahora centro-izquierda de la sala
+        // (centro geométrico en X = 302.5; CunaCriaturaX = 295 queda a solo
+        // 7.5 celdas del centro, claramente "en medio", con sitio de sobra a
+        // su derecha para la repisa y el charco sin tocar el muro derecho).
+        private const int CunaX0 = 285; // (2ª ronda) antes 263
+        private const int CunaWidth = 20;
+        private const int CunaHeight = 12;
+
+        /// <summary>Ancla de la CUNA (contrato): celda del SUELO sobre el que se asienta la criatura, centro en X. `CuartoY0 + WallThickness - 1` = la última fila maciza del propio suelo de la U (mismo criterio que `VatPlateRow`/`ChillPlateRow` del plano viejo: "la fila donde vive la placa/piedra es la última de su suelo").</summary>
+        public const int CunaCriaturaX = CunaX0 + CunaWidth / 2; // 295 (2ª ronda; antes 273)
+        public const int CunaCriaturaY = CuartoY0 + WallThickness - 1; // 170 (2ª ronda; antes 156)
+
+        // ---- El montón de Nutrient, TOCANDO la cuna por dentro ---------------
+        // Ver el docblock de la clase para por qué "tocando" no es un capricho:
+        // GrowthTick solo mira los 4 vecinos ORTOGONALES de una célula de
+        // Vivium, nunca un radio. Vive DENTRO del propio interior de la cuna.
+        // LADO IZQUIERDO: pegado a la pared izquierda con 1 celda de margen,
+        // no toca el muro, en la esquina opuesta a la repisa (arriba-derecha).
+        // Misma fórmula relativa a CunaCriaturaX/Y que la ronda anterior --
+        // solo se traduce con la cuna, la geometría interna no cambia.
+        private const int NutrienteMoundWidth = 4;
+        private const int NutrienteMoundX0 = CunaCriaturaX - 2 - NutrienteMoundWidth; // 289 (2ª ronda; antes 267): termina en 292, TOCANDO (adyacencia ortogonal, sin hueco) el borde izquierdo del disco sembrado (radio 2 -> desde CunaCriaturaX-2 = columna 293).
+        private const int NutrienteMoundY0 = CunaCriaturaY + 1; // 171 (2ª ronda; antes 157): justo sobre el suelo de la cuna, mismo nivel que el disco sembrado.
+        private const int NutrienteMoundHeight = 4; // 171..174 (2ª ronda; antes 157..160)
+
+        // ---- La repisa del capullo, EN EL MISMO SUELO QUE LA CUNA (tercera
+        // ronda: "recomponer como una línea", ver el docblock de la clase) -
+        // Antes flotaba 13 celdas por ENCIMA del remate de la cuna
+        // (RepisaY0=CunaTopY+2); eso se lee como "otro piso", no "la misma
+        // línea". Ahora `RepisaY0 = CuartoY0`, EXACTAMENTE el mismo suelo que
+        // usan `BuildCuna` y `PlaceCharco` -- las tres estructuras comparten
+        // fila (`CapulloY` == `CunaCriaturaY`, diferencia cero, dentro del
+        // "1-2 celdas" que pedía el encargo con margen de sobra). Con la
+        // diferencia vertical anulada, TODA la separación del alcance
+        // térmico tiene que venir de X: ver `CapulloDistanciaX` para la
+        // cuenta con la métrica REAL (Chebyshev, no euclídea).
+        // `CunaTopY` se conserva (ya no la usa esta sección, pero sigue
+        // viva: ancla `AprendizY` más abajo, "justo sobre el remate de la
+        // cuna, mirando dentro").
+        private const int CunaTopY = CuartoY0 + CunaHeight - 1; // 179 (2ª ronda; antes 165): última fila de la U (su remate abierto).
+        private const int RepisaWidth = 16;
+        /// <summary>Mismo suelo que la cuna y el charco (tercera ronda) -- antes CunaTopY+2 (181), flotando 13 celdas por encima.</summary>
+        private const int RepisaY0 = CuartoY0; // 168 (tercera ronda; antes 181)
+        private const int RepisaHeight = 3;
+        /// <summary>
+        /// Distancia en X, centro a centro, entre la cuna y el capullo
+        /// (tercera ronda: reemplaza `RepisaOffsetX`, que medía un
+        /// desplazamiento decorativo sobre una repisa que flotaba en otra
+        /// altura). Con `RepisaY0`==suelo de la cuna, la distancia CHEBYSHEV
+        /// real que cuenta `Game/Criatura.ApplyCalorTick` (`dist =
+        /// Mathf.Max(Abs(dx), Abs(dy))`, NUNCA euclídea pese a lo que decía
+        /// el comentario de la ronda anterior) queda dominada casi del todo
+        /// por este valor: centro térmico en (`CunaCriaturaX`,
+        /// `CunaCriaturaY`+2) = (295,172) -- ver `AlturaCuerpoCeldas` en
+        /// Criatura.cs --, capullo en (307,170) -&gt; Chebyshev =
+        /// max(|307-295|, |170-172|) = max(12,2) = 12. DENTRO de 10-14, y es
+        /// literalmente una de las tres distancias (10/12/14) que
+        /// `PerfilCalorPct` verifica explícitamente en Criatura.cs.
+        /// </summary>
+        private const int CapulloDistanciaX = 12;
+        private const int RepisaX0 = CunaCriaturaX + CapulloDistanciaX - RepisaWidth / 2; // 299 (tercera ronda; antes 292): PISA a propósito las columnas 299-304 de la cuna -- ver el docblock de la clase, "LA REPISA SOLAPA EL SUELO DE LA CUNA A PROPÓSITO".
+
+        /// <summary>
+        /// Ancla de la REPISA (contrato): celda del suelo/repisa sobre la que
+        /// se apoya el capullo. Distancia CHEBYSHEV real (tercera ronda: ver
+        /// `CapulloDistanciaX` arriba para la cuenta completa y por qué
+        /// Chebyshev y no euclídea) al centro térmico del Rescoldo
+        /// (`CunaCriaturaX`, `CunaCriaturaY`+2) = 12 -- dentro de los 10-14
+        /// de alcance verificados por el otro encargo, y ahora EN EL MISMO
+        /// PLANO que la cuna (`CapulloY` == `CunaCriaturaY`, diferencia
+        /// cero) en vez de flotando 13 celdas por encima: la separación es
+        /// horizontal, no vertical, que es justo la lectura "en línea" que
+        /// pedía Cesar.
+        /// </summary>
+        public const int CapulloX = RepisaX0 + RepisaWidth / 2; // 307 (tercera ronda; antes 300)
+        public const int CapulloY = RepisaY0 + RepisaHeight - 1; // 170 (tercera ronda; antes 183) -- == CunaCriaturaY.
+
+        // ---- El charco de Water, a la IZQUIERDA de la cuna (tercera ronda:
+        // "recomponer como una línea", ver el docblock de la clase --
+        // cuenco -> criatura -> capullo, leído de izquierda a derecha). Antes
+        // vivía a la DERECHA (X0=314, el mismo lado que ahora ocupa la
+        // repisa/capullo) -- con las dos cosas a la derecha, la sala se leía
+        // con todo amontonado en un lado y nada en el otro, lo contrario de
+        // un escaparate. Misma cubeta en miniatura (DrawUShape sobre
+        // `CuartoY0`, YA el mismo suelo que la cuna y la repisa -- sin
+        // cambios en esa parte) solo trasladada al otro lado, con el mismo
+        // criterio de hueco pequeño (5 celdas hasta la pared izquierda de la
+        // cuna) que ya usaba la ronda anterior para "cerca, mismo primer
+        // plano".
+        private const int CharcoX0 = 267; // (tercera ronda; antes 314, que quedaba al mismo lado que la repisa)
+        private const int CharcoWidth = 14;
+        private const int CharcoHeight = 7;
+        /// <summary>Filas de agua dentro de la cubeta -- no llena hasta el borde a propósito: se lee como charco, no como aljibe rebosante.</summary>
+        private const int CharcoAguaAltura = 2;
+
+        /// <summary>
+        /// Dónde nace el aprendiz (contrato). TERCERA RONDA: el aprendiz
+        /// pasa del INTERIOR de la cuna (antes X=300, a la DERECHA del
+        /// centro -- casi pegado al lado del capullo) a flotar justo por
+        /// ENCIMA del remate abierto (`CunaTopY`+1), a la IZQUIERDA del
+        /// centro de la cuna -- "el aprendiz nace a la izquierda de la
+        /// criatura, a pocas celdas, sobre esa misma línea" (encargo). Sigue
+        /// siendo el mismo grupo cuna/criatura, sin sobrevolar el centro
+        /// geométrico de nada:
+        /// dx=`CunaCriaturaX`-`AprendizX`=295-290=5,
+        /// dy=(`CunaCriaturaY`+2)-`AprendizY`=172-180=-8,
+        /// distancia euclídea al centro del disco sembrado del Rescoldo =
+        /// √(5²+8²) = √89 ≈ 9.4 celdas -- "unas pocas celdas", del mismo
+        /// orden que la ronda anterior (6.4).
+        ///
+        /// ENCUADRE DE CÁMARA DESDE ESTE PUNTO (calculado, no a ojo, réplica
+        /// exacta de `FitMainCamera`/`UpdateCameraFollow` de
+        /// `Sim/SimRenderer.cs`, aspect 16:9, zoom
+        /// `CuartoIntimoZoomFactor`=5/16 -- ver el docblock de esa constante
+        /// para el porqué del valor): la cámara arranca en el centro del
+        /// mundo (38.4, 14.4 world units, `Editor/AlkahestSceneBuilder.
+        /// BuildMainCamera`) y el primer frame (snap=true) la mueve, con la
+        /// zona muerta del 30%, a (30.25, 17.375) world units --
+        /// rectángulo visible resultante en CELDAS: X≈[262.5, 342.5] (80
+        /// celdas), Y≈[151.25, 196.25] (45 celdas EXACTAS, dentro del 45-55
+        /// pedido). El charco (X 267-280), la cuna (X 285-304, Y 168-179) y
+        /// la repisa/capullo (X 299-314, Y 168-170) caen ENTEROS dentro de
+        /// ese rectángulo desde el segundo cero. De las 45 celdas de alto,
+        /// 16.75 quedan por DEBAJO del suelo real de la sala (`CuartoY0`,
+        /// piedra de verdad, sin excavar -- la cámara de seguimiento con
+        /// zona muerta ancla al aprendiz al 65% de la altura del encuadre,
+        /// así que con el aprendiz a solo 12 celdas del suelo una franja de
+        /// roca real sigue entrando por abajo, documentada aquí en vez de
+        /// fingida a cero) y 16.25 son sala excavada VACÍA por encima del
+        /// grupo cuna/repisa (aire libre, no roca) -- el resto (~12 celdas)
+        /// es el propio grupo cuna/charco/repisa/criatura. Verificado
+        /// numéricamente en el informe de la ronda (réplica en Python de la
+        /// misma aritmética de cámara).
+        /// </summary>
+        public const int AprendizX = 290; // (tercera ronda; antes 300)
+        public const int AprendizY = CunaTopY + 1; // 180 (tercera ronda; antes 176): justo sobre el remate de la cuna, mirando dentro.
+
+        /// <summary>
+        /// Construye el mundo del pivot (playtest 21): todo piedra salvo la
+        /// cámara íntima. Ver el docblock de la clase para el reparto
+        /// completo de lo que hay dentro y por qué. `BuildTestLevel` NO se
+        /// llama desde aquí -- las dos construcciones son alternativas, no
+        /// una capa sobre la otra (ver `AlkahestSim.Start`, que elige una de
+        /// las dos).
+        /// </summary>
+        public static void BuildCuartoIntimo(CellGrid grid)
+        {
+            FillWorldStone(grid);
+            ExcavateCuarto(grid);
+            BuildCuna(grid);
+            BuildRepisa(grid);
+            PlaceNutrienteMound(grid);
+            PlaceCharco(grid);
+            BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
+            PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
+        }
+
+        /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>
+        private static void FillWorldStone(CellGrid grid)
+        {
+            for (int y = 0; y < CellGrid.H; y++)
+            {
+                for (int x = 0; x < CellGrid.W; x++)
+                {
+                    grid.SetCell(x, y, MaterialId.Stone);
+                }
+            }
+        }
+
+        private static void ExcavateCuarto(CellGrid grid)
+        {
+            DrawSolidRect(grid, CuartoX0, CuartoY0, CuartoX1 - CuartoX0 + 1, CuartoY1 - CuartoY0 + 1, MaterialId.Empty);
+        }
+
+        private static void BuildCuna(CellGrid grid)
+        {
+            DrawUShape(grid, CunaX0, CuartoY0, CunaWidth, CunaHeight, WallThickness);
+        }
+
+        private static void BuildRepisa(CellGrid grid)
+        {
+            DrawSolidRect(grid, RepisaX0, RepisaY0, RepisaWidth, RepisaHeight, MaterialId.Stone);
+        }
+
+        private static void PlaceNutrienteMound(CellGrid grid)
+        {
+            DrawSolidRect(grid, NutrienteMoundX0, NutrienteMoundY0, NutrienteMoundWidth, NutrienteMoundHeight, MaterialId.Nutrient);
+        }
+
+        private static void PlaceCharco(CellGrid grid)
+        {
+            DrawUShape(grid, CharcoX0, CuartoY0, CharcoWidth, CharcoHeight, WallThickness);
+            int interiorX0 = CharcoX0 + WallThickness;
+            int interiorWidth = CharcoWidth - 2 * WallThickness;
+            int floorTopY = CuartoY0 + WallThickness - 1; // última fila maciza del suelo de la cubeta.
+            DrawSolidRect(grid, interiorX0, floorTopY + 1, interiorWidth, CharcoAguaAltura, MaterialId.Water);
+        }
+
         // =================================================================
         // CONSTRUCCIÓN
         // =================================================================

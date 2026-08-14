@@ -275,6 +275,7 @@ namespace Alkahest.Game
         {
             if (_sim == null || _flask == null || _sim.Universe == null) return;
             if (DayCycle.InputLocked) return; // bajo los overlays de jornada el HUD estorba.
+            if (DayCycle.HudSilenciado) return; // (playtest 21, EL PIVOT) hermano de InputLocked, ver DayCycle.HudSilenciado.
 
             UiStyles.Preparar();
             ComputeTopContents();

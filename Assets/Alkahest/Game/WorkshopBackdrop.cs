@@ -74,8 +74,8 @@ namespace Alkahest.Game
     ///
     /// SOLUCIÓN: el TOTAL de trabajo no baja (sigue siendo ~2M iteraciones,
     /// el coste real de pintar 1.990.656 téxeles a mano), pero deja de
-    /// pagarse en UN frame. <see cref="Start"/> es ahora una corrutina que
-    /// pinta el array de píxeles en TROZOS de <see cref="RowsPerBatch"/> filas
+    /// pagarse en UN frame. La corrutina de fondo pinta el array de píxeles
+    /// en TROZOS de <see cref="RowsPerBatch"/> filas
     /// (~47 filas ≈ 110.000 téxeles por fragmento, calibrado para acercarse a
     /// un presupuesto de frame cómodo) y cede el control (`yield return null`)
     /// entre fragmento y fragmento -- Texture2D/Sprite.Create solo se llaman
@@ -93,6 +93,45 @@ namespace Alkahest.Game
     /// de ~1.990.656 iteraciones, pero repartido en ~19 fragmentos de
     /// ~110.000 cada uno -- ningún frame paga más que una fracción del coste
     /// que antes preocupaba, y el arranque deja de notarse.
+    ///
+    /// =====================================================================
+    /// EL CUARTO ÍNTIMO (playtest 21, EL PIVOT) -- AJUSTE 2
+    /// =====================================================================
+    /// El pivot mueve la cámara jugable a Sim/SimLevelBuilder.CuartoX0..Y1,
+    /// muy lejos de CULTIVO/LABORATORIO/ChillTrayY0/SurfaceFloorY0 -- las
+    /// coordenadas que anclaban la mampostería, las dos vigas, el zócalo y el
+    /// halo de fragua de este archivo. Dibujar esa arquitectura ahí seguiría
+    /// siendo geométricamente válido (el lienzo mide lo mismo, 768x288), pero
+    /// se vería A TRAVÉS de las celdas vacías del cuarto nuevo -- vigas y
+    /// zócalo que no sostienen nada real en el plano vigente, y un halo de
+    /// fragua flotando sobre CULTIVO, una zona que en el pivot no existe como
+    /// tal (no hay cubas ni placas ígneas: el único calor activo ahora es el
+    /// que el propio Rescoldo genera, ver Game/Criatura.cs). El encargo es
+    /// explícito: "la única luz de la escena tiene que venir de la criatura".
+    ///
+    /// El contrato del pivot también es explícito en que no hay que mantener
+    /// dos modos ("El cuarto íntimo pasa a ser EL juego"): no existe un
+    /// interruptor en tiempo de ejecución entre "taller clásico" y "cuarto
+    /// íntimo", así que este archivo no necesita leer ningún flag para
+    /// decidir qué pintar. Aun así, por la regla 26 (ningún archivo encoge
+    /// sin justificación), la corrutina clásica de arriba NO se borra: se
+    /// renombra a <see cref="PintarFondoTallerClasico"/> y se queda
+    /// completa, compilando, simplemente sin que nadie la llame -- si algún
+    /// día se recupera el taller como modo jugable, el fondo ya está aquí,
+    /// intacto, en vez de tener que reconstruirlo de memoria.
+    ///
+    /// <see cref="Start"/> ahora llama a <see cref="PintarFondoCuartoIntimo"/>:
+    /// un fondo oscuro y PLANO (un único color de base, sin hiladas de
+    /// ladrillo, sin vigas, sin zócalo, sin halo de fragua) con una viñeta de
+    /// encuadre opcional (permitida explícitamente por el encargo) que solo
+    /// oscurece las esquinas -- no añade ninguna fuente de luz propia, así
+    /// que sigue siendo cierto que la única luz "cálida" que puede aparecer
+    /// en la escena es la que pinte la propia criatura sobre la simulación
+    /// (sortingOrder -5, delante de este fondo en -10). Sigue troceada en
+    /// <see cref="RowsPerBatch"/> filas por fragmento por coherencia con el
+    /// resto del archivo, aunque al no haber hashes de mampostería el coste
+    /// por téxel es mucho menor que antes -- el margen de sobra es bienvenido,
+    /// no un problema.
     /// </summary>
     public sealed class WorkshopBackdrop : MonoBehaviour
     {
@@ -145,7 +184,98 @@ namespace Alkahest.Game
         private const float FraguaRadioX = 0.19f;
         private const float FraguaRadioY = 0.21f;
 
+        /// <summary>
+        /// (playtest 21, AJUSTE 2) Punto de entrada real: pinta el fondo del
+        /// cuarto íntimo. Ver el bloque "EL CUARTO ÍNTIMO" en el doc de clase
+        /// para por qué ya no se llama a <see cref="PintarFondoTallerClasico"/>.
+        /// </summary>
         private IEnumerator Start()
+        {
+            yield return PintarFondoCuartoIntimo();
+        }
+
+        /// <summary>
+        /// (playtest 21, AJUSTE 2) Fondo del cuarto íntimo: plano, oscuro,
+        /// uniforme. Sin mampostería con hiladas/piezas, sin vigas, sin
+        /// zócalo, sin halo de fragua -- "la única luz de la escena tiene que
+        /// venir de la criatura". Incluye una viñeta de encuadre suave
+        /// (permitida explícitamente por el encargo): oscurece las esquinas
+        /// sin introducir ninguna fuente de luz propia, así que no compite
+        /// con el resplandor que la propia Criatura dibuja sobre el sprite
+        /// de la simulación.
+        /// </summary>
+        private IEnumerator PintarFondoCuartoIntimo()
+        {
+            var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
+            {
+                name = "ChaosAlchemyWorkshopBackdrop",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            var px = new Color32[TexW * TexH];
+
+            // Un único color de base: oscuro, casi negro, ligeramente cálido
+            // en la sombra (misma familia que "abajo" del taller clásico,
+            // para no desentonar con la paleta general del juego) pero SIN
+            // gradiente vertical ni estructura -- "plano y uniforme" tal
+            // cual lo pide el encargo.
+            var baseColor = new Color(0.055f, 0.045f, 0.052f);
+
+            int rowsSinCeder = 0;
+
+            for (int y = 0; y < TexH; y++)
+            {
+                float ty = y / (float)(TexH - 1);
+
+                for (int x = 0; x < TexW; x++)
+                {
+                    float tx = x / (float)(TexW - 1);
+
+                    // Viñeta de encuadre: mismo lenguaje que la del taller
+                    // clásico (fracción fija del lienzo entero, efecto de
+                    // encuadre genérico, no ligado a ninguna estructura real
+                    // del plano) pero sin el halo de fragua que la acompañaba.
+                    float nx = tx - 0.5f, ny = ty - 0.52f;
+                    float vig = Mathf.Clamp01(1f - (nx * nx * 2.3f + ny * ny * 2.0f));
+                    Color c = baseColor * (0.62f + 0.38f * vig);
+
+                    px[y * TexW + x] = new Color(
+                        Mathf.Clamp01(c.r),
+                        Mathf.Clamp01(c.g),
+                        Mathf.Clamp01(c.b), 1f);
+                }
+
+                rowsSinCeder++;
+                if (rowsSinCeder >= RowsPerBatch)
+                {
+                    rowsSinCeder = 0;
+                    yield return null;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+
+            var go = new GameObject("WorkshopBackdrop_Sprite");
+            var sr = go.AddComponent<SpriteRenderer>();
+            float worldW = CellGrid.W * SimRenderer.CellWorldSize;
+            sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
+            sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
+            go.transform.position = Vector3.zero;
+        }
+
+        /// <summary>
+        /// (playtest 4..19) Fondo del TALLER CLÁSICO: mampostería con
+        /// hiladas/piezas, dos vigas, zócalo y halo de fragua anclado a
+        /// CULTIVO. Preservado íntegro por la regla 26 (no encoger sin
+        /// justificación) pero SIN llamar desde <see cref="Start"/> en el
+        /// pivot (playtest 21) -- ver el bloque "EL CUARTO ÍNTIMO" en el doc
+        /// de clase. Si el taller clásico vuelve a ser jugable algún día,
+        /// basta con hacer que <see cref="Start"/> llame aquí en vez de a
+        /// <see cref="PintarFondoCuartoIntimo"/>.
+        /// </summary>
+        private IEnumerator PintarFondoTallerClasico()
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
             {

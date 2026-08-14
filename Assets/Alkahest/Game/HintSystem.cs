@@ -168,7 +168,7 @@ namespace Alkahest.Game
 
         private void OnGUI()
         {
-            if (!_everUnlocked || DayCycle.InputLocked || _oculto) return;
+            if (!_everUnlocked || DayCycle.InputLocked || DayCycle.HudSilenciado || _oculto) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
             if (_playSeconds >= _duracion) return;
 
             UiStyles.Preparar();

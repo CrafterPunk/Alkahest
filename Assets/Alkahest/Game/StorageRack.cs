@@ -633,7 +633,7 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void OnGUI()
         {
-            if (_sim == null || DayCycle.InputLocked) return;
+            if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
             UiStyles.Preparar();
             int hover = RedomaBajoCursor();

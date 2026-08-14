@@ -798,7 +798,7 @@ namespace Alkahest.Game
         /// </summary>
         private void OnGUI()
         {
-            if (_sim == null || DayCycle.InputLocked) return;
+            if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
             // Salida temprana: si el aprendiz está fuera de los dos anillos, no
             // hay nada que dibujar -- ni siquiera Preparar().
