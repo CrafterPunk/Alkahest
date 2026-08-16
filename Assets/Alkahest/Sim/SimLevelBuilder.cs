@@ -948,11 +948,59 @@ namespace Alkahest.Sim
         // criterio de hueco pequeño (5 celdas hasta la pared izquierda de la
         // cuna) que ya usaba la ronda anterior para "cerca, mismo primer
         // plano".
-        private const int CharcoX0 = 267; // (tercera ronda; antes 314, que quedaba al mismo lado que la repisa)
+        // (playtest 22) EL CHARCO SE MUEVE OTRA VEZ, Y AHORA POR UNA RAZÓN
+        // MECÁNICA, NO DE COMPOSICIÓN: pasa de 267 a 250 para quedar JUSTO
+        // DEBAJO DE LAS BOQUILLAS de los dos caños del muro izquierdo (ver
+        // `CanoMontajeX`). La cubeta deja de ser un charco decorativo y pasa a
+        // ser la PILA DE RECOGIDA: abres el grifo y el agua cae dentro, en vez
+        // de derramarse por el suelo de la sala. Comprobado: la boquilla cae en
+        // x = CanoMontajeX + Dispenser.SpoutOffsetCells = 253, y el interior de
+        // la cubeta es 253..260 (X0+WallThickness .. X0+Width-WallThickness-1),
+        // así que el chorro entra por la primera columna útil.
+        private const int CharcoX0 = 250; // (playtest 22; antes 267, y antes 314)
         private const int CharcoWidth = 14;
         private const int CharcoHeight = 7;
         /// <summary>Filas de agua dentro de la cubeta -- no llena hasta el borde a propósito: se lee como charco, no como aljibe rebosante.</summary>
         private const int CharcoAguaAltura = 2;
+
+        // =================================================================
+        // LOS DOS CAÑOS BÁSICOS (playtest 22)
+        // =================================================================
+        // Cesar, tras jugar el pivot: *"quizás necesite los caños más básicos
+        // al inicio; hay un charquito de agua pero si por lo que sea lo pierdo
+        // ya no hay mucho más que hacer, y así evitamos dejar cositas en el
+        // suelo que se pueden perder"*.
+        //
+        // Su razón es la correcta y vale como criterio general del proyecto:
+        // **en un juego que te pide experimentar, un recurso que puedes perder
+        // para siempre es una trampa.** Un charco de 16 celdas de agua se
+        // evapora, se ensucia o se lo bebe la criatura, y a partir de ahí la
+        // sala es un cuarto bonito donde no se puede hacer nada. Una fuente
+        // INFINITA no es una comodidad: es lo que permite equivocarse, que es
+        // de lo que va el juego entero.
+        //
+        // SOLO DOS, y a coste 0 de Favor: AGUA (el disolvente de todo) y
+        // NUTRIENTE (la comida de la criatura, o sea lo que la mantiene viva y
+        // caliente). Arena, aceite y azoth se quedan enterrados con el taller
+        // clásico -- aparecen al excavar, y esa es su recompensa. Dos caños es
+        // "lo básico" literal; cinco sería volver al banco de grifos que este
+        // pivot se llevó por delante.
+        //
+        // MONTADOS EN EL MURO IZQUIERDO, en columna, como en la referencia de
+        // arte que mandó Cesar (allí hay una columna de grifos etiquetados a la
+        // izquierda del cuadro). `CuartoX0` es la PRIMERA COLUMNA DE AIRE de la
+        // sala (BuildCuartoIntimo excava CuartoX0..X1 con DrawSolidRect/Empty),
+        // así que montar ahí deja el aparato pegado a la roca del muro (x=247),
+        // no flotando.
+        //
+        // LECTURA DE IZQUIERDA A DERECHA que queda en la sala, que es la que
+        // pidió Cesar: **caños + pila -> criatura -> capullo**.
+        /// <summary>Columna de montaje de los dos caños: la primera columna de aire, pegada al muro izquierdo de la cámara.</summary>
+        public const int CanoMontajeX = CuartoX0;
+        /// <summary>Fila del caño de AGUA. Bastante por encima del labio de la cubeta (que llega a CuartoY0+CharcoHeight-1) para que el chorro se vea caer.</summary>
+        public const int CanoAguaY = CuartoY0 + 13;
+        /// <summary>Fila del caño de NUTRIENTE, encima del de agua. Separación amplia para que las dos chapas de rótulo no se pisen (el problema de "los caños con los títulos apilados" del playtest 15).</summary>
+        public const int CanoNutrienteY = CuartoY0 + 21;
 
         /// <summary>
         /// Dónde nace el aprendiz (contrato). TERCERA RONDA: el aprendiz

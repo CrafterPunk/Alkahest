@@ -106,10 +106,29 @@ namespace Alkahest.Game
             //   SpawnChillStone(apprentice.transform);
 
             var orderSystem = SpawnOrderSystem(knowledge);
-            // SpawnDispensers necesitaba ir aquí (grifoAzoth alimentaba
-            // MasterSupplies.Init más abajo) -- ambos se saltan juntos, ver
-            // el bloque de "muestras del Maestro" unas líneas más abajo.
+            // (playtest 21) SpawnDispensers ENTERO se saltaba aquí -- los cinco
+            // grifos del banco clásico (agua/arena/aceite/nutriente/azoth) están
+            // enterrados con el taller. `grifoAzoth` alimentaba MasterSupplies.Init,
+            // que tampoco se instancia (ver el bloque de "muestras del Maestro").
             //   var grifoAzoth = SpawnDispensers(apprentice.transform, orderSystem);
+            //
+            // (playtest 22) PERO LOS DOS BÁSICOS SÍ VUELVEN, montados en el muro
+            // izquierdo de la cámara. Cesar, tras jugar: *"quizás necesite los
+            // caños más básicos al inicio; hay un charquito de agua pero si por
+            // lo que sea lo pierdo ya no hay mucho más que hacer, y así evitamos
+            // dejar cositas en el suelo que se pueden perder"*. Su razón es la
+            // correcta: en un juego que te pide experimentar, un recurso
+            // perdible para siempre es una trampa -- una fuente infinita es lo
+            // que te permite equivocarte. Solo AGUA y NUTRIENTE (la comida de la
+            // criatura), a coste 0 de Favor y sin sellar; arena, aceite y azoth
+            // se quedan enterrados y aparecen al excavar, que es su recompensa.
+            // Coordenadas del plano (regla de este archivo: NINGUNA vive aquí),
+            // ver SimLevelBuilder.CanoMontajeX/CanoAguaY/CanoNutrienteY.
+            var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
+                SimLevelBuilder.CanoAguaY, orderSystem);
+            var canoNutriente = SpawnCanoBasico(apprentice.transform, "Nutrient", MaterialId.Nutrient,
+                SimLevelBuilder.CanoNutrienteY, orderSystem);
+            _dispensers = new[] { canoAgua, canoNutriente };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
             //   SpawnStorageRack(apprentice.transform, flask, knowledge);
 
@@ -335,6 +354,31 @@ namespace Alkahest.Game
             var azoth = SpawnOneDispenser(player, "Azoth", MaterialId.Azoth, 4, orderSystem, 4, true);
             _dispensers = new[] { agua, arena, aceite, nutriente, azoth };
             return azoth;
+        }
+
+        /// <summary>
+        /// (playtest 22) Un caño básico del cuarto íntimo, montado en el muro
+        /// izquierdo. NO reutiliza <see cref="SpawnOneDispenser"/> a propósito:
+        /// aquel deriva su posición de `TapMountX`/`TapFirstY`/`TapStepY`, que
+        /// son las coordenadas del BANCO DE GRIFOS del taller clásico (hoy
+        /// enterrado, a 30 celdas de aquí). Reutilizarlo habría plantado los dos
+        /// caños dentro de la roca, fuera de la cámara -- el mismo tipo de fallo
+        /// que la regla 39 del proyecto (calibrar contra la medida real, nunca
+        /// contra la constante que "suena" bien).
+        ///
+        /// Coste 0 de Favor y sin sellar: son la base de la que parte todo, no
+        /// una recompensa. El Favor ni siquiera se gana todavía en este modo
+        /// (los encargos no existen hasta que se excave hasta la Tolva).
+        /// </summary>
+        private Dispenser SpawnCanoBasico(Transform player, string label, byte matId, int filaY,
+            OrderSystem orderSystem)
+        {
+            var go = new GameObject($"CanoBasico_{label}");
+            var dispenser = go.AddComponent<Dispenser>();
+            dispenser.Init(_sim, player,
+                SimLevelBuilder.CanoMontajeX, filaY,
+                matId, orderSystem, 0, false);
+            return dispenser;
         }
 
         private Dispenser SpawnOneDispenser(Transform player, string label, byte matId, int fila,

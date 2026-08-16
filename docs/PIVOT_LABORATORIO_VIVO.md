@@ -235,3 +235,86 @@ que ya funcionan.
 - No rediseño el diario.
 - No borro el modo taller.
 - No hago cría, genética ni árbol de criaturas. Una criatura, un capullo, y una promesa.
+
+---
+
+# ADENDA — HERRAMIENTAS VIVAS (la ronda siguiente, decidida y NO implementada)
+
+*Escrito tras el playtest 21, que Cesar jugó y validó. La implementación se perdió con un
+reinicio del sandbox antes de desplegarse; las DECISIONES son firmes y están aquí para que la
+próxima sesión no tenga que volver a tomarlas.*
+
+## Respuestas a lo que reportó jugando
+
+- **"No puedo reacomodar el hijito"** — `Mudanza` solo conoce `HeatPlate`/`ChillStone`/`Dispenser`
+  (contrato `IMovible`). Las criaturas no están en esa lista. Arreglo pequeño: que `Criatura` y
+  `Capullo` implementen `IMovible` y se registren con `Mudanza.RegistrarMovible(this)`.
+- **"Nació lo mismo que tenía vivo, ¿es probabilidad?"** — Ni probabilidad ni diseño: es un HUECO.
+  Los dos seres son literalmente `MaterialId.Vivium`, así que color, patrón y hábito de
+  crecimiento salen de la SEMILLA DE LA PARTIDA, no del individuo. `esCria:true` solo cambia el
+  tamaño. Para que un hijo se parezca a su padre sin ser su clon, **los rasgos tienen que vivir en
+  la criatura, no en el material**.
+- **"Se ilumina cuando come, no sé si es fuente de luz, quizás pueda serlo"** — Hoy el halo es un
+  sprite encima que no ilumina nada. Su intuición es buena: que sea luz de verdad.
+- **"No encontré los caños / la máquina de calor o de hielo"** — Correcto, no existen: el bootstrap
+  del pivot se salta todas las máquinas (están enterradas). No fue su F3.
+- **"Imagino que esa es la función del ser vivo pero no lo puedo mover, tampoco veo la temperatura"**
+  — Acertó del todo. La criatura ya se calienta a sí misma y a su entorno, pero es **invisible e
+  inamovible**, así que para el jugador no existe como instrumento.
+
+## LA TESIS, que la escribió él mismo
+
+Su referencia de arte lleva un panel rotulado **"HERRAMIENTAS VIVAS"**. Eso es el juego:
+
+> **Las máquinas no son máquinas: son criaturas.** No instalas una placa de calor y una piedra
+> fría — crías seres con TEMPERAMENTO y los colocas donde los necesitas. Montar el laboratorio es
+> ordenar tus instrumentos vivos. El cincel excava el espacio; las criaturas lo amueblan.
+
+Con eso encaja todo lo ya construido: alimentar importa porque un ser bien alimentado trabaja
+mejor; el capullo importa porque criar es cómo consigues el temperamento que te falta; digerir es
+la alquimia hecha por un ser; y **el taller enterrado pasa a ser la herencia de quien construyó
+máquinas en vez de criar seres** — lo encuentras, lo usas, pero ya no es tu forma de trabajar.
+
+## Decisiones tomadas por Cesar (firmes)
+
+1. **Temperamento SOLO TÉRMICO** en esta iteración: cada ser tira a calor, a frío o a templado, y
+   con eso sustituyen a la placa ígnea y a la piedra gélida. Nada de oficios (digerir/iluminar/
+   oler) todavía — eso es más de una iteración y arriesga que nada quede afinado.
+2. **La cría HEREDA DEL PADRE CON DESVIACIÓN**, no una tirada nueva. Si crías uno caliente, su cría
+   tiende a caliente, y en varias generaciones puedes afinar el temperamento que te falta. **Eso es
+   lo que convierte incubar en una mecánica en vez de una espera.**
+
+## Cómo implementarlo (notas para quien lo retome)
+
+- **El temperamento es un valor CONTINUO** guardado en la instancia; las tres etiquetas
+  (calor/frío/templado) son solo cómo se le presenta al jugador. Sin continuo no hay herencia con
+  desviación de verdad.
+- **LA TRAMPA, y es fácil caer**: si una criatura fría enfría su propia celda, se sale de su banda
+  de crecimiento, se duerme y no crece nunca — se autodestruye. Hay que separar los dos radios que
+  ya existen en `Criatura.ApplyCalorTick`: **el NÚCLEO (radio pequeño) mantiene SIEMPRE a la
+  criatura dentro de su banda**, y **el ALCANCE AMPLIO empuja hacia el temperamento**. Ese anillo
+  exterior es lo que la convierte en instrumento.
+- Mantener el techo de seguridad que ya existe (Vivium hierve a 120°C, arde a 150°C) y añadir el
+  simétrico por abajo: una criatura fría no puede matar a otra por congelación sin aviso (regla 38:
+  si el jugador puede romper algo en silencio, dale el deshacer).
+- **Se lee sin números**: la brasa y el halo tiñen según el temperamento (ámbar / azul pálido /
+  neutro) y al acercarse sale un rótulo de mundo con `UiStyles.PlacaMundo`, igual que hacían las
+  máquinas. Un instrumento que no puedes leer no es un instrumento.
+- **La luz de verdad**: sin shaders (prohibidos en runtime), sin tocar el alfa por celda (regla 19).
+  Capas de sprite; la criatura tiene que ILUMINAR la piedra de alrededor, no llevar un aura pegada.
+- **Caños básicos de vuelta en la sala** (agua y nutriente), fijos a la pared. Razón de Cesar, que
+  es la correcta: *"si por lo que sea lo pierdo ya no hay mucho más que hacer, y así evitamos dejar
+  cositas en el suelo que se pueden perder"*. Un recurso perdible para siempre es una trampa en un
+  juego que quiere que experimentes.
+- Al mover una criatura hay que decidir y DOCUMENTAR qué pasa con su cuerpo de Vivium (son celdas
+  reales de la grilla): ¿se queda?, ¿se poda y vuelve a crecer? Y `Reposicionar` nunca pasa por
+  `BuildVisual` ni `Init` (regla 36).
+- Determinismo: el sorteo de la cría no puede usar `UnityEngine.Random`.
+
+## Advertencia de proceso para la próxima sesión
+
+El sandbox se reinició **tres veces** en esta sesión y revirtió el repo cinco rondas sin avisar
+(regla 6b). Una de esas veces un encargo trabajó una hora contra código de cinco rondas atrás sin
+que ninguno de los dos lo supiéramos, y concluyó —con razón para lo que veía— que una API que sí
+existe no existía. **Comprobar `git log --oneline -1` contra GitHub ANTES de encargar nada**, y
+desplegar/commitear pronto en vez de acumular.

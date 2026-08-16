@@ -46,8 +46,11 @@ namespace Alkahest.Game
     /// artefacto de compresión. Se quitó ornamento (ver MascaraCorazon y
     /// AplicarGrietas, cada uno documenta su propio recorte) y se subió el
     /// contraste interior a cambio (AplicarVolumen). El HALO
-    /// (<see cref="HaloCalido"/>/<see cref="HaloFrio"/>) NO se toca en este
-    /// pase -- es lo único del juego que Cesar confirmó que ya funciona.
+    /// (<see cref="HaloLuz"/>, playtest 22: unificado en una sola forma que
+    /// el llamante tiñe en runtime -- ver el docblock de esa sección más
+    /// abajo) SÍ se toca en la ronda del temperamento, pero solo en CÓMO se
+    /// usa (posición, capas, tinte): la forma en sí (el bulto de alfa) es
+    /// la MISMA que Cesar ya validó en el playtest 21, sin retocar.
     /// </summary>
     public static class SerSprites
     {
@@ -195,21 +198,52 @@ namespace Alkahest.Game
         /// cosa de esta lista, haz esta"). Sustituye a AplicarNucleoCalido
         /// (RECHAZADO: un estallido radial grande y centrado que se leía
         /// como "pelota de playa"/"sol dentro de un corazón"). La brasa es
-        /// pequeña, DESCENTRADA (nunca en el centro geométrico) y con un
-        /// sesgo de color realmente CÁLIDO (ámbar/naranja: sube R fuerte,
-        /// G la mitad, BAJA B) en vez de "más brillo" parejo en los tres
-        /// canales, que es justo lo que la volvía blanca/solar antes. Es la
-        /// ÚNICA decoración añadida encima de FirmaVisualFabrica -- el resto
-        /// del interior (patrón/color/borde) viene entero de la semilla, sin
+        /// pequeña y DESCENTRADA (nunca en el centro geométrico); su
+        /// POSICIÓN sale del `seed` de la silueta (sin cambios). Es la ÚNICA
+        /// decoración añadida encima de FirmaVisualFabrica -- el resto del
+        /// interior (patrón/color/borde) viene entero de la semilla, sin
         /// tocar (pedido explícito: "el interior tiene que venir ENTERO de
         /// FirmaVisualFabrica").
+        ///
+        /// SESGO DE COLOR POR TEMPERAMENTO (playtest 22, nuevo parámetro
+        /// `temperamento`, ver el bloque CONFIG — TEMPERAMENTO en
+        /// Criatura.cs): dos tramos LINEALES sobre TRES anclas -- frío
+        /// (t=0), templado (t=0.5), calor (t=1) -- en vez de un solo lerp de
+        /// un extremo al otro. Se eligieron tres anclas y no dos a propósito:
+        /// el punto medio ARITMÉTICO de "frío" y "calor" no cae en un gris
+        /// neutro (con frío=(R-0.60,G+0.10,B+1.00) y calor=(R+1.00,G+0.55,
+        /// B-0.35), el promedio sale (R+0.20,G+0.325,B+0.325) -- verde/cian
+        /// de sobra visible, NO neutro), así que TEMPLADO necesita su propia
+        /// ancla declarada (R+0.25,G+0.25,B+0.25: brillo parejo, sin sesgo
+        /// de matiz) en vez de salir de la interpolación. CALOR conserva
+        /// EXACTO el sesgo original (R+1.00/G+0.55/B-0.35 de `fuerza`) --
+        /// "si solo haces una cosa de esta lista, haz esta" y el ámbar que
+        /// Cesar ya validó en el playtest 21 no cambia. FRÍO es su
+        /// simétrico razonable: B sube fuerte, R baja, G casi no se mueve
+        /// (el hielo no es verde).
         /// </summary>
-        public static void AplicarBrasa(Color32[] px, int w, int h, byte[] alpha, int seed, int fuerza = 150)
+        public static void AplicarBrasa(Color32[] px, int w, int h, byte[] alpha, int seed, float temperamento, int fuerza = 150)
         {
             var rng = new System.Random(unchecked(seed * 7 + 4242));
             float cx = w * (0.50f + ((float)rng.NextDouble() * 2f - 1f) * 0.14f);
             float cy = h * (0.42f + ((float)rng.NextDouble() * 2f - 1f) * 0.08f); // ligeramente bajo del centro -- "brasa", no "sol".
             float radio = Mathf.Min(w, h) * 0.17f;
+
+            float mR, mG, mB;
+            if (temperamento < 0.5f)
+            {
+                float k = temperamento / 0.5f; // 0 (frío puro) .. 1 (templado)
+                mR = Mathf.Lerp(-0.60f, 0.25f, k);
+                mG = Mathf.Lerp(0.10f, 0.25f, k);
+                mB = Mathf.Lerp(1.00f, 0.25f, k);
+            }
+            else
+            {
+                float k = (temperamento - 0.5f) / 0.5f; // 0 (templado) .. 1 (calor puro)
+                mR = Mathf.Lerp(0.25f, 1.00f, k);
+                mG = Mathf.Lerp(0.25f, 0.55f, k);
+                mB = Mathf.Lerp(0.25f, -0.35f, k);
+            }
 
             for (int y = 0; y < h; y++)
             {
@@ -221,9 +255,9 @@ namespace Alkahest.Game
                     if (d >= 1f) continue;
                     float t = Mathf.Pow(1f - d, 2.2f);
                     var c = px[i];
-                    c.r = (byte)Mathf.Min(255, c.r + fuerza * t);
-                    c.g = (byte)Mathf.Min(255, c.g + fuerza * 0.55f * t);
-                    c.b = (byte)Mathf.Max(0, c.b - fuerza * 0.35f * t);
+                    c.r = (byte)Mathf.Clamp(c.r + fuerza * mR * t, 0f, 255f);
+                    c.g = (byte)Mathf.Clamp(c.g + fuerza * mG * t, 0f, 255f);
+                    c.b = (byte)Mathf.Clamp(c.b + fuerza * mB * t, 0f, 255f);
                     px[i] = c;
                 }
             }
@@ -486,8 +520,8 @@ namespace Alkahest.Game
         }
 
         // ===================================================================
-        // HALO — anillo de tinte cálido/frío alrededor del cuerpo (playtest
-        // 21, CORREGIDO dos veces).
+        // HALO — LA FORMA de la luz (playtest 21, CORREGIDO dos veces antes
+        // de esto; playtest 22, UNIFICADO en una sola textura).
         //
         // Intento 1 (rechazado): alpha=0 fijo en un radio r0 -> "rosquilla"
         // de color flotando lejos del corazón.
@@ -508,42 +542,50 @@ namespace Alkahest.Game
         // máscara, y AplicarBrasa/AplicarVolumen/Desaturar respetan
         // alpha[i]==0), era este halo sentado detrás.
         //
-        // CORRECCIÓN (esta vez verificada compositando sobre un fondo NO
-        // negro, /tmp/verificacion_borde_halo_fondo_no_negro.png): el alfa
-        // es un BULTO que SUBE y LUEGO BAJA otra vez a 0 -- nunca hay una
-        // meseta opaca. Sube de una base continua (no cero: si tocara 0 en
-        // el propio centro vuelve el bug de la "rosquilla" del intento 1)
-        // hasta un pico a r_pico=30% del radio inscrito, y baja a alfa=0 en
+        // Intento 3 (playtest 21, el que quedó en pie): el alfa es un BULTO
+        // que SUBE y LUEGO BAJA otra vez a 0 -- nunca hay una meseta opaca.
+        // Sube de una base continua (no cero: si tocara 0 en el propio
+        // centro vuelve el bug de la "rosquilla" del intento 1) hasta un
+        // pico a r_pico=30% del radio inscrito, y baja a alfa=0 en
         // r_cero=78% del radio inscrito -- CON MARGEN REAL antes del borde
         // del lienzo (100%) y de sobra antes de las ESQUINAS del cuadrado
         // (a 141% del radio inscrito). Nunca llega a negro opaco: el techo
         // de alfa es 0.88, y el color tira a un gris casi-negro (6,6,6), no
         // a negro puro, donde bump>0 -- aunque eso ya es irrelevante en la
-        // práctica porque justo ahí el alfa ya es 0.
+        // práctica porque justo ahí el alfa ya es 0. DOS variantes
+        // pregeneradas (cálida/fría), cruzadas en alfa por Criatura según el
+        // ESTADO (Contenta=cálida, Aletargada=casi fría...).
         //
-        // DOS variantes pregeneradas (cálida/fría) cacheadas para siempre
-        // (no dependen de la semilla): Criatura las cruza en alpha, nunca
-        // regenera textura.
+        // PLAYTEST 22, "EL HALO ES LUZ DE VERDAD": el intento 3 seguía
+        // siendo un tinte flotando sobre TODO (sortingOrder 100+, por
+        // encima de la maquinaria) -- "se ilumina cuando come pero no sé si
+        // es fuente de luz" (Cesar). Dos cambios, NINGUNO en esta forma
+        // (rPico/rCero/baseCentro se CONSERVAN intactos, ya verificados):
+        //  1) La textura deja de pre-tintar cálido/frío -- ahora es casi
+        //     BLANCA (240,238,232), y el color real (frío/templado/calor,
+        //     el TEMPERAMENTO de la criatura, ver Criatura.
+        //     ColorHaloDeTemperamento) se aplica en RUNTIME vía
+        //     SpriteRenderer.color -- multiplicar por un tinte es gratis, no
+        //     hace falta cachear tres variantes ni cruzar dos texturas.
+        //  2) Criatura ya NO la dibuja en sortingOrder 100+: la sienta justo
+        //     ENCIMA del sprite de la simulación (-5) y DEBAJO de todo lo
+        //     demás, en DOS capas (núcleo pequeño+opaco, wash grande+suave)
+        //     -- ver Criatura.BuildHalo/ActualizarHalo para el porqué
+        //     completo. Esta función solo entrega la FORMA; de la posición y
+        //     el tinte ya no sabe nada.
         // ===================================================================
         private const int HaloTex = 128;
-        private static Sprite _haloCalido;
-        private static Sprite _haloFrio;
-        private static Texture2D _haloCalidoTex;
-        private static Texture2D _haloFrioTex;
+        private static Sprite _haloLuz;
+        private static Texture2D _haloLuzTex;
 
-        public static Sprite HaloCalido()
+        /// <summary>La FORMA de la luz -- una sola textura, casi blanca, cacheada para siempre (no depende de la semilla ni del temperamento). El tinte real lo aplica el llamante vía SpriteRenderer.color -- ver el docblock de arriba.</summary>
+        public static Sprite HaloLuz()
         {
-            if (_haloCalido == null) _haloCalido = ConstruirHalo(true, out _haloCalidoTex);
-            return _haloCalido;
+            if (_haloLuz == null) _haloLuz = ConstruirHalo(out _haloLuzTex);
+            return _haloLuz;
         }
 
-        public static Sprite HaloFrio()
-        {
-            if (_haloFrio == null) _haloFrio = ConstruirHalo(false, out _haloFrioTex);
-            return _haloFrio;
-        }
-
-        private static Sprite ConstruirHalo(bool calido, out Texture2D textura)
+        private static Sprite ConstruirHalo(out Texture2D textura)
         {
             int size = HaloTex;
             var px = new Color32[size * size];
@@ -552,7 +594,7 @@ namespace Alkahest.Game
             float rPico = rMax * 0.30f;         // el tinte alcanza su máximo aquí...
             float rCero = rMax * 0.78f;         // ...y ha vuelto a alfa 0 aquí -- MUCHO antes del borde (100%) y de las esquinas (141%).
             const float baseCentro = 0.30f;     // alfa relativo YA en el centro (dist=0): continuo, nunca 0 en medio (evita la "rosquilla" del intento 1).
-            Color32 tinte = calido ? new Color32(255, 185, 110, 255) : new Color32(130, 175, 220, 255);
+            var gris = new Color32(240, 238, 232, 255); // casi blanco -- el llamante multiplica esto por su propio tinte (ver docblock).
 
             for (int y = 0; y < size; y++)
             {
@@ -578,14 +620,10 @@ namespace Alkahest.Game
                     }
 
                     float a = Mathf.Pow(bump, 0.9f) * 0.88f; // techo <1: nunca opaco del todo.
-                    byte r = (byte)Mathf.RoundToInt(tinte.r * bump + 6f * (1f - bump));
-                    byte g = (byte)Mathf.RoundToInt(tinte.g * bump + 6f * (1f - bump));
-                    byte b = (byte)Mathf.RoundToInt(tinte.b * bump + 6f * (1f - bump));
-                    px[y * size + x] = new Color32(r, g, b, (byte)Mathf.RoundToInt(a * 255f));
+                    px[y * size + x] = new Color32(gris.r, gris.g, gris.b, (byte)Mathf.RoundToInt(a * 255f));
                 }
             }
-            return CrearSprite(px, size, size, new Vector2(0.5f, 0.5f),
-                calido ? "ChaosAlchemyHaloCalido" : "ChaosAlchemyHaloFrio", out textura);
+            return CrearSprite(px, size, size, new Vector2(0.5f, 0.5f), "ChaosAlchemyHaloLuz", out textura);
         }
 
         // ===================================================================

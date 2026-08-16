@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Alkahest.Sim;
 
@@ -49,11 +50,13 @@ namespace Alkahest.Game
     ///      corazón que se mecen y, si el aprendiz se acerca, se orientan
     ///      hacia él (ver <see cref="ActualizarZarcillos"/>).
     ///
-    /// HALO: <see cref="SerSprites.HaloCalido"/>/<see cref="SerSprites.HaloFrio"/>,
-    /// sortingOrder 100+ (por encima de toda la maquinaria del taller, que
-    /// llega a ~60), cruzados en alpha y escalados según "vitalidad" — ver
-    /// <see cref="ActualizarHalo"/>, llamado desde LateUpdate a petición
-    /// explícita del encargo ("siguiendo al corazón").
+    /// HALO: <see cref="SerSprites.HaloLuz"/> (playtest 22: una sola forma,
+    /// teñida en runtime por TEMPERAMENTO, no por estado), sortingOrder
+    /// -4/-3 (justo encima del sprite de la simulación, debajo de todo lo
+    /// demás -- "la luz cae sobre la piedra", ver el docblock de
+    /// <see cref="ActualizarHalo"/>), escalado según "vitalidad" — llamado
+    /// desde LateUpdate a petición explícita del encargo ("siguiendo al
+    /// corazón").
     ///
     /// DIGERIR (decisión de Cesar): ver <see cref="SondearDigestionYAmenaza"/>
     /// y <see cref="CompletarDigestion"/>. El producto lo decide
@@ -88,13 +91,142 @@ namespace Alkahest.Game
     /// archivo): "alimentas -> se pone contenta -> calienta más -> el
     /// capullo cercano avanza" sale solo de que el capullo ya leía
     /// temperatura real de su propia celda.
+    ///
+    /// TEMPERAMENTO TÉRMICO, POR INDIVIDUO (playtest 22, "HERRAMIENTAS
+    /// VIVAS" -- ver el bloque CONFIG — TEMPERAMENTO más abajo para la
+    /// implementación completa, y <see cref="ApplyCalorTick"/> para cómo
+    /// actúa de verdad). Antes de esta ronda el color/patrón salían enteros
+    /// de la SEMILLA (el material Vivium), así que toda cría era un clon
+    /// del padre -- Cesar lo detectó jugando: "nació lo mismo que tenía
+    /// vivo". Ahora el temperamento es un valor CONTINUO de INSTANCIA
+    /// (0=frío puro .. 1=calor puro), sorteado determinista para el
+    /// Rescoldo original y HEREDADO CON DESVIACIÓN (nunca una tirada nueva)
+    /// para cada cría -- ver <see cref="Capullo.Eclosionar"/>. Sustituye a
+    /// la placa ígnea/piedra gélida: una criatura caliente calienta la
+    /// sala, una fría la enfría, una templada apenas la toca -- montar el
+    /// laboratorio pasa a ser ORDENAR INSTRUMENTOS VIVOS, no aparatos.
+    ///
+    /// SE LEE DE UN VISTAZO en tres canales, sin ningún número permanente en
+    /// pantalla: la BRASA (<see cref="SerSprites.AplicarBrasa"/> ahora tiñe
+    /// según temperamento) y el HALO (<see cref="ColorHaloDeTemperamento"/>, y ver
+    /// el docblock de <see cref="ActualizarHalo"/> para el rediseño de la
+    /// luz) de cerca/lejos respectivamente, y de más cerca un RÓTULO DE
+    /// MUNDO (ver <see cref="OnGUI"/>) con lo que hace ("calienta/enfría/
+    /// apenas toca la sala") y cómo está (el <see cref="Estado"/> de
+    /// siempre).
     /// </summary>
-    public sealed class Criatura : MonoBehaviour
+    public sealed class Criatura : MonoBehaviour, IMovible
     {
         /// <summary>La criatura PRINCIPAL de la partida (la que NO nació de un capullo), o null. La usa Capullo para colocar a la cría cerca de su progenitor.</summary>
         public static Criatura Principal { get; private set; }
 
+        /// <summary>
+        /// TODAS las Criaturas vivas ahora mismo (madre + cualquier cría
+        /// previa). Lo usa <see cref="Capullo.Eclosionar"/> para encontrar
+        /// "quien lo cuidó" -- ver <see cref="MasCercanaA"/> -- en vez de
+        /// depender solo de <see cref="Principal"/> (que deja de servir en
+        /// cuanto hay más de una criatura en la sala). Registrada en
+        /// <see cref="Init"/>, olvidada en <see cref="OnDestroy"/>, mismo
+        /// ciclo de vida que <see cref="Principal"/>.
+        /// </summary>
+        private static readonly List<Criatura> _activas = new List<Criatura>(4);
+
+        /// <summary>
+        /// La Criatura activa más cercana (en línea recta) a `posMundo`, o
+        /// null si no hay ninguna viva. Usado por Capullo para la herencia
+        /// de temperamento -- ver el docblock de <see cref="_activas"/>.
+        /// </summary>
+        public static Criatura MasCercanaA(Vector3 posMundo)
+        {
+            Criatura mejor = null;
+            float mejorD2 = float.MaxValue;
+            for (int i = 0; i < _activas.Count; i++)
+            {
+                var c = _activas[i];
+                if (c == null) continue; // destruida sin pasar por OnDestroy todavía (recarga de escena) -- defensivo.
+                float d2 = (c.transform.position - posMundo).sqrMagnitude;
+                if (d2 >= mejorD2) continue;
+                mejorD2 = d2;
+                mejor = c;
+            }
+            return mejor;
+        }
+
+        /// <summary>
+        /// CANAL DE HERENCIA (playtest 22, ver <see cref="Capullo.Eclosionar"/>):
+        /// como <see cref="Init"/> tiene la firma CONGELADA por
+        /// CONTRATO_PIVOT.md y no puede ganar un parámetro nuevo, Capullo
+        /// fija este valor JUSTO ANTES de llamar <c>Init(esCria: true)</c>
+        /// para pasarle el temperamento heredado del progenitor con la
+        /// desviación ya calculada -- Init lo consume (y lo limpia a null)
+        /// en su primera línea útil, así que nunca sobrevive más de un
+        /// frame ni se confunde entre dos eclosiones seguidas (Unity es de
+        /// un solo hilo: fijar-y-consumir dentro de la misma llamada
+        /// síncrona es seguro). <c>null</c> = sortea uno nuevo desde la
+        /// semilla del universo (el caso del Rescoldo original, esCria:false,
+        /// o el caso límite de una cría sin ningún progenitor vivo).
+        /// </summary>
+        public static float? TemperamentoHeredadoPendiente;
+
         private enum Estado { Hambrienta, Contenta, Aletargada, Asustada }
+
+        // -----------------------------------------------------------------
+        // CONFIG — TEMPERAMENTO TÉRMICO (playtest 22, "HERRAMIENTAS VIVAS":
+        // ver el docblock de la clase y el de ApplyCalorTick más abajo).
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// 0=FRÍO puro, 0.5=TEMPLADO, 1=CALOR puro. Valor CONTINUO de esta
+        /// INSTANCIA (nunca de la semilla del material -- el material Vivium
+        /// sigue siendo el mismo para todas; lo que varía por individuo es
+        /// este campo), fijado UNA vez en <see cref="Init"/> y nunca
+        /// modificado después: el temperamento es un rasgo de nacimiento,
+        /// no un estado de ánimo. Las tres etiquetas (fría/templada/
+        /// caliente) son solo cómo se le presenta al jugador (ver
+        /// <see cref="UmbralFrio"/>/<see cref="UmbralCalor"/> y
+        /// <see cref="OnGUI"/>) -- guardarlo continuo es lo que permite que
+        /// la herencia (<see cref="Capullo.Eclosionar"/>) se desvíe de
+        /// verdad en vez de rebotar entre tres cubos discretos.
+        /// </summary>
+        private float _temperamento = 0.5f;
+
+        private const float UmbralFrio = 0.35f;
+        private const float UmbralCalor = 0.65f;
+
+        /// <summary>Sal arbitraria (distingue este hash de cualquier otro uso de XorShift en el proyecto): sorteo del temperamento ORIGINAL, solo para el Rescoldo que no nació de un capullo.</summary>
+        private const uint SalTemperamentoOriginal = 401u;
+
+        /// <summary>
+        /// Determina <see cref="_temperamento"/> al construir: si Capullo
+        /// dejó un valor pendiente (una cría), lo consume; si no (el
+        /// Rescoldo original, o una cría sin progenitor vivo -- caso límite
+        /// defensivo), lo sortea determinista de la SEMILLA del universo +
+        /// la celda de la cuna -- "estaba ahí, dormida en la roca" (contrato
+        /// del pivot): el temperamento del Rescoldo original es un rasgo de
+        /// ESTE universo, no una tirada nueva cada vez que se reconstruye la
+        /// escena con la misma semilla. NUNCA UnityEngine.Random (regla del
+        /// proyecto): <see cref="XorShift"/> es el único generador
+        /// permitido, aquí con tick=0 CONSTANTE (nunca <c>_sim.Stepper.Tick</c>
+        /// -- si no, el resultado cambiaría cada vez que se llama según
+        /// cuándo ocurra en la partida, y dejaría de ser "un rasgo de
+        /// nacimiento").
+        /// </summary>
+        private static float SortearOHeredarTemperamento(AlkahestSim sim, int celdaCunaX, int celdaCunaY)
+        {
+            if (TemperamentoHeredadoPendiente.HasValue)
+            {
+                float heredado = TemperamentoHeredadoPendiente.Value;
+                TemperamentoHeredadoPendiente = null;
+                return Mathf.Clamp01(heredado);
+            }
+            if (sim == null || sim.Universe == null) return 0.5f; // defensivo: sin universo, templado neutro.
+
+            var rng = XorShift.FromCell(0u, celdaCunaX, celdaCunaY, (uint)sim.Universe.Seed ^ SalTemperamentoOriginal);
+            return rng.NextByte() / 255f;
+        }
+
+        /// <summary>Temperamento normalizado 0..1 de ESTA instancia. Lo lee <see cref="Capullo.Eclosionar"/> para calcular la herencia con desviación de su cría.</summary>
+        public float TemperamentoNormalizado => _temperamento;
 
         // -----------------------------------------------------------------
         // CONFIG — tamaño/mundo
@@ -220,6 +352,28 @@ namespace Alkahest.Game
         private const byte TechoSeguridadRaw = 110;
 
         /// <summary>
+        /// (playtest 22, "el simétrico por abajo" -- pedido explícito de la
+        /// ronda: "que el mundo sea peligroso está bien; que sea
+        /// irreversible sin avisar, no"). Suelo absoluto de seguridad para
+        /// el ALCANCE AMPLIO de una criatura FRÍA (ver
+        /// <see cref="ApplyCalorTick"/>): el objetivo de temperamento nunca
+        /// baja de aquí, así que una criatura fría no puede enfriar a otra
+        /// criatura (o a sí misma, si algo raro pasara) hasta un extremo sin
+        /// retorno -- el NÚCLEO de CUALQUIER criatura (ver
+        /// <see cref="RadioCalorNucleo"/>) sigue empujando hacia SU banda de
+        /// crecimiento con prioridad de tick, así que la recuperación real
+        /// es cuestión de segundos, nunca "ya la mataste sin darte cuenta".
+        /// EQUIDISTANTE de <see cref="CellGrid.AmbientRaw"/>=70 respecto al
+        /// techo: 110-70=40 arriba, 70-30=40 abajo -- un extremo cálido y un
+        /// extremo frío igual de dramáticos, ninguno privilegiado. En
+        /// grados: RawToC(30)=-60°C, bastante más templado que el extremo
+        /// dedicado de ChillStone (HELANDO=20raw=-80°C, un aparato hecho
+        /// para eso a propósito) -- una criatura fría es una herramienta
+        /// real, pero más suave que la piedra gélida hecha ex profeso.
+        /// </summary>
+        private const byte FloorSeguridadRaw = 30;
+
+        /// <summary>
         /// Perfil de empuje por distancia Chebyshev (celdas) al centro del
         /// cuerpo -- índice = distancia, valor = % de
         /// <see cref="TempStepPerTickCalor"/>. Verificado NUMÉRICAMENTE antes
@@ -291,8 +445,8 @@ namespace Alkahest.Game
         private Texture2D _texZarcillo;
 
         private Transform _haloRoot;
-        private SpriteRenderer _haloCalidoSr;
-        private SpriteRenderer _haloFrioSr;
+        private SpriteRenderer _haloNucleoSr;
+        private SpriteRenderer _haloWashSr;
 
         // -----------------------------------------------------------------
         // Estado runtime
@@ -306,7 +460,7 @@ namespace Alkahest.Game
         private float _vitalidadActual = 0.35f;
         private float _pulsoExtra; // 0..1, decae -- bump momentáneo (comer/exudar).
 
-        private float _haloRadioActual = 1f, _haloCalidezActual = 0.3f, _haloIntensidadActual = 0.5f;
+        private float _haloRadioActual = 1f, _haloIntensidadActual = 0.5f;
 
         private float _accPoll;
         private int _ultimoConteoVivium = -1;
@@ -392,15 +546,25 @@ namespace Alkahest.Game
             _esCria = esCria;
             _digestionHabilitada = !esCria;
 
+            // El TEMPERAMENTO se decide ANTES de construir el visual: la
+            // brasa (AplicarBrasa) y el halo (ColorHaloDeTemperamento) se
+            // tiñen por él en BuildVisuals -- ver el bloque CONFIG —
+            // TEMPERAMENTO arriba.
+            _temperamento = SortearOHeredarTemperamento(sim, celdaCunaX, celdaCunaY);
+
             if (!esCria) Principal = this;
+            _activas.Add(this);
 
             BuildVisuals();
             SembrarCuerpoInicial();
+            Mudanza.RegistrarMovible(this); // (playtest 22, "y se pueden mover") ver el contrato IMovible en Game/Mudanza.cs.
         }
 
         private void OnDestroy()
         {
             if (Principal == this) Principal = null;
+            _activas.Remove(this);
+            Mudanza.OlvidarMovible(this);
             LiberarTexturas();
         }
 
@@ -409,11 +573,7 @@ namespace Alkahest.Game
         // ===================================================================
         private void BuildVisuals()
         {
-            float celda = SimRenderer.CellWorldSize;
-            float baseX = (_celdaCunaX + 0.5f) * celda;
-            float baseY = (_celdaCunaY + 1) * celda; // encima del suelo de la cuna.
-
-            transform.position = new Vector3(baseX, baseY, 0f);
+            RecalcularTransform();
             transform.localScale = _esCria ? Vector3.one * EscalaCria : Vector3.one;
 
             var pivoteGo = new GameObject("PivoteLatido");
@@ -424,6 +584,21 @@ namespace Alkahest.Game
             BuildCorazon();
             BuildZarcillos();
             BuildHalo();
+        }
+
+        /// <summary>
+        /// Recoloca `transform.position` a partir de _celdaCunaX/Y -- extraído
+        /// de BuildVisuals (playtest 22) para que <see cref="Reposicionar"/>
+        /// (contrato IMovible) pueda reutilizarlo SIN volver a llamar a
+        /// BuildVisuals/Init (regla 36: CrearCapa siempre hace `new
+        /// GameObject`, una segunda pasada duplicaría corazón/zarcillos/halo).
+        /// </summary>
+        private void RecalcularTransform()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            float baseX = (_celdaCunaX + 0.5f) * celda;
+            float baseY = (_celdaCunaY + 1) * celda; // encima del suelo de la cuna.
+            transform.position = new Vector3(baseX, baseY, 0f);
         }
 
         private void BuildCorazon()
@@ -449,7 +624,7 @@ namespace Alkahest.Game
                 // núcleo pequeño y descentrado, "si solo haces una cosa de
                 // esta lista, haz esta") y el VOLUMEN (luz arriba/sombra
                 // abajo, "ahora es plano").
-                SerSprites.AplicarBrasa(px, w, h, mask, seedSilueta);
+                SerSprites.AplicarBrasa(px, w, h, mask, seedSilueta, _temperamento);
                 SerSprites.AplicarVolumen(px, w, h, mask);
                 _framesVivo[f] = SerSprites.CrearSprite(px, w, h, new Vector2(0.5f, 0.5f),
                     "ChaosAlchemyCorazonVivo_" + f, out _texVivo[f]);
@@ -487,14 +662,62 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// (playtest 22, "EL HALO ES LUZ DE VERDAD" -- ver el docblock
+        /// completo en <see cref="ActualizarHalo"/> para el porqué del
+        /// sortingOrder y de las dos capas). DOS SpriteRenderers, la misma
+        /// forma (<see cref="SerSprites.HaloLuz"/>, casi blanca, cacheada
+        /// para siempre) a dos escalas: NÚCLEO (pequeño, el punto caliente
+        /// que vende que hay una fuente) y WASH (grande, la luz cayendo
+        /// sobre la piedra de alrededor). El TINTE (frío/templado/calor) se
+        /// fija UNA vez aquí -- <see cref="ColorHaloDeTemperamento"/> de
+        /// <see cref="_temperamento"/>, que no cambia tras Init -- y Update
+        /// solo mueve la alfa (ver ActualizarHalo), nunca el color.
+        /// </summary>
         private void BuildHalo()
         {
             var haloGo = new GameObject("HaloRoot");
             _haloRoot = haloGo.transform;
             _haloRoot.SetParent(transform, false); // NO es hijo de PivoteLatido: el halo no debe latir con el corazón, solo seguirlo (LateUpdate).
 
-            _haloFrioSr = MaquinariaSprites.CrearCapa(_haloRoot, "HaloFrio", SerSprites.HaloFrio(), 100, 1f, 1f);
-            _haloCalidoSr = MaquinariaSprites.CrearCapa(_haloRoot, "HaloCalido", SerSprites.HaloCalido(), 101, 1f, 1f);
+            Sprite formaLuz = SerSprites.HaloLuz();
+            // sortingOrder -4/-3: justo ENCIMA del sprite de la simulación
+            // (SimRenderer, -5) y DEBAJO de todo lo demás (corazón 45/46,
+            // zarcillos 44, aprendiz 50, maquinaria ~15-60) -- la luz cae
+            // SOBRE la piedra, no flota como una pegatina delante de la
+            // escena entera (ver ActualizarHalo). Antes vivía en 100/101,
+            // "por encima de toda la maquinaria del taller" a propósito
+            // (playtest 21): esa decisión queda SUPERADA por este pase --
+            // se prefería visible siempre, ahora se prefiere que ILUMINE.
+            _haloNucleoSr = MaquinariaSprites.CrearCapa(_haloRoot, "HaloNucleo", formaLuz, -3, NucleoEscalaFrac, NucleoEscalaFrac);
+            _haloWashSr = MaquinariaSprites.CrearCapa(_haloRoot, "HaloWash", formaLuz, -4, 1f, 1f);
+
+            Color32 tinte = ColorHaloDeTemperamento(_temperamento);
+            Color tinteF = new Color(tinte.r / 255f, tinte.g / 255f, tinte.b / 255f, 0f);
+            _haloNucleoSr.color = tinteF;
+            _haloWashSr.color = tinteF;
+        }
+
+        /// <summary>Fracción del diámetro TOTAL del halo (ver ActualizarHalo, `escala`) que ocupa la capa NÚCLEO -- más chica y más opaca que WASH, el "punto caliente" de la luz.</summary>
+        private const float NucleoEscalaFrac = 0.42f;
+
+        /// <summary>
+        /// Tres anclas fijas (frío/templado/calor), interpolación LINEAL en
+        /// dos tramos sobre <see cref="_temperamento"/> -- mismo patrón que
+        /// <see cref="SerSprites.AplicarBrasa"/> (ver ese docblock para por
+        /// qué NO es un lerp de un solo tramo entre frío y calor: el punto
+        /// medio aritmético de esos dos no cae en un gris neutro). "Cálido =
+        /// ámbar/naranja; frío = azul pálido; templado = neutro" (pedido
+        /// explícito de la ronda) -- se lee de lejos, sin ningún número.
+        /// </summary>
+        private static Color32 ColorHaloDeTemperamento(float temperamento)
+        {
+            var frio = new Color32(150, 195, 235, 255);
+            var templado = new Color32(220, 214, 202, 255);
+            var calor = new Color32(255, 176, 96, 255);
+            return temperamento < 0.5f
+                ? Color32.Lerp(frio, templado, temperamento / 0.5f)
+                : Color32.Lerp(templado, calor, (temperamento - 0.5f) / 0.5f);
         }
 
         private void SembrarCuerpoInicial()
@@ -915,32 +1138,54 @@ namespace Alkahest.Game
         /// clamp-hacia-objetivo por tick -- "empuja poco y a menudo en vez de
         /// mucho de golpe"), con el objetivo y el alcance leídos así:
         ///
-        ///  · OBJETIVO: siempre dentro de la banda de ESTA semilla
-        ///    (Universe.VivGrowMinRaw/MaxRaw, nunca una constante), y siempre
-        ///    acotado por <see cref="TechoSeguridadRaw"/> -- muy por debajo
-        ///    de donde el Vivium hierve o arde (ver doc de esa constante):
-        ///    la criatura NUNCA puede calentarse hasta matarse.
+        ///  · NÚCLEO (playtest 22, SIEMPRE, sea cual sea el TEMPERAMENTO):
+        ///    siempre dentro de la banda de ESTA semilla (Universe.
+        ///    VivGrowMinRaw/MaxRaw, nunca una constante), acotado por
+        ///    <see cref="TechoSeguridadRaw"/> -- muy por debajo de donde el
+        ///    Vivium hierve o arde (ver doc de esa constante). Si esto
+        ///    dependiera del temperamento, una criatura FRÍA se congelaría a
+        ///    SÍ MISMA hasta dormirse para siempre en cuanto tuviera hambre
+        ///    (Hambrienta/Asustada ya reducen el alcance al núcleo, ver
+        ///    abajo) -- se autodestruiría. El radio pequeño
+        ///    (<see cref="RadioCalorNucleo"/>) garantiza que la propia celda
+        ///    y las inmediatas se mantengan en el borde bajo de SU banda
+        ///    pase lo que pase: el "rescoldo mínimo" del que siempre puede
+        ///    recuperarse sola en cuanto vuelva a comer.
         ///
-        ///  · ALCANCE: depende del ESTADO. Contenta empuja fuerte y LEJOS
-        ///    (<see cref="RadioCalorPleno"/> = 14 celdas, verificado con
+        ///  · ALCANCE AMPLIO (playtest 22, AQUÍ es donde vive el
+        ///    TEMPERAMENTO): empuja hacia el mismo eje continuo que decide el
+        ///    color del halo (ver <see cref="ColorHaloDeTemperamento"/>) --
+        ///    <see cref="_temperamento"/> interpolado entre
+        ///    <see cref="FloorSeguridadRaw"/> (frío puro) y
+        ///    <see cref="TechoSeguridadRaw"/> (calor puro), CLAMPEADO a ese
+        ///    rango sin importar la banda de la semilla -- a propósito: es
+        ///    lo que convierte a la criatura en INSTRUMENTO (calienta/enfría
+        ///    la SALA, no solo su propio cuerpo). Una TEMPLADA (0.5) cae
+        ///    justo en el punto medio de Floor/Techo, que por diseño ES
+        ///    CellGrid.AmbientRaw=70 -- así que "templado apenas toca la
+        ///    sala" sale gratis de la aritmética, sin un caso especial: el
+        ///    objetivo YA es el ambiente, empujar hacia él no hace casi nada
+        ///    en una sala que ya está a temperatura ambiente.
+        ///    Solo se aplica más allá de <see cref="RadioCalorNucleo"/> --
+        ///    Hambrienta/Asustada nunca llegan (radio=RadioCalorNucleo, todo
+        ///    el barrido es núcleo), Aletargada llega a
+        ///    <see cref="RadioCalorRecuperacion"/>, Contenta llega a
+        ///    <see cref="RadioCalorPleno"/>=14 celdas (verificado con
         ///    números -- ver <see cref="PerfilCalorPct"/> -- que sí llega
         ///    hasta donde el otro encargo coloca el capullo hermano).
-        ///    Aletargada intenta recuperar la banda a un alcance intermedio
-        ///    (<see cref="RadioCalorRecuperacion"/>). Hambrienta y Asustada
-        ///    se quedan en el NÚCLEO (<see cref="RadioCalorNucleo"/>): su
-        ///    propia celda y las inmediatas, apuntando solo al borde BAJO de
-        ///    la banda -- el "rescoldo mínimo" del que siempre se puede
-        ///    recuperar sola en cuanto vuelva a comer. Nunca cero, nunca
-        ///    irreversible: un juego íntimo no puede tener un estado de "ya
-        ///    la mataste sin darte cuenta".
         ///
         /// Esto también es lo que hace físico de verdad el vínculo con el
-        /// capullo (Capullo.cs, SIN CAMBIOS -- ya lee temperatura real de su
-        /// propia celda vía _sim.SampleTempRaw, agnóstico de dónde viene ese
-        /// calor): solo cuando la criatura está Contenta el empuje llega tan
-        /// lejos, así que "alimentas -> se pone contenta -> calienta más ->
-        /// el capullo avanza" sale de encajar dos piezas que ya existían, no
-        /// de un "if (criatura.contenta) capullo++" cableado a mano.
+        /// capullo (Capullo.cs, SIN CAMBIOS en su propia lógica de calor --
+        /// ya lee temperatura real de su propia celda vía
+        /// _sim.SampleTempRaw, agnóstico de dónde viene ese calor): solo
+        /// cuando la criatura está Contenta el empuje llega tan lejos, así
+        /// que "alimentas -> se pone contenta -> calienta más -> el capullo
+        /// avanza" sale de encajar dos piezas que ya existían, no de un
+        /// "if (criatura.contenta) capullo++" cableado a mano. (Y ahora,
+        /// además: si esa criatura es fría, el mismo mecanismo puede ENFRIAR
+        /// el progreso del capullo -- coherente con "instrumento de
+        /// verdad": coloca a tu criatura fría lejos de lo que quieras
+        /// incubar.)
         /// </summary>
         private void ApplyCalorTick()
         {
@@ -968,8 +1213,17 @@ namespace Alkahest.Game
                     break;
             }
 
-            byte target = (byte)Mathf.Clamp(minRaw + Mathf.RoundToInt(rango * fraccionObjetivo), minRaw, maxRawSeguro);
+            // NÚCLEO: SIEMPRE dentro de SU banda, el temperamento NUNCA
+            // interviene aquí -- ver el docblock de arriba, "por qué no".
+            byte targetNucleo = (byte)Mathf.Clamp(minRaw + Mathf.RoundToInt(rango * fraccionObjetivo), minRaw, maxRawSeguro);
             int stepBase = Mathf.Max(1, Mathf.RoundToInt(TempStepPerTickCalor * fraccionStep));
+
+            // ALCANCE AMPLIO: el objetivo del TEMPERAMENTO -- solo importa
+            // cuando `radio` > RadioCalorNucleo (Contenta/Aletargada), ver
+            // el docblock de arriba.
+            byte targetAmplio = (byte)Mathf.Clamp(
+                Mathf.RoundToInt(Mathf.Lerp(FloorSeguridadRaw, TechoSeguridadRaw, _temperamento)),
+                FloorSeguridadRaw, TechoSeguridadRaw);
 
             int cx = _celdaCunaX;
             int cy = _celdaCunaY + AlturaCuerpoCeldas;
@@ -986,6 +1240,7 @@ namespace Alkahest.Game
                     int x = cx + dx;
                     if (!CellGrid.InBounds(x, y)) continue;
 
+                    byte target = dist <= RadioCalorNucleo ? targetNucleo : targetAmplio;
                     int step = Mathf.Max(1, stepBase * PerfilCalorPct[dist] / 100);
                     int idx = CellGrid.Idx(x, y);
                     int cur = grid.temp[idx];
@@ -1146,48 +1401,208 @@ namespace Alkahest.Game
 
         // ===================================================================
         // HALO — llamado desde LateUpdate ("siguiendo al corazón").
+        //
+        // (playtest 22, "EL HALO ES LUZ DE VERDAD") REDISEÑO: antes el color
+        // (frío/cálido) se cruzaba según el ESTADO (Contenta=cálido pleno,
+        // Aletargada=casi frío...) y el halo vivía en sortingOrder 100+, por
+        // ENCIMA de toda la escena -- "se ilumina cuando come pero no sé si
+        // es fuente de luz, quizás pueda serlo" (Cesar, jugando la ronda
+        // anterior): un tinte flotando SOBRE todo lo demás se lee como una
+        // pegatina, no como luz cayendo sobre algo.
+        //
+        // Ahora el COLOR es fijo por INSTANCIA (ColorHaloDeTemperamento de
+        // _temperamento, decidido en BuildHalo y nunca tocado aquí -- "la
+        // luz sigue al temperamento: la fría alumbra frío, la caliente
+        // alumbra cálido", pedido explícito) y lo que el ESTADO mueve es
+        // solo TAMAÑO/INTENSIDAD (cuánto "brilla" ahora mismo -- Contenta
+        // brilla más, Aletargada casi nada). Y el sortingOrder bajó a -4/-3
+        // (ver BuildHalo): justo ENCIMA del sprite de la simulación (-5) y
+        // DEBAJO de la criatura/aprendiz/maquinaria, así que la luz cae
+        // SOBRE la piedra en vez de flotar delante de la escena entera.
+        //
+        // NO HAY UN SPRITE DE "OSCURIDAD" SEPARADO QUE PERFORAR (se buscó
+        // antes de escribir esto): la sala está oscura porque
+        // SimRenderer/WorkshopBackdrop pintan la roca en tonos casi negros
+        // (Sim/Universe.cs, "GARANTÍA 3"), no porque haya una capa de manto
+        // negro encima que se pueda agujerear -- y tocar esos colores por
+        // téxel violaría la regla 19 (nada de trucos de alfa contra el fondo
+        // en el hot path del render). La técnica elegida en su lugar: DOS
+        // capas de sprite alpha-blended (núcleo pequeño y opaco + wash
+        // grande y suave, ver BuildHalo) sentadas justo SOBRE el render de
+        // la piedra -- con un color claro y alfa creciente hacia el centro,
+        // el compuesto ya "aclara" visualmente la piedra de alrededor sin
+        // necesitar blending aditivo real (que exigiría un material propio,
+        // y por tanto Shader.Find en algún punto -- prohibido en runtime,
+        // regla del proyecto).
         // ===================================================================
         private void ActualizarHalo(float dt)
         {
-            float radioObjetivo, calidezObjetivo, intensidadObjetivo;
+            float radioObjetivo, intensidadObjetivo;
             switch (_estado)
             {
-                case Estado.Contenta: radioObjetivo = 1.6f; calidezObjetivo = 1f; intensidadObjetivo = 0.95f; break;
-                case Estado.Hambrienta: radioObjetivo = 0.6f; calidezObjetivo = 0.15f; intensidadObjetivo = 0.7f; break;
-                case Estado.Aletargada: radioObjetivo = 0.35f; calidezObjetivo = 0.10f; intensidadObjetivo = 0.35f; break;
-                default: radioObjetivo = 0.55f; calidezObjetivo = 0.5f; intensidadObjetivo = 0.75f; break; // Asustada
+                case Estado.Contenta: radioObjetivo = 1.6f; intensidadObjetivo = 0.95f; break;
+                case Estado.Hambrienta: radioObjetivo = 0.6f; intensidadObjetivo = 0.55f; break;
+                case Estado.Aletargada: radioObjetivo = 0.35f; intensidadObjetivo = 0.25f; break;
+                default: radioObjetivo = 0.55f; intensidadObjetivo = 0.65f; break; // Asustada
             }
 
             _haloRadioActual = Mathf.MoveTowards(_haloRadioActual, radioObjetivo, dt * 0.9f);
-            _haloCalidezActual = Mathf.MoveTowards(_haloCalidezActual, calidezObjetivo, dt * 0.7f);
             _haloIntensidadActual = Mathf.MoveTowards(_haloIntensidadActual, intensidadObjetivo, dt * 0.7f);
 
             float parpadeo = 1f;
             if (_estado == Estado.Asustada)
                 parpadeo = 1f + (Mathf.PerlinNoise(Time.time * 9f, 0.5f) - 0.5f) * 0.35f;
 
-            // (ver SerSprites.ConstruirHalo, CORREGIDO playtest 21: el alfa ya
-            // vuelve a 0 al 78% del radio inscrito de la textura -- no hay
-            // "canto duro" que esconder, verificado compositando sobre un
-            // fondo que no es negro puro). diametroMundo=4.6 se conserva de
-            // la primera entrega (decide cuánto ANILLO visible de tinte cae
-            // alrededor del cuerpo, no un borde a esconder): a esa escala el
-            // pico de tinte (30% del radio de la textura) cae a poco más de
-            // 1 unidad de mundo del corazón en Contenta, un halo perceptible
-            // sin devorar la cámara íntima pequeña.
+            // (ver SerSprites.HaloLuz, curva heredada del playtest 21: el
+            // alfa vuelve a 0 al 78% del radio inscrito -- no hay "canto
+            // duro" que esconder, verificado compositando sobre fondo NO
+            // negro). diametroMundo=4.6 se conserva de la primera entrega
+            // (decide cuánto ANILLO visible cae alrededor del cuerpo): a esa
+            // escala el pico de tinte (30% del radio) cae a poco más de 1
+            // unidad de mundo del corazón en Contenta -- perceptible sin
+            // devorar la cámara íntima pequeña.
             float diametroMundo = 4.6f;
             float escala = diametroMundo * _haloRadioActual * parpadeo;
 
             _haloRoot.position = _pivoteLatido.position;
             _haloRoot.localScale = new Vector3(escala, escala, 1f);
 
-            var cCalido = _haloCalidoSr.color;
-            cCalido.a = _haloIntensidadActual * _haloCalidezActual;
-            _haloCalidoSr.color = cCalido;
+            // NÚCLEO: más opaco (el "punto caliente" que vende que hay una
+            // fuente) -- WASH: más tenue (la luz cayendo sobre la piedra de
+            // alrededor). El COLOR de ambos ya quedó fijado en BuildHalo.
+            var cNucleo = _haloNucleoSr.color;
+            cNucleo.a = _haloIntensidadActual * 0.95f;
+            _haloNucleoSr.color = cNucleo;
 
-            var cFrio = _haloFrioSr.color;
-            cFrio.a = _haloIntensidadActual * (1f - _haloCalidezActual);
-            _haloFrioSr.color = cFrio;
+            var cWash = _haloWashSr.color;
+            cWash.a = _haloIntensidadActual * 0.55f;
+            _haloWashSr.color = cWash;
+        }
+
+        // ===================================================================
+        // IMOVIBLE (playtest 22, "y se pueden mover" -- contrato en
+        // Game/Mudanza.cs). Ver el docblock de <see cref="Reposicionar"/>
+        // para qué pasa con el CUERPO simulado (Vivium real) al mover.
+        // ===================================================================
+        public Vector3 CentroMundo => _pivoteLatido != null ? _pivoteLatido.position : transform.position;
+
+        public Vector2 TamanoMundo =>
+            new Vector2(AnchoMundoCorazon, AltoMundoCorazon) * (_esCria ? EscalaCria : 1f);
+
+        public Vector2Int AnclaCelda => new Vector2Int(_celdaCunaX, _celdaCunaY);
+
+        /// <summary>
+        /// Margen generoso alrededor del ancla: el radio de trabajo más
+        /// amplio de la criatura es <see cref="RadioSondeoComidaCeldas"/>=16
+        /// (comida) -- mayor que el resto (calor=14, amenaza=10, digestión
+        /// 6+9+2=17 pero centrada, no sondeada en redondo desde la cuna).
+        /// Si el sondeo de comida cabe sin tocar el marco protegido del
+        /// mundo, todo lo demás también cabe.
+        /// </summary>
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            const int margen = RadioSondeoComidaCeldas;
+            int yBase = anclaCelda.y + AlturaCuerpoCeldas;
+            return anclaCelda.x - margen >= 1 && anclaCelda.x + margen <= CellGrid.W - 2
+                && yBase - margen >= 1 && yBase + margen <= CellGrid.H - 2
+                && anclaCelda.y >= 1 && anclaCelda.y <= CellGrid.H - 2;
+        }
+
+        /// <summary>
+        /// QUÉ PASA CON EL CUERPO AL MOVER (decisión de este encargo, pedida
+        /// explícita por el contrato): el CUERPO simulado (Vivium real en la
+        /// grilla, sembrado por <see cref="SembrarCuerpoInicial"/> y hecho
+        /// crecer por SimStepper.GrowthTick, Sim/, no tocado) se PODA entero
+        /// en el sitio VIEJO (<see cref="PodarCuerpoCompleto"/>) y se vuelve
+        /// a SEMBRAR en el sitio NUEVO. Se descartaron las otras dos
+        /// opciones del contrato: "se queda" dejaría un parche de Vivium sin
+        /// dueño en la sala vieja mientras el corazón visual ya está en otro
+        /// sitio -- rompe la ficción central "el corazón ES la carne, no un
+        /// sprite encima"; "se mueve célula a célula" costaría lo mismo
+        /// (vaciar+repintar) sin ganar nada, porque el hábito de crecimiento
+        /// (Enredadera/Mata/Dispersa, por semilla) igualmente redibujaría la
+        /// forma desde cero en el sitio nuevo en cuanto vuelva a comer. Coste
+        /// acotado (como mucho <see cref="TallaMaxCeldas"/>=40 celdas
+        /// podadas + una siembra), UNA sola vez por Reposicionar, nunca en
+        /// Update -- nunca pasa por BuildVisual ni por Init (regla 36).
+        /// </summary>
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            PodarCuerpoCompleto();
+            _celdaCunaX = anclaCelda.x;
+            _celdaCunaY = anclaCelda.y;
+            RecalcularTransform();
+            SembrarCuerpoInicial(); // ya deja _ultimoConteoVivium=-1 -- la resiembra no cuenta como "comió".
+        }
+
+        /// <summary>Convierte a Empty todo el Vivium sembrado/crecido alrededor de la cuna VIEJA -- ver el docblock de <see cref="Reposicionar"/>.</summary>
+        private void PodarCuerpoCompleto()
+        {
+            if (_sim == null) return;
+            int cx = _celdaCunaX;
+            int cyBase = _celdaCunaY + AlturaCuerpoCeldas;
+            int r = RadioSondeoComidaCeldas; // cubre de sobra TallaMaxCeldas -- mismo radio que el sondeo de comida.
+            for (int dy = -r; dy <= r; dy++)
+            {
+                int y = cyBase + dy;
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int x = cx + dx;
+                    if (_sim.SampleMaterial(x, y) == MaterialId.Vivium) _sim.Paint(x, y, 0, MaterialId.Empty);
+                }
+            }
+        }
+
+        // ===================================================================
+        // RÓTULO DE MUNDO (playtest 22, "tampoco veo la temperatura que
+        // tiene"): a diferencia de HeatPlate/ChillStone, la criatura no
+        // depende de MachineFocus/tecla E -- se lee de cerca sin interactuar,
+        // igual que su brasa y su halo. Un solo rótulo, no dos anillos: LO
+        // QUE HACE (el temperamento, como función de instrumento -- "calienta
+        // /enfría/apenas toca la sala") y CÓMO ESTÁ (el Estado de siempre),
+        // separados por un punto medio.
+        // ===================================================================
+        private const float RangoRotuloPleno = 3.2f;
+        private const float RangoRotuloDesvanece = 4.6f;
+
+        private void OnGUI()
+        {
+            if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (regla del proyecto) hermano de InputLocked, primera línea, como todos.
+            if (_pivoteLatido == null) return;
+
+            float cercania = UiStyles.Cercania(_pivoteLatido.position, _jugador, RangoRotuloPleno, RangoRotuloDesvanece);
+            if (cercania <= 0f) return;
+
+            UiStyles.Preparar();
+            Color colorBase = _estado == Estado.Asustada ? UiStyles.Peligro : ColorTemperamentoTexto();
+            string texto = FraseFuncionTemperamento() + " · " + NombreEstado();
+            UiStyles.PlacaMundo(_pivoteLatido.position, texto,
+                new Color(colorBase.r, colorBase.g, colorBase.b, colorBase.a * cercania), UiStyles.S(46f));
+        }
+
+        private Color ColorTemperamentoTexto()
+        {
+            if (_temperamento < UmbralFrio) return UiStyles.Frio;
+            if (_temperamento > UmbralCalor) return UiStyles.Aviso;
+            return UiStyles.TextoTenue;
+        }
+
+        private string FraseFuncionTemperamento()
+        {
+            if (_temperamento < UmbralFrio) return "enfría la sala";
+            if (_temperamento > UmbralCalor) return "calienta la sala";
+            return "apenas toca la sala";
+        }
+
+        private string NombreEstado()
+        {
+            switch (_estado)
+            {
+                case Estado.Hambrienta: return "hambrienta";
+                case Estado.Contenta: return "contenta";
+                case Estado.Aletargada: return "aletargada";
+                default: return "asustada";
+            }
         }
     }
 }

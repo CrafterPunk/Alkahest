@@ -30,11 +30,27 @@ namespace Alkahest.Game
     /// inventar una constante nueva sin relación con el resto del sistema.
     ///
     /// ECLOSIONA (decisión de Cesar) al llegar al final: instancia una
-    /// <see cref="Criatura"/> con esCria=true cerca de
-    /// <see cref="Criatura.Principal"/> si existe (si no, junto al propio
-    /// capullo) y desaparece tras un pulso breve — ver <see cref="Eclosionar"/>.
+    /// <see cref="Criatura"/> con esCria=true cerca del progenitor que la
+    /// incubó (el más cercano vivo ahora mismo -- ver
+    /// <see cref="Criatura.MasCercanaA"/>; si no hay ninguno, junto al
+    /// propio capullo) y desaparece tras un pulso breve — ver
+    /// <see cref="Eclosionar"/>.
+    ///
+    /// HERENCIA DE TEMPERAMENTO CON DESVIACIÓN (playtest 22, decisión de
+    /// Cesar: "hereda con desviación, no tirada nueva" -- ver
+    /// <see cref="HeredarTemperamentoConDesviacion"/>). Se resuelve AQUÍ, en
+    /// Eclosionar, porque solo Capullo conoce a la vez al progenitor Y el
+    /// instante en que la cría nace; Criatura.Init recibe el resultado ya
+    /// calculado a través de <see cref="Criatura.TemperamentoHeredadoPendiente"/>
+    /// (su firma está CONGELADA por CONTRATO_PIVOT.md, no puede ganar un
+    /// parámetro nuevo).
+    ///
+    /// SE PUEDE MOVER: implementa <see cref="IMovible"/> (playtest 22, "y se
+    /// pueden mover"). El capullo no siembra nada en la sim (a diferencia de
+    /// Criatura), así que moverlo es solo recolocar el sprite -- no hay
+    /// cuerpo simulado del que preocuparse.
     /// </summary>
-    public sealed class Capullo : MonoBehaviour
+    public sealed class Capullo : MonoBehaviour, IMovible
     {
         /// <summary>
         /// (playtest 21, CORREGIDO MIRANDO EL JUEGO CORRER) Ancho del capullo en
@@ -89,11 +105,48 @@ namespace Alkahest.Game
             _celdaRepisaY = celdaRepisaY;
 
             BuildVisuals();
+            Mudanza.RegistrarMovible(this); // (playtest 22, "y se pueden mover") ver el contrato IMovible en Game/Mudanza.cs.
         }
 
         private void OnDestroy()
         {
+            Mudanza.OlvidarMovible(this);
             LiberarTexturas();
+        }
+
+        // ---------------------------------------------------------------------------------
+        // IMOVIBLE (playtest 22, ver el contrato en Game/Mudanza.cs). El
+        // capullo no siembra nada en la sim -- moverlo es solo recolocar el
+        // sprite, no hay cuerpo simulado que podar/resembrar (a diferencia
+        // de Criatura.Reposicionar).
+        // ---------------------------------------------------------------------------------
+        public Vector3 CentroMundo => _pivote != null ? _pivote.position : transform.position;
+        public Vector2 TamanoMundo => new Vector2(AnchoMundoCapullo, AltoMundoCapullo);
+        public Vector2Int AnclaCelda => new Vector2Int(_celdaRepisaX, _celdaRepisaY);
+
+        /// <summary>Margen mínimo (el capullo no sondea nada por sí mismo -- solo necesita que su propio sprite, pequeño, no salga del marco protegido del mundo).</summary>
+        private const int MargenMundoCapullo = 3;
+
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            return anclaCelda.x - MargenMundoCapullo >= 1 && anclaCelda.x + MargenMundoCapullo <= CellGrid.W - 2
+                && anclaCelda.y >= 1 && anclaCelda.y + MargenMundoCapullo <= CellGrid.H - 2;
+        }
+
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            _celdaRepisaX = anclaCelda.x;
+            _celdaRepisaY = anclaCelda.y;
+            RecalcularTransform();
+        }
+
+        /// <summary>Extraído de BuildVisuals (playtest 22) para que Reposicionar pueda reutilizarlo sin volver a llamar a BuildVisuals/Init (regla 36).</summary>
+        private void RecalcularTransform()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            float baseX = (_celdaRepisaX + 0.5f) * celda;
+            float baseY = (_celdaRepisaY + 1) * celda;
+            transform.position = new Vector3(baseX, baseY, 0f);
         }
 
         // ===================================================================
@@ -102,10 +155,7 @@ namespace Alkahest.Game
         // ===================================================================
         private void BuildVisuals()
         {
-            float celda = SimRenderer.CellWorldSize;
-            float baseX = (_celdaRepisaX + 0.5f) * celda;
-            float baseY = (_celdaRepisaY + 1) * celda;
-            transform.position = new Vector3(baseX, baseY, 0f);
+            RecalcularTransform();
 
             var pivoteGo = new GameObject("PivoteRespiro");
             _pivote = pivoteGo.transform;
@@ -196,7 +246,24 @@ namespace Alkahest.Game
             if (_progreso >= 1f) Eclosionar();
         }
 
-        /// <summary>Instancia una Criatura(esCria:true) cerca de Criatura.Principal si existe (si no, junto al propio capullo) y se desvanece.</summary>
+        /// <summary>Sal arbitraria (distingue este hash de cualquier otro uso de XorShift en el proyecto): la DESVIACIÓN de herencia de temperamento, ver <see cref="HeredarTemperamentoConDesviacion"/>.</summary>
+        private const uint SalHerenciaTemperamento = 0x7A11u;
+
+        /// <summary>Cuánto puede desviarse la cría del temperamento de su progenitor, en una sola generación (ver el docblock de la clase, "HERENCIA DE TEMPERAMENTO CON DESVIACIÓN"). Perceptible pero acotado: dos generaciones seguidas en la misma dirección mueven el temperamento de un extremo a otro con claridad, sin que UNA sola tirada pueda hacerlo.</summary>
+        private const float DesviacionMaxTemperamento = 0.16f;
+
+        /// <summary>
+        /// Instancia una Criatura(esCria:true) cerca del progenitor que la
+        /// incubó -- la Criatura activa más cercana a ESTE capullo ahora
+        /// mismo (<see cref="Criatura.MasCercanaA"/>, una aproximación
+        /// razonable a "quien lo cuidó": normalmente es quien lo mantuvo
+        /// tibio lo bastante para llegar hasta aquí, ver
+        /// <see cref="Criatura.ApplyCalorTick"/>). Si no hay ninguna viva
+        /// (caso límite), nace junto al propio capullo y sin progenitor de
+        /// quien heredar -- <see cref="Criatura.SortearOHeredarTemperamento"/>
+        /// cae entonces a un sorteo fresco por semilla, el mismo criterio que
+        /// el Rescoldo original.
+        /// </summary>
         private void Eclosionar()
         {
             if (_eclosionado) return;
@@ -204,15 +271,23 @@ namespace Alkahest.Game
 
             int celdaX = _celdaRepisaX;
             int celdaY = _celdaRepisaY;
-            if (Criatura.Principal != null)
+            var progenitor = Criatura.MasCercanaA(transform.position);
+            if (progenitor != null)
             {
-                var cp = _sim.WorldToCell(Criatura.Principal.transform.position);
+                var cp = _sim.WorldToCell(progenitor.transform.position);
                 // -1 en Y: Criatura.Init ancla en la celda de SUELO (su
                 // transform.position real queda un cell por ENCIMA de esa
                 // celda, ver Criatura.BuildVisuals), así que hay que
                 // deshacer ese +1 para volver a una celda de suelo válida.
                 celdaX = cp.x + 3;
                 celdaY = cp.y - 1;
+
+                // HERENCIA CON DESVIACIÓN (playtest 22, decisión de Cesar:
+                // "hereda con desviación, no tirada nueva" -- ver el
+                // docblock de la clase). Se fija ANTES de Init porque su
+                // firma está CONGELADA por CONTRATO_PIVOT.md.
+                Criatura.TemperamentoHeredadoPendiente =
+                    HeredarTemperamentoConDesviacion(progenitor.TemperamentoNormalizado, _sim.Universe.Seed);
             }
 
             var criaturaGo = new GameObject("Criatura (cría)");
@@ -220,6 +295,33 @@ namespace Alkahest.Game
             cria.Init(_sim, _jugador, celdaX, celdaY, esCria: true);
 
             _tiempoTrasEclosion = 0f;
+        }
+
+        /// <summary>
+        /// El temperamento del progenitor +/- una desviación pequeña pero
+        /// PERCEPTIBLE, determinista (regla del proyecto: nunca
+        /// UnityEngine.Random -- solo <see cref="XorShift"/>). tick=0
+        /// CONSTANTE, (x,y)=la celda de la repisa donde ESTE capullo
+        /// eclosiona ("el momento": única por instancia, y estable si el
+        /// jugador no lo mueve entre sondeos), sal=la semilla del universo
+        /// combinada con <see cref="SalHerenciaTemperamento"/> -- misma
+        /// partida + mismo sitio + mismo instante siempre da la misma
+        /// desviación.
+        ///
+        /// EJEMPLO REAL de dos generaciones (semilla=20, verificado
+        /// ejecutando el mismo algoritmo fuera de Unity antes de escribir
+        /// esto): madre templada (0.502) -> incuba un capullo en (315,175),
+        /// desviación +0.115 -> cría1 templada pero ya tirando a caliente
+        /// (0.617) -> esa cría1 incuba otro capullo en (320,170), desviación
+        /// +0.154 -> cría2 CALIENTE (0.771, cruza el umbral de 0.65). Dos
+        /// generaciones, elegidas por el jugador, mueven el temperamento de
+        /// "templado" a "caliente" con claridad.
+        /// </summary>
+        private float HeredarTemperamentoConDesviacion(float delProgenitor, int seed)
+        {
+            var rng = XorShift.FromCell(0u, _celdaRepisaX, _celdaRepisaY, (uint)seed ^ SalHerenciaTemperamento);
+            float desviacion = (rng.NextByte() / 255f * 2f - 1f) * DesviacionMaxTemperamento;
+            return Mathf.Clamp01(delProgenitor + desviacion);
         }
 
         /// <summary>Un pulso de luz + temblor breve, luego se desvanece y el GameObject desaparece (contrato: "desaparece o queda como cáscara rota" -- se eligió desaparecer por alcance del encargo).</summary>

@@ -344,6 +344,33 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     40% menos". Al entregar una ronda, por cada cambio hay que dar el gesto concreto y el valor
     observable que lo comprueba — y si algo solo se ve en la jornada 2 (el vivium, por ejemplo),
     decirlo, o el playtest se gasta buscando lo inalcanzable.
+44. **UN RECURSO QUE EL JUGADOR PUEDE PERDER PARA SIEMPRE ES UNA TRAMPA (playtest 22)**: Cesar,
+    sobre el charco del cuarto íntimo — *"si por lo que sea lo pierdo ya no hay mucho más que
+    hacer, y así evitamos dejar cositas en el suelo que se pueden perder"*. En un juego cuyo verbo
+    es EXPERIMENTAR, una fuente infinita no es una comodidad: **es lo que permite equivocarse**.
+    Los dos caños básicos (agua y nutriente, coste 0) volvieron al cuarto por eso. Criterio
+    general: todo lo que el diseño espera que el jugador GASTE probando cosas tiene que ser
+    reponible; lo escaso se reserva para lo que el diseño espera que ATESORE.
+45. **EL RASGO DE UN INDIVIDUO NO PUEDE VIVIR EN SU MATERIAL (playtest 22)**: Cesar preguntó *"nació
+    lo mismo que tenía vivo, ¿esto es probabilidad o así es?"* — ninguna de las dos: era un hueco.
+    Las dos criaturas son literalmente `MaterialId.Vivium`, así que color, patrón y hábito de
+    crecimiento salen de la SEMILLA DE LA PARTIDA (regla 17) y toda cría nacía clon de su padre.
+    Para que dos seres del mismo material se distingan, **el rasgo tiene que ser un campo de la
+    instancia** (`Criatura._temperamento`), y continuo, no una etiqueta — sin continuo no hay
+    herencia con desviación. Vale para cualquier cosa que se quiera individualizar después.
+46. **UNA CRIATURA QUE SE ENFRÍA A SÍ MISMA SE MATA (playtest 22)**: el temperamento térmico tiene
+    un fallo mortal simétrico al de la regla 40. Si una criatura fría enfría su propia celda, sale
+    de su banda de crecimiento, se duerme y no crece nunca más. Por eso `ApplyCalorTick` separa dos
+    radios: **el NÚCLEO mantiene SIEMPRE a la criatura dentro de su banda**, pase lo que pase, y
+    solo **el ALCANCE AMPLIO lleva el temperamento hacia fuera**. Ese anillo exterior es lo que la
+    convierte en instrumento; el núcleo es lo que la mantiene viva. No fusionarlos.
+47. **NO REUTILIZAR UNA CONSTANTE DE POSICIÓN SOLO PORQUE EL NOMBRE ENCAJA (playtest 22, corolario
+    de la 39)**: los caños del cuarto íntimo NO pasan por `SpawnOneDispenser`, porque ese método
+    deriva su sitio de `TapMountX`/`TapFirstY`/`TapStepY` — las coordenadas del banco de grifos del
+    taller CLÁSICO, hoy enterrado a 30 celdas de la cámara. Reutilizarlo habría plantado los dos
+    caños dentro de la roca, invisibles, sin ningún error. Cuando el plano tiene dos zonas vivas a
+    la vez, el nombre de una constante ya no basta para saber si es la correcta.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -402,6 +429,21 @@ el 90% del tiempo. Arreglado con anclaje de ruido estático, mapa de orígenes e
 recalibración; queda pendiente que Manchas y Laberinto se distingan por FORMA (backlog).
 También: los encargos SÍ habían bajado (32-40 y 42-54 en la jornada 1) pero no se le dieron los
 números para comprobarlo (regla 43), y los scripts de commit pasan a llevar el número del playtest.
+
+**Playtest 22** (ronda accidentada: tres reinicios del sandbox y un límite de cuota que cortó a un
+agente; el código llegó entero pero **SIN VERIFICAR EN EL EDITOR**, el MCP de Unity cayó antes de
+poder compilarlo) — **HERRAMIENTAS VIVAS**: la tesis que el propio Cesar puso en su referencia de
+arte, *las máquinas no son máquinas, son criaturas con temperamento que colocas donde las
+necesitas*. Temperamento térmico CONTINUO por individuo (regla 45) que sustituye a la placa ígnea y
+a la piedra gélida, con el núcleo protegido para que una criatura fría no se suicide (regla 46);
+la cría HEREDA del progenitor que la incubó con desviación, así que criar deja de ser esperar y
+pasa a ser orientar; criatura y capullo implementan `IMovible` (tecla V, R devuelve); y vuelven los
+dos caños básicos —agua y nutriente, coste 0, en el muro izquierdo— con el charco movido debajo
+para recogerlos (reglas 44 y 47). PENDIENTE de esta ronda: **el halo no se convirtió en luz real**,
+que era una buena intuición de Cesar y sigue siendo el siguiente paso barato.
+La sección "LA TENSIÓN DE FONDO DEL PROYECTO" del HANDOFF resume, para quien tenga que opinar desde
+fuera, el problema central: cómo hacer legible un simulador profundo sin simplificarlo — y la
+hipótesis actual, que es DARLE UN CUERPO.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

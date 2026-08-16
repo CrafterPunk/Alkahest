@@ -104,6 +104,113 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 22 → HERRAMIENTAS VIVAS: las máquinas son criaturas — pendiente de validar
+Ronda accidentada (tres reinicios del sandbox y un límite de cuota que cortó a un agente a mitad),
+pero el código llegó entero. **Sin verificar en el editor: el MCP de Unity se cayó antes de poder
+compilarlo yo.**
+
+**Reporte de Cesar tras jugar el playtest 21**, que es lo que ordenó esta ronda:
+*"no puedo reacomodar el hijito que nació"* · *"nació lo mismo que tenía vivo, ¿esto es
+probabilidad o así es?"* · *"se ilumina bastante cuando come pero no sé si es fuente de luz, quizás
+pueda serlo"* · *"busqué los caños por el mapa, quizás los rompí con el empty del F3 o simplemente
+no hay"* · *"tampoco encontré la máquina de calor o de hielo, imagino que esa es la función del ser
+vivo pero no lo puedo mover, tampoco veo la temperatura que tiene"* · *"quizás necesite los caños
+más básicos al inicio; hay un charquito de agua pero si por lo que sea lo pierdo ya no hay mucho
+más que hacer, y así evitamos dejar cositas en el suelo que se pueden perder"*.
+
+### LA TESIS, y la escribió él
+Su referencia de arte lleva un panel rotulado **"HERRAMIENTAS VIVAS"**. Eso es el juego:
+
+> **Las máquinas no son máquinas: son criaturas.** No instalas una placa de calor y una piedra
+> fría — crías seres con TEMPERAMENTO y los colocas donde los necesitas. Montar el laboratorio es
+> ordenar tus instrumentos vivos. El cincel excava el espacio; las criaturas lo amueblan.
+
+Con eso encaja todo lo ya construido: alimentar importa porque un ser bien alimentado trabaja
+mejor; el capullo importa porque criar es cómo consigues el temperamento que te falta; digerir es
+la alquimia hecha por un ser; y **el taller enterrado pasa a ser la herencia de quien construyó
+máquinas en vez de criar seres**.
+
+### Qué se hizo
+1. **TEMPERAMENTO TÉRMICO POR INDIVIDUO** (`Criatura.cs`). Valor CONTINUO en la instancia (no en el
+   material — ese era el bug de fondo: los dos seres son el mismo `MaterialId.Vivium`, así que
+   color, patrón y hábito salían de la SEMILLA y por eso la cría era un clon). Las etiquetas
+   calor/frío/templado son solo la presentación.
+   **LA TRAMPA, documentada porque es fácil caer**: si una criatura fría enfría su propia celda, se
+   sale de su banda de crecimiento, se duerme y no crece nunca — se autodestruye. Por eso los dos
+   radios que ya existían se separan: **el NÚCLEO mantiene SIEMPRE a la criatura dentro de su
+   banda**, y solo **el ALCANCE AMPLIO lleva el temperamento**. Ese anillo exterior es lo que la
+   convierte en instrumento.
+2. **LA CRÍA HEREDA CON DESVIACIÓN** (`Capullo.HeredarTemperamentoConDesviacion`, decisión de Cesar
+   frente a "tirada nueva"). Se resuelve en el capullo porque solo él conoce a la vez al progenitor
+   y el instante del nacimiento; se pasa a `Criatura` por
+   `Criatura.TemperamentoHeredadoPendiente` porque la firma de `Init` está congelada por contrato.
+   Hereda de `Criatura.MasCercanaA` — de quien lo incubó, no de un "padre" global.
+3. **CRIATURA Y CAPULLO SON MOVIBLES**: implementan `IMovible` y se registran en `Mudanza`. Tecla
+   **V** los agarra, **R** los devuelve a su sitio (regla 38).
+4. **LOS DOS CAÑOS BÁSICOS VUELVEN** (`SimLevelBuilder.CanoMontajeX/CanoAguaY/CanoNutrienteY` +
+   `AlkahestGameBootstrap.SpawnCanoBasico`). Solo **agua y nutriente**, coste 0, montados en el muro
+   izquierdo en columna como en la referencia de arte. **El charco se movió de x=267 a x=250 para
+   quedar justo debajo de las boquillas**: deja de ser decorado y pasa a ser pila de recogida.
+   Arena, aceite y azoth siguen enterrados — aparecen al excavar, y esa es su recompensa.
+   *NO se reutilizó `SpawnOneDispenser`*: aquel deriva su posición de `TapMountX/TapFirstY/TapStepY`,
+   que son las coordenadas del banco clásico enterrado a 30 celdas de allí. Habría plantado los
+   caños dentro de la roca — exactamente el fallo que advierte la regla 39.
+   La lectura de la sala queda **caños+pila → criatura → capullo**, de izquierda a derecha.
+
+### Lo que quedó SIN HACER de esta ronda
+- **El halo no se convirtió en luz real.** Cesar lo intuyó (*"quizás pueda serlo"*) y es buena idea:
+  la cámara está oscura y las criaturas deberían ser lo que la alumbra, así que colocarlas sería
+  también decidir dónde ves. Sin shaders (prohibidos en runtime) y sin tocar el alfa por celda
+  (regla 19): capas de sprite.
+- **Nada de esto se ha visto correr.** Compila a nivel de lectura (llaves, símbolos cruzados,
+  firmas) pero no pasó por un compilador de verdad.
+
+### NOTA DE PROCESO (importante para quien retome)
+El sandbox se reinició **tres veces** en esta sesión y revirtió el repo cinco rondas sin avisar
+(regla 6b). Una de esas veces un encargo trabajó una hora entera contra código de cinco rondas
+atrás sin que nadie lo supiera, y concluyó —con razón para lo que veía— que `Universe.Leyes` y
+`Universe.AfinidadDelUniverso` no existían. **Comprobar `git log --oneline -1` contra GitHub ANTES
+de encargar nada**, y desplegar pronto en vez de acumular.
+
+---
+
+## LA TENSIÓN DE FONDO DEL PROYECTO (para quien tenga que opinar desde fuera)
+*Cesar lo nombró así: "por si volvemos a Fable para recoger su opinión si nos quedamos atascados en
+este intento de introducir lo complejo del mundo en algo simple para el jugador".*
+
+Ese ES el problema central de ChaosAlchemy, y conviene dejarlo escrito sin adornos:
+
+**Debajo hay un simulador honesto y profundo**: autómata celular determinista de 768x288 a 30Hz,
+química generada por semilla con una gramática de formas de ley, campo morfológico, crecimiento
+dendrítico con hábito por semilla, temperatura por celda. Todo eso funciona y está medido.
+
+**Arriba hay un jugador que necesita entender qué está pasando en diez segundos.** Y el historial
+de esta sesión es, casi entero, la crónica de esa fricción:
+- Los patrones existían pero hacía falta demasiada materia para verlos (playtests 19-20) — y cinco
+  de las ocho familias nunca funcionaron como el código afirmaba.
+- La química por semilla generaba variedad real pero *"5 plantillas con sustantivos
+  intercambiables"* hasta que se le dio una TESIS por semilla (regla 35).
+- Los encargos bajaron un 40% y Cesar no lo notó, porque no se le dieron los números que tenía que
+  ver (regla 43).
+- El taller creció a 3x2 pantallas por un requisito de co-op y en la ronda siguiente hubo que
+  compactarlo porque experimentar cansaba.
+- Y el pivot entero nace de que un laboratorio técnico lleno de instrumentos **no comunicaba
+  ninguna fantasía**, mientras que una sola criatura viva sí.
+
+**La hipótesis de trabajo actual, que es lo que habría que someter a juicio externo:** que la vía
+para hacer legible un sistema complejo no es simplificarlo ni explicarlo, sino **darle un cuerpo**.
+Una criatura que tiene hambre enseña temperatura, química y crecimiento sin una sola línea de
+tutorial, porque el jugador ya sabe leer a un ser vivo. Las "herramientas vivas" son esa apuesta
+llevada al final: en vez de aprender qué hace cada máquina, convives con seres que tienen carácter.
+
+**El riesgo de esa apuesta, dicho honestamente:** que la criatura sea una capa de simpatía sobre la
+misma complejidad, y que el jugador acabe igual de perdido pero además sintiéndose culpable por no
+cuidar bien a algo. La señal de que va bien será que Cesar pueda **decir en voz alta** qué clase de
+mundo le tocó ("aquí todo acaba en limo", "esta cría salió friolera") sin abrir el diario. La señal
+de alarma será que siga necesitando que se lo expliquen.
+
+---
+
 ## Playtest 20 → LAS CINCO FAMILIAS DE PATRÓN QUE NUNCA FUNCIONARON, y por qué Cesar no vio
 ## los cambios que le prometí — pendiente de validar en el editor
 
