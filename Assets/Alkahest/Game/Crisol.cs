@@ -48,6 +48,41 @@ namespace Alkahest.Game
     /// exacto, esta talla es un no-op idéntico (Piedra sobre Piedra); si dejó
     /// roca maciza (lo esperable, dado que el contrato solo le exige el
     /// ancla), esta talla es la que abre el hueco de verdad.
+    ///
+    /// -----------------------------------------------------------------------
+    /// PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md, encargo M) — DOS CAMBIOS
+    /// -----------------------------------------------------------------------
+    /// (1) LA MAMPOSTERÍA YA NO SE TALLA EN Init() (regla 15 de CLAUDE.md:
+    ///     se comenta el porqué, no se borra el mecanismo). El reparto de
+    ///     responsabilidades cambia (contrato §2, regla 47): ahora
+    ///     Sim/SimLevelBuilder.cs talla la cubeta y la tolva del Crisol AL
+    ///     CONSTRUIR EL PLANO, vía <see cref="TallarEnPlano"/> (estático,
+    ///     opera directo sobre <see cref="CellGrid"/> con SetCell -- es
+    ///     CONSTRUCCIÓN de nivel, no creación en juego, así que no aplica la
+    ///     regla 29/PaintStable, que es para runtime). <see
+    ///     cref="CarveBasin"/>/<see cref="TallarMamposteria"/> de INSTANCIA
+    ///     SIGUEN VIVOS: Mudanza (tecla V/R, tercer archivo de este mismo
+    ///     encargo) reubica el Crisol EN CALIENTE, y esa reubicación sí es
+    ///     una talla en juego de verdad (ahí SÍ sigue aplicando PaintStable).
+    ///     Las medidas (CubetaAncho/Alto, TolvaAncho/Alto, MuroGrosor,
+    ///     HuecoEntreCubetaYTolva) pasan de privadas a públicas para que
+    ///     SimLevelBuilder no las duplique a mano -- una sola fuente de
+    ///     verdad de la GEOMETRÍA, aunque haya dos caminos de escritura
+    ///     (plano vs. runtime) por la razón de arriba.
+    /// (2) LA GRAMÁTICA VISUAL (contrato §1): la tolva deja de reutilizar
+    ///     <see cref="MaquinariaSprites.ChasisPlaca"/> (que la confundía con
+    ///     un embudo: "otra forma, otra altura, otro color" es la regla
+    ///     §1.2) y pasa a <see cref="MaquinariaSprites.Brasero"/> (cesto de
+    ///     hierro). La cubeta gana un <see cref="MaquinariaSprites.Embudo"/>
+    ///     montado arriba (§1.1), un <see cref="MaquinariaSprites.MarcoContenedor"/>
+    ///     (§1.3, "aquí queda el resultado") y una
+    ///     <see cref="MaquinariaSprites.Chimenea"/> con bocanadas de
+    ///     <see cref="MaquinariaSprites.Humo"/> SOLO mientras
+    ///     <c>_fuelMatActivo != Empty</c> (§1.4: "el verbo vive en el
+    ///     cuerpo"). El AFFORDANCE GLOW (§1.5) usa el helper único
+    ///     <see cref="MaquinariaSprites.AffordanceGlow"/>: una instancia por
+    ///     boca (embudo/brasero), sondeada en Update con un delegado
+    ///     cacheado en Init (cero allocs por sondeo).
     /// </summary>
     public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovible
     {
@@ -62,13 +97,18 @@ namespace Alkahest.Game
         // (frente al WallThickness=3 de las cubas grandes): un crisol es un
         // caldero compacto, no una cuba de taller.
         // -----------------------------------------------------------------
-        private const int CubetaAncho = 7;
-        private const int CubetaAlto = 5;
-        private const int TolvaAncho = 3;
-        private const int TolvaAlto = 3;
-        private const int MuroGrosor = 1;
+        // (playtest 26) De privadas a PÚBLICAS: Sim/SimLevelBuilder.cs las lee
+        // para tallar esta misma geometría al construir el plano (ver
+        // TallarEnPlano más abajo) -- una sola fuente de verdad del TAMAÑO,
+        // aunque el QUIÉN ESCRIBE la piedra cambie según el momento (plano vs.
+        // runtime, ver el docblock de la clase).
+        public const int CubetaAncho = 7;
+        public const int CubetaAlto = 5;
+        public const int TolvaAncho = 3;
+        public const int TolvaAlto = 3;
+        public const int MuroGrosor = 1;
         /// <summary>Separación entre el muro derecho de la cubeta y el muro izquierdo de la tolva: son DOS recintos distintos del mismo aparato, no uno solo partido en dos.</summary>
-        private const int HuecoEntreCubetaYTolva = 2;
+        public const int HuecoEntreCubetaYTolva = 2;
 
         private AlkahestSim _sim;
         private Transform _player;
@@ -130,6 +170,23 @@ namespace Alkahest.Game
         private SpriteRenderer _resalte;
         private float _alfaResalte;
 
+        // ---- Playtest 26 (contrato §1): gramática visual + affordance glow ----
+        private Vector3 _centroCubeta, _centroTolva;
+        private Flask _flask; // leído SOLO (nunca modificado -- contrato: "sin tocar Flask.cs").
+        private MaquinariaSprites.AffordanceGlow _glowEmbudo = new MaquinariaSprites.AffordanceGlow();
+        private MaquinariaSprites.AffordanceGlow _glowBrasero = new MaquinariaSprites.AffordanceGlow();
+        // Delegados CACHEADOS en Init (método de instancia -> Func, una sola
+        // asignación de por vida): el sondeo de AffordanceGlow los reutiliza
+        // cada ~0.25s sin generar basura (ver MaquinariaSprites.AffordanceGlow.Sondear).
+        private System.Func<byte, bool> _sirveEmbudo;
+        private System.Func<byte, bool> _sirveBrasero;
+        private SpriteRenderer _afordanceEmbudo, _afordanceBrasero;
+        // Chimenea: bocanadas de humo SOLO mientras arde combustible (§1.4).
+        private const int HumoPuffs = 3;
+        private const float HumoCicloSeg = 2.4f;
+        private readonly SpriteRenderer[] _humo = new SpriteRenderer[HumoPuffs];
+        private Vector3 _humoOrigen;
+
         private const float RangoEstadoPleno = 5.0f;
         private const float RangoEstadoDesvanece = 6.5f;
         private const float RangoNombrePleno = 2.6f;
@@ -168,9 +225,17 @@ namespace Alkahest.Game
             // Contrato §4.5: "suelo y=CuartoY0+2" para los emplazamientos de las
             // tres máquinas nuevas.
             _baseY = SimLevelBuilder.CuartoY0 + 2;
+            _flask = player != null ? player.GetComponent<Flask>() : null; // ver docblock de la clase: solo LECTURA (MaterialDominante()), Flask.cs no se toca.
+            _sirveEmbudo = MaterialSirveEmbudo;
+            _sirveBrasero = MaterialSirveBrasero;
 
             RecalcularRegiones();
-            TallarMamposteria();
+            // (playtest 26) YA NO se talla aquí -- ver el docblock de la clase,
+            // "LA MAMPOSTERÍA YA NO SE TALLA EN Init()". SimLevelBuilder.
+            // BuildCuartoIntimo llama a TallarEnPlano con esta misma anchorX/baseY
+            // ANTES de que este componente exista siquiera; si por lo que sea el
+            // plano NO se hubiera tallado (nivel clásico, tests), TallarMamposteria()
+            // sigue viva y la sigue usando Reposicionar (Mudanza) -- ver ese método.
             BuildVisual();
             UpdateVisualTint();
             RebuildChapaEstado();
@@ -179,6 +244,17 @@ namespace Alkahest.Game
             MachineFocus.Registrar(this);
             Mudanza.RegistrarMovible(this);
         }
+
+        /// <summary>Cualquier líquido o polvo no vacío -- contrato §1.5 ("Embudo del Crisol: cualquier líquido o polvo").</summary>
+        private bool MaterialSirveEmbudo(byte mat)
+        {
+            if (mat == MaterialId.Empty || _sim?.Universe == null) return false;
+            var arquetipo = _sim.Universe.Get(mat).archetype;
+            return arquetipo == MaterialArchetype.Liquid || arquetipo == MaterialArchetype.Powder;
+        }
+
+        /// <summary>Contrato §1.5: "Brasero: Universe.EsCombustible(M)".</summary>
+        private bool MaterialSirveBrasero(byte mat) => _sim?.Universe != null && _sim.Universe.EsCombustible(mat);
 
         private void RecalcularRegiones()
         {
@@ -197,9 +273,66 @@ namespace Alkahest.Game
             float centroY = (_baseY + (CubetaAlto + 1) * 0.5f) * celda;
             _centro = new Vector3(centroX, centroY, 0f);
             transform.position = _centro;
+
+            // Bocas (contrato §1.5): el centro de cada recinto, usado por
+            // AffordanceGlow para medir distancia jugador->boca.
+            int spanCubeta = _cubX1 - _cubX0 + 1;
+            _centroCubeta = new Vector3((_cubX0 + spanCubeta * 0.5f) * celda, (_baseY + (CubetaAlto + 1) * 0.5f) * celda, 0f);
+            int spanTolva = _tolX1 - _tolX0 + 1;
+            _centroTolva = new Vector3((_tolX0 + spanTolva * 0.5f) * celda, (_baseY + (TolvaAlto + 1) * 0.5f) * celda, 0f);
+
+            // Origen del humo (mismo cálculo que BuildVisual): recomputado aquí
+            // TAMBIÉN porque Reposicionar (Mudanza) llama a RecalcularRegiones
+            // pero NO a BuildVisual (regla 36 de CLAUDE.md, BuildVisual no es
+            // idempotente) -- sin esto, tras mover el Crisol el humo seguiría
+            // saliendo de la posición VIEJA.
+            float altoCubeta = (CubetaAlto + 1) * celda;
+            float chimeneaOffsetX = (spanCubeta * celda) * 0.32f;
+            float chimeneaAlto = celda * 3.2f;
+            _humoOrigen = _centroCubeta + new Vector3(chimeneaOffsetX, altoCubeta * 0.5f + chimeneaAlto, 0f);
         }
 
-        /// <summary>Talla la mampostería propia del crisol (ver DECISIÓN en el doc de la clase): muros y suelo de Piedra de 1 celda alrededor de cubeta y tolva, interior vaciado a Empty.</summary>
+        /// <summary>
+        /// (playtest 26) Talla la mampostería del Crisol DIRECTAMENTE sobre el
+        /// CellGrid del plano -- llamado por Sim/SimLevelBuilder.cs al construir
+        /// el nivel (construcción, no creación en juego: usa grid.SetCell, no
+        /// PaintStable/regla 29, que es para runtime). Misma geometría EXACTA
+        /// que <see cref="CarveBasin"/> de instancia, que sigue viva para
+        /// Reposicionar (Mudanza) -- ver el docblock de la clase.
+        /// </summary>
+        public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
+        {
+            int cubX0 = anchorX - CubetaAncho / 2;
+            int cubX1 = cubX0 + CubetaAncho - 1;
+            int cubY0 = baseY + 1;
+            int cubY1 = cubY0 + CubetaAlto - 1;
+
+            int tolX0 = cubX1 + MuroGrosor + HuecoEntreCubetaYTolva + MuroGrosor;
+            int tolX1 = tolX0 + TolvaAncho - 1;
+            int tolY0 = baseY + 1;
+            int tolY1 = tolY0 + TolvaAlto - 1;
+
+            CarveBasinEnGrid(grid, cubX0, cubX1, cubY0, cubY1);
+            CarveBasinEnGrid(grid, tolX0, tolX1, tolY0, tolY1);
+        }
+
+        private static void CarveBasinEnGrid(CellGrid grid, int x0, int x1, int y0, int y1)
+        {
+            for (int x = x0 - MuroGrosor; x <= x1 + MuroGrosor; x++)
+            {
+                if (CellGrid.InBounds(x, y0 - 1)) grid.SetCell(x, y0 - 1, MaterialId.Stone);
+            }
+            for (int y = y0 - 1; y <= y1; y++)
+            {
+                if (CellGrid.InBounds(x0 - MuroGrosor, y)) grid.SetCell(x0 - MuroGrosor, y, MaterialId.Stone);
+                if (CellGrid.InBounds(x1 + MuroGrosor, y)) grid.SetCell(x1 + MuroGrosor, y, MaterialId.Stone);
+            }
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+        }
+
+        /// <summary>Talla la mampostería propia del crisol EN CALIENTE (ver DECISIÓN en el doc de la clase, y la nota de playtest 26 sobre por qué sigue viva): muros y suelo de Piedra de 1 celda alrededor de cubeta y tolva, interior vaciado a Empty. Solo la llama ya <see cref="Reposicionar"/> (Mudanza) -- Init ya NO la llama, ver el docblock de la clase.</summary>
         private void TallarMamposteria()
         {
             CarveBasin(_cubX0, _cubX1, _cubY0, _cubY1);
@@ -276,6 +409,37 @@ namespace Alkahest.Game
             if (_accumulator > TickDt * MaxStepsPerFrame) _accumulator = TickDt * MaxStepsPerFrame;
 
             ActualizarResalte();
+
+            // Contrato §1.5: sondeo de proximidad+material cada ~0.25s (acumulador
+            // propio de AffordanceGlow, ver MaquinariaSprites.cs) -- NUNCA por frame.
+            _glowEmbudo.Sondear(Time.deltaTime, _centroCubeta, _player, _flask, _sirveEmbudo);
+            _glowBrasero.Sondear(Time.deltaTime, _centroTolva, _player, _flask, _sirveBrasero);
+            if (_afordanceEmbudo != null) _afordanceEmbudo.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, _glowEmbudo.Alfa);
+            if (_afordanceBrasero != null) _afordanceBrasero.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, _glowBrasero.Alfa);
+
+            AnimarHumo(); // contrato §1.4: bocanadas SOLO mientras arde combustible.
+        }
+
+        /// <summary>Contrato §1.4: la CHIMENEA suelta bocanadas de humo SOLO cuando el Crisol quema combustible (el estado del aparato, contado por el cuerpo, no por texto). Tres volutas en fases distintas de un ciclo de <see cref="HumoCicloSeg"/>, cada una sube y se desvanece -- pura aritmética sobre Time.time, cero allocs (los SpriteRenderer ya existen, solo se les mueve la posición/alfa).</summary>
+        private void AnimarHumo()
+        {
+            bool ardiendo = _fuelMatActivo != MaterialId.Empty;
+            for (int i = 0; i < HumoPuffs; i++)
+            {
+                var sr = _humo[i];
+                if (sr == null) continue;
+                if (!ardiendo) { sr.color = new Color(sr.color.r, sr.color.g, sr.color.b, 0f); continue; }
+
+                float fase = Mathf.Repeat(Time.time / HumoCicloSeg + (i / (float)HumoPuffs), 1f);
+                float subida = fase * (SimRenderer.CellWorldSize * 6f);
+                float deriva = Mathf.Sin(fase * Mathf.PI * 2f + i) * (SimRenderer.CellWorldSize * 0.6f);
+                float escala = 0.6f + fase * 1.1f; // la voluta crece al subir.
+                float alfa = (1f - fase) * 0.75f; // se desvanece al alejarse.
+
+                sr.transform.position = _humoOrigen + new Vector3(deriva, subida, 0f);
+                sr.transform.localScale = Vector3.one * escala * (SimRenderer.CellWorldSize * 3f) / sr.sprite.rect.width;
+                sr.color = new Color(210f / 255f, 205f / 255f, 200f / 255f, alfa);
+            }
         }
 
         private bool EstaEnfocada() => MachineFocus.EsFoco(this, _player);
@@ -539,10 +703,15 @@ namespace Alkahest.Game
         }
 
         // -----------------------------------------------------------------
-        // VISUAL: chasis + resistencias de HeatPlate REUTILIZADOS (ver
-        // DECISIÓN de sprites en el doc de la clase), un juego para la cubeta
-        // y otro más pequeño para la tolva. Tintados de mineral/carboncillo
-        // en vez del naranja de la placa para leerse como mampostería.
+        // VISUAL (playtest 26, contrato §1 — LA GRAMÁTICA): la cubeta lleva
+        // EMBUDO (§1.1, boca de materia) + MARCO (§1.3, "aquí queda el
+        // resultado") + CHIMENEA con HUMO (§1.4, el verbo en el cuerpo); la
+        // tolva deja el chasis de HeatPlate por BRASERO (§1.2, "otra forma,
+        // otra altura, otro color" — jamás se confunde con un embudo). Las
+        // resistencias (rescoldo/brasas) SIGUEN reutilizando
+        // ResistenciasPlaca — el brillo cálido animado que ya funcionaba,
+        // solo que ahora asoma dentro de la silueta de cesto en vez de la
+        // placa rectangular.
         // -----------------------------------------------------------------
         private void BuildVisual()
         {
@@ -551,27 +720,60 @@ namespace Alkahest.Game
             int spanCubeta = _cubX1 - _cubX0 + 1;
             float anchoCubeta = spanCubeta * celda;
             float altoCubeta = (CubetaAlto + 1) * celda; // + el muro/suelo de 1 celda.
-            Vector3 centroCubeta = new Vector3((_cubX0 + spanCubeta * 0.5f) * celda, (_baseY + (CubetaAlto + 1) * 0.5f) * celda, 0f);
 
             int spanTolva = _tolX1 - _tolX0 + 1;
             float anchoTolva = spanTolva * celda;
             float altoTolva = (TolvaAlto + 1) * celda;
-            Vector3 centroTolva = new Vector3((_tolX0 + spanTolva * 0.5f) * celda, (_baseY + (TolvaAlto + 1) * 0.5f) * celda, 0f);
 
             var cubetaGo = new GameObject("CrisolCubetaChasis");
             cubetaGo.transform.SetParent(transform, false);
-            cubetaGo.transform.position = centroCubeta;
+            cubetaGo.transform.position = _centroCubeta;
             _resalte = MaquinariaSprites.CrearCapa(cubetaGo.transform, "Resalte", MaquinariaSprites.ChasisPlaca(spanCubeta), 16,
                 anchoCubeta * 1.15f, altoCubeta * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
+            // Affordance glow del embudo (§1.5): halo MÁS GRANDE que el resalte de
+            // foco y detrás de él (orden 14 < 16), tintado de UiStyles.Exito -- dos
+            // señales distintas, dos anillos concéntricos distintos.
+            _afordanceEmbudo = MaquinariaSprites.CrearCapa(cubetaGo.transform, "AfordanceEmbudo", MaquinariaSprites.Embudo(spanCubeta), 14,
+                anchoCubeta * 1.4f, altoCubeta * 1.6f);
+            _afordanceEmbudo.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, 0f);
             MaquinariaSprites.CrearCapa(cubetaGo.transform, "Chasis", MaquinariaSprites.ChasisPlaca(spanCubeta), 18, anchoCubeta, altoCubeta);
             _resistenciasCubeta = MaquinariaSprites.CrearCapa(cubetaGo.transform, "Rescoldo", MaquinariaSprites.ResistenciasPlaca(spanCubeta), 19,
                 anchoCubeta, altoCubeta);
+            // Marco de latón (§1.3, "cubeta enmarcada"): overlay por encima del
+            // chasis, sin cubrir el interior (transparente salvo el borde).
+            MaquinariaSprites.CrearCapa(cubetaGo.transform, "MarcoCubeta", MaquinariaSprites.MarcoContenedor(spanCubeta), 21, anchoCubeta, altoCubeta);
+            // Embudo funcional (§1.1): montado ARRIBA de la cámara de trabajo.
+            var embudoGo = new GameObject("Embudo");
+            embudoGo.transform.SetParent(cubetaGo.transform, false);
+            embudoGo.transform.localPosition = new Vector3(0f, altoCubeta * 0.5f + celda * 1.2f, 0f);
+            MaquinariaSprites.CrearCapa(embudoGo.transform, "Sprite", MaquinariaSprites.Embudo(spanCubeta), 20, anchoCubeta * 0.8f, celda * 2.4f);
+
+            // Chimenea (§1.4): tubo montado sobre el hombro derecho del chasis de
+            // la cubeta, con las bocanadas de humo saliendo por su boca.
+            var chimeneaGo = new GameObject("Chimenea");
+            chimeneaGo.transform.SetParent(cubetaGo.transform, false);
+            float chimeneaOffsetX = anchoCubeta * 0.32f;
+            float chimeneaAlto = celda * 3.2f;
+            chimeneaGo.transform.localPosition = new Vector3(chimeneaOffsetX, altoCubeta * 0.5f + chimeneaAlto * 0.5f, 0f);
+            MaquinariaSprites.CrearCapa(chimeneaGo.transform, "Sprite", MaquinariaSprites.Chimenea(2), 22, celda * 1.4f, chimeneaAlto);
+            _humoOrigen = _centroCubeta + new Vector3(chimeneaOffsetX, altoCubeta * 0.5f + chimeneaAlto, 0f);
+            for (int i = 0; i < HumoPuffs; i++)
+            {
+                var humoGo = new GameObject("Humo" + i);
+                humoGo.transform.SetParent(transform, false); // fuera de cubetaGo: AnimarHumo mueve su POSICIÓN MUNDO directamente cada frame.
+                var sr = MaquinariaSprites.CrearCapa(humoGo.transform, "Sprite", MaquinariaSprites.Humo(), 23, celda * 1.8f, celda * 1.8f);
+                sr.color = new Color(0.82f, 0.80f, 0.78f, 0f);
+                _humo[i] = sr;
+            }
 
             var tolvaGo = new GameObject("CrisolTolvaChasis");
             tolvaGo.transform.SetParent(transform, false);
-            tolvaGo.transform.position = centroTolva;
-            MaquinariaSprites.CrearCapa(tolvaGo.transform, "Chasis", MaquinariaSprites.ChasisPlaca(spanTolva), 18, anchoTolva, altoTolva);
+            tolvaGo.transform.position = _centroTolva;
+            _afordanceBrasero = MaquinariaSprites.CrearCapa(tolvaGo.transform, "AfordanceBrasero", MaquinariaSprites.Brasero(spanTolva), 14,
+                anchoTolva * 1.4f, altoTolva * 1.6f);
+            _afordanceBrasero.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, 0f);
+            MaquinariaSprites.CrearCapa(tolvaGo.transform, "Chasis", MaquinariaSprites.Brasero(spanTolva), 18, anchoTolva, altoTolva);
             _resistenciasTolva = MaquinariaSprites.CrearCapa(tolvaGo.transform, "Brasas", MaquinariaSprites.ResistenciasPlaca(spanTolva), 19,
                 anchoTolva, altoTolva);
         }

@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &160947490
+--- !u!1 &803297123
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,9 +127,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 160947493}
-  - component: {fileID: 160947492}
-  - component: {fileID: 160947491}
+  - component: {fileID: 803297126}
+  - component: {fileID: 803297125}
+  - component: {fileID: 803297124}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -137,21 +137,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &160947491
+--- !u!81 &803297124
 AudioListener:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 160947490}
+  m_GameObject: {fileID: 803297123}
   m_Enabled: 1
---- !u!20 &160947492
+--- !u!20 &803297125
 Camera:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 160947490}
+  m_GameObject: {fileID: 803297123}
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
@@ -196,13 +196,13 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!4 &160947493
+--- !u!4 &803297126
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 160947490}
+  m_GameObject: {fileID: 803297123}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 38.4, y: 14.400001, z: -10}
@@ -211,7 +211,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1683168091
+--- !u!1 &965658278
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -219,11 +219,11 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1683168096}
-  - component: {fileID: 1683168095}
-  - component: {fileID: 1683168094}
-  - component: {fileID: 1683168093}
-  - component: {fileID: 1683168092}
+  - component: {fileID: 965658283}
+  - component: {fileID: 965658282}
+  - component: {fileID: 965658281}
+  - component: {fileID: 965658280}
+  - component: {fileID: 965658279}
   m_Layer: 0
   m_Name: Alkahest
   m_TagString: Untagged
@@ -231,62 +231,62 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1683168092
+--- !u!114 &965658279
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1683168091}
+  m_GameObject: {fileID: 965658278}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 31ec692aa47fa9c45a4ca1034bb3fa30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Game.AlkahestGameBootstrap
---- !u!114 &1683168093
+--- !u!114 &965658280
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1683168091}
+  m_GameObject: {fileID: 965658278}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b3087459c7466c74fb0c26465183cf1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Dev.DevPalette
---- !u!114 &1683168094
+--- !u!114 &965658281
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1683168091}
+  m_GameObject: {fileID: 965658278}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3294a9d855f210444805917cfa0f5c8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.AlkahestSim
   seed: 0
---- !u!114 &1683168095
+--- !u!114 &965658282
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1683168091}
+  m_GameObject: {fileID: 965658278}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b2867a3157fa38d47aab9c15f4012d94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Sim.SimRenderer
---- !u!4 &1683168096
+--- !u!4 &965658283
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1683168091}
+  m_GameObject: {fileID: 965658278}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -299,5 +299,5 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 160947493}
-  - {fileID: 1683168096}
+  - {fileID: 803297126}
+  - {fileID: 965658283}

@@ -124,7 +124,25 @@ namespace Alkahest.Game
         /// color cuelga en aire libre, dentro de la pila de recogida
         /// (interior x 9..56). Antes eran 3 y el caño quedaba lamiendo la piedra.
         /// </summary>
-        private const int SpoutOffsetCells = 5;
+        // (playtest 26, fix integración) De const a INSTANCIA: los dos caños del
+        // laboratorio comparten pared (CanoMontajeX) y con un alcance único los
+        // dos chorros caían por la MISMA columna de celdas -- el limo desembocaba
+        // en la pila del agua, justo la ilegibilidad que esta ronda combate. El
+        // caño de limo pide ahora un voladizo más largo por Init y su chorro cae
+        // sobre SU pila. El default 5 conserva a todos los demás grifos idénticos.
+        private int _spoutOffsetCells = 5;
+        private const int SpoutOffsetCellsDefault = 5;
+
+        // (playtest 26, LA RACIÓN) Con la línea del taller, el chorro cae a
+        // SUELO ABIERTO y no a una cuba honda: 20 segundos de grifo abierto
+        // inundaban el laboratorio entero (visto en la verificación con
+        // capturas de esta misma ronda). Un grifo del laboratorio sirve ahora
+        // una RACIÓN por apertura (~una pila colmada) y se cierra solo, con su
+        // rótulo diciéndolo -- abrirlo otra vez sirve otra ración. racion=0
+        // (default) = comportamiento clásico infinito: los grifos del taller
+        // clásico y los versátiles no cambian en nada.
+        private int _racionCeldas;
+        private int _emitidasEstaApertura;
         /// <summary>Filas que baja el caudal respecto a la celda de anclaje: la boquilla dibujada cuelga por debajo del eje del caño, y el chorro tiene que nacer DE ELLA.</summary>
         private const int SpoutDropCells = 2;
         private const float InsufficientFavorFlashSeconds = 1.5f;
@@ -192,6 +210,8 @@ namespace Alkahest.Game
         // dentro de OnGUI: cero asignaciones de string por frame.
         private string _chapaCerrado;   // "AGUA" o "ACEITE  3★" - chapa permanente en reposo.
         private string _chapaAbierto;   // "AGUA · abierto" - chapa permanente, grifo ON.
+        private string _chapaServido;   // (playtest 26, LA RACIÓN) "AGUA · servido - E para más": unos segundos tras el autocierre por ración.
+        private float _servidoTimer;    // segundos restantes mostrando _chapaServido.
         private string _chapaRebosando; // "AGUA · rebosa" - chapa permanente, rebosando.
         private string _promptAbrir;    // "E — abrir" o "E — abrir (N Favor)".
         private int _lastNamingVersion = -1;
@@ -225,7 +245,7 @@ namespace Alkahest.Game
         /// mountCellX/mountCellY (que Init nunca almacenaba, ver el survey de
         /// este encargo).
         /// </summary>
-        public Vector2Int AnclaCelda => new Vector2Int(_spoutX - SpoutOffsetCells, _spoutY + SpoutDropCells);
+        public Vector2Int AnclaCelda => new Vector2Int(_spoutX - _spoutOffsetCells, _spoutY + SpoutDropCells);
 
         /// <summary>
         /// ¿Cabría el grifo en esa celda de montaje sin que la boquilla, el
@@ -238,7 +258,7 @@ namespace Alkahest.Game
         /// </summary>
         public bool CabeEnAncla(Vector2Int anclaCelda)
         {
-            int spoutX = anclaCelda.x + SpoutOffsetCells;
+            int spoutX = anclaCelda.x + _spoutOffsetCells;
             int spoutY = anclaCelda.y - SpoutDropCells;
             int izq = anclaCelda.x - 1;                                  // brida en voladizo hacia el mount.
             int der = spoutX + SpoutRadius + 1;                          // boquilla + radio de emisión.
@@ -250,11 +270,15 @@ namespace Alkahest.Game
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Transform player, int mountCellX, int mountCellY, byte materialId,
-            OrderSystem orderSystem = null, int favorCost = 0, bool bloqueado = false)
+            OrderSystem orderSystem = null, int favorCost = 0, bool bloqueado = false, int spoutOffsetCells = SpoutOffsetCellsDefault,
+            int racionCeldas = 0)
         {
+            _racionCeldas = racionCeldas;
+            _emitidasEstaApertura = 0;
             _sim = sim;
             _player = player;
-            _spoutX = mountCellX + SpoutOffsetCells;
+            _spoutOffsetCells = spoutOffsetCells;
+            _spoutX = mountCellX + _spoutOffsetCells;
             _spoutY = mountCellY - SpoutDropCells;
             _matId = materialId;
             _orderSystem = orderSystem;
@@ -289,7 +313,7 @@ namespace Alkahest.Game
         /// </summary>
         public void Reposicionar(Vector2Int anclaCelda)
         {
-            _spoutX = anclaCelda.x + SpoutOffsetCells;
+            _spoutX = anclaCelda.x + _spoutOffsetCells;
             _spoutY = anclaCelda.y - SpoutDropCells;
             transform.position = _sim.CellToWorld(anclaCelda);
 
@@ -333,9 +357,14 @@ namespace Alkahest.Game
             // EN VOLADIZO: la brida muerde el pilar en la celda 8 y la boquilla
             // llega hasta la 15, con el caudal cayendo desde la 13.
             float celda = SimRenderer.CellWorldSize;
+            // (playtest 26) El voladizo visual CRECE con el alcance real: un caño
+            // con _spoutOffsetCells=12 estira su tubo (el sprite es procedural,
+            // estirarlo alarga el tramo recto) y desplaza su centro, de modo que
+            // la boquilla dibujada queda SIEMPRE sobre la columna real del chorro.
+            float extra = (_spoutOffsetCells - SpoutOffsetCellsDefault) * celda;
             _cano = MaquinariaSprites.CrearCapa(transform, "Cano", MaquinariaSprites.CanoGrifo(), 19,
-                8f * celda, 5f * celda);
-            _cano.transform.localPosition = new Vector3(2.5f * celda, 0f, 0f);
+                8f * celda + extra, 5f * celda);
+            _cano.transform.localPosition = new Vector3(2.5f * celda + extra * 0.5f, 0f, 0f);
 
             // (restaurado playtest 7) HALO de resalte: la misma silueta del
             // caño, ~1.22x más grande y DETRÁS de todo (sortingOrder 15 < 19 del
@@ -346,7 +375,7 @@ namespace Alkahest.Game
             // "E — ..." permanente (que "estorba" según el jugador) como señal
             // de "estás lo bastante cerca para actuar aquí".
             _halo = MaquinariaSprites.CrearCapa(transform, "Halo", MaquinariaSprites.CanoGrifo(), 15,
-                8f * celda * 1.22f, 5f * celda * 1.22f);
+                (8f * celda + extra) * 1.22f, 5f * celda * 1.22f);
             _halo.transform.localPosition = _cano.transform.localPosition;
             _halo.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
@@ -356,7 +385,7 @@ namespace Alkahest.Game
             gotaGO.transform.SetParent(transform, false);
             // La gota cuelga justo bajo la boquilla, en aire libre: es la marca
             // de color que dice QUÉ da este grifo desde el otro lado del taller.
-            gotaGO.transform.localPosition = new Vector3(SpoutOffsetCells * celda, -3.2f * celda, 0f);
+            gotaGO.transform.localPosition = new Vector3(_spoutOffsetCells * celda, -3.2f * celda, 0f);
             _gotaTr = gotaGO.transform;
             _gota = gotaGO.AddComponent<SpriteRenderer>();
             _gota.sprite = MaquinariaSprites.Solido();
@@ -398,6 +427,7 @@ namespace Alkahest.Game
             string sufijoCoste = favorCostPerActivation > 0 ? $"  {favorCostPerActivation}★" : "";
             _chapaCerrado = nombreCorto + sufijoCoste;
             _chapaAbierto = nombreCorto + " · abierto";
+            _chapaServido = nombreCorto + " · servido — E para más"; // (playtest 26, LA RACIÓN)
             _chapaRebosando = nombreCorto + " · rebosa";
             _promptAbrir = favorCostPerActivation > 0 ? $"E — abrir ({favorCostPerActivation} Favor)" : "E — abrir";
             if (_knowledge != null) _lastNamingVersion = _knowledge.NamingVersion;
@@ -448,6 +478,8 @@ namespace Alkahest.Game
         {
             if (_sim == null || _sim.Grid == null) return;
             if (DayCycle.InputLocked) return; // M4: título/intro/fin de día/pantalla final congelan el grifo.
+
+            if (_servidoTimer > 0f) _servidoTimer -= Time.deltaTime; // (playtest 26, LA RACIÓN) la chapa "servido" caduca sola.
 
             // Regla 13: el jugador puede bautizar un innominado a mitad de
             // partida y la chapa de este grifo tiene que reflejarlo. Compara un
@@ -525,6 +557,7 @@ namespace Alkahest.Game
             if (TryPayActivationCost())
             {
                 _on = true;
+                _emitidasEstaApertura = 0; // (playtest 26, LA RACIÓN) ración nueva por apertura -- ver el docblock de _racionCeldas.
                 MachineFocus.RegistrarUsoE();
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> ON (coste {favorCostPerActivation} Favor).");
             }
@@ -583,7 +616,18 @@ namespace Alkahest.Game
                     // que nacer a una temperatura donde ese material sea ESTABLE.
                     _sim.PaintStable(x, y, 0, _matId);
                     budget--;
+                    _emitidasEstaApertura++;
                 }
+            }
+
+            // (playtest 26, LA RACIÓN) servida la ración, el grifo se cierra
+            // solo. El contador se rearma al ABRIR (ver donde _on pasa a true),
+            // no aquí: así "cerrar a mano a mitad de ración" no regala ración
+            // extra al reabrir a medias.
+            if (_racionCeldas > 0 && _emitidasEstaApertura >= _racionCeldas)
+            {
+                _on = false;
+                _servidoTimer = 5f; // la chapa explica el autocierre -- sin esto parece un grifo roto (regla 43: un estado sin rótulo es indistinguible de un bug).
             }
 
             if (budget < EmitRatePerTick)
@@ -668,7 +712,7 @@ namespace Alkahest.Game
             }
             else
             {
-                texto = _chapaCerrado;
+                texto = _servidoTimer > 0f ? _chapaServido : _chapaCerrado;
                 color = UiStyles.TextoTenue;
                 alfa = 0.45f + 0.55f * cercania;
             }

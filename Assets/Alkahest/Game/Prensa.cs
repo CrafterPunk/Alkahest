@@ -28,6 +28,26 @@ namespace Alkahest.Game
     /// Prensa talla su propio recinto de Piedra de 1 celda de grosor alrededor
     /// del lecho vía <see cref="AlkahestSim.PaintStable"/> para que lo vertido
     /// no se derrame por el suelo abierto del cuarto.
+    ///
+    /// -----------------------------------------------------------------------
+    /// PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md, encargo M)
+    /// -----------------------------------------------------------------------
+    /// (1) La mampostería YA NO se talla en Init() (regla 15 de CLAUDE.md,
+    ///     regla 47: SimLevelBuilder pasa a tallar TODA la mampostería del
+    ///     plano). <see cref="TallarLecho"/> sigue viva para Reposicionar
+    ///     (Mudanza, runtime); <see cref="TallarEnPlano"/> (estático, sobre
+    ///     CellGrid directo) es la que llama Sim/SimLevelBuilder.cs al
+    ///     construir el nivel -- mismo criterio que Game/Crisol.cs, ver su
+    ///     docblock para el porqué de los dos caminos.
+    /// (2) Gramática visual (§1): el lecho gana un
+    ///     <see cref="MaquinariaSprites.Embudo"/> (§1.1, "toda boca que
+    ///     recibe materia del frasco"), un
+    ///     <see cref="MaquinariaSprites.MarcoContenedor"/> (§1.3) y un
+    ///     <see cref="MaquinariaSprites.Husillo"/> montado sobre la
+    ///     mandíbula (§1.4: "nadie ha dudado jamás de qué hace un tornillo de
+    ///     banco"). El AFFORDANCE GLOW (§1.5, "Lecho de la Prensa:
+    ///     Universe.Prensa(M) es Compactar o Reventar") usa el helper único
+    ///     <see cref="MaquinariaSprites.AffordanceGlow"/>.
     /// </summary>
     public sealed class Prensa : MonoBehaviour, IMaquinaInteractiva, IMovible
     {
@@ -35,10 +55,12 @@ namespace Alkahest.Game
 
         private const float ProximityRange = 3.2f;
 
-        // Contrato §5.2: "lecho (~5x3)".
-        private const int LechoAncho = 5;
-        private const int LechoAlto = 3;
-        private const int MuroGrosor = 1;
+        // Contrato §5.2: "lecho (~5x3)". (playtest 26) De privadas a PÚBLICAS:
+        // SimLevelBuilder las lee para tallar la misma geometría en el plano
+        // (ver TallarEnPlano más abajo).
+        public const int LechoAncho = 5;
+        public const int LechoAlto = 3;
+        public const int MuroGrosor = 1;
 
         // Contrato §5.2: "anim 0.5s", "cooldown ~2s con la mandíbula arriba de nuevo".
         private const float PressDuration = 0.5f;
@@ -65,6 +87,12 @@ namespace Alkahest.Game
 
         private SpriteRenderer _resalte;
         private float _alfaResalte;
+
+        // ---- Playtest 26 (contrato §1): gramática visual + affordance glow ----
+        private Flask _flask; // solo lectura (contrato: "sin tocar Flask.cs").
+        private MaquinariaSprites.AffordanceGlow _glowLecho = new MaquinariaSprites.AffordanceGlow();
+        private System.Func<byte, bool> _sirveLecho;
+        private SpriteRenderer _afordanceLecho;
 
         private const float RangoEstadoPleno = 5.0f;
         private const float RangoEstadoDesvanece = 6.5f;
@@ -97,14 +125,26 @@ namespace Alkahest.Game
             _player = player;
             _anchorX = anchorX;
             _baseY = SimLevelBuilder.CuartoY0 + 2; // contrato §4.5.
+            _flask = player != null ? player.GetComponent<Flask>() : null;
+            _sirveLecho = MaterialSirveLecho;
 
             RecalcularRegion();
-            TallarLecho();
+            // (playtest 26) YA NO se talla aquí -- SimLevelBuilder.BuildCuartoIntimo
+            // llama a TallarEnPlano con esta misma anchorX/baseY. TallarLecho()
+            // sigue viva SOLO para Reposicionar (Mudanza), ver el docblock de la clase.
             BuildVisual();
             PosicionarMandibula(1f); // arranca arriba del todo.
 
             MachineFocus.Registrar(this);
             Mudanza.RegistrarMovible(this);
+        }
+
+        /// <summary>Contrato §1.5: "Lecho de la Prensa: Universe.Prensa(M) es Compactar o Reventar".</summary>
+        private bool MaterialSirveLecho(byte mat)
+        {
+            if (_sim?.Universe == null) return false;
+            var resp = _sim.Universe.Prensa(mat);
+            return resp == RespuestaPrensa.Compactar || resp == RespuestaPrensa.Reventar;
         }
 
         private void RecalcularRegion()
@@ -121,7 +161,7 @@ namespace Alkahest.Game
             transform.position = _centro;
         }
 
-        /// <summary>Muros de Piedra de 1 celda + suelo alrededor del lecho, interior vaciado (ver DECISIÓN en el doc de la clase).</summary>
+        /// <summary>Muros de Piedra de 1 celda + suelo alrededor del lecho, interior vaciado EN CALIENTE (ver DECISIÓN en el doc de la clase). Solo la llama ya <see cref="Reposicionar"/> (Mudanza) -- Init ya NO la llama, ver el docblock de la clase.</summary>
         private void TallarLecho()
         {
             for (int x = _lechoX0 - MuroGrosor; x <= _lechoX1 + MuroGrosor; x++)
@@ -134,6 +174,32 @@ namespace Alkahest.Game
                 _sim.PaintStable(_lechoX1 + MuroGrosor, y, 0, MaterialId.Stone);
             }
             _sim.PaintRect(_lechoX0, _lechoY0, LechoAncho, LechoAlto, MaterialId.Empty);
+        }
+
+        /// <summary>
+        /// (playtest 26) Talla el lecho de la Prensa DIRECTAMENTE sobre el
+        /// CellGrid del plano -- llamado por Sim/SimLevelBuilder.cs al
+        /// construir el nivel (construcción, no PaintStable/regla 29, que es
+        /// para runtime). Misma geometría EXACTA que <see cref="TallarLecho"/>
+        /// de instancia.
+        /// </summary>
+        public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
+        {
+            int lechoX0 = anchorX - LechoAncho / 2;
+            int lechoX1 = lechoX0 + LechoAncho - 1;
+            int lechoY0 = baseY + 1;
+            int lechoY1 = lechoY0 + LechoAlto - 1;
+
+            for (int x = lechoX0 - MuroGrosor; x <= lechoX1 + MuroGrosor; x++)
+                if (CellGrid.InBounds(x, lechoY0 - 1)) grid.SetCell(x, lechoY0 - 1, MaterialId.Stone);
+            for (int y = lechoY0 - 1; y <= lechoY1; y++)
+            {
+                if (CellGrid.InBounds(lechoX0 - MuroGrosor, y)) grid.SetCell(lechoX0 - MuroGrosor, y, MaterialId.Stone);
+                if (CellGrid.InBounds(lechoX1 + MuroGrosor, y)) grid.SetCell(lechoX1 + MuroGrosor, y, MaterialId.Stone);
+            }
+            for (int y = lechoY0; y <= lechoY1; y++)
+                for (int x = lechoX0; x <= lechoX1; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
         }
 
         private void OnDestroy()
@@ -183,6 +249,10 @@ namespace Alkahest.Game
 
             PosicionarMandibula(EstadoFraccion());
             ActualizarResalte();
+
+            // Contrato §1.5: sondeo cada ~0.25s (acumulador propio de AffordanceGlow).
+            _glowLecho.Sondear(Time.deltaTime, _centro, _player, _flask, _sirveLecho);
+            if (_afordanceLecho != null) _afordanceLecho.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, _glowLecho.Alfa);
         }
 
         /// <summary>Fracción 0(abajo)..1(arriba) de la mandíbula para el frame actual, según el estado.</summary>
@@ -339,8 +409,11 @@ namespace Alkahest.Game
         }
 
         // -----------------------------------------------------------------
-        // VISUAL: marco (ChasisPlaca) + mandíbula (ChasisPlaca tintada, anima
-        // su posición Y) -- ver DECISIÓN de sprites en el doc de la clase.
+        // VISUAL (playtest 26, contrato §1): marco (ChasisPlaca) + mandíbula
+        // (ChasisPlaca tintada, anima su posición Y) -- ver DECISIÓN de
+        // sprites en el doc de la clase. Nuevo esta ronda: EMBUDO arriba
+        // (§1.1), MARCO de latón sobre el lecho (§1.3), HUSILLO estático
+        // sobre la mandíbula (§1.4) y el halo de affordance (§1.5).
         // -----------------------------------------------------------------
         private void BuildVisual()
         {
@@ -357,7 +430,14 @@ namespace Alkahest.Game
                 ancho * 1.15f, altoMarco * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
+            // Affordance glow del lecho (§1.5): halo MÁS GRANDE, detrás (orden 14).
+            _afordanceLecho = MaquinariaSprites.CrearCapa(marcoGo.transform, "AfordanceLecho", MaquinariaSprites.Embudo(span), 14,
+                ancho * 1.4f, altoMarco * 1.7f);
+            _afordanceLecho.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, 0f);
+
             MaquinariaSprites.CrearCapa(marcoGo.transform, "Marco", MaquinariaSprites.ChasisPlaca(span), 18, ancho, altoMarco);
+            // Marco de latón (§1.3, "cubeta enmarcada"): también aplica al lecho -- es un recipiente de trabajo como cualquier otro.
+            MaquinariaSprites.CrearCapa(marcoGo.transform, "MarcoLaton", MaquinariaSprites.MarcoContenedor(span), 17, ancho, altoMarco);
 
             float altoMandibula = MuroGrosor * 2 * celda;
             _mandibulaArribaPos = _centro + new Vector3(0f, altoMarco * 0.5f + altoMandibula, 0f);
@@ -369,6 +449,24 @@ namespace Alkahest.Game
             _mandibulaSr = MaquinariaSprites.CrearCapa(mandibulaGo.transform, "Mandibula", MaquinariaSprites.ChasisPlaca(span), 20,
                 ancho, altoMandibula);
             _mandibulaSr.color = new Color(0.20f, 0.16f, 0.16f, 1f); // más oscura que el marco: la pieza que golpea.
+
+            // Husillo (§1.4): vástago roscado estático sobre la posición de
+            // reposo de la mandíbula -- "nadie ha dudado jamás de qué hace un
+            // tornillo de banco" (contrato). No se anima: la pieza que se
+            // mueve es la mandíbula, colgada de él.
+            float husilloAlto = celda * 3f;
+            var husilloGo = new GameObject("Husillo");
+            husilloGo.transform.SetParent(transform, false);
+            husilloGo.transform.position = _mandibulaArribaPos + new Vector3(0f, altoMandibula * 0.5f + husilloAlto * 0.5f, 0f);
+            MaquinariaSprites.CrearCapa(husilloGo.transform, "Sprite", MaquinariaSprites.Husillo(span), 15, celda * 1.2f, husilloAlto);
+
+            // Embudo (§1.1): montado en lo más alto, sobre el husillo -- la
+            // materia entra por arriba, cae al lecho, la mandíbula la prensa.
+            float embudoAlto = celda * 2.2f;
+            var embudoGo = new GameObject("Embudo");
+            embudoGo.transform.SetParent(transform, false);
+            embudoGo.transform.position = husilloGo.transform.position + new Vector3(0f, husilloAlto * 0.5f + embudoAlto * 0.5f, 0f);
+            MaquinariaSprites.CrearCapa(embudoGo.transform, "Sprite", MaquinariaSprites.Embudo(span), 21, ancho * 0.7f, embudoAlto);
         }
 
         private void PosicionarMandibula(float fraccionArriba)

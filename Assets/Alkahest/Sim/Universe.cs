@@ -761,8 +761,16 @@ namespace Alkahest.Sim
                 // la regla 17 de CLAUDE.md que ya vale para el vocabulario del
                 // taller (contrato sección 4.1) -- por eso NO entra en
                 // UnnamedMaterialIds/SortearFirmasVisuales.
-                baseColor = new Color32(94, 86, 72, 255),
-                colorJitter = 12,
+                // (playtest 26, fix con capturas) Antes (94,86,72), un pardo
+                // neutro que A ESCALA DE JUEGO se confundía con la piedra: en
+                // la verificación visual de esta ronda un lago entero de limo
+                // se leía como suelo de roca. Ahora un VERDE OLIVA turbio,
+                // inconfundible con la piedra gris y con cualquier líquido del
+                // vocabulario (agua azul, aceite negro-pardo) -- sigue siendo
+                // "turbio y humilde" (es barro primigenio, no una gema) pero
+                // se reconoce de un vistazo, que es su único trabajo.
+                baseColor = new Color32(88, 96, 52, 255),
+                colorJitter = 16,
                 // Densidad entre agua y aceite (contrato 4.1): la media de
                 // liquidDensity[Water]/[Oil], ya sorteadas arriba -- así el
                 // limo estratifica de forma legible frente a los dos líquidos

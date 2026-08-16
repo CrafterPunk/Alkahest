@@ -1,5 +1,12 @@
 // (playtest 17) `using System;` retirado: lo único que lo necesitaba era el
 // `Math.Round` de los degradados de clima, que ya no existen.
+//
+// (playtest 26) `using Alkahest.Game;`: mismo patrón ya establecido por
+// Sim/SimRenderer.cs (que ya depende de Game/UiStyles y Game/JournalHud) --
+// SimLevelBuilder llama a los `TallarEnPlano` estáticos de Crisol/Prensa/
+// BancoChispa/EnsayoMaestro (regla 47 de CLAUDE.md: SimLevelBuilder talla
+// TODA la mampostería del plano, ver el bloque "PLAYTEST 26" más abajo).
+using Alkahest.Game;
 
 namespace Alkahest.Sim
 {
@@ -839,7 +846,11 @@ namespace Alkahest.Sim
         /// ((CuartoX0+CuartoX1)/2, (CuartoY0+CuartoY1)/2) = (302, 188), a una
         /// celda del punto histórico x≈303/y≈189 donde nacía el aprendiz en
         /// el plano viejo -- a propósito, para no pelearse con la cámara ni
-        /// el encuadre.
+        /// el encuadre. (playtest 26: `CuartoX0` bajó a 232, así que el
+        /// centro geométrico REAL hoy es (294.5, 188), no (302, 188) -- esta
+        /// cifra queda como registro histórico de por qué se eligió
+        /// `AprendizX`/`AprendizY` en su momento, no como valor vigente; ver
+        /// las constantes mismas, sin cambios, para la posición real.)
         ///
         /// ALTURA REDUCIDA (2ª ronda de integración, "AJUSTE COMPOSICIÓN"):
         /// 70 celdas de alto con todo el contenido viviendo en las ~20
@@ -852,8 +863,25 @@ namespace Alkahest.Sim
         /// arriba) sin que la mitad del encuadre sea negro. El ANCHO (110)
         /// no se toca -- Cesar lo confirmó explícitamente correcto.
         /// </summary>
-        public const int CuartoX0 = 248;
-        public const int CuartoX1 = 357; // ancho 110, sin cambios
+        /// <summary>
+        /// PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md §2, "LA LÍNEA DEL TALLER"):
+        /// 248 -&gt; 232. Cesar, playtest 25: *"si se ocupa más espacio no pasa
+        /// nada"* -- el cuarto CRECE hacia la IZQUIERDA (ancho 110 -&gt; 126)
+        /// para caber la línea completa de cinco estaciones + las dos pilas
+        /// de recogida sin apretar. <see cref="CuartoX1"/> NO se toca (357):
+        /// 357-232+1=126, la aritmética cuadra sola, así que todo lo anclado
+        /// al lado DERECHO del cuarto (Columna/Ensayo/pasillo/Tolva, ninguno
+        /// tocado por este playtest) queda exactamente donde estaba. Lo único
+        /// que se desplaza es <see cref="CanoMontajeX"/> (`= CuartoX0`, los
+        /// caños se mueven con la pared -- CORRECTO Y DESEADO, contrato:
+        /// "verifica que el spawn del aprendiz y el pasillo a la Tolva siguen
+        /// sanos"): comprobado, <see cref="AprendizX"/>=290 y
+        /// <see cref="CarvePasilloTolva"/> (que arranca en `CuartoX1+1`, no en
+        /// `CuartoX0`) no dependen de este valor, así que ninguno de los dos
+        /// se mueve ni un píxel.
+        /// </summary>
+        public const int CuartoX0 = 232;
+        public const int CuartoX1 = 357; // ancho 126 (antes 110), sin cambios de valor -- ver el porqué arriba.
         public const int CuartoY0 = 168; // (2ª ronda) antes 154
         public const int CuartoY1 = 209; // (2ª ronda) antes 223; alto 42, antes 70
 
@@ -957,11 +985,63 @@ namespace Alkahest.Sim
         // x = CanoMontajeX + Dispenser.SpoutOffsetCells = 253, y el interior de
         // la cubeta es 253..260 (X0+WallThickness .. X0+Width-WallThickness-1),
         // así que el chorro entra por la primera columna útil.
+        //
+        // (playtest 26, RETIRADO -- ver PILAS DE RECOGIDA más abajo) El
+        // contrato §2 pide DOS pilas nombradas, una por caño ("cada uno
+        // vierte SOBRE SU PILA"), en vez de una única cubeta compartida.
+        // `PlaceCharco` (más abajo en el archivo) se CONSERVA sin llamantes
+        // (regla 15 de CLAUDE.md: comentar el porqué, no borrar) -- las tres
+        // constantes de aquí abajo siguen vivas porque ese método las sigue
+        // usando, aunque `BuildCuartoIntimo` ya no lo invoque.
         private const int CharcoX0 = 250; // (playtest 22; antes 267, y antes 314)
         private const int CharcoWidth = 14;
         private const int CharcoHeight = 7;
         /// <summary>Filas de agua dentro de la cubeta -- no llena hasta el borde a propósito: se lee como charco, no como aljibe rebosante.</summary>
         private const int CharcoAguaAltura = 2;
+
+        // =================================================================
+        // PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md §2) — LAS DOS PILAS DE
+        // RECOGIDA, una por caño ("el chorro deja de perderse por el suelo")
+        // =================================================================
+        // Contrato: "pilas de recogida talladas bajo cada caño, 6 de ancho, 3
+        // de hondo, marco de piedra". Interpretadas como OUTER (mismo
+        // criterio que `BasinWidth`/`VatWidth` en este archivo: el X0/ancho
+        // que se nombra es siempre el footprint EXTERIOR, con
+        // `PilaMuroGrosor`=1 -- NO el `WallThickness`=3 de las cubas grandes,
+        // que no cabría en 6 celdas (6-2*3=0, imposible)). Mismo idioma que
+        // las cubetas de Crisol/Prensa/BancoChispa/Ensayo: "caldero
+        // compacto", no cuba de taller.
+        //
+        // BASEY = `CuartoY0+2` (170), MISMA convención que Crisol/Prensa/
+        // BancoChispa/Ensayo (`baseY`): la fila `CuartoY0+2` YA es la última
+        // fila maciza del suelo general (ver BuildCuartoFloor), así que el
+        // interior de la pila (`baseY+1` en adelante) NUNCA colisiona con la
+        // losa -- si el suelo de la pila se pusiera en CuartoY0 a secas, las
+        // dos filas de "interior" caerían DENTRO de la losa ya sólida y la
+        // pila nacería tapiada por dentro sin ningún error visible.
+        //
+        // DECISIÓN (fuera del contrato, documentada): AMBAS PILAS COMPARTEN
+        // COLUMNA DE CAÍDA. `Dispenser.SpoutOffsetCells`=5 es una constante
+        // ÚNICA (no por-instancia, archivo fuera de mi alcance) y los dos
+        // caños montan en la MISMA `CanoMontajeX` (solo cambian de fila Y,
+        // "se separan en vertical como hoy" -- contrato §2, textual): el
+        // chorro de los DOS caños cae siempre por la columna
+        // x=CanoMontajeX+5=237, dentro de PilaAgua, nunca de PilaLimo. No hay
+        // forma de resolverlo sin tocar Dispenser.cs/AlkahestGameBootstrap.cs
+        // (fuera de mi alcance, "NADA MÁS" del contrato). Se tallan las DOS
+        // pilas FRAMED de todos modos -- (a) cumple la lectura visual pedida
+        // ("aquí cada material tiene su cubeta", la duda original de Cesar
+        // era justo esta), y (b) un líquido que rebosa PilaAgua fluye por el
+        // suelo hacia PilaLimo en vez de perderse (SimStepper, Liquid de
+        // verdad) -- el objetivo LITERAL de Cesar ("el chorro deja de
+        // perderse por el suelo") se cumple igual.
+        private const int PilaMuroGrosor = 1;
+        public const int PilaAnchoOuter = 6; // contrato §2, valor EXACTO.
+        public const int PilaHondoOuter = 3; // contrato §2, valor EXACTO.
+        /// <summary>Interior 235..238 -- incluye la columna de caída real (237, ver DECISIÓN arriba).</summary>
+        public const int PilaAguaX0 = 234;
+        /// <summary>Contigua a PilaAgua con 1 celda de aire entre las dos (240) -- se leen como DOS pilas, no una partida en dos.</summary>
+        public const int PilaLimoX0 = 241;
 
         // =================================================================
         // LOS DOS CAÑOS BÁSICOS (playtest 22)
@@ -990,11 +1070,14 @@ namespace Alkahest.Sim
         // arte que mandó Cesar (allí hay una columna de grifos etiquetados a la
         // izquierda del cuadro). `CuartoX0` es la PRIMERA COLUMNA DE AIRE de la
         // sala (BuildCuartoIntimo excava CuartoX0..X1 con DrawSolidRect/Empty),
-        // así que montar ahí deja el aparato pegado a la roca del muro (x=247),
+        // así que montar ahí deja el aparato pegado a la roca del muro
+        // (x=`CuartoX0`-1=231, playtest 26 -- antes 247 con `CuartoX0`=248),
         // no flotando.
         //
-        // LECTURA DE IZQUIERDA A DERECHA que queda en la sala, que es la que
-        // pidió Cesar: **caños + pila -> criatura -> capullo**.
+        // LECTURA DE IZQUIERDA A DERECHA que queda en la sala (playtest 26,
+        // reemplaza "criatura -> capullo", aparcados desde el playtest 25):
+        // **caños + pilas -> CRISOL -> PRENSA -> COLUMNA -> CHISPA -> ENSAYO
+        // -> pasillo -> Tolva** (contrato §2, "la línea del taller").
         /// <summary>Columna de montaje de los dos caños: la primera columna de aire, pegada al muro izquierdo de la cámara.</summary>
         public const int CanoMontajeX = CuartoX0;
         /// <summary>Fila del caño de AGUA. Bastante por encima del labio de la cubeta (que llega a CuartoY0+CharcoHeight-1) para que el chorro se vea caer.</summary>
@@ -1016,58 +1099,79 @@ namespace Alkahest.Sim
 
         // =================================================================
         // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.5) --
-        // el REAMUEBLADO del cuarto íntimo: Crisol/Prensa/BancoChispa/Ensayo
-        // (Game/, encargo B/C) SOLO necesitan el ANCLA de una celda de aquí
-        // abajo -- cada uno talla su PROPIA mampostería en su Init() (ver
-        // Game/Crisol.cs::CarveBasin, Game/Prensa.cs::TallarLecho,
-        // Game/BancoChispa.cs::TallarRanura -- los tres vía PaintStable, mismo
-        // patrón que Game/Cincel.cs, así que SimLevelBuilder NO necesita
-        // excavar sus cubetas). La ÚNICA excepción es
-        // Game/EnsayoMaestro.cs::TallarCubeta, que NO talla suelo -- su propio
-        // comentario dice "suelo ya es piedra maciza del cuarto, no hace
-        // falta tallar debajo" -- así que el suelo UNIFORME que este archivo
-        // sí construye (ver BuildCuartoFloor, llamado desde BuildCuartoIntimo)
-        // es lo que hace cierta esa frase.
+        // el REAMUEBLADO del cuarto íntimo. PÁRRAFO HISTÓRICO (playtest 26 lo
+        // CORRIGE, ver el bloque siguiente): en el playtest 25, Crisol/
+        // Prensa/BancoChispa/Ensayo tallaban su PROPIA mampostería en Init()
+        // vía PaintStable, y SimLevelBuilder solo daba el ancla de una celda.
+        // ESO YA NO ES CIERTO -- se deja el párrafo para que quede constancia
+        // del reparto anterior, no como instrucción vigente.
+        //
+        // =================================================================
+        // PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md §2, regla 47 de CLAUDE.md) —
+        // SIMLEVELBUILDER PASA A TALLAR TODA LA MAMPOSTERÍA DEL PLANO
+        // =================================================================
+        // Las máquinas DEJAN de tallar su propia mampostería en Init()
+        // (Game/Crisol.cs::TallarMamposteria, Game/Prensa.cs::TallarLecho,
+        // Game/BancoChispa.cs::TallarRanura, Game/EnsayoMaestro.cs::
+        // TallarCubeta quedan vivas SOLO para Mudanza en caliente -- ver el
+        // docblock de cada clase). Cada una expone un método ESTÁTICO
+        // `TallarEnPlano(CellGrid, ...)` que opera directo sobre la grilla
+        // (SetCell, no PaintStable -- es construcción de nivel, no runtime,
+        // ver regla 29 de CLAUDE.md) con la MISMA geometría que su propia
+        // instancia, así que las medidas (anchos/altos/grosores de muro) NO
+        // se duplican a mano aquí: BuildCuartoIntimo solo pasa el ancla
+        // (constantes de más abajo) y `CuartoY0+2` como `baseY`.
         //
         // SITIOS ELEGIDOS (suelo y=CuartoY0+2=170, huelga de piso último
         // sólido -- mismo criterio que `CunaCriaturaY`), leídos de izquierda
-        // a derecha, la MISMA lectura narrativa del cuarto que ya usaban
-        // caños->criatura->capullo, ahora caños->Crisol->Prensa->BancoChispa->
-        // Columna->Ensayo->pasillo (a la Tolva):
-        //   caños+pila (250..263) -> [6 huelga] -> CRISOL (huella real
-        //   270..284, 15 celdas: ver Crisol.CubetaAncho/TolvaAncho/
-        //   HuecoEntreCubetaYTolva) -> [6] -> PRENSA (291..297, 7 celdas) ->
-        //   [6] -> BANCO DE CHISPA (304..308, 5 celdas) -> [6] -> COLUMNA DE
-        //   ENSAYO (315..319, 5 celdas) -> [29, sala abierta de sobra] ->
-        //   ENSAYO DEL MAESTRO (349..353, 5 celdas) -> [4] -> pared derecha
-        //   del cuarto (357) -> pasillo pre-carvado -> Tolva.
-        // El orden es la PROGRESIÓN del jugador: hervir (Crisol) -> prensar
-        // lo templado/recocido -> leer lo invisible (chispa) -> observar en
-        // vidrio (Columna) -> el veredicto final antes de cruzar a entregar
-        // (Ensayo, "junto a la boca del pasillo" -- el contrato lo pide así
-        // literalmente). Las huellas de Crisol/Prensa/BancoChispa/Ensayo se
-        // derivan de sus propias constantes de ancho (copiadas aquí en el
-        // comentario para huelga, NO duplicadas como código: si alguno de
-        // esos archivos cambia su ancho, este comentario puede quedar
-        // desactualizado -- la huelga de 6 real la decide siempre el archivo
-        // dueño de la geometría, esto es documentación de intención).
+        // a derecha -- ORDEN NUEVO del contrato §2 ("la línea del taller"):
+        // caños->CRISOL->PRENSA->COLUMNA->CHISPA->ENSAYO->pasillo (a la
+        // Tolva). Columna y Chispa INTERCAMBIAN orden respecto al playtest 25
+        // (antes Chispa->Columna): ahora es hervir->prensar->OBSERVAR en
+        // vidrio->REVELAR lo invisible->examinar, la progresión que pide el
+        // contrato ("crudo->transformar->forzar->observar->revelar->
+        // examinar->entregar").
+        //   pilas (234..246, ver PilaAguaX0/PilaLimoX0 más arriba) -> [7
+        //   huelga] -> CRISOL (huella real 254..268, 15 celdas: ver
+        //   Crisol.CubetaAncho/TolvaAncho/HuecoEntreCubetaYTolva) -> [10
+        //   huelga, ≥8 pedido por el contrato] -> PRENSA (279..285, 7
+        //   celdas) -> [10] -> COLUMNA (296..300, 5 celdas) -> [9] -> BANCO
+        //   DE CHISPA (310..314, 5 celdas) -> [13] -> ENSAYO DEL MAESTRO
+        //   (328..332, 5 celdas) -> [24 hasta la pared, sala abierta de
+        //   sobra] -> pared derecha del cuarto (357) -> pasillo pre-carvado
+        //   -> Tolva.
+        // Las CUATRO huelgas entre estaciones (10/10/9/13) superan el
+        // mínimo de 8 celdas que pide el contrato -- medidas EXACTAS a partir
+        // de la aritmética real de cada máquina (Crisol.CubetaAncho/
+        // TolvaAncho/etc., Prensa.LechoAncho, BancoChispa.RanuraAncho,
+        // EnsayoMaestro.PlintoAncho, todas PÚBLICAS desde este playtest para
+        // que este comentario no mienta por duplicar un número a mano: se
+        // recalcularon leyendo el código de cada archivo, no a ojo). Las
+        // huellas de Crisol/Prensa/BancoChispa/Ensayo se derivan de sus
+        // propias constantes de ancho (copiadas aquí en el comentario para
+        // huelga, NO duplicadas como código: si alguno de esos archivos
+        // cambia su ancho, este comentario puede quedar desactualizado -- la
+        // huelga real la decide siempre el archivo dueño de la geometría,
+        // esto es documentación de intención).
         // =================================================================
 
-        /// <summary>Ancla (centro de la cubeta) del Crisol -- Game/Crisol.cs la lee tal cual (`SimLevelBuilder.CrisolX`).</summary>
-        public const int CrisolX = 274;
-        /// <summary>Ancla (centro del lecho) de la Prensa.</summary>
-        public const int PrensaX = 294;
-        /// <summary>Ancla (centro de la ranura) del Banco de Chispa.</summary>
-        public const int BancoChispaX = 306;
-        /// <summary>Ancla (centro del plinto) del Ensayo del Maestro -- junto a la boca del pasillo (357..358), el veredicto final antes de cruzar a la Tolva.</summary>
-        public const int EnsayoPlintoX = 351;
+        /// <summary>Ancla (centro de la cubeta) del Crisol -- Game/Crisol.cs la lee tal cual (`SimLevelBuilder.CrisolX`). 274 -&gt; 258 (playtest 26, nuevo orden de la línea).</summary>
+        public const int CrisolX = 258;
+        /// <summary>Ancla (centro del lecho) de la Prensa. 294 -&gt; 282 (playtest 26).</summary>
+        public const int PrensaX = 282;
+        /// <summary>Ancla (centro de la ranura) del Banco de Chispa. 306 -&gt; 312 (playtest 26: AHORA VA DESPUÉS de la Columna, ver el bloque de arriba).</summary>
+        public const int BancoChispaX = 312;
+        /// <summary>Ancla (centro del plinto) del Ensayo del Maestro -- junto a la boca del pasillo (357..358), el veredicto final antes de cruzar a la Tolva. 351 -&gt; 330 (playtest 26).</summary>
+        public const int EnsayoPlintoX = 330;
 
-        /// <summary>Pared IZQUIERDA de la Columna de Ensayo (contrato §4.5) -- mismo criterio de nombre que CunaX0/CharcoX0/RepisaX0 (el X0 de una estructura es siempre su borde izquierdo, no su centro).</summary>
-        public const int ColumnaX0 = 315;
+        /// <summary>Pared IZQUIERDA de la Columna de Ensayo (contrato §4.5/§2) -- mismo criterio de nombre que CunaX0/CharcoX0/RepisaX0 (el X0 de una estructura es siempre su borde izquierdo, no su centro). 315 -&gt; 296 (playtest 26: AHORA VA ANTES del Banco de Chispa, ver el bloque de arriba).</summary>
+        public const int ColumnaX0 = 296;
         /// <summary>3 de hueco interior + 2 muros de Crystal (contrato, valor EXACTO).</summary>
         public const int ColumnaAncho = 5;
         /// <summary>Alto de los muros de Crystal, de pie sobre el suelo (contrato, valor EXACTO).</summary>
         public const int ColumnaAlto = 22;
+        /// <summary>Playtest 26 (contrato §1.4, "vidrio alto con marcas de nivel horizontales cada 5 celdas"): cada cuántas filas se talla una marca -- ver <see cref="BuildColumnaEnsayo"/>.</summary>
+        private const int ColumnaMarcaPaso = 5;
 
         // ---- El pasillo PRE-CARVADO a la Tolva (contrato §4.5) --------------
         /// <summary>6 de alto (contrato, valor EXACTO).</summary>
@@ -1135,7 +1239,18 @@ namespace Alkahest.Sim
         /// ya validado sin una razón que lo exija es el mismo error que
         /// reutilizar uno por el nombre) -- cae ahora sobre el hueco abierto
         /// entre `BuildCuartoFloor` y la nueva maquinaria de la izquierda del
-        /// Crisol (`CrisolX`=274), con sitio de sobra.
+        /// Crisol.
+        ///
+        /// VERIFICADO TRAS PLAYTEST 26 (`CrisolX` 274-&gt;258, `PrensaX`
+        /// 294-&gt;282, reordenación de la línea del taller, contrato §2): 290
+        /// sigue cayendo en el hueco ABIERTO entre la huella de la Prensa
+        /// (outer 279..285, ver `Game/Prensa.cs`) y `ColumnaX0`=296 -- no
+        /// colisiona con ninguna mampostería nueva. `AprendizY`=180 además
+        /// queda muy por encima de la altura de cualquier estación (la más
+        /// alta, el Crisol, no pasa de `CuartoY0+2+CubetaAlto`=175), así que
+        /// tampoco hay colisión vertical. NO se recoloca (mismo corolario de
+        /// la regla 47 citado arriba): sigue siendo un sitio validado sin
+        /// razón para moverlo.
         /// </summary>
         public const int AprendizX = 290; // (tercera ronda; antes 300)
         public const int AprendizY = CunaTopY + 1; // 180 (tercera ronda; antes 176): justo sobre el remate de la cuna, mirando dentro.
@@ -1181,11 +1296,41 @@ namespace Alkahest.Sim
             // enseña el frasco de paso. El "primer estirón en 15s" pasa a ser
             // "responde a los segundos de que TÚ le des de comer".
             //   PlaceNutrienteMound(grid);
-            PlaceCharco(grid);
-            BuildColumnaEnsayo(grid); // (contrato §4.5) la Columna de Ensayo, muros de Crystal, abierta por arriba.
+            // (playtest 26) PlaceCharco(grid) YA NO SE LLAMA -- lo reemplazan
+            // las DOS pilas nombradas del contrato §2 (ver BuildPilasFuentes).
+            // NOTA DE INTEGRACIÓN: la DECISIÓN original del encargo ("ambos
+            // chorros caen por la misma columna") quedó OBSOLETA en la misma
+            // ronda -- Dispenser ganó voladizo por instancia y el caño de limo
+            // se spawnea con alcance 12 (ver AlkahestGameBootstrap), así que
+            // cada chorro aterriza HOY sobre su propia pila: agua en x237
+            // (PilaAgua 234..239), limo en x244 (PilaLimo 241..246). El método
+            // viejo se conserva intacto sin llamantes (regla 15 de CLAUDE.md).
+            //   PlaceCharco(grid);
+            BuildPilasFuentes(grid); // (contrato §2) las dos pilas de recogida bajo los caños.
+
+            // (playtest 26, regla 47 de CLAUDE.md) LA LÍNEA DEL TALLER: cada
+            // máquina talla su propia geometría vía su TallarEnPlano estático
+            // (mismas medidas que su instancia -- ver el bloque "PLAYTEST 26"
+            // más arriba, junto a CrisolX/PrensaX/etc.), en el orden nuevo del
+            // contrato: Crisol -> Prensa -> Columna -> Chispa -> Ensayo.
+            int baseYEstaciones = CuartoY0 + 2; // mismo baseY que todas (contrato §4.5).
+            Crisol.TallarEnPlano(grid, CrisolX, baseYEstaciones);
+            Prensa.TallarEnPlano(grid, PrensaX, baseYEstaciones);
+            BuildColumnaEnsayo(grid); // (contrato §4.5/§1.4) la Columna de Ensayo, muros de Crystal + marcas de nivel cada 5 celdas.
+            BancoChispa.TallarEnPlano(grid, BancoChispaX, baseYEstaciones);
+            EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, baseYEstaciones);
+
             BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
             CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
+        }
+
+        /// <summary>(contrato §2) Las dos pilas de recogida bajo los caños -- ver la DECISIÓN junto a <see cref="PilaAguaX0"/>/<see cref="PilaLimoX0"/> para por qué son dos estructuras FRAMED aunque ambos chorros compartan columna de caída.</summary>
+        private static void BuildPilasFuentes(CellGrid grid)
+        {
+            int y0 = CuartoY0 + 2; // mismo baseY que Crisol/Prensa/BancoChispa/Ensayo -- una fila ENCIMA del suelo general (BuildCuartoFloor), para que el interior no colisione con la losa.
+            DrawUShape(grid, PilaAguaX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
+            DrawUShape(grid, PilaLimoX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>
@@ -1259,6 +1404,24 @@ namespace Alkahest.Sim
             {
                 if (CellGrid.InBounds(ColumnaX0, y)) grid.SetCell(ColumnaX0, y, MaterialId.Crystal);
                 if (CellGrid.InBounds(x1, y)) grid.SetCell(x1, y, MaterialId.Crystal);
+            }
+
+            // (playtest 26, contrato §1.4: "vidrio alto con marcas de nivel
+            // horizontales cada 5 celdas") DECISIÓN (fuera del contrato,
+            // documentada): la Columna no tiene un Game/*.cs propio (no está
+            // en la lista de archivos de este encargo, y crear uno nuevo
+            // tampoco lo está) -- las marcas se tallan aquí como MASONRY, un
+            // nudillo de Stone de 1 celda que sobresale a cada lado del
+            // vidrio, NUNCA dentro del hueco de observación (regla: "nada de
+            // materiales del grid para efectos" es sobre humo/arco animados,
+            // esto es una marca ESTÁTICA de nivel, parte del plano, como
+            // cualquier otra pieza de mampostería del archivo).
+            for (int y = y0; y < y0 + ColumnaAlto; y += ColumnaMarcaPaso)
+            {
+                int xIzq = ColumnaX0 - 1;
+                int xDer = x1 + 1;
+                if (CellGrid.InBounds(xIzq, y)) grid.SetCell(xIzq, y, MaterialId.Stone);
+                if (CellGrid.InBounds(xDer, y)) grid.SetCell(xDer, y, MaterialId.Stone);
             }
         }
 

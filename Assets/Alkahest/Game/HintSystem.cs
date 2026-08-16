@@ -6,7 +6,11 @@ namespace Alkahest.Game
 {
     /// <summary>
     /// [ChaosAlchemy] Onboarding suave: pistas rotatorias arriba-centro, bajo el
-    /// reloj de la jornada. H las oculta para siempre en esta partida.
+    /// reloj de la jornada. H las oculta/muestra (no "para siempre": es un
+    /// interruptor, ver <see cref="_oculto"/>); N salta ya a la siguiente sin
+    /// esperar el reloj (playtest 26, ver <see cref="_offsetManual"/>); y todo lo
+    /// que ya se mostró se puede releer para siempre en la sección CONSEJOS del
+    /// diario (Game/JournalHud.cs), vía <see cref="PistasMostradas"/>.
     ///
     /// PISTAS POR JORNADA (playtest 4). Antes eran 7 frases que salían una sola
     /// vez, durante los ~2.5 primeros minutos de la partida entera: para cuando
@@ -44,13 +48,24 @@ namespace Alkahest.Game
     ///
     /// El alto del panel se MIDE con word-wrap real (CalcHeight): ninguna frase
     /// se corta, por larga que sea, y el ancho se acota para no pisar el panel
-    /// del frasco (izquierda) ni el de encargos (derecha).
+    /// del frasco (izquierda) ni el de encargos (derecha). (playtest 26) La fila
+    /// de progreso "consejo N/M" entra en esa misma suma de alturas -- nunca es
+    /// una fila "gratis" que el panel no contaba.
     /// </summary>
     public sealed class HintSystem : MonoBehaviour
     {
-        /// <summary>Segundos de lectura por pista: la jornada 1 va algo más despacio (primera vez con los controles), las siguientes ya conocen el ritmo.</summary>
-        private const float SegundosPorPistaJornada1 = 9f;
-        private const float SegundosPorPistaOtras = 8f;
+        /// <summary>
+        /// Segundos de lectura por pista. (fix playtest 26, CONTRATO_LEGIBILIDAD.md §3.1)
+        /// Cesar, literal: "los consejos están pasando muy rápido y aturde". Antes 9s/8s
+        /// (jornada1/otras) -- la distinción venía de que la jornada 1 "va más despacio,
+        /// primera vez con los controles", pero 8-9s ya era insuficiente incluso para las
+        /// jornadas veteranas, así que el problema no era la DIFERENCIA entre las dos, era
+        /// que las dos se quedaban cortas. Unificadas a 12s: se dejan las dos constantes
+        /// separadas (no una sola) porque el día que haga falta volver a diferenciarlas el
+        /// sitio ya existe, documentado, en vez de tener que reinventarlo.
+        /// </summary>
+        private const float SegundosPorPistaJornada1 = 12f;
+        private const float SegundosPorPistaOtras = 12f;
 
         // (playtest 25, CONTRATO_PERSISTE.md §6.5) REEMPLAZADAS ENTERAS: la
         // dirección "LO QUE PERSISTE" ya no abre en el taller clásico (grifos
@@ -117,6 +132,26 @@ namespace Alkahest.Game
         private bool _everUnlocked;
         private bool _oculto;
 
+        /// <summary>
+        /// (fix playtest 26, CONTRATO_LEGIBILIDAD.md §3.2) "Saltar: tecla N = siguiente
+        /// consejo YA... desapareció lo de poder saltar a otro". El índice mostrado NO se
+        /// SUSTITUYE por uno manual (eso lo dejaría "congelado" ahí, sin volver a avanzar
+        /// solo, contradiciendo el punto 3 -- "el reloj sigue corriendo" incluso al
+        /// ocultar/mostrar): el offset se SUMA al índice por tiempo en OnGUI (ver el cálculo
+        /// de `i`). Efecto práctico: cada N adelanta el reloj efectivo en un tramo entero de
+        /// <see cref="_segundosPista"/> -- de ahí en adelante el jugador sigue leyendo al
+        /// mismo ritmo de siempre, solo que _segundosPista más adelantado que si no hubiera
+        /// pulsado nada; el offset NO se "gasta" ni se "recupera" con el paso del tiempo, es
+        /// un desplazamiento permanente hasta que ReiniciarParaJornada lo resetea o hasta
+        /// que `i` toca el último índice y el clamp absorbe cualquier offset de sobra.
+        /// Clampeado (en el propio Update, y otra vez en OnGUI por seguridad) al último
+        /// índice real de la jornada: pulsar N en el último consejo no hace nada, no lo saca
+        /// fuera de rango.
+        /// Se reinicia en ReiniciarParaJornada (cada jornada trae su propia lista de pistas,
+        /// un offset de la jornada anterior no significa nada en la nueva).
+        /// </summary>
+        private int _offsetManual;
+
         // ---------------------------------------------------------------------------------
         // (fix playtest 10) API ESTÁTICA DE SOLO LECTURA para que el diario (Game/
         // JournalHud.cs, en reescritura en paralelo esta misma ronda -- ver
@@ -130,12 +165,14 @@ namespace Alkahest.Game
         // en Awake() (una partida nueva = pistas nuevas). Nadie fuera de esta clase debe
         // mutarla -- por eso se expone como IReadOnlyList, no como List directamente.
         //
-        // TODO (próxima ronda, otro agente): enganchar esto en JournalHud para listar
-        // "lo que ya os han dicho" en una sección del diario. Todavía NADIE la lee.
+        // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.5) YA TIENE CONSUMIDOR: la sección
+        // CONSEJOS de Game/JournalHud.cs (ver su ConstruirEntradasConsejos) lee esta lista
+        // directamente, sin ninguna API nueva expuesta aquí -- el TODO que dejó el
+        // playtest 10 quedaba resuelto con lo que ya existía.
         // ---------------------------------------------------------------------------------
         private static readonly List<string> _pistasMostradas = new List<string>();
 
-        /// <summary>Pistas ya mostradas al jugador esta partida, en el orden en que aparecieron por primera vez. Ver nota de arriba: todavía sin consumidor, lista para engancharse.</summary>
+        /// <summary>Pistas ya mostradas al jugador esta partida, en el orden en que aparecieron por primera vez. Consumida por la sección CONSEJOS de Game/JournalHud.cs (ver nota de arriba).</summary>
         public static IReadOnlyList<string> PistasMostradas => _pistasMostradas;
 
         private void Awake()
@@ -158,6 +195,8 @@ namespace Alkahest.Game
             _duracion = _segundosPista * _pistas.Length;
             _registrada = new bool[_pistas.Length];
             _playSeconds = 0f;
+            _offsetManual = 0; // pista nueva: el salto manual de la jornada anterior no aplica aquí.
+            _progresoIndiceCache = -1; // fuerza reconstruir el string "consejo N/M" con el M de la jornada nueva.
         }
 
         private void Update()
@@ -173,27 +212,77 @@ namespace Alkahest.Game
                 // doc-comment) para que escribir un nombre que contenga "h" no oculte las
                 // pistas sin querer -- el mismo bug que ya se arregló para M (mute) y T
                 // (Game/NamingUi.cs), aplicado aquí.
+                // (playtest 26) NO se le añade además el guard de JournalHud.Abierto: H es
+                // un interruptor de PREFERENCIA de HUD que no toca el mundo, exactamente el
+                // mismo caso que ya documenta Game/OrdersHud.cs para su tecla O -- el propio
+                // libro ya tapa la placa visualmente (GUI.depth) mientras está abierto (ver
+                // el guard nuevo en OnGUI, punto 6 del contrato), así que no hace falta
+                // impedir el toggle en sí, solo su dibujado.
                 if (kb != null && kb.hKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto) _oculto = !_oculto;
+
+                // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.2) N = saltar al siguiente
+                // consejo YA. SÍ lleva el guard de JournalHud.Abierto además de
+                // EscribiendoTexto -- a diferencia de H, la regla 12 de CLAUDE.md lista N
+                // explícitamente entre los atajos del MUNDO que lo necesitan (comparte tecla
+                // con Dev/DevPalette.StepOnce, que SÍ es una acción de mundo).
+                //
+                // OJO, CONFLICTO CONOCIDO FUERA DE ESTE ENCARGO (archivos M/H disjuntos, ver
+                // contrato §4): Dev/DevPalette.cs también escucha N (avanza la sim un tick)
+                // en builds de dev/editor, sin comprobar si la paleta F3 está abierta. Con
+                // BuildOptions.Development activo (regla 14 de CLAUDE.md, build actual) las
+                // dos N conviven: saltar de consejo Y avanzar un tick de la sim ocurren en la
+                // misma pulsación. No se puede arreglar aquí (DevPalette.cs no es un archivo
+                // de este encargo) -- queda anotado para quien reparta la próxima ronda.
+                if (kb != null && kb.nKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
+                {
+                    _offsetManual = Mathf.Min(_offsetManual + 1, Mathf.Max(0, _pistas.Length - 1));
+                }
             }
         }
 
         private void OnGUI()
         {
-            if (!_everUnlocked || DayCycle.InputLocked || DayCycle.HudSilenciado || _oculto) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
+            // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.6) "La placa de consejos se OCULTA
+            // mientras el diario está abierto -- dos capas de texto a la vez aturden": el
+            // libro ya se dibuja encima de todo (GUI.depth=-1000 en JournalHud), así que sin
+            // este guard la placa quedaría invisible DETRÁS del libro pero seguiría
+            // existiendo por debajo, sin aportar nada -- este return además evita el trabajo
+            // de medir/dibujarla en vano.
+            if (!_everUnlocked || DayCycle.InputLocked || DayCycle.HudSilenciado || _oculto || JournalHud.Abierto) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
             if (_playSeconds >= _duracion) return;
 
             UiStyles.Preparar();
 
-            int i = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
+            // (playtest 26) Índice por tiempo (como siempre) + offset manual de N (ver doc
+            // de _offsetManual): el offset se SUMA, nunca sustituye, y el resultado se
+            // clampea otra vez aquí por si _pistas cambiara de tamaño entre Update y OnGUI
+            // (no debería, pero el clamp es gratis y defensivo).
+            int baseIndice = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
+            int i = Mathf.Clamp(baseIndice + _offsetManual, 0, _pistas.Length - 1);
             string texto = _pistas[i];
 
             // Archivo para el diario (ver PistasMostradas arriba): una sola vez por
             // índice, no un Contains() por frame -- barato incluso a 60+ FPS.
+            // (playtest 26) CLAVE: esto archiva SOLO el índice `i` que de verdad se DIBUJA
+            // esta vez -- si N (o el tiempo transcurrido oculto/con el diario abierto) hace
+            // que la placa salte de, p.ej., el consejo 2 al 5 sin pasar por 3 y 4 visiblemente,
+            // esos dos NUNCA se marcan _registrada ni entran en _pistasMostradas: no se
+            // destripan en el diario consejos que el jugador no llegó a leer.
             if (i >= 0 && i < _registrada.Length && !_registrada[i])
             {
                 _registrada[i] = true;
                 if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
             }
+
+            // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.4) "consejo 3/10" pequeño y tenue en
+            // la esquina de la placa: string cacheado, solo se reconstruye cuando `i` cambia
+            // (cero allocs por frame mientras el jugador lee el mismo consejo).
+            if (i != _progresoIndiceCache)
+            {
+                _progresoIndiceCache = i;
+                _progresoTexto = "consejo " + (i + 1) + "/" + _pistas.Length;
+            }
+            var estiloProgreso = EstiloProgreso();
 
             float pad = UiStyles.S(9f);
             float acento = UiStyles.S(3f);
@@ -202,18 +291,60 @@ namespace Alkahest.Game
             float ancho = Mathf.Clamp(Screen.width - UiStyles.S(700f), UiStyles.S(300f), UiStyles.S(560f));
             float interior = ancho - pad * 2f - acento;
 
+            // (playtest 26) La placa MIDE su alto con CalcHeight (vía UiStyles.Alto) para
+            // cada fila que dibuja, incluida la nueva del progreso -- así el panel nunca
+            // desborda el texto que contiene, ni al revés (nunca sobra hueco muerto).
+            float altoProgreso = estiloProgreso.lineHeight;
             float altoTexto = UiStyles.Alto(UiStyles.CuerpoCentrado, texto, interior);
             float altoPie = UiStyles.TenueCentrado.lineHeight;
-            float alto = pad + altoTexto + UiStyles.S(3f) + altoPie + pad;
+            float alto = pad + altoProgreso + UiStyles.S(2f) + altoTexto + UiStyles.S(3f) + altoPie + pad;
 
             // Justo debajo del reloj de la jornada (ver DayCycle.DrawPlayingHud).
             var panel = new Rect((Screen.width - ancho) * 0.5f, UiStyles.S(54f), ancho, alto);
             UiStyles.Panel(panel);
             UiStyles.Rellenar(new Rect(panel.x, panel.y, acento, panel.height), UiStyles.Oro);
 
-            GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTexto), texto, UiStyles.CuerpoCentrado);
-            GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoPie, interior, altoPie),
-                "H — ocultar consejos", UiStyles.TenueCentrado);
+            float xTexto = panel.x + acento + pad;
+            float y = panel.y + pad;
+
+            // (playtest 26) Esquina superior derecha del interior de la placa: ancla
+            // UpperRight sobre el ancho completo, no una segunda columna estrecha -- así no
+            // hay que calcular dónde empieza "la esquina" aparte del resto de la maqueta.
+            GUI.Label(new Rect(xTexto, y, interior, altoProgreso), _progresoTexto, estiloProgreso);
+            y += altoProgreso + UiStyles.S(2f);
+
+            GUI.Label(new Rect(xTexto, y, interior, altoTexto), texto, UiStyles.CuerpoCentrado);
+
+            GUI.Label(new Rect(xTexto, panel.yMax - pad - altoPie, interior, altoPie),
+                "H — ocultar · N — siguiente", UiStyles.TenueCentrado);
+        }
+
+        // -----------------------------------------------------------------
+        // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.4) Estilo del "consejo N/M": propio de
+        // esta clase (no vive en UiStyles, que no tiene ningún nivel tenue anclado a la
+        // derecha) pero cacheado con el mismo criterio que UiStyles.Preparar -- se
+        // reconstruye SOLO si cambia la escala del HUD, nunca por frame.
+        // -----------------------------------------------------------------
+        private GUIStyle _estiloProgreso;
+        private float _escalaEstiloProgreso = -1f;
+        private string _progresoTexto = "";
+        private int _progresoIndiceCache = -1;
+
+        private GUIStyle EstiloProgreso()
+        {
+            if (_estiloProgreso == null || _escalaEstiloProgreso != UiStyles.Escala)
+            {
+                _escalaEstiloProgreso = UiStyles.Escala;
+                // Clon de TenueCentrado (mismo color/tenue que pide el contrato, "estilo
+                // UiStyles.CuerpoTenue o similar") con ancla a la derecha y un punto menos de
+                // tamaño: se lee como un contador de página, no como una segunda frase.
+                _estiloProgreso = new GUIStyle(UiStyles.TenueCentrado)
+                {
+                    alignment = TextAnchor.UpperRight,
+                    fontSize = UiStyles.F(10),
+                };
+            }
+            return _estiloProgreso;
         }
     }
 }

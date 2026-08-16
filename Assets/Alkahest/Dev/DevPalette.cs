@@ -128,7 +128,13 @@ namespace Alkahest.Dev
                         PlayerPrefs.SetInt(PrefKey, _visible ? 1 : 0);
                     }
                     if (kb.pKey.wasPressedThisFrame) TogglePause();
-                    if (kb.nKey.wasPressedThisFrame) _sim.StepOnce();
+                    // (playtest 26, fix integración) N solo actúa con la paleta
+                    // ABIERTA: HintSystem estrenó N como "siguiente consejo" y
+                    // en dev-builds (regla 14) una sola pulsación hacía las dos
+                    // cosas a la vez -- saltaba consejo Y avanzaba un tick de
+                    // sim. El paso-a-paso es una herramienta de la paleta:
+                    // que exija tenerla delante es lo natural.
+                    if (kb.nKey.wasPressedThisFrame && _visible) _sim.StepOnce();
                 }
                 IsOpen = _visible && IsDevBuild();
             }

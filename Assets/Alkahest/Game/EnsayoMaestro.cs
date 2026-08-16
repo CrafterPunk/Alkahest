@@ -41,6 +41,35 @@ namespace Alkahest.Game
     /// material y mismo patrón (MuroGrosor=1, dos muros laterales) que las
     /// cubetas de Crisol.cs/Prensa.cs/BancoChispa.cs (encargo B, en
     /// paralelo): visualmente coherente en todo el cuarto.
+    ///
+    /// -----------------------------------------------------------------------
+    /// PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md, encargo M) — EnsayoMaestro.cs
+    /// pasa a ser propiedad del MISMO encargo que MaquinariaSprites.cs, así
+    /// que el párrafo de arriba ("losa de piedra... sin depender de
+    /// MaquinariaSprites, propiedad de B") queda como ARCHIVO HISTÓRICO: esa
+    /// restricción YA NO EXISTE. Tres cambios:
+    /// (1) La mampostería del plinto YA NO se talla en Init() (regla 47:
+    ///     SimLevelBuilder talla TODA la mampostería del plano) -- ver
+    ///     <see cref="TallarEnPlano"/> (estático). Como el Ensayo NO es
+    ///     IMovible (a diferencia de Crisol/Prensa/BancoChispa), no hay
+    ///     Reposicionar que necesite seguir tallando en caliente: <see
+    ///     cref="TallarCubeta"/> de instancia queda intacta sin llamantes
+    ///     (regla 15 de CLAUDE.md: se comenta el porqué, no se borra).
+    /// (2) LA GRAMÁTICA VISUAL (§1.4: "Ensayo = pedestal ceremonial más
+    ///     alto, con brasero propio incorporado -- es EL examen: se ve
+    ///     importante"): la losa plana de 1x1 se sustituye por un pedestal
+    ///     construido con <see cref="MaquinariaSprites"/> (mismo idioma
+    ///     latón+carboncillo del resto del cuarto): chasis alto + marco de
+    ///     latón (§1.3) + embudo arriba (§1.1) + un brasero en miniatura
+    ///     incorporado en la base (decorativo -- el Ensayo no quema
+    ///     combustible propio, solo hace más intenso su rescoldo mientras
+    ///     calienta A LA VISTA, eco visual del Crisol).
+    /// (3) EL AFFORDANCE GLOW (§1.5: "Ensayo: hay pedido activo de
+    ///     AguantaCalor/Conduce") usa el helper único
+    ///     <see cref="MaquinariaSprites.AffordanceGlow"/> -- a diferencia de
+    ///     las otras cuatro bocas, el predicado NO mira el material en sí
+    ///     (cualquier muestra sirve para presentarse al examen), solo si hay
+    ///     un pedido de ese tipo activo (ver <see cref="MaterialSirvePlinto"/>).
     /// </summary>
     public sealed class EnsayoMaestro : MonoBehaviour, IMaquinaInteractiva
     {
@@ -48,11 +77,13 @@ namespace Alkahest.Game
         // Geometría del plinto (decisión de este encargo: A solo fija la X
         // vía SimLevelBuilder.EnsayoPlintoX; el resto del footprint es
         // propiedad de este archivo, igual que Crisol/Prensa/BancoChispa son
-        // propiedad de B con solo su X heredada del plano).
+        // propiedad de B con solo su X heredada del plano). (playtest 26) De
+        // privadas a PÚBLICAS: SimLevelBuilder las lee para tallar la misma
+        // geometría en el plano.
         // -----------------------------------------------------------------
-        private const int PlintoAncho = 5; // 3 de hueco interior + 2 muros de piedra (mismo criterio que las cubetas de B, ver docblock de la clase).
-        private const int PlintoAltoInterior = 4; // celdas de hueco útil sobre el suelo.
-        private const int MuroGrosor = 1;
+        public const int PlintoAncho = 5; // 3 de hueco interior + 2 muros de piedra (mismo criterio que las cubetas de B, ver docblock de la clase).
+        public const int PlintoAltoInterior = 4; // celdas de hueco útil sobre el suelo.
+        public const int MuroGrosor = 1;
 
         private const float ProximityRange = 3.0f;
 
@@ -95,6 +126,12 @@ namespace Alkahest.Game
         private Color _rotuloColor = UiStyles.Oro;
         private float _rotuloHasta;
 
+        // ---- Playtest 26 (contrato §1): gramática visual + affordance glow ----
+        private Flask _flask; // solo lectura (contrato: "sin tocar Flask.cs").
+        private MaquinariaSprites.AffordanceGlow _glowPlinto = new MaquinariaSprites.AffordanceGlow();
+        private System.Func<byte, bool> _sirvePlinto;
+        private SpriteRenderer _afordancePlinto;
+
         // Foco de interacción (Game/MachineFocus.cs): solo el aparato más
         // cercano responde a E.
         public Vector3 PuntoFoco => _centro;
@@ -107,6 +144,8 @@ namespace Alkahest.Game
             _orders = orders;
             _player = jugador;
             _knowledge = FindAnyObjectByType<SubstanceKnowledge>(); // ver docblock: Init no la trae, se busca (regla 1 de CLAUDE.md).
+            _flask = jugador != null ? jugador.GetComponent<Flask>() : null;
+            _sirvePlinto = MaterialSirvePlinto;
 
             int plintoX = SimLevelBuilder.EnsayoPlintoX;
             int suelo = SimLevelBuilder.CuartoY0 + 2; // (contrato §6.2/§4.5) "emplazamientos DENTRO del cuarto, suelo y=CuartoY0+2".
@@ -120,18 +159,25 @@ namespace Alkahest.Game
             float celda = SimRenderer.CellWorldSize;
             _centro = new Vector3((_x0 + _x1 + 1) * 0.5f * celda, (_y0 + _y1 + 1) * 0.5f * celda, 0f);
 
-            TallarCubeta(plintoX - mitad, plintoX - mitad + PlintoAncho - 1, suelo);
+            // (playtest 26) YA NO se talla aquí -- SimLevelBuilder.BuildCuartoIntimo
+            // llama a TallarEnPlano con esta misma geometría. TallarCubeta() se
+            // conserva sin llamantes (regla 15): el Ensayo no es IMovible, así que
+            // a diferencia de Crisol/Prensa/BancoChispa no hay Reposicionar que la
+            // necesite en caliente -- ver el docblock de la clase.
             BuildVisual();
 
             MachineFocus.Registrar(this);
         }
+
+        /// <summary>Contrato §1.5: "Ensayo: hay pedido activo de AguantaCalor/Conduce" -- a diferencia de las otras cuatro bocas, no mira `mat` (cualquier muestra sirve para presentarse), solo si hay un pedido del tipo correcto esperando.</summary>
+        private bool MaterialSirvePlinto(byte mat) => BuscarOrdenEnsayoActiva() != null;
 
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
         }
 
-        /// <summary>Talla los dos muros de Stone (StaticSolid: no cae) que contienen la muestra -- suelo ya es piedra maciza del cuarto, no hace falta tallar debajo.</summary>
+        /// <summary>Talla los dos muros de Stone (StaticSolid: no cae) que contienen la muestra -- suelo ya es piedra maciza del cuarto, no hace falta tallar debajo. Sin llamantes desde playtest 26 (ver el docblock de la clase); se conserva por regla 15.</summary>
         private void TallarCubeta(int muroXIzq, int muroXDer, int suelo)
         {
             if (_sim == null) return;
@@ -142,23 +188,68 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>Sprite mínimo por código: una losa de piedra bajo la cubeta, marcando el plinto -- mismo lenguaje "sprites por código" del proyecto, sin depender de MaquinariaSprites (propiedad de B).</summary>
+        /// <summary>
+        /// (playtest 26) Talla el plinto del Ensayo DIRECTAMENTE sobre el
+        /// CellGrid del plano -- llamado por Sim/SimLevelBuilder.cs al
+        /// construir el nivel. Misma geometría EXACTA que <see cref="Init"/>
+        /// calculaba a mano (muros a `plintoX-mitad`/`plintoX-mitad+PlintoAncho-1`,
+        /// suelo ya macizo del cuarto -- ver BuildCuartoFloor).
+        /// </summary>
+        public static void TallarEnPlano(CellGrid grid, int plintoX, int suelo)
+        {
+            int mitad = PlintoAncho / 2;
+            int muroXIzq = plintoX - mitad;
+            int muroXDer = plintoX - mitad + PlintoAncho - 1;
+            for (int y = suelo; y <= suelo + PlintoAltoInterior - 1; y++)
+            {
+                if (CellGrid.InBounds(muroXIzq, y)) grid.SetCell(muroXIzq, y, MaterialId.Stone);
+                if (CellGrid.InBounds(muroXDer, y)) grid.SetCell(muroXDer, y, MaterialId.Stone);
+            }
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.4: pedestal ceremonial construido con MaquinariaSprites
+        /// (mismo idioma latón+carboncillo del resto del cuarto) -- chasis alto
+        /// + marco (§1.3) + embudo arriba (§1.1) + un brasero en miniatura
+        /// incorporado en la base (decorativo, "se ve importante").
+        /// </summary>
         private void BuildVisual()
         {
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "ChaosAlchemyEnsayoTex" };
-            tex.SetPixel(0, 0, Color.white);
-            tex.Apply(false, false);
-            var sprite = Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
-
             float celda = SimRenderer.CellWorldSize;
-            var go = new GameObject("PlintoBase");
-            go.transform.SetParent(transform, false);
-            go.transform.position = new Vector3(_centro.x, _y0 * celda - celda * 0.5f, 0f);
-            go.transform.localScale = new Vector3((_x1 - _x0 + 1 + MuroGrosor * 2) * celda, celda, 1f);
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite;
-            sr.sortingOrder = 18;
-            sr.color = new Color(0.45f, 0.40f, 0.36f, 1f); // piedra apagada, coherente con el resto del cuarto.
+            int span = _x1 - _x0 + 1 + MuroGrosor * 2;
+            float ancho = span * celda;
+            // Pedestal MÁS ALTO que las demás cubetas (contrato §1.4): el doble
+            // de la altura interior habitual, para leerse como "el examen, se ve
+            // importante" frente a las cubetas de trabajo normales.
+            float altoPedestal = (PlintoAltoInterior + MuroGrosor) * 1.6f * celda;
+            Vector3 centroPedestal = new Vector3(_centro.x, _y0 * celda - celda * 0.5f + altoPedestal * 0.5f, 0f);
+
+            var pedestalGo = new GameObject("EnsayoPedestal");
+            pedestalGo.transform.SetParent(transform, false);
+            pedestalGo.transform.position = centroPedestal;
+
+            // Affordance glow del plinto (§1.5): halo MÁS GRANDE, detrás (orden 14).
+            _afordancePlinto = MaquinariaSprites.CrearCapa(pedestalGo.transform, "AfordancePlinto", MaquinariaSprites.Embudo(span), 14,
+                ancho * 1.4f, altoPedestal * 1.5f);
+            _afordancePlinto.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, 0f);
+
+            MaquinariaSprites.CrearCapa(pedestalGo.transform, "Chasis", MaquinariaSprites.ChasisPlaca(span), 18, ancho, altoPedestal);
+            // Marco de latón (§1.3, "cubeta enmarcada").
+            MaquinariaSprites.CrearCapa(pedestalGo.transform, "MarcoLaton", MaquinariaSprites.MarcoContenedor(span), 19, ancho, altoPedestal);
+
+            // Brasero incorporado (§1.4, decorativo): en miniatura, a la base del
+            // pedestal -- eco visual del Crisol, "el examen usa calor de verdad".
+            var brasilloGo = new GameObject("BraseroIncorporado");
+            brasilloGo.transform.SetParent(pedestalGo.transform, false);
+            brasilloGo.transform.localPosition = new Vector3(0f, -altoPedestal * 0.5f + celda * 0.8f, -0.01f);
+            MaquinariaSprites.CrearCapa(brasilloGo.transform, "Rescoldo", MaquinariaSprites.ResistenciasPlaca(2), 19,
+                ancho * 0.6f, celda * 1.4f);
+
+            // Embudo (§1.1): montado arriba de la cámara de trabajo.
+            var embudoGo = new GameObject("Embudo");
+            embudoGo.transform.SetParent(pedestalGo.transform, false);
+            embudoGo.transform.localPosition = new Vector3(0f, altoPedestal * 0.5f + celda * 1.2f, 0f);
+            MaquinariaSprites.CrearCapa(embudoGo.transform, "Sprite", MaquinariaSprites.Embudo(span), 21, ancho * 0.75f, celda * 2.4f);
         }
 
         private bool EstaEnfocada() => MachineFocus.EsFoco(this, _player);
@@ -169,6 +260,12 @@ namespace Alkahest.Game
             if (DayCycle.InputLocked) return;
 
             if (_knowledge == null) _knowledge = FindAnyObjectByType<SubstanceKnowledge>(); // reintento perezoso, ver Init.
+
+            // Contrato §1.5: sondeo cada ~0.25s (acumulador propio de AffordanceGlow),
+            // corre SIEMPRE (también mientras Calentando -- el jugador puede seguir
+            // acercándose con otra muestra para el próximo pedido).
+            _glowPlinto.Sondear(Time.deltaTime, _centro, _player, _flask, _sirvePlinto);
+            if (_afordancePlinto != null) _afordancePlinto.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, _glowPlinto.Alfa);
 
             if (_fase == Fase.Calentando)
             {

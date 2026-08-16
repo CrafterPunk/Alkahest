@@ -27,15 +27,35 @@ namespace Alkahest.Game
     /// DECISIÓN (fuera del contrato, documentada): LA RANURA ES MAMPOSTERÍA
     /// PROPIA DEL BANCO, TALLADA EN Init() — mismo motivo y mismo patrón que
     /// Crisol.CarveBasin/Prensa.TallarLecho (ver esos docblocks).
+    ///
+    /// -----------------------------------------------------------------------
+    /// PLAYTEST 26 (CONTRATO_LEGIBILIDAD.md, encargo M)
+    /// -----------------------------------------------------------------------
+    /// (1) La mampostería YA NO se talla en Init() (regla 15/regla 47:
+    ///     SimLevelBuilder pasa a tallar TODA la mampostería del plano). La
+    ///     DECISIÓN de arriba ("tallada en Init") queda como ARCHIVO
+    ///     HISTÓRICO -- <see cref="TallarRanura"/> sigue viva SOLO para
+    ///     Reposicionar (Mudanza, runtime); <see cref="TallarEnPlano"/>
+    ///     (estático, CellGrid directo) es la que llama Sim/SimLevelBuilder.cs.
+    /// (2) Gramática visual (§1): la ranura gana un
+    ///     <see cref="MaquinariaSprites.Embudo"/> (§1.1) y un
+    ///     <see cref="MaquinariaSprites.MarcoContenedor"/> (§1.3); los dos
+    ///     bornes ganan un <see cref="MaquinariaSprites.Arco"/> visible SOLO
+    ///     mientras el análisis revela conductividad ≥1 (§1.4: "electrodos +
+    ///     ARCO visible al analizar + lámpara en su poste" -- la lámpara ya
+    ///     existía). El AFFORDANCE GLOW (§1.5, "Ranura del Banco:
+    ///     MaterialId.EsBaseEstado(M)") usa el helper único
+    ///     <see cref="MaquinariaSprites.AffordanceGlow"/>.
     /// </summary>
     public sealed class BancoChispa : MonoBehaviour, IMaquinaInteractiva, IMovible
     {
         private const float ProximityRange = 3.2f;
 
-        // Contrato §5.3: "RANURA (~3x2)".
-        private const int RanuraAncho = 3;
-        private const int RanuraAlto = 2;
-        private const int MuroGrosor = 1;
+        // Contrato §5.3: "RANURA (~3x2)". (playtest 26) De privadas a
+        // PÚBLICAS: SimLevelBuilder las lee para tallar la misma geometría.
+        public const int RanuraAncho = 3;
+        public const int RanuraAlto = 2;
+        public const int MuroGrosor = 1;
 
         /// <summary>Cuánto tiempo se queda la lámpara encendida tras un análisis, antes de apagarse otra vez (teatro visual; no afecta al registro, que ocurre una vez al pulsar E).</summary>
         private const float BrilloDuracion = 3f;
@@ -58,6 +78,13 @@ namespace Alkahest.Game
         private SpriteRenderer _lampara;
         private SpriteRenderer _resalte;
         private float _alfaResalte;
+
+        // ---- Playtest 26 (contrato §1): gramática visual + affordance glow ----
+        private Flask _flask; // solo lectura (contrato: "sin tocar Flask.cs").
+        private MaquinariaSprites.AffordanceGlow _glowRanura = new MaquinariaSprites.AffordanceGlow();
+        private System.Func<byte, bool> _sirveRanura;
+        private SpriteRenderer _afordanceRanura;
+        private SpriteRenderer _arco; // §1.4: visible SOLO mientras _ultimaConductividad>=1 && _brilloRestante>0.
 
         private const float RangoEstadoPleno = 5.0f;
         private const float RangoEstadoDesvanece = 6.5f;
@@ -90,15 +117,22 @@ namespace Alkahest.Game
             _conocimiento = conocimiento;
             _anchorX = anchorX;
             _baseY = SimLevelBuilder.CuartoY0 + 2; // contrato §4.5.
+            _flask = player != null ? player.GetComponent<Flask>() : null;
+            _sirveRanura = MaterialSirveRanura;
 
             RecalcularRegion();
-            TallarRanura();
+            // (playtest 26) YA NO se talla aquí -- SimLevelBuilder.BuildCuartoIntimo
+            // llama a TallarEnPlano. TallarRanura() sigue viva SOLO para
+            // Reposicionar (Mudanza), ver el docblock de la clase.
             BuildVisual();
             UpdateLamparaTint();
 
             MachineFocus.Registrar(this);
             Mudanza.RegistrarMovible(this);
         }
+
+        /// <summary>Contrato §1.5: "Ranura del Banco: MaterialId.EsBaseEstado(M)".</summary>
+        private bool MaterialSirveRanura(byte mat) => MaterialId.EsBaseEstado(mat);
 
         private void RecalcularRegion()
         {
@@ -114,7 +148,7 @@ namespace Alkahest.Game
             transform.position = _centro;
         }
 
-        /// <summary>Muros de Piedra de 1 celda + suelo alrededor de la ranura, interior vaciado (ver DECISIÓN en el doc de la clase).</summary>
+        /// <summary>Muros de Piedra de 1 celda + suelo alrededor de la ranura, interior vaciado EN CALIENTE (ver DECISIÓN en el doc de la clase). Solo la llama ya <see cref="Reposicionar"/> (Mudanza) -- Init ya NO la llama, ver el docblock de la clase.</summary>
         private void TallarRanura()
         {
             for (int x = _ranuraX0 - MuroGrosor; x <= _ranuraX1 + MuroGrosor; x++)
@@ -127,6 +161,32 @@ namespace Alkahest.Game
                 _sim.PaintStable(_ranuraX1 + MuroGrosor, y, 0, MaterialId.Stone);
             }
             _sim.PaintRect(_ranuraX0, _ranuraY0, RanuraAncho, RanuraAlto, MaterialId.Empty);
+        }
+
+        /// <summary>
+        /// (playtest 26) Talla la ranura del Banco DIRECTAMENTE sobre el
+        /// CellGrid del plano -- llamado por Sim/SimLevelBuilder.cs al
+        /// construir el nivel (construcción, no PaintStable/regla 29, que es
+        /// para runtime). Misma geometría EXACTA que <see cref="TallarRanura"/>
+        /// de instancia.
+        /// </summary>
+        public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
+        {
+            int ranuraX0 = anchorX - RanuraAncho / 2;
+            int ranuraX1 = ranuraX0 + RanuraAncho - 1;
+            int ranuraY0 = baseY + 1;
+            int ranuraY1 = ranuraY0 + RanuraAlto - 1;
+
+            for (int x = ranuraX0 - MuroGrosor; x <= ranuraX1 + MuroGrosor; x++)
+                if (CellGrid.InBounds(x, ranuraY0 - 1)) grid.SetCell(x, ranuraY0 - 1, MaterialId.Stone);
+            for (int y = ranuraY0 - 1; y <= ranuraY1; y++)
+            {
+                if (CellGrid.InBounds(ranuraX0 - MuroGrosor, y)) grid.SetCell(ranuraX0 - MuroGrosor, y, MaterialId.Stone);
+                if (CellGrid.InBounds(ranuraX1 + MuroGrosor, y)) grid.SetCell(ranuraX1 + MuroGrosor, y, MaterialId.Stone);
+            }
+            for (int y = ranuraY0; y <= ranuraY1; y++)
+                for (int x = ranuraX0; x <= ranuraX1; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
         }
 
         private void OnDestroy()
@@ -172,6 +232,23 @@ namespace Alkahest.Game
 
             UpdateLamparaTint();
             ActualizarResalte();
+            ActualizarArco();
+
+            // Contrato §1.5: sondeo cada ~0.25s (acumulador propio de AffordanceGlow).
+            _glowRanura.Sondear(Time.deltaTime, _centro, _player, _flask, _sirveRanura);
+            if (_afordanceRanura != null) _afordanceRanura.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, _glowRanura.Alfa);
+        }
+
+        /// <summary>Contrato §1.4: "electrodos + ARCO visible al analizar". El arco solo se ve mientras el último análisis reveló conductividad ≥1 Y sigue dentro de la ventana de brillo (misma condición que la lámpara) -- si no conduce, no hay arco: la ausencia es el dato.</summary>
+        private void ActualizarArco()
+        {
+            if (_arco == null) return;
+            bool visible = _ultimaConductividad >= 1 && _brilloRestante > 0f;
+            if (!visible) { _arco.color = new Color(_arco.color.r, _arco.color.g, _arco.color.b, 0f); return; }
+
+            float t = BrilloDuracion > 0f ? Mathf.Clamp01(_brilloRestante / BrilloDuracion) : 0f;
+            float parpadeo = 0.7f + 0.3f * Mathf.Sin(Time.time * 18f); // arco eléctrico: parpadeo rápido, no un pulso suave de 1Hz (eso es el affordance glow).
+            _arco.color = new Color(0.75f, 0.90f, 1f, t * parpadeo);
         }
 
         private bool EstaEnfocada() => MachineFocus.EsFoco(this, _player);
@@ -251,7 +328,19 @@ namespace Alkahest.Game
                 ancho * 1.15f, altoChasis * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
+            // Affordance glow de la ranura (§1.5): halo MÁS GRANDE, detrás (orden 14).
+            _afordanceRanura = MaquinariaSprites.CrearCapa(chasisGo.transform, "AfordanceRanura", MaquinariaSprites.Embudo(span), 14,
+                ancho * 1.4f, altoChasis * 1.7f);
+            _afordanceRanura.color = new Color(UiStyles.Exito.r, UiStyles.Exito.g, UiStyles.Exito.b, 0f);
+
             MaquinariaSprites.CrearCapa(chasisGo.transform, "Chasis", MaquinariaSprites.ChasisPlaca(span), 18, ancho, altoChasis);
+            // Marco de latón (§1.3, "cubeta enmarcada"): la ranura también es un recipiente de trabajo.
+            MaquinariaSprites.CrearCapa(chasisGo.transform, "MarcoLaton", MaquinariaSprites.MarcoContenedor(span), 17, ancho, altoChasis);
+            // Embudo (§1.1): montado arriba, sobre la propia ranura.
+            var embudoGo = new GameObject("Embudo");
+            embudoGo.transform.SetParent(chasisGo.transform, false);
+            embudoGo.transform.localPosition = new Vector3(0f, altoChasis * 0.5f + celda * 1.1f, 0f);
+            MaquinariaSprites.CrearCapa(embudoGo.transform, "Sprite", MaquinariaSprites.Embudo(span), 21, ancho * 0.75f, celda * 2.2f);
 
             // Dos bornes: pequeños tacos de latón oscuro a cada lado de la ranura.
             var sprite1x1 = MaquinariaSprites.Solido();
@@ -268,6 +357,14 @@ namespace Alkahest.Game
             bornDerGo.transform.position = _centro + new Vector3(ancho * 0.5f - bornAncho * 0.5f, 0f, -0.01f);
             var bornDerSr = MaquinariaSprites.CrearCapa(bornDerGo.transform, "Sprite", sprite1x1, 19, bornAncho, bornAlto);
             bornDerSr.color = new Color(0.42f, 0.34f, 0.20f, 1f);
+
+            // Arco (§1.4): estirado horizontalmente ENTRE los dos bornes, visible
+            // solo al analizar con conductividad ≥1 (ver ActualizarArco).
+            var arcoGo = new GameObject("Arco");
+            arcoGo.transform.SetParent(transform, false);
+            arcoGo.transform.position = _centro + new Vector3(0f, bornAlto * 0.15f, -0.02f);
+            _arco = MaquinariaSprites.CrearCapa(arcoGo.transform, "Sprite", MaquinariaSprites.Arco(), 20, ancho - bornAncho, celda * 1.4f);
+            _arco.color = new Color(0.75f, 0.90f, 1f, 0f);
 
             // Lámpara: encima del chasis (reutiliza el serpentín de Resistencias
             // como filamento).

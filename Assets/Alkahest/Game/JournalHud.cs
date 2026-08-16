@@ -84,7 +84,18 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class JournalHud : MonoBehaviour
     {
-        private enum Seccion { Leyes = 0, Sustancias = 1, Procedimientos = 2 }
+        // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.5) CONSEJOS se añade como CUARTA
+        // pestaña -- a diferencia de las patentes (que se sumaron a PROCEDIMIENTOS
+        // existente, ver comentario de _entradasProcedimientos), aquí SÍ hace falta una
+        // pestaña propia: "los consejos ya mostrados se releen ahí" es una cosa
+        // categóricamente distinta de "cómo se hace" (LEYES/PROCEDIMIENTOS) o "qué es esto"
+        // (SUSTANCIAS) -- mezclarla en cualquiera de las otras tres habría sido tan ruidoso
+        // como forzarla donde no encaja, y el contrato pide "sección CONSEJOS", no "más
+        // filas en una sección que ya existe".
+        private enum Seccion { Leyes = 0, Sustancias = 1, Procedimientos = 2, Consejos = 3 }
+
+        /// <summary>Número de pestañas del libro -- único sitio que hay que tocar si algún día se añade/quita una sección (DrawCabecera y el ancho de cada tab lo derivan de aquí).</summary>
+        private const int SeccionCount = 4;
 
         // (playtest 18) Coincide a propósito con Sim/Universe.MaxLeyes ("El
         // diario ya reserva este tamaño", ver el doc de esa constante en el
@@ -181,6 +192,18 @@ namespace Alkahest.Game
 
         private readonly Entrada[] _entradasSustancias = new Entrada[MaterialId.Count];
         private int _entradasSustanciasCount;
+
+        // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.5) CONSEJOS: una Entrada por pista de
+        // Game/HintSystem.PistasMostradas, MISMO orden (de primera aparición). Capacidad =
+        // suma de las 3 listas de pistas que existen hoy en HintSystem (Jornada1=10 +
+        // Jornada2=9 + Jornada3=6 = 25); HintSystem.cs es de propiedad de este mismo
+        // encargo pero NO se puede leer su longitud en tiempo de compilación desde aquí
+        // (son arrays `private`, a propósito -- ver la nota de PistasMostradas), así que se
+        // deja margen (32) en vez de acoplar esta constante al tamaño exacto de esas listas.
+        private const int MaxConsejosMostrados = 32;
+        private readonly Entrada[] _entradasConsejos = new Entrada[MaxConsejosMostrados];
+        private int _entradasConsejosCount;
+
         // (playtest 25, FIX) `long`, no `int`: con LeyesVersion (5b) +
         // NamingVersion (16b) + CountDiscovered (6b) + Hornada.PatentesVersion
         // (5b) el `int` de 32 bits ya estaba lleno de canto a canto (0..31
@@ -315,7 +338,7 @@ namespace Alkahest.Game
         private static readonly Color _papelBorde = new Color(0.58f, 0.47f, 0.30f, 0.30f);
         private static readonly Color _lomo = new Color(0.09f, 0.07f, 0.06f, 1f);
 
-        private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS" };
+        private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS", "CONSEJOS" };
 
         // (playtest 18) TextoVacioLeyes queda como fallback puramente DEFENSIVO: con el
         // criterio de huecos (ver ConstruirLeyesDesdeUniverso/ActualizarCache) la sección
@@ -334,6 +357,15 @@ namespace Alkahest.Game
         // ley") describía el criterio ANTERIOR y ya no es cierto: ahora hace falta
         // PRESENCIAR la ley, no solo conocer sus dos materiales por separado.
         private const string TextoVacioProcedimientos = "(sin procedimientos archivados todavía: aparecen solos en cuanto presencias esa ley ocurrir)";
+
+        // (playtest 26, CONTRATO_LEGIBILIDAD.md §3.5) "¿los puedo relanzar después?" --
+        // Cesar sobre los consejos. Esta sección responde que sí: todo lo que la placa
+        // superior (Game/HintSystem.cs) ya mostró se queda archivado aquí PARA SIEMPRE, en
+        // el mismo orden en que apareció. Los consejos que aún no se han mostrado (por
+        // tiempo, por estar oculta con H, o saltados con N sin llegar a dibujarse -- ver el
+        // comentario de archivado en HintSystem.OnGUI) NO aparecen: esta sección nunca
+        // "destripa" contenido que el jugador todavía no ha leído en el mundo.
+        private const string TextoVacioConsejos = "(sin consejos archivados todavía: aparecen aquí en cuanto se muestran en la placa de arriba)";
 
         // (playtest 18) EL HUECO: renglón que ocupa el sitio de una ley que el jugador
         // TODAVÍA no ha presenciado (ver ConstruirLeyesDesdeUniverso/ActualizarCache,
@@ -545,9 +577,9 @@ namespace Alkahest.Game
 
             float yTabs = ySubtitulo + altoSubtitulo + UiStyles.S(6f);
             float altoTabs = r.yMax - yTabs;
-            float anchoTab = r.width / 3f;
+            float anchoTab = r.width / SeccionCount;
 
-            for (int s = 0; s < 3; s++)
+            for (int s = 0; s < SeccionCount; s++)
             {
                 var tabRect = new Rect(r.x + anchoTab * s, yTabs, anchoTab, altoTabs);
                 bool activa = (int)_seccion == s;
@@ -686,6 +718,11 @@ namespace Alkahest.Game
                     entradas = _entradasProcedimientos;
                     count = _entradasProcedimientosCount;
                     vacio = TextoVacioProcedimientos;
+                    break;
+                case Seccion.Consejos:
+                    entradas = _entradasConsejos;
+                    count = _entradasConsejosCount;
+                    vacio = TextoVacioConsejos;
                     break;
                 default:
                     entradas = _entradasLeyes;
@@ -1117,11 +1154,20 @@ namespace Alkahest.Game
             // ningún otro contador de esta fórmula, así que la ficha de
             // SUSTANCIAS podía quedarse sin la línea nueva hasta que otro
             // evento cualquiera invalidara la caché por casualidad.
+            // (playtest 26) + HintSystem.PistasMostradas.Count (8 bits, bits 48-55): sección
+            // CONSEJOS nueva -- sin este término, que a un jugador se le mostrara un consejo
+            // más (que no descubre material, ni presencia ley, ni congela patente, ni anota
+            // observación) no invalidaría la caché y el diario nunca listaría el consejo
+            // recién archivado. Solo CRECE dentro de la vida de este JournalHud (la lista se
+            // limpia en HintSystem.Awake, que recrea la escena entera -- y con ella este
+            // propio componente, ver AlkahestGameBootstrap.SpawnJournalHud), así que un
+            // simple Count basta: no hace falta una versión que también detecte bajadas.
             long firma = ((long)_knowledge.CountDiscovered() << 21)
                        ^ (((long)_knowledge.NamingVersion & 0xFFFF) << 5)
                        ^ ((long)_knowledge.LeyesVersion & 0x1F)
                        ^ (((long)Hornada.PatentesVersion & 0x1F) << 27)
-                       ^ (((long)_knowledge.ObservacionesVersion & 0xFFFF) << 32);
+                       ^ (((long)_knowledge.ObservacionesVersion & 0xFFFF) << 32)
+                       ^ (((long)HintSystem.PistasMostradas.Count & 0xFF) << 48);
             if (firma == _cacheFirma) return;
             _cacheFirma = firma;
 
@@ -1244,6 +1290,32 @@ namespace Alkahest.Game
                     TieneSwatch = true,
                     MatId = matId,
                     Firma = universe.DescribirFirma(matId),
+                };
+            }
+
+            ConstruirEntradasConsejos();
+        }
+
+        /// <summary>
+        /// (playtest 26, CONTRATO_LEGIBILIDAD.md §3.5) Sección CONSEJOS: vuelca
+        /// <see cref="HintSystem.PistasMostradas"/> tal cual, en el mismo orden -- a
+        /// diferencia de PROCEDIMIENTOS (que SINTETIZA texto nuevo a partir de Universe.Leyes
+        /// porque HintSystem no exponía nada consultable, ver el docblock largo de
+        /// ConstruirEntradaProcedimiento), aquí SÍ hay un consumidor real de ese hook
+        /// estático desde el playtest 10: literalmente la lista de frases que la placa
+        /// superior ya le enseñó al jugador, ni una más ni una menos.
+        /// </summary>
+        private void ConstruirEntradasConsejos()
+        {
+            _entradasConsejosCount = 0;
+            var pistas = HintSystem.PistasMostradas;
+            int n = Mathf.Min(pistas.Count, MaxConsejosMostrados); // defensivo: ver doc de MaxConsejosMostrados.
+            for (int i = 0; i < n; i++)
+            {
+                _entradasConsejos[_entradasConsejosCount++] = new Entrada
+                {
+                    Titulo = "Consejo " + (i + 1),
+                    Cuerpo = pistas[i],
                 };
             }
         }

@@ -1,4 +1,5 @@
 using UnityEngine;
+using Alkahest.Sim;
 
 namespace Alkahest.Game
 {
@@ -29,6 +30,76 @@ namespace Alkahest.Game
     {
         private static readonly System.Collections.Generic.Dictionary<string, Sprite> _cache =
             new System.Collections.Generic.Dictionary<string, Sprite>(16);
+
+        // =================================================================
+        // [Playtest 26, CONTRATO_LEGIBILIDAD.md §1.5] EL AFFORDANCE GLOW —
+        // IMPLEMENTACIÓN CENTRAL ÚNICA
+        // =================================================================
+        /// <summary>
+        /// "La boca te contesta": cuando el jugador está a ≤10 celdas con el
+        /// frasco cargado de un material M, la boca de una máquina PULSA
+        /// suave (halo, ~1 Hz) SOLO si M le sirve a esa boca. Es la respuesta
+        /// literal a la duda de Cesar en el playtest 25 ("¿meto limo en
+        /// todas?"): el taller señala, no explica con texto.
+        ///
+        /// UNA instancia por BOCA (embudo, brasero, lecho, ranura, plinto);
+        /// cada máquina posee tantas instancias como bocas tenga (el Crisol,
+        /// dos: embudo + brasero) y llama a <see cref="Sondear"/> UNA vez por
+        /// Update, con su propio delegado de "sirve" CACHEADO (nunca una
+        /// lambda nueva por llamada -- ver el doc de <see cref="Sondear"/>).
+        ///
+        /// COSTE (contrato): el sondeo de proximidad+material corre cada
+        /// <see cref="ProbeIntervalSeconds"/> (~0.25s, acumulador propio,
+        /// JAMÁS por frame); el resultado se cachea en <see cref="Activo"/>.
+        /// El pulso visual (<see cref="Alfa"/>) SÍ se recalcula cada frame,
+        /// pero es solo un `Mathf.Sin(Time.time...)` -- cero allocs, cero
+        /// asignaciones de string/color nuevas (el llamante decide el color
+        /// final, este helper solo entrega el alfa 0..1).
+        /// </summary>
+        public sealed class AffordanceGlow
+        {
+            public const float ProbeIntervalSeconds = 0.25f;
+            private const float RangoCeldas = 10f;
+            private const float PulsoHz = 1f;
+
+            private float _timer;
+            private bool _activo;
+
+            /// <summary>¿La última pasada del sondeo dice que esta boca sirve para el material que lleva el jugador ahora mismo?</summary>
+            public bool Activo => _activo;
+
+            /// <summary>Alfa del pulso 0..1 para este frame (seno sobre Time.time) -- 0 si <see cref="Activo"/> es false. Recalculado cada frame pero sin allocs: pura aritmética.</summary>
+            public float Alfa => _activo ? (0.5f + 0.5f * Mathf.Sin(Time.time * PulsoHz * Mathf.PI * 2f)) : 0f;
+
+            /// <summary>
+            /// Avanza el acumulador y, si toca sondear (~0.25s), recalcula
+            /// <see cref="Activo"/>: jugador a ≤10 celdas de `bocaMundo` Y el
+            /// frasco lleva un material no vacío que `sirve` acepta.
+            /// Llamar UNA vez por Update de la máquina con `Time.deltaTime`
+            /// real. `sirve` debe ser un delegado YA CREADO (campo cacheado
+            /// en la máquina, asignado una vez en Init -- un método de
+            /// instancia convertido a `Func&lt;byte,bool&gt;` asigna una sola
+            /// vez, no en cada llamada) -- nunca una lambda literal aquí, o
+            /// el sondeo generaría basura cada 0.25s.
+            /// </summary>
+            public void Sondear(float deltaTime, Vector3 bocaMundo, Transform jugador, Flask frasco, System.Func<byte, bool> sirve)
+            {
+                _timer += deltaTime;
+                if (_timer < ProbeIntervalSeconds) return;
+                _timer -= ProbeIntervalSeconds;
+
+                if (jugador == null || frasco == null || sirve == null) { _activo = false; return; }
+
+                float celda = SimRenderer.CellWorldSize;
+                float distCeldas = Vector3.Distance(jugador.position, bocaMundo) / celda;
+                if (distCeldas > RangoCeldas) { _activo = false; return; }
+
+                byte mat = frasco.MaterialDominante();
+                if (mat == MaterialId.Empty) { _activo = false; return; }
+
+                _activo = sirve(mat);
+            }
+        }
 
         // (fix playtest 6: baja resolución) Una celda de sim mide 0.1 unidades de
         // mundo; con la cámara acercada eso son ~7-8 px de pantalla en 1080p. Las
@@ -490,6 +561,315 @@ namespace Alkahest.Game
             return s;
         }
 
+        // =================================================================
+        // [Playtest 26, CONTRATO_LEGIBILIDAD.md §1] LA GRAMÁTICA VISUAL —
+        // familias de sprites compartidas por las 5 estaciones nuevas
+        // (Crisol/Prensa/BancoChispa/Columna/Ensayo). Mismo criterio de
+        // Escala/S(...) y cacheo que el resto de la fábrica.
+        // =================================================================
+
+        /// <summary>
+        /// GRAMÁTICA §1.1: EMBUDO = ENTRADA DE MATERIA. Boca ancha arriba,
+        /// se cierra hacia un pico estrecho abajo (perfil t*t: se abre rápido
+        /// cerca de la boca, como un embudo de verdad, no un cono recto) --
+        /// latón, MISMO sprite-familia en TODA máquina que reciba materia del
+        /// frasco (Crisol/Prensa/BancoChispa/Ensayo): se aprende una vez.
+        /// </summary>
+        public static Sprite Embudo(int spanCeldas)
+        {
+            string clave = "embudo" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
+            int h = S(14);
+            var px = new Color32[w * h];
+
+            Color32 latonAlto = new Color32(0xF2, 0xD3, 0x8C, 255);
+            Color32 laton = new Color32(0xBD, 0x93, 0x47, 255);
+            Color32 latonBajo = new Color32(0x70, 0x56, 0x2A, 255);
+
+            int spoutSemi = Mathf.Max(S(1), w / 10);
+            int mouthSemi = w / 2 - S(1);
+
+            for (int y = 0; y < h; y++)
+            {
+                float t = y / (float)(h - 1); // 0 abajo (pico), 1 arriba (boca).
+                int semi = Mathf.RoundToInt(Mathf.Lerp(spoutSemi, mouthSemi, t * t));
+                bool remateBoca = y >= h - S(2); // remate de la boca, ligeramente más ancho que el cuerpo del embudo.
+                if (remateBoca) semi = mouthSemi + S(1);
+
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    bool bordeIzq = dx <= -semi + Escala;
+                    bool bordeDer = dx >= semi - Escala;
+                    Color32 c = remateBoca ? latonAlto : (bordeIzq ? latonAlto : (bordeDer ? latonBajo : laton));
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyEmbudo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.2: BRASERO = ENTRADA DE COMBUSTIBLE, la ÚNICA otra
+        /// boca que existe -- otra forma (cesto ovalado, no un embudo),
+        /// otra altura, otro color (hierro oscuro, no latón): jamás se
+        /// confunde. Silueta de bowl con barrotes verticales (rejilla del
+        /// cesto) que dejan asomar el rescoldo de dentro (capa
+        /// <see cref="ResistenciasPlaca"/>, reutilizada por el llamante,
+        /// tintada de ámbar/naranja).
+        /// </summary>
+        public static Sprite Brasero(int spanCeldas)
+        {
+            string clave = "brasero" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
+            int h = S(14);
+            var px = new Color32[w * h];
+
+            Color32 hierroAlto = new Color32(0x58, 0x50, 0x4C, 255);
+            Color32 hierro = new Color32(0x2A, 0x26, 0x24, 255);
+            Color32 hierroBajo = new Color32(0x14, 0x12, 0x12, 255);
+
+            int maxSemi = w / 2 - S(1);
+            int barrotePeriodo = Mathf.Max(1, S(3));
+
+            for (int y = S(1); y < h - S(1); y++)
+            {
+                // Perfil de bowl: máximo ancho a media altura (seno), NUNCA
+                // rectangular -- la silueta por sí sola ya lee "cesto", no
+                // "chasis" (grammar §1.2: "otra forma que un embudo").
+                float t = (y - S(1)) / (float)(h - S(2) - 1);
+                float bulge = Mathf.Sin(t * Mathf.PI);
+                int semi = Mathf.RoundToInt(Mathf.Lerp(maxSemi * 0.35f, maxSemi, bulge));
+
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    bool barrote = (x % barrotePeriodo) == 0; // rejilla vertical del cesto.
+                    bool bordeIzq = dx <= -semi + Escala;
+                    Color32 c = barrote ? hierroBajo : (bordeIzq ? hierroAlto : hierro);
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Patas cortas: dos tacos macizos bajo el cesto.
+            int pataSemi = Mathf.Max(S(1), maxSemi / 3);
+            for (int y = 0; y < S(1); y++)
+            {
+                for (int dx = -pataSemi; dx <= pataSemi; dx++)
+                {
+                    int xIzq = w / 2 - maxSemi / 2 + dx;
+                    int xDer = w / 2 + maxSemi / 2 + dx;
+                    if (xIzq >= 0 && xIzq < w) px[y * w + xIzq] = hierroBajo;
+                    if (xDer >= 0 && xDer < w) px[y * w + xDer] = hierroBajo;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyBrasero");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.3: CUBETA ENMARCADA. Marco de latón de 2px con
+        /// remate en las cuatro esquinas -- overlay transparente por dentro
+        /// (se dibuja SOBRE el chasis del recipiente, escalado un poco más
+        /// grande, mismo patrón que el "_resalte" de foco ya existente en
+        /// Crisol/Prensa/BancoChispa). Lee "contenedor", no "agujero en el
+        /// suelo": lo que el playtest 25 pedía explícitamente para todo
+        /// recipiente de trabajo.
+        /// </summary>
+        public static Sprite MarcoContenedor(int spanCeldas)
+        {
+            string clave = "marco" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
+            int h = S(14);
+            var px = new Color32[w * h]; // transparente por defecto.
+
+            Color32 laton = new Color32(0xE8, 0xC4, 0x7A, 255);
+            Color32 latonBrillo = new Color32(0xFF, 0xEE, 0xC0, 255);
+            int grosor = S(2);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool borde = x < grosor || x >= w - grosor || y < grosor || y >= h - grosor;
+                    if (borde) px[y * w + x] = laton;
+                }
+            }
+
+            int remate = S(3);
+            MarcarRemateCuadrado(px, w, h, 0, 0, remate, latonBrillo);
+            MarcarRemateCuadrado(px, w, h, w - remate, 0, remate, latonBrillo);
+            MarcarRemateCuadrado(px, w, h, 0, h - remate, remate, latonBrillo);
+            MarcarRemateCuadrado(px, w, h, w - remate, h - remate, remate, latonBrillo);
+
+            s = Crear(px, w, h, "ChaosAlchemyMarcoContenedor");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.4 (Crisol): CHIMENEA. Tubo de hierro montado sobre el
+        /// chasis de la cubeta, con remate acampanado arriba -- el CUERPO
+        /// estático; las bocanadas de humo son <see cref="Humo"/>, animadas
+        /// por Crisol.cs SOLO mientras quema combustible.
+        /// </summary>
+        public static Sprite Chimenea(int spanCeldas)
+        {
+            string clave = "chimenea" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(spanCeldas * Escala, S(10), S(200));
+            int h = S(16);
+            var px = new Color32[w * h];
+
+            Color32 hierroAlto = new Color32(0x52, 0x4A, 0x46, 255);
+            Color32 hierro = new Color32(0x2E, 0x28, 0x26, 255);
+            Color32 hierroBajo = new Color32(0x16, 0x12, 0x12, 255);
+
+            int semiTubo = Mathf.Max(S(1), w / 4);
+            for (int y = 0; y < h; y++)
+            {
+                bool remate = y >= h - S(3); // boca superior, ligeramente más ancha.
+                int semi = remate ? semiTubo + S(1) : semiTubo;
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    bool borde = Mathf.Abs(dx) >= semi - Mathf.Max(1, Escala / 2);
+                    px[y * w + x] = remate ? hierroAlto : (borde ? hierroBajo : hierro);
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyChimenea");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.4 (Crisol): una voluta de humo -- blob radial suave,
+        /// semitransparente. Crisol.cs instancia varias, animando posición y
+        /// alfa de cada una por código (nunca frames de textura: es UN solo
+        /// sprite reusado con transform distinto, cero allocs de textura por
+        /// bocanada).
+        /// </summary>
+        public static Sprite Humo()
+        {
+            const string clave = "humo";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(10), h = S(10);
+            var px = new Color32[w * h];
+            float cx = w / 2f, cy = h / 2f, r = w / 2f;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = x - cx, dy = y - cy;
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy) / r;
+                    float a = Mathf.Clamp01(1f - dist);
+                    a *= a; // caída suave hacia el borde: lee como voluta, no como disco duro.
+                    px[y * w + x] = new Color32(210, 205, 200, (byte)(a * 200));
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyHumo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.4 (Prensa): HUSILLO. Vástago vertical con filetes de
+        /// rosca periódicos -- "nadie ha dudado jamás de qué hace un tornillo
+        /// de banco" (contrato). Se monta ESTÁTICO sobre la mandíbula (la
+        /// pieza que se mueve es la mandíbula misma, ya animada por
+        /// Prensa.cs).
+        /// </summary>
+        public static Sprite Husillo(int spanCeldas)
+        {
+            string clave = "husillo" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(Mathf.Max(S(8), spanCeldas * Escala / 2), S(8), S(200));
+            int h = S(20);
+            var px = new Color32[w * h];
+
+            Color32 hierroAlto = new Color32(0x6A, 0x62, 0x5C, 255);
+            Color32 hierro = new Color32(0x3A, 0x34, 0x30, 255);
+            Color32 hierroBajo = new Color32(0x1C, 0x18, 0x16, 255);
+
+            int semiVastago = Mathf.Max(S(1), w / 5);
+            int periodo = Mathf.Max(1, S(3));
+            for (int y = 0; y < h; y++)
+            {
+                bool rosca = (y % periodo) == 0; // filete de rosca: una línea clara cada `periodo` filas.
+                for (int dx = -semiVastago; dx <= semiVastago; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    bool borde = Mathf.Abs(dx) >= semiVastago - Mathf.Max(1, Escala / 2);
+                    px[y * w + x] = rosca ? hierroAlto : (borde ? hierroBajo : hierro);
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyHusillo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// GRAMÁTICA §1.4 (Banco de chispa): ARCO. Zigzag determinista (sin
+        /// UnityEngine.Random -- regla de oro del proyecto) núcleo blanco +
+        /// halo cian, pensado para estirarse horizontalmente entre los dos
+        /// electrodos. BancoChispa.cs lo activa (alfa>0) SOLO mientras
+        /// analiza y la conductividad leída es ≥1 -- si no conduce, no hay
+        /// arco (la ausencia es el dato).
+        /// </summary>
+        public static Sprite Arco()
+        {
+            const string clave = "arco";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(40), h = S(14);
+            var px = new Color32[w * h]; // transparente.
+
+            Color32 nucleo = new Color32(255, 255, 255, 255);
+            Color32 halo = new Color32(140, 200, 255, 140);
+
+            int centroY = h / 2;
+            int prevY = centroY;
+            int paso = Mathf.Max(1, S(2));
+            for (int x = 0; x < w; x++)
+            {
+                int quiebro = ((x / paso) % 2 == 0) ? S(2) : -S(2);
+                int y = Mathf.Clamp(centroY + quiebro, S(2), h - S(2) - 1);
+                int yMin = Mathf.Min(prevY, y), yMax = Mathf.Max(prevY, y);
+                for (int yy = yMin; yy <= yMax; yy++)
+                {
+                    px[yy * w + x] = nucleo;
+                    if (yy - 1 >= 0) px[(yy - 1) * w + x] = halo;
+                    if (yy + 1 < h) px[(yy + 1) * w + x] = halo;
+                }
+                prevY = y;
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyArco");
+            _cache[clave] = s;
+            return s;
+        }
+
         /// <summary>Sprite blanco de 1x1 para barras/rellenos genéricos (se tinta con SpriteRenderer.color).</summary>
         public static Sprite Solido()
         {
@@ -511,6 +891,20 @@ namespace Alkahest.Game
                 for (int dx = 0; dx < Escala; dx++)
                 {
                     int x = cx + dx, y = cy + dy;
+                    if (x < 0 || x >= w || y < 0 || y >= h) continue;
+                    px[y * w + x] = color;
+                }
+            }
+        }
+
+        /// <summary>Taco cuadrado macizo de `size` téxeles en (x0,y0) -- usado por <see cref="MarcoContenedor"/> para el "remate" de sus cuatro esquinas.</summary>
+        private static void MarcarRemateCuadrado(Color32[] px, int w, int h, int x0, int y0, int size, Color32 color)
+        {
+            for (int dy = 0; dy < size; dy++)
+            {
+                for (int dx = 0; dx < size; dx++)
+                {
+                    int x = x0 + dx, y = y0 + dy;
                     if (x < 0 || x >= w || y < 0 || y >= h) continue;
                     px[y * w + x] = color;
                 }

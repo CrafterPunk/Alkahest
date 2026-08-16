@@ -2284,3 +2284,66 @@ enseña el siguiente y cada respuesta abre dos preguntas.
 colores) o hace falta más teatro? ¿el crisol comunica sus 3 modos (rescoldo/combustible/
 enfriando)? ¿20s de calcinación sostenida son eternos o justos? ¿el arco de 5 pedidos dura una
 sesión buena (~30-45 min)? ¿la patente se siente como MI descubrimiento o como un popup?
+
+---
+
+## Playtest 26 → EL TALLER QUE SE EXPLICA SOLO (dos encargos Sonnet + verificación con capturas por Fable en el PC de Cesar)
+
+**El feedback de Cesar (playtest 25)**: "no queda claro dónde van las cosas, dónde se reciben,
+si debería meter limo en todas... hay que trabajar mucho en las máquinas para que se entienda su
+funcionamiento... el inicio tiene que mejorar SIN CARTELES... para el público de a pie, si se
+ocupa más espacio no pasa nada... los consejos están pasando muy rápido y aturde, tampoco sé si
+los puedo relanzar y desapareció lo de poder saltar a otro." Contrato:
+`docs/CONTRATO_LEGIBILIDAD.md`.
+
+### La gramática visual (toda máquina, presente y futura)
+
+EMBUDO de latón = entrada de materia (una familia de sprites, se aprende una vez). BRASERO de
+hierro con rescoldo = entrada de combustible (la ÚNICA otra boca; forma/altura/color distintos).
+CUBETA ENMARCADA = aquí queda el resultado. EL VERBO EN EL CUERPO: chimenea con bocanadas SOLO al
+quemar combustible; mandíbulas+husillo; electrodos+arco+lámpara; vidrio con marcas; pedestal
+ceremonial del Ensayo. Y el **AFFORDANCE GLOW**: a ≤10 celdas con el frasco cargado de M, cada
+boca PULSA solo si M le sirve (crisol: líquidos/polvos; brasero: combustibles; prensa: lo que
+compacta o revienta; chispa: variantes base; ensayo: pedido activo). LA DUDA DE CESAR ("¿meto
+limo en todas?") LA CONTESTA EL TALLER SEÑALANDO, sin un cartel. Helper único compartido
+(sondeo 0.25s + seno sobre SpriteRenderer.color, cero allocs).
+
+### La línea del taller (el plano nuevo)
+
+El cuarto crece a la izquierda (CuartoX0 248→232, ancho 126). De izquierda a derecha = el proceso
+entero: FUENTES (caños agua+limo, cada uno con su PILA de recogida) → CRISOL (brasero|panza+
+embudo+chimenea) → PRENSA → COLUMNA de vidrio → BANCO DE CHISPA → ENSAYO → pasillo → TOLVA.
+Crudo → transformar → forzar → observar → revelar → examinar → entregar. Holguras 10/10/9/13
+(≥8). TODA la mampostería la talla ahora SimLevelBuilder vía los `TallarEnPlano` estáticos de
+cada máquina (regla 47: una sola fuente de verdad del plano; el auto-tallado en Init del playtest
+25 se retiró). El caño de limo ganó VOLADIZO PROPIO (Dispenser con alcance por instancia, 12 vs
+5): sin él, ambos chorros caían por la misma columna y el limo desembocaba en la pila del agua.
+
+### Consejos que no aturden
+
+12s por consejo (antes 8-9); **N** = siguiente (sin marcar como leído lo saltado); **H** =
+ocultar/mostrar; contador "consejo 3/10" en la placa; sección **CONSEJOS** nueva en el diario
+que lista los ya mostrados para releer (el hook `PistasMostradas` del playtest 10 POR FIN con su
+consumidor); la placa se calla con el diario abierto. Conflicto cazado por el encargo H: la N de
+DevPalette (paso de tick) ahora exige la paleta abierta.
+
+### Lo que SOLO se vio jugando (verificación con capturas — Cesar prestó el PC)
+
+Fable jugó la build real por computer-use (capturas + WASD + frasco) y cazó DOS problemas
+invisibles en el código:
+1. **La inundación**: 20 segundos de grifo abierto sobre el suelo corrido de la línea = medio
+   laboratorio bajo limo (las cubas hondas del taller clásico lo contenían; el suelo abierto no).
+   Fix: **LA RACIÓN** — los caños del laboratorio sirven ~45 celdas por apertura y se cierran
+   solos, chapa "· servido — E para más" (regla 43: un autocierre sin rótulo parece un grifo
+   roto). Los grifos clásicos siguen infinitos (racionCeldas=0 default).
+2. **El limo camuflado**: su pardo (94,86,72) se confundía con la piedra A ESCALA DE JUEGO — un
+   lago entero se leía como suelo. Fix: verde oliva turbio (88,96,52) + jitter 16.
+Verificado en vivo tras los fixes: ración contenida en su pila, oliva inconfundible, "hirviendo"
+en el crisol al recibir limo, frasco aspirando (35/900 · "limo"), y el AFFORDANCE GLOW del
+embudo del crisol LATIENDO con limo en el frasco mientras prensa/chispa/ensayo permanecían
+apagados. Diario: 4 pestañas (LEYES · SUSTANCIAS · PROCEDIMIENTOS · CONSEJOS) confirmadas en
+pantalla. Compilado 0 errores / 0 warnings.
+
+**Preguntas abiertas**: ¿45 celdas es LA ración correcta? ¿el glow se entiende como "esto le
+sirve" o hace falta que el pulso sea más obvio? ¿la columna de vidrio se lee como vidrio (hoy:
+dos muros de Crystal verde)? ¿el Ensayo se distingue lo bastante del resto como EL examen?

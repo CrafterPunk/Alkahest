@@ -405,6 +405,14 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     Corolario que lo cazó: todo solver imprime su resultado en el log de seed — el bug se vio en
     el PRIMER arranque leyendo "ganador=19" ("un assert que no se puede leer no protege nada").
 
+52. **LO QUE SOLO SE VE JUGANDO (playtest 26)**: la ronda de legibilidad compiló limpia y toda
+    su lógica era correcta -- y aun así traía DOS fallos que ningún grep podía ver: el limo se
+    confundía con la piedra A ESCALA DE JUEGO (el color de un material se juzga contra sus
+    vecinos en pantalla, no en el hex del código) y un grifo infinito sobre suelo abierto
+    inundaba el laboratorio en 20 segundos (la geometría alrededor de una fuente cambia lo que
+    la fuente ES). Toda ronda que cambie forma, plano o color se verifica JUGANDO con capturas
+    antes de entregar; de ahí salieron la RACIÓN de los caños y el oliva del limo.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -527,6 +535,20 @@ BACKLOG NUEVO de esta dirección (v2): biblioteca transversal entre mundos (firm
 persistencia JSON), alambique/condensación, fragilidad-frío, configuración fantasma visual sobre
 máquinas, royalties por patente, hornada por-lote (v0 es global), teatro físico para
 FlotaInsoluble, automatización como premio de lategame.
+
+**Playtest 26 — EL TALLER QUE SE EXPLICA SOLO** (feedback de Cesar sobre el 25: máquinas
+ilegibles, "sin carteles", consejos que aturden; contrato `docs/CONTRATO_LEGIBILIDAD.md`, dos
+encargos Sonnet + fixes e integración de Fable VERIFICANDO EN VIVO con capturas en el PC de
+Cesar): GRAMÁTICA VISUAL (embudo=entrada, brasero=combustible, cubeta enmarcada=resultado, el
+verbo en el cuerpo: chimenea/husillo/arco/pedestal) + **AFFORDANCE GLOW** (la boca late si lo
+del frasco le sirve -- "¿meto limo en todas?" lo contesta el taller señalando) + LA LÍNEA DEL
+TALLER (cuarto 232..357, fuentes→crisol→prensa→columna→chispa→ensayo→tolva; mampostería
+centralizada en SimLevelBuilder vía TallarEnPlano estáticos; caño de limo con voladizo 12 propio)
++ consejos a 12s con N=siguiente, H=ocultar, contador 3/10 y sección CONSEJOS releíble en el
+diario (hook del playtest 10 por fin consumido) + **LA RACIÓN** de los caños del laboratorio
+(45 celdas por apertura, "· servido — E para más"; nació de ver la inundación EN VIVO) + limo
+recoloreado a oliva (se camuflaba con la piedra). Regla 52 nació de esta verificación. Detalle y
+preguntas abiertas en HANDOFF sección Playtest 26.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

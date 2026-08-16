@@ -160,8 +160,15 @@ namespace Alkahest.Game
             // agua se va, sus arenas quedan").
             var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
                 SimLevelBuilder.CanoAguaY, orderSystem);
+            // (playtest 26, fix integración) alcanceCano=12: los dos caños
+            // comparten pared y con el voladizo default (5) sus chorros caían
+            // por la MISMA columna -- el limo desembocaba en la pila del agua.
+            // Con 12, la boquilla del limo queda sobre SU pila
+            // (SimLevelBuilder.PilaLimoX0..+5) y cada chorro aterriza a la
+            // vista en su recipiente: la primera imagen del juego ya enseña
+            // "cada boca, su pila".
             var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
-                SimLevelBuilder.CanoNutrienteY, orderSystem);
+                SimLevelBuilder.CanoNutrienteY, orderSystem, alcanceCano: 12);
             _dispensers = new[] { canoAgua, canoLimo };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
             //   SpawnStorageRack(apprentice.transform, flask, knowledge);
@@ -430,13 +437,19 @@ namespace Alkahest.Game
         /// (los encargos no existen hasta que se excave hasta la Tolva).
         /// </summary>
         private Dispenser SpawnCanoBasico(Transform player, string label, byte matId, int filaY,
-            OrderSystem orderSystem)
+            OrderSystem orderSystem, int alcanceCano = 5)
         {
             var go = new GameObject($"CanoBasico_{label}");
             var dispenser = go.AddComponent<Dispenser>();
+            // (playtest 26, LA RACIÓN) racionCeldas=45: ~una pila colmada por
+            // apertura y el grifo se cierra solo ("· servido — E para más").
+            // Verificado con capturas en esta misma ronda: sin ración, 20s de
+            // grifo abierto sobre el suelo corrido de la línea inundaban el
+            // laboratorio entero. Solo afecta a los DOS caños del laboratorio
+            // (este método); los grifos del taller clásico siguen infinitos.
             dispenser.Init(_sim, player,
                 SimLevelBuilder.CanoMontajeX, filaY,
-                matId, orderSystem, 0, false);
+                matId, orderSystem, 0, false, alcanceCano, racionCeldas: 45);
             return dispenser;
         }
 
