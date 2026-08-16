@@ -50,6 +50,28 @@ namespace Alkahest.Game
     /// LAS DOS CRIATURAS (`Criatura`/`Capullo`, `Game/Criatura.cs` y
     /// `Game/Capullo.cs`, propiedad del otro encargo de esta ronda -- API
     /// congelada en CONTRATO_PIVOT.md, copiada VERBATIM más abajo).
+    ///
+    /// =====================================================================
+    /// LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md): EL LABORATORIO
+    /// REAMUEBLA EL MISMO CUARTO, LA CRIATURA SE APARCA.
+    /// =====================================================================
+    /// Mismo cuarto íntimo, mismo criterio de "TrySpawn() es una lista plana
+    /// de llamadas" del bloque de arriba -- esta vez la bifurcación es al
+    /// revés: la Criatura y el Capullo (contrato §1, "quedan APARCADOS: sus
+    /// archivos no se tocan y NO se spawnean en esta versión") pasan a ser
+    /// las llamadas COMENTADAS (estilo regla 15 de CLAUDE.md, con la nota
+    /// "criatura aparcada — LO QUE PERSISTE" en el propio comentario, más
+    /// abajo en `TrySpawn()`), y lo que se instancia de nuevo son las TRES
+    /// MÁQUINAS de este contrato (`Crisol`/`Prensa`/`BancoChispa`, §5, en las
+    /// constantes de `SimLevelBuilder` §4.5 que define el encargo A EN
+    /// PARALELO) y el `EnsayoMaestro` del encargo C (§6.2/§6.5, firma
+    /// congelada). El caño que emitía Nutrient pasa a emitir
+    /// `MaterialId.Limo` (regla 47: sigue siendo la boca del CUARTO ÍNTIMO,
+    /// `SimLevelBuilder.CanoNutrienteY`, no la del taller clásico). Ninguna
+    /// de las tres máquinas nuevas necesitó tocar `Sim/SimLevelBuilder.cs`
+    /// (fuera del alcance de este archivo): cada una talla su propia
+    /// mampostería en `Init()` a partir del ancla de una celda que sí define
+    /// el contrato -- ver el docblock de `Game/Crisol.cs` para el porqué.
     /// </summary>
     public sealed class AlkahestGameBootstrap : MonoBehaviour
     {
@@ -119,22 +141,45 @@ namespace Alkahest.Game
             // dejar cositas en el suelo que se pueden perder"*. Su razón es la
             // correcta: en un juego que te pide experimentar, un recurso
             // perdible para siempre es una trampa -- una fuente infinita es lo
-            // que te permite equivocarte. Solo AGUA y NUTRIENTE (la comida de la
-            // criatura), a coste 0 de Favor y sin sellar; arena, aceite y azoth
-            // se quedan enterrados y aparecen al excavar, que es su recompensa.
+            // que te permite equivocarte. Solo AGUA y LIMO (el material
+            // primigenio del que descienden las 40 variantes de esta ronda), a
+            // coste 0 de Favor y sin sellar; arena, aceite y azoth se quedan
+            // enterrados y aparecen al excavar, que es su recompensa.
             // Coordenadas del plano (regla de este archivo: NINGUNA vive aquí),
             // ver SimLevelBuilder.CanoMontajeX/CanoAguaY/CanoNutrienteY.
+            //
+            // (LO QUE PERSISTE, playtest 25, contrato §5.4 / regla 47 de
+            // CLAUDE.md): el caño que emitía Nutrient pasa a emitir
+            // MaterialId.Limo -- MISMO SpawnCanoBasico, misma boca
+            // (CanoNutrienteY sigue siendo la constante correcta: es la del
+            // CUARTO ÍNTIMO, no la del banco de grifos del taller clásico que
+            // advierte la regla 47), solo cambia el material que emite. La
+            // criatura queda aparcada esta ronda (ver más abajo), así que el
+            // nutriente ya no tiene consumidor -- el limo sí: es el primer
+            // gesto del juego entero (diseño §9, "hervir limo en el crisol: el
+            // agua se va, sus arenas quedan").
             var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
                 SimLevelBuilder.CanoAguaY, orderSystem);
-            var canoNutriente = SpawnCanoBasico(apprentice.transform, "Nutrient", MaterialId.Nutrient,
+            var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
                 SimLevelBuilder.CanoNutrienteY, orderSystem);
-            _dispensers = new[] { canoAgua, canoNutriente };
+            _dispensers = new[] { canoAgua, canoLimo };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
             //   SpawnStorageRack(apprentice.transform, flask, knowledge);
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
             SpawnOrdersHud(orderSystem);
+
+            // LAS TRES MÁQUINAS DE LO QUE PERSISTE (contrato §5.4): en las
+            // constantes de SimLevelBuilder §4.5 (CrisolX/PrensaX/BancoChispaX,
+            // suelo CuartoY0+2 -- las define el encargo A EN PARALELO, se
+            // referencian aquí por su nombre EXACTO del contrato). Después del
+            // conocimiento (el Crisol y el Banco lo necesitan para las
+            // condiciones/observaciones legibles del diario) y antes del ciclo
+            // de jornadas.
+            SpawnCrisol(apprentice.transform, knowledge);
+            SpawnPrensa(apprentice.transform);
+            SpawnBancoChispa(apprentice.transform, knowledge);
 
             // Fondo del taller + pistas se crean ANTES que el ciclo de
             // jornadas: DayCycle avisa a HintSystem en cuanto entra en la
@@ -156,26 +201,35 @@ namespace Alkahest.Game
             //   var supplies = new GameObject("MasterSupplies").AddComponent<MasterSupplies>();
             //   supplies.Init(_sim, grifoAzoth);
 
-            // LAS DOS CRIATURAS (contrato CONTRATO_PIVOT.md, firma VERBATIM
-            // -- ver Game/Criatura.cs/Capullo.cs, propiedad del otro
-            // encargo de esta ronda). Después del aprendiz (necesitan su
-            // Transform) y antes del ciclo de jornadas, mismo criterio que
-            // el resto de este método: todo lo que otro sistema pueda leer
-            // por referencia se crea antes que ese sistema.
-            var criaturaGo = new GameObject("Criatura");
-            var criatura = criaturaGo.AddComponent<Criatura>();
-            criatura.Init(_sim, apprentice.transform, SimLevelBuilder.CunaCriaturaX, SimLevelBuilder.CunaCriaturaY);
+            // LAS DOS CRIATURAS -- CRIATURA APARCADA — LO QUE PERSISTE
+            // (contrato CONTRATO_PERSISTE.md §1/§5.4, playtest 25, mismo
+            // estilo que la regla 15 de CLAUDE.md: documentar en el código lo
+            // que se retira, no solo dejar de llamarlo). Sus archivos
+            // (Game/Criatura.cs/Capullo.cs) NO SE TOCAN y quedan APARCADOS
+            // INTACTOS (diseño §8.6: "toda la infraestructura Criatura/Vivium
+            // queda APARCADA INTACTA... es el escalón 'materia → materia
+            // viva' y merece su propia fase") -- esta ronda es sobre qué
+            // PERSISTE ante calor/frío/presión/agua/chispa, no sobre criar.
+            // Se comentan sus llamadas de siembra (firma VERBATIM conservada
+            // abajo, sin borrar, para cuando la criatura vuelva):
+            //   var criaturaGo = new GameObject("Criatura");
+            //   var criatura = criaturaGo.AddComponent<Criatura>();
+            //   criatura.Init(_sim, apprentice.transform, SimLevelBuilder.CunaCriaturaX, SimLevelBuilder.CunaCriaturaY);
+            //
+            //   var capulloGo = new GameObject("Capullo");
+            //   var capullo = capulloGo.AddComponent<Capullo>();
+            //   capullo.Init(_sim, apprentice.transform, SimLevelBuilder.CapulloX, SimLevelBuilder.CapulloY);
 
-            var capulloGo = new GameObject("Capullo");
-            var capullo = capulloGo.AddComponent<Capullo>();
-            capullo.Init(_sim, apprentice.transform, SimLevelBuilder.CapulloX, SimLevelBuilder.CapulloY);
+            // EL ENSAYO DEL MAESTRO (contrato §6.2/§6.5, firma congelada
+            // `EnsayoMaestro.Init(AlkahestSim sim, OrderSystem orders,
+            // Transform jugador)` -- propiedad del encargo C de esta ronda,
+            // implementado en paralelo). Junto a la boca del pasillo
+            // (`SimLevelBuilder.EnsayoPlintoX`, la lee la propia clase). Antes
+            // del ciclo de jornadas, mismo criterio que el resto de este
+            // método.
+            SpawnEnsayoMaestro(orderSystem, apprentice.transform);
 
-            var dayCycle = SpawnDayCycle(orderSystem, knowledge, supplies, hints);
-
-            // [playtest 24, LA MAREA] Tras DayCycle, con las referencias
-            // reales (ver el docblock de SpawnMareaDirector) -- CONTRATO_MAREA.md
-            // §4.2/§4.6 pide explícitamente "spawn tras DayCycle".
-            SpawnMareaDirector(dayCycle, hints);
+            SpawnDayCycle(orderSystem, knowledge, supplies, hints);
 
             // (M5 audio) EL TALLER SUENA: se instancia AL FINAL, cuando ya
             // existen todas las dependencias que necesita (frasco, grifos,
@@ -183,7 +237,7 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (cuarto íntimo, playtest 21 -- taller clásico 768x288 enterrado bajo la roca).");
+            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (cuarto íntimo, playtest 25 -- LO QUE PERSISTE: crisol/prensa/banco de chispa, criatura aparcada).");
         }
 
         private ApprenticeController SpawnApprentice()
@@ -386,6 +440,41 @@ namespace Alkahest.Game
             return dispenser;
         }
 
+        /// <summary>
+        /// LO QUE PERSISTE (contrato §5.4): el Crisol, en
+        /// <see cref="SimLevelBuilder.CrisolX"/> -- la constante la define el
+        /// encargo A en paralelo, se usa por su nombre EXACTO del contrato.
+        /// `knowledge` alimenta las condiciones legibles del diario
+        /// ("combustible:&lt;nombre&gt;", ver Crisol.CondicionCalor).
+        /// </summary>
+        private void SpawnCrisol(Transform player, SubstanceKnowledge knowledge)
+        {
+            var go = new GameObject("Crisol");
+            var crisol = go.AddComponent<Crisol>();
+            crisol.Init(_sim, player, knowledge, SimLevelBuilder.CrisolX);
+        }
+
+        /// <summary>LO QUE PERSISTE (contrato §5.4): la Prensa, en <see cref="SimLevelBuilder.PrensaX"/>.</summary>
+        private void SpawnPrensa(Transform player)
+        {
+            var go = new GameObject("Prensa");
+            var prensa = go.AddComponent<Prensa>();
+            prensa.Init(_sim, player, SimLevelBuilder.PrensaX);
+        }
+
+        /// <summary>
+        /// LO QUE PERSISTE (contrato §5.4): el Banco de Chispa, en
+        /// <see cref="SimLevelBuilder.BancoChispaX"/>. `knowledge` alimenta el
+        /// hook de observaciones (contrato §5.3/§6.4,
+        /// SubstanceKnowledge.RegistrarObservacionPropiedad).
+        /// </summary>
+        private void SpawnBancoChispa(Transform player, SubstanceKnowledge knowledge)
+        {
+            var go = new GameObject("BancoChispa");
+            var banco = go.AddComponent<BancoChispa>();
+            banco.Init(_sim, player, knowledge, SimLevelBuilder.BancoChispaX);
+        }
+
         private Dispenser SpawnOneDispenser(Transform player, string label, byte matId, int fila,
             OrderSystem orderSystem, int favorCost, bool bloqueado)
         {
@@ -423,6 +512,21 @@ namespace Alkahest.Game
             chute.Init(_sim, orderSystem);
         }
 
+        /// <summary>
+        /// LO QUE PERSISTE (contrato §6.2/§6.5): el Ensayo del Maestro, con la
+        /// firma congelada `EnsayoMaestro.Init(AlkahestSim sim, OrderSystem
+        /// orders, Transform jugador)` -- "nada más necesita Init nuevo", la
+        /// propia clase lee su posición de `SimLevelBuilder.EnsayoPlintoX`
+        /// (junto a la boca del pasillo), igual que DeliveryChute lee la suya.
+        /// Propiedad del encargo C de esta ronda, implementado en paralelo.
+        /// </summary>
+        private void SpawnEnsayoMaestro(OrderSystem orderSystem, Transform player)
+        {
+            var go = new GameObject("EnsayoMaestro");
+            var ensayo = go.AddComponent<EnsayoMaestro>();
+            ensayo.Init(_sim, orderSystem, player);
+        }
+
         private void SpawnNamingUi(Flask flask, SubstanceKnowledge knowledge)
         {
             var go = new GameObject("NamingUi");
@@ -452,37 +556,12 @@ namespace Alkahest.Game
             director.Init(_sim, orderSystem, knowledge, flask, player, _dispensers);
         }
 
-        /// <summary>
-        /// [playtest 24, LA MAREA] Pasa a devolver el DayCycle creado (antes
-        /// era `void`): MareaDirector.cs (mismo playtest) necesita esa
-        /// referencia real para llamar `TerminarPartida` -- cambio de firma
-        /// contenido en este MISMO archivo, un método PRIVADO de este
-        /// bootstrap, no una de las firmas congeladas por contrato
-        /// (Criatura.Init/Capullo.Init sí lo están, ver CONTRATO_PIVOT.md;
-        /// esta no).
-        /// </summary>
-        private DayCycle SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,
+        private void SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,
             MasterSupplies supplies, HintSystem hints)
         {
             var go = new GameObject("DayCycle");
             var cycle = go.AddComponent<DayCycle>();
             cycle.Init(_sim, orderSystem, knowledge, supplies, hints);
-            return cycle;
-        }
-
-        /// <summary>
-        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.2/§4.6] El
-        /// director del arco: sondea cada 2s (victoria/derrota/pistas) y
-        /// decide el despertar de la marea. Se crea DESPUÉS de DayCycle
-        /// (necesita su referencia real para TerminarPartida) y de HintSystem
-        /// (ya existía antes en este método, para el sistema de pistas del
-        /// arco -- ver EncolarPistaDeMarea).
-        /// </summary>
-        private void SpawnMareaDirector(DayCycle dayCycle, HintSystem hints)
-        {
-            var go = new GameObject("MareaDirector");
-            var director = go.AddComponent<MareaDirector>();
-            director.Init(_sim, dayCycle, hints);
         }
     }
 }

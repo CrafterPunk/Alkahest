@@ -259,6 +259,18 @@ namespace Alkahest.Game
         // hace falta razonar sobre "0 es también un valor válido de NamingVersion").
         private int _ultimaNamingVersionAplicada = -1;
 
+        /// <summary>
+        /// (playtest 25, CONTRATO_PERSISTE.md §6.1) EL ARCO DE 5 DE "LO QUE
+        /// PERSISTE": -1 mientras no está activo (modo clásico, o antes de
+        /// llamar a GenerateOrdersPersiste). 0..4 = qué pedido del arco fijo
+        /// está mostrándose ahora mismo en <see cref="ActiveOrders"/> (que en
+        /// este modo SIEMPRE tiene como mucho UNO: "de uno en uno", ver
+        /// AvanzarArcoPersisteSiToca). 5 = arco terminado.
+        /// </summary>
+        private int _arcoPersisteIndex = -1;
+
+        private const int ArcoPersisteCount = 5;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
         {
@@ -550,6 +562,114 @@ namespace Alkahest.Game
             }
         }
 
+        // =================================================================
+        // (playtest 25, CONTRATO_PERSISTE.md §6.1) EL ARCO DE "LO QUE
+        // PERSISTE" -- reemplaza a GenerateOrdersPivot en el laboratorio
+        // (ver Game/DayCycle.cs): CINCO pedidos de UNO EN UNO, textos e
+        // ÍNDICES LITERALES del contrato ("el arco ES el tutorial", no se
+        // reordena ni se sortea). La temperatura del nº2 SIEMPRE sale de
+        // Universe.TempEnsayoCalorRaw (calibrada por el solver de A) --
+        // jamás un número inventado aquí: "se acabaron los pedidos
+        // imposibles" es la lección del playtest 22 que este arco no puede
+        // repetir.
+        //
+        // RECOMPENSAS: crecientes, la 5ª paga el DOBLE (contrato, "el
+        // conocimiento vale más que la sustancia"). Los números concretos
+        // (30/40/45/55/110) NO están fijados por el contrato más allá de esa
+        // forma -- DECISIÓN de este encargo, calibrada contra
+        // StartingFavor=20 para que el arco entero sea alcanzable sin volver
+        // a la Tolva vacía: 30+40+45+55+110 = 280 Favor solo con este arco,
+        // muy por encima de MaestroFavorTarget=260 (con margen para lo que
+        // se gaste en grifos/experimentar).
+        // =================================================================
+        private static readonly string[] ArcoPersisteTextos =
+        {
+            "Separadme el limo: traedme una sola de sus arenas, pura.",
+            "Algo que aguante el rojo del crisol sin ceder.",
+            "Algo que encienda mi lámpara.",
+            "Algo que flote en el agua sin deshacerse en ella.",
+            "El cómo del nº2, por escrito en vuestro libro.",
+        };
+
+        private static readonly OrderType[] ArcoPersisteTipos =
+        {
+            OrderType.Pureza, OrderType.AguantaCalor, OrderType.Conduce, OrderType.FlotaInsoluble, OrderType.Procedimiento,
+        };
+
+        // MinCells: Pureza/FlotaInsoluble cuentan celdas de verdad en la
+        // Tolva; AguantaCalor/Conduce/Procedimiento son "de un solo golpe"
+        // (el Ensayo o la primera celda tras patentar los completa entero),
+        // así que su MinCells es 1 -- OrdersHud (fuera de este encargo) ya
+        // sabe leer "0/1" -> "hecho" sin ningún cambio ahí.
+        private static readonly int[] ArcoPersisteMinCells = { 25, 1, 1, 20, 1 };
+        private static readonly int[] ArcoPersisteRecompensa = { 30, 40, 45, 55, 110 };
+
+        /// <summary>
+        /// (playtest 25) DayCycle la llama UNA vez, al primer momento
+        /// jugable del laboratorio (ver su docblock en Game/DayCycle.cs).
+        /// Arranca el arco en el pedido 0 -- el resto se encadena solo
+        /// (ver AvanzarArcoPersisteSiToca, llamado desde TryDeliverCell y
+        /// CompletarEnsayo cada vez que un pedido se completa de verdad).
+        /// </summary>
+        public void GenerateOrdersPersiste()
+        {
+            ActiveOrders.Clear();
+            _arcoPersisteIndex = 0;
+            AddArcoPersisteOrder(_arcoPersisteIndex);
+        }
+
+        private void AddArcoPersisteOrder(int i)
+        {
+            AddOrder(ArcoPersisteTipos[i], ArcoPersisteMinCells[i], ArcoPersisteRecompensa[i], ArcoPersisteTextos[i]);
+        }
+
+        /// <summary>
+        /// Llamado tras marcar Completado=true en CUALQUIER pedido mientras
+        /// el arco de LO QUE PERSISTE está activo. Como el arco solo tiene
+        /// UN pedido vivo en <see cref="ActiveOrders"/> a la vez (se vacía y
+        /// se repone aquí mismo), no hace falta comprobar CUÁL se completó:
+        /// solo puede ser el actual.
+        /// </summary>
+        private void AvanzarArcoPersisteSiToca()
+        {
+            if (_arcoPersisteIndex < 0) return;
+            _arcoPersisteIndex++;
+            ActiveOrders.Clear();
+            if (_arcoPersisteIndex < ArcoPersisteCount) AddArcoPersisteOrder(_arcoPersisteIndex);
+            // >= ArcoPersisteCount: arco terminado -- se deja ActiveOrders vacío
+            // a propósito (el arco no se repite, v0: el laboratorio no tiene
+            // "jornada siguiente" que lo reponga).
+        }
+
+        /// <summary>
+        /// (playtest 25) Completa un pedido AguantaCalor/Conduce del arco --
+        /// los ÚNICOS dos tipos que <see cref="MatchesOrder"/> nunca deja
+        /// coincidir en la Tolva (contrato §6.1: "se resuelve en el Ensayo").
+        /// La llama <see cref="EnsayoMaestro"/> tras un ensayo con éxito.
+        /// `factorFavor` es el multiplicador de estrellas (x1/x1.5/x2, ver
+        /// contrato §6.2); el Favor final se redondea al entero más cercano.
+        /// Devuelve false si no hay un pedido INCOMPLETO de ese tipo activo
+        /// ahora mismo (nada que completar -- el Ensayo no debería llamar
+        /// aquí sin comprobar antes, pero la API se defiende igual).
+        /// </summary>
+        public bool CompletarEnsayo(OrderType tipo, float factorFavor)
+        {
+            for (int i = 0; i < ActiveOrders.Count; i++)
+            {
+                var order = ActiveOrders[i];
+                if (order.Tipo != tipo || order.Completado) continue;
+
+                order.Progreso = order.MinCells;
+                order.Completado = true;
+                int favor = Mathf.RoundToInt(order.Recompensa * factorFavor);
+                AddFavor(favor);
+                Debug.Log($"[ChaosAlchemy] Ensayo superado: {order.Descripcion} (+{favor} Favor, x{factorFavor:0.0}).");
+                AvanzarArcoPersisteSiToca();
+                return true;
+            }
+            return false;
+        }
+
         private void AddNamedOrFallback(System.Random rng)
         {
             byte target = PickNamedMaterial(rng);
@@ -671,12 +791,26 @@ namespace Alkahest.Game
                     continue;
                 }
 
+                // (playtest 25) PUREZA fija su objetivo con la PRIMERA celda
+                // válida que recibe: MatchesOrder ya comprobó que matId es un
+                // Polvo de base×estado (o que coincide con el LockedMat ya
+                // fijado); aquí, y SOLO aquí (TryDeliverCell es el único
+                // sitio que puede mutar Order, MatchesOrder es estático), se
+                // fija el candado la primera vez. "Traedme una sola de sus
+                // arenas, PURA" -- a partir de este punto, solo esa base
+                // exacta cuenta para el resto del pedido.
+                if (order.Tipo == OrderType.Pureza && !order.LockedMat.HasValue)
+                {
+                    order.LockedMat = matId;
+                }
+
                 order.Progreso++;
                 if (order.Progreso >= order.MinCells)
                 {
                     order.Completado = true;
                     AddFavor(order.Recompensa);
                     Debug.Log($"[ChaosAlchemy] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
+                    AvanzarArcoPersisteSiToca(); // no-op si el arco de LO QUE PERSISTE no está activo (_arcoPersisteIndex==-1).
                 }
                 return DeliveryOutcome.Progressed;
             }
@@ -699,6 +833,43 @@ namespace Alkahest.Game
                     return order.MinTempC.HasValue && CellGrid.RawToC(tempRaw) <= order.MinTempC.Value;
                 case OrderType.NamedMaterial:
                     return order.TargetMat.HasValue && matId == order.TargetMat.Value;
+
+                // =============================================================
+                // (playtest 25, CONTRATO_PERSISTE.md §6.1) LOS CINCO TIPOS NUEVOS.
+                // =============================================================
+                case OrderType.Pureza:
+                    // "N celdas del MISMO Polvo base -- cualquiera": cualquier
+                    // base×estado en su estado NATAL (Polvo) vale como primera
+                    // celda; a partir de ahí, order.LockedMat (fijado en
+                    // TryDeliverCell, MatchesOrder es estático y no puede
+                    // mutar) exige la MISMA base exacta -- "pura", no mezcla.
+                    if (!MaterialId.EsBaseEstado(matId)) return false;
+                    if (MaterialId.EstadoDe(matId) != EstadoMateria.Polvo) return false;
+                    return !order.LockedMat.HasValue || matId == order.LockedMat.Value;
+
+                case OrderType.FlotaInsoluble:
+                    // Por TABLA (contrato §6.1): densidad menor que la del
+                    // agua Y no soluble. No se restringe a base×estado a
+                    // propósito -- el criterio es literal, cualquier material
+                    // de este universo que lo cumpla vale (v0: sin teatro,
+                    // solo la comprobación de tabla, tal y como pide el
+                    // contrato -- "teatro en v2").
+                    return universe.Get(matId).density < universe.Get(MaterialId.Water).density
+                        && !universe.SolubleEnAgua(matId);
+
+                case OrderType.Procedimiento:
+                    // Se autocompleta al entregar CUALQUIER celda mientras
+                    // haya ≥1 patente registrada -- "el cómo, por escrito",
+                    // no una sustancia concreta (contrato §6.1).
+                    return Hornada.TieneAlMenosUnaPatente();
+
+                case OrderType.AguantaCalor:
+                case OrderType.Conduce:
+                    // NUNCA coinciden aquí: se resuelven en el Ensayo del
+                    // Maestro (ver EnsayoMaestro.cs + OrderSystem.CompletarEnsayo),
+                    // nunca vertiendo en la Tolva (contrato §6.1).
+                    return false;
+
                 default:
                     return false;
             }

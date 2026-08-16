@@ -134,20 +134,6 @@ namespace Alkahest.Game
         /// <summary>¿Lleva el aprendiz el cincel en la mano ahora mismo? Análogo a JournalHud.Abierto / Dev/DevPalette.IsOpen: un flag estático de solo lectura hacia fuera, que además ES el indicador de modo (ver doc de clase) -- si el icono/haz del cincel se ve, estás en modo cincel; si no, llevas el frasco.</summary>
         public static bool ModoActivo { get; private set; }
 
-        /// <summary>
-        /// [playtest 24, LA MAREA -- ver CONTRATO_MAREA.md §4.1] Celdas de
-        /// piedra REALMENTE talladas (nunca las que RELLENAR vuelve a poner):
-        /// la señal de despertar que lee <see cref="MareaDirector"/> -- "has
-        /// empezado a abrir el mundo: el mundo también se abre hacia ti".
-        /// Solo cuenta en <see cref="TallarTick"/>, justo donde ya se filtra
-        /// "SOLO piedra" (ver doc de ese método): cada golpe de budget que de
-        /// verdad convierte una celda de Stone en Empty suma uno, así que un
-        /// clic mantenido sobre agua/cristal/vacío no adelanta el despertar.
-        /// Reset a 0 en <see cref="Init"/> -- una partida nueva empieza con
-        /// el contador limpio, igual que el resto del estado de esta clase.
-        /// </summary>
-        public static int CeldasTalladas { get; private set; }
-
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
 
@@ -178,10 +164,6 @@ namespace Alkahest.Game
         public void Init(AlkahestSim sim)
         {
             _sim = sim;
-            // [playtest 24, LA MAREA] Cada partida nueva arranca con el
-            // contador de despertar en cero -- ver el docblock de
-            // CeldasTalladas.
-            CeldasTalladas = 0;
             BuildVisuals();
         }
 
@@ -337,11 +319,6 @@ namespace Alkahest.Game
 
                         _sim.Paint(x, y, 0, MaterialId.Empty);
                         budget--;
-                        // [playtest 24, LA MAREA] Solo TALLAR cuenta para el
-                        // despertar (ver el docblock de CeldasTalladas):
-                        // RELLENAR vuelve a poner piedra, así que no debe
-                        // sumar aquí.
-                        CeldasTalladas++;
                     }
                 }
             }

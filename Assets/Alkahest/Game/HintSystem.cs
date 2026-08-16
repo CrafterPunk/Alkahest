@@ -52,20 +52,31 @@ namespace Alkahest.Game
         private const float SegundosPorPistaJornada1 = 9f;
         private const float SegundosPorPistaOtras = 8f;
 
+        // (playtest 25, CONTRATO_PERSISTE.md §6.5) REEMPLAZADAS ENTERAS: la
+        // dirección "LO QUE PERSISTE" ya no abre en el taller clásico (grifos
+        // de agua/aceite, placa, Tolva de siempre) sino en el laboratorio del
+        // cuarto íntimo (limo, crisol, prensa, banco de chispa) -- las 12
+        // líneas viejas describían un guion que este modo ni siquiera
+        // recorre (no hay "aceite que arde junto a la placa" en la primera
+        // jornada de este pivot). Las 10 líneas de aquí son LITERALES del
+        // contrato (verbatim, no parafraseadas): un paso ejecutable cada una,
+        // en el orden en que el jugador puede de verdad encontrárselas.
+        // PistasJornada2/PistasJornada3 NO se tocan: siguen sirviendo al modo
+        // CLÁSICO (EnterDayIntro, día 2/3), que este encargo no toca -- ver
+        // DayCycle.EnterCuartoIntimoSilencioso, que solo llama a
+        // ReiniciarParaJornada(1), nunca a día 2 ni 3 en este modo.
         private static readonly string[] PistasJornada1 =
         {
-            "Muévete con WASD.",
-            "Aspira con clic izquierdo.",
-            "Vierte con clic derecho.",
-            "Pulsa E junto a un grifo para abrir el caudal.",
-            "Mira los ENCARGOS arriba a la derecha: el Maestro paga por efectos.",
-            "El aceite arde: acércalo a la placa encendida.",
-            "Vierte en la TOLVA dorada del muro derecho para entregar.",
-            "Pulsa E en una placa para regular su calor.",
-            "La piedra gélida del estante enfría lo que toca.",
-            "Aspira hielo y viértelo helado en la Tolva: el frasco conserva el frío.",
-            "Pulsa T para bautizar lo que apuntas o llevas en el frasco.",
-            "Pulsa J para abrir tu diario.",
+            "El caño turbio gotea LIMO: todo lo que existe aquí desciende de él.",
+            "Hierve limo en el crisol: el agua se va, sus arenas quedan.",
+            "El crisol solo, sin alimentar, hierve pero no funde.",
+            "Tostad un polvo sin fundirlo: algunos se vuelven combustible.",
+            "Con combustible en la tolva del crisol, llega el rojo de verdad.",
+            "Lo fundido, vertido fuera, se templa: duro pero frágil.",
+            "Dejadlo morir dentro del crisol y saldrá recocido: dócil a la prensa.",
+            "La prensa compacta lo dócil y revienta lo frágil.",
+            "La lámpara del banco delata lo que el ojo no ve.",
+            "Pulsa T para bautizar; el libro (J) guarda vuestros procedimientos.",
         };
 
         // (fix playtest 9, recortadas playtest 10) El jugador reportó llevar horas sin
@@ -105,17 +116,6 @@ namespace Alkahest.Game
         private float _playSeconds;
         private bool _everUnlocked;
         private bool _oculto;
-
-        // -----------------------------------------------------------------
-        // [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.5] CANAL DE
-        // PRIORIDAD: ver EncolarPistaDeMarea más abajo.
-        // -----------------------------------------------------------------
-        /// <summary>Cuánto se ve una pista prioritaria antes de devolver el turno a la rotación normal de jornada -- mismo tiempo de lectura que las pistas de jornada 2/3 (SegundosPorPistaOtras): son igual de cortas, una línea ejecutable cada una.</summary>
-        private const float SegundosPistaPrioritaria = SegundosPorPistaOtras;
-
-        private string _pistaPrioritaria;
-        private float _pistaPrioritariaSegundosRestantes;
-        private bool _pistaPrioritariaArchivada;
 
         // ---------------------------------------------------------------------------------
         // (fix playtest 10) API ESTÁTICA DE SOLO LECTURA para que el diario (Game/
@@ -160,35 +160,12 @@ namespace Alkahest.Game
             _playSeconds = 0f;
         }
 
-        /// <summary>
-        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.5] Canal de
-        /// PRIORIDAD para Game/MareaDirector.cs (mismo playtest): INTERRUMPE
-        /// la cola normal de jornada y muestra esta línea con la MISMA placa
-        /// y el MISMO estilo -- las tres pistas del arco de la marea
-        /// (despertar / primer Rocío / marea subiendo) no pueden esperar su
-        /// turno en una rotación que va a 8-9s por frase y puede llevar
-        /// minutos en dar la vuelta. NO toca `_playSeconds`/`_registrada`
-        /// (la rotación normal de jornada sigue corriendo por debajo y
-        /// retoma exactamente donde le tocaría estar en cuanto la prioridad
-        /// expira, ver OnGUI) ni pasa por la cola: es un interruptor
-        /// aparte, no una entrada más de <see cref="_pistas"/>.
-        /// </summary>
-        public void EncolarPistaDeMarea(string pista)
-        {
-            _pistaPrioritaria = pista;
-            _pistaPrioritariaSegundosRestantes = SegundosPistaPrioritaria;
-            _pistaPrioritariaArchivada = false;
-        }
-
         private void Update()
         {
             if (!DayCycle.InputLocked)
             {
                 _everUnlocked = true;
                 _playSeconds += Time.deltaTime;
-
-                if (_pistaPrioritariaSegundosRestantes > 0f)
-                    _pistaPrioritariaSegundosRestantes -= Time.deltaTime;
 
                 var kb = Keyboard.current;
                 // (fix playtest 10) H es un atajo de una tecla como cualquier otro del
@@ -203,43 +180,19 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (!_everUnlocked || DayCycle.InputLocked || DayCycle.HudSilenciado || _oculto) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
-
-            // [playtest 24, LA MAREA] La pista PRIORITARIA (ver
-            // EncolarPistaDeMarea) se dibuja EN VEZ de la rotación normal
-            // mientras esté viva -- incluso si `_playSeconds >= _duracion`
-            // ya apagó la rotación normal hace rato (el arco de la marea
-            // puede disparar sus tres avisos bien entrada la partida, mucho
-            // después de que la cola de jornada 1/2/3 haya terminado de
-            // rotar).
-            bool prioritaria = _pistaPrioritariaSegundosRestantes > 0f;
-            if (!prioritaria && _playSeconds >= _duracion) return;
+            if (_playSeconds >= _duracion) return;
 
             UiStyles.Preparar();
 
-            string texto;
-            if (prioritaria)
-            {
-                texto = _pistaPrioritaria;
-                // Archivo para el diario, una sola vez por pista prioritaria
-                // (mismo criterio de coste que el bloque normal de abajo).
-                if (!_pistaPrioritariaArchivada)
-                {
-                    _pistaPrioritariaArchivada = true;
-                    if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
-                }
-            }
-            else
-            {
-                int i = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
-                texto = _pistas[i];
+            int i = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
+            string texto = _pistas[i];
 
-                // Archivo para el diario (ver PistasMostradas arriba): una sola vez por
-                // índice, no un Contains() por frame -- barato incluso a 60+ FPS.
-                if (i >= 0 && i < _registrada.Length && !_registrada[i])
-                {
-                    _registrada[i] = true;
-                    if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
-                }
+            // Archivo para el diario (ver PistasMostradas arriba): una sola vez por
+            // índice, no un Contains() por frame -- barato incluso a 60+ FPS.
+            if (i >= 0 && i < _registrada.Length && !_registrada[i])
+            {
+                _registrada[i] = true;
+                if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
             }
 
             float pad = UiStyles.S(9f);

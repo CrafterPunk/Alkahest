@@ -161,11 +161,48 @@ namespace Alkahest.Game
 
         private readonly Entrada[] _entradasLeyes = new Entrada[MaxLeyes];
         private int _entradasLeyesCount;
-        private readonly Entrada[] _entradasProcedimientos = new Entrada[MaxLeyes];
+
+        // (playtest 25, CONTRATO_PERSISTE.md §6.4) PROCEDIMIENTOS ahora
+        // mezcla DOS fuentes en la MISMA lista/paginación: las "recetas"
+        // derivadas de leyes presenciadas (como antes, ver
+        // ConstruirEntradaProcedimiento) MÁS las PATENTES congeladas por
+        // Hornada.cs (ver ActualizarCache) -- capacidad = las de siempre +
+        // el tope de Hornada, para que ninguna de las dos fuentes pueda
+        // desbordar el array de la otra.
+        private const int MaxProcedimientos = MaxLeyes + Hornada.MaxPatentes;
+        private readonly Entrada[] _entradasProcedimientos = new Entrada[MaxProcedimientos];
         private int _entradasProcedimientosCount;
+        // Paralelo a _entradasProcedimientos: -1 si la entrada es una
+        // "receta" derivada de ley (no bautizable aquí); si es ≥0, es el
+        // índice de patente en Hornada (Hornada.GetPatente(...)) que esa
+        // fila representa -- lo consulta DrawEntradaProcedimiento para
+        // ofrecer el botón "bautizar" solo en las patentes SIN nombre.
+        private readonly int[] _entradaProcedimientoPatenteIdx = new int[MaxProcedimientos];
+
         private readonly Entrada[] _entradasSustancias = new Entrada[MaterialId.Count];
         private int _entradasSustanciasCount;
-        private int _cacheFirma = int.MinValue;
+        // (playtest 25, FIX) `long`, no `int`: con LeyesVersion (5b) +
+        // NamingVersion (16b) + CountDiscovered (6b) + Hornada.PatentesVersion
+        // (5b) el `int` de 32 bits ya estaba lleno de canto a canto (0..31
+        // ocupados exactos) -- no quedaba ni un bit libre para
+        // ObservacionesVersion (ver SubstanceKnowledge.RegistrarObservacionPropiedad).
+        // Ensanchar a `long` en vez de recortar alguno de los rangos
+        // existentes: recortar reabriría el riesgo de colisión que esos
+        // mismos campos ya documentan haber cerrado a propósito.
+        private long _cacheFirma = long.MinValue;
+
+        // (playtest 25) La ventana de bautizo de UNA patente a la vez,
+        // abierta desde el botón de su ficha en PROCEDIMIENTOS -- ver
+        // DrawEntradaProcedimiento/DrawVentanaBautizoPatente. NO se reutiliza
+        // NamingUi.cs (fuera del alcance de este encargo, y su API está
+        // atada a un MaterialId real de la sim, no a un índice de patente de
+        // Hornada): esta es una ventana PARALELA, mismo idioma visual
+        // (GUILayout.Window + Campo + Boton de UiStyles), para el mismo
+        // gesto ("mismo flujo que las sustancias", contrato §6.4).
+        private const int VentanaBautizoPatenteId = 837481; // distinto del 837480 de NamingUi.cs.
+        private int _patenteEnEdicionIdx = -1;
+        private string _patenteNombreField = "";
+        private Rect _ventanaBautizoPatenteRect;
 
         // (playtest 18) "N de M" de la sección LEYES: cabecera bien visible
         // (DrawContenido la usa en vez de la constante "LEYES" cuando
@@ -184,13 +221,25 @@ namespace Alkahest.Game
         // MIDEN su contenido cacheado cada frame con UiStyles.Alto (que no
         // asigna: reutiliza un GUIContent estático). Lo único que se cachea
         // agresivamente son los STRINGS (ActualizarCache); la geometría de
-        // qué entrada cae en qué página es barata de recalcular (<=24
-        // entradas) y así siempre está sincronizada con la resolución
-        // actual sin un segundo mecanismo de invalidación.
+        // qué entrada cae en qué página es barata de recalcular y así
+        // siempre está sincronizada con la resolución actual sin un segundo
+        // mecanismo de invalidación.
+        //
+        // (playtest 25, FIX) El tope estaba en MaxLeyes+2=26 páginas -- daba
+        // igual mientras la sección más larga (SUSTANCIAS) tenía como mucho
+        // 16 entradas (MaterialId.Count viejo=17). Con las 40 variantes
+        // base×estado de A (MaterialId.Count=58), SUSTANCIAS puede llegar a
+        // 57 entradas: en el caso límite (una entrada gigante por página) se
+        // necesitarían más de 26 páginas y ComputePages se habría cortado en
+        // silencio (guardas `_pageCount < _pageLeftStart.Length`), perdiendo
+        // fichas del catálogo sin ningún error visible. El tope ahora cubre
+        // el peor caso real de las tres secciones (SUSTANCIAS es la más
+        // larga: MaterialId.Count-1) con margen.
         // -----------------------------------------------------------------
-        private readonly int[] _pageLeftStart = new int[MaxLeyes + 2];
-        private readonly int[] _pageRightStart = new int[MaxLeyes + 2];
-        private readonly int[] _pageRightEnd = new int[MaxLeyes + 2];
+        private const int MaxPaginasCapacidad = MaterialId.Count + 2;
+        private readonly int[] _pageLeftStart = new int[MaxPaginasCapacidad];
+        private readonly int[] _pageRightStart = new int[MaxPaginasCapacidad];
+        private readonly int[] _pageRightEnd = new int[MaxPaginasCapacidad];
         private int _pageCount = 1;
 
         private int _pieFirma = int.MinValue;
@@ -254,6 +303,9 @@ namespace Alkahest.Game
         private const int MiniLado = 30;
 
         private const string TextoInvitaBautizo = "todavía sin nombre — cierra el diario y bautízala con T";
+
+        /// <summary>(playtest 25) Invitación equivalente para una PATENTE sin bautizar: aquí SÍ hay un botón en la propia página (ver DrawEntradaProcedimiento), no hace falta cerrar el libro.</summary>
+        private const string TextoInvitaBautizoPatente = "(sin bautizar — pulsa el botón de abajo)";
 
         // Pergamino apagado y lomo: coherentes con la paleta ciruela/latón
         // del taller (UiStyles.Tinta/Oro), NO blanco puro -- el reporte pide
@@ -336,6 +388,20 @@ namespace Alkahest.Game
                 // realidad el overlay de jornada es quien manda.
                 _visible = false;
                 Abierto = false;
+                CerrarVentanaBautizoPatente(); // (playtest 25) no dejar la ventana de bautizo huérfana bajo el overlay de jornada.
+                return;
+            }
+
+            // (playtest 25) ESC es universal (regla 12 de CLAUDE.md): tiene
+            // que poder cerrar la ventana de bautizo de patente AUNQUE sea
+            // ella misma quien tiene EscribiendoTexto en true -- por eso esta
+            // comprobación va ANTES del `if (UiStyles.EscribiendoTexto)` de
+            // abajo, igual que NamingUi.cs resuelve el mismo conflicto para
+            // su propio campo.
+            var kbPatente = Keyboard.current;
+            if (_patenteEnEdicionIdx >= 0 && kbPatente != null && kbPatente.escapeKey.wasPressedThisFrame)
+            {
+                CerrarVentanaBautizoPatente();
                 return;
             }
 
@@ -405,6 +471,14 @@ namespace Alkahest.Game
 
             UiStyles.Rellenar(new Rect(0f, 0f, Screen.width, Screen.height), _velo);
             DrawBook();
+
+            // (playtest 25) La ventana de bautizo de patente se dibuja EN UN
+            // GUILayout.Window aparte, después del libro -- mismo orden que
+            // NamingUi respecto al resto del HUD (la ventana de bautizo
+            // siempre gana encima de lo que la abrió). GUI.depth=-1000 ya
+            // puesto arriba sigue aplicando: sigue por delante del resto del
+            // HUD del mundo, solo detrás de sí misma no hay nada que competir.
+            DrawVentanaBautizoPatente();
         }
 
         // ===================================================================
@@ -582,15 +656,22 @@ namespace Alkahest.Game
             // ("★ SE PROPAGA — el X no se gasta..."), repetirlo como
             // distintivo aparte sería ruido, no aire.
             bool mostrarBadge = _seccion == Seccion.Leyes;
+            // (playtest 25) Solo PROCEDIMIENTOS puede llevar el botón de
+            // bautizo de patente bajo una entrada -- ver
+            // DrawEntradaProcedimiento/PatenteIdxDe.
+            bool esProcedimientos = _seccion == Seccion.Procedimientos;
 
-            ComputePages(entradas, count, cuerpoIzq.width, cuerpoIzq.height, mostrarBadge);
+            ComputePages(entradas, count, cuerpoIzq.width, cuerpoIzq.height, mostrarBadge, esProcedimientos);
 
             int pagina = Mathf.Clamp(_pagina, 0, _pageCount - 1);
             _pagina = pagina;
 
-            DrawColumna(cuerpoIzq, entradas, _pageLeftStart[pagina], _pageRightStart[pagina], mostrarBadge);
-            DrawColumna(cuerpoDer, entradas, _pageRightStart[pagina], _pageRightEnd[pagina], mostrarBadge);
+            DrawColumna(cuerpoIzq, entradas, _pageLeftStart[pagina], _pageRightStart[pagina], mostrarBadge, esProcedimientos);
+            DrawColumna(cuerpoDer, entradas, _pageRightStart[pagina], _pageRightEnd[pagina], mostrarBadge, esProcedimientos);
         }
+
+        /// <summary>Índice de patente (Hornada.GetPatente) que representa la entrada `i` de PROCEDIMIENTOS, o -1 si es una receta de ley o si no estamos en esa sección. Ver _entradaProcedimientoPatenteIdx.</summary>
+        private int PatenteIdxDe(int i, bool esProcedimientos) => esProcedimientos ? _entradaProcedimientoPatenteIdx[i] : -1;
 
         private void ObtenerSeccionActual(out Entrada[] entradas, out int count, out string vacio)
         {
@@ -621,16 +702,16 @@ namespace Alkahest.Game
         // progreso (al menos una entrada por columna) para no entrar en
         // bucle si una entrada aislada fuera más alta que la columna entera.
         // -----------------------------------------------------------------
-        private void ComputePages(Entrada[] entradas, int count, float ancho, float altoDisponible, bool badge)
+        private void ComputePages(Entrada[] entradas, int count, float ancho, float altoDisponible, bool badge, bool esProcedimientos)
         {
             _pageCount = 0;
             int idx = 0;
             while (idx < count && _pageCount < _pageLeftStart.Length)
             {
                 int leftStart = idx;
-                int leftEnd = FillColumn(entradas, leftStart, count, ancho, altoDisponible, badge);
+                int leftEnd = FillColumn(entradas, leftStart, count, ancho, altoDisponible, badge, esProcedimientos);
                 int rightStart = leftEnd;
-                int rightEnd = FillColumn(entradas, rightStart, count, ancho, altoDisponible, badge);
+                int rightEnd = FillColumn(entradas, rightStart, count, ancho, altoDisponible, badge, esProcedimientos);
 
                 _pageLeftStart[_pageCount] = leftStart;
                 _pageRightStart[_pageCount] = rightStart;
@@ -642,17 +723,17 @@ namespace Alkahest.Game
             if (_pageCount == 0) _pageCount = 1; // defensivo: no debería pasar con count>0, pero nunca 0 páginas.
         }
 
-        private int FillColumn(Entrada[] entradas, int start, int count, float ancho, float altoDisponible, bool badge)
+        private int FillColumn(Entrada[] entradas, int start, int count, float ancho, float altoDisponible, bool badge, bool esProcedimientos)
         {
             if (start >= count) return start;
 
-            float usado = EntradaAltura(entradas[start], ancho, badge);
+            float usado = EntradaAltura(entradas[start], ancho, badge, PatenteIdxDe(start, esProcedimientos));
             int i = start + 1;
             float espacio = UiStyles.S(14f); // "aire" entre entradas -- el problema del playtest era de aire, no de contenido.
 
             while (i < count)
             {
-                float extra = espacio + EntradaAltura(entradas[i], ancho, badge);
+                float extra = espacio + EntradaAltura(entradas[i], ancho, badge, PatenteIdxDe(i, esProcedimientos));
                 if (usado + extra > altoDisponible) break;
                 usado += extra;
                 i++;
@@ -660,7 +741,16 @@ namespace Alkahest.Game
             return i;
         }
 
-        private float EntradaAltura(Entrada e, float ancho, bool badge)
+        /// <summary>Alto (px de diseño, ver UiStyles.S) del botón "Bautizar" que DrawEntradaProcedimiento añade bajo una patente sin nombre.</summary>
+        private const float AltoBotonBautizarPatente = 22f;
+
+        /// <summary>¿La entrada `patenteIdx` (ver PatenteIdxDe) necesita el botón de bautizo bajo su cuerpo? Solo patentes reales (≥0) SIN nombre todavía.</summary>
+        private static bool NecesitaBotonBautizoPatente(int patenteIdx)
+        {
+            return patenteIdx >= 0 && string.IsNullOrEmpty(Hornada.GetPatente(patenteIdx).Nombre);
+        }
+
+        private float EntradaAltura(Entrada e, float ancho, bool badge, int patenteIdx = -1)
         {
             // (playtest 12) Ficha de catálogo (SUSTANCIAS): miniatura a la
             // izquierda + columna de texto (título/firma/observaciones) a la
@@ -680,10 +770,15 @@ namespace Alkahest.Game
             float hOtros = UiStyles.Alto(_estiloEntradaTitulo, e.Titulo, ancho);
             if (badge && e.Propaga) hOtros += UiStyles.S(2f) + _estiloBadgePropaga.lineHeight;
             if (!string.IsNullOrEmpty(e.Cuerpo)) hOtros += UiStyles.S(3f) + UiStyles.Alto(_estiloDetalle, e.Cuerpo, ancho);
+            // (playtest 25) Reserva de alto para el botón "Bautizar" de una
+            // patente sin nombre -- ver DrawEntradaProcedimiento. Solo aplica
+            // a PROCEDIMIENTOS (badge siempre false ahí, así que no colisiona
+            // con el distintivo ★ SE PROPAGA de LEYES).
+            if (NecesitaBotonBautizoPatente(patenteIdx)) hOtros += UiStyles.S(4f) + UiStyles.S(AltoBotonBautizarPatente);
             return hOtros;
         }
 
-        private void DrawColumna(Rect r, Entrada[] entradas, int start, int end, bool badge)
+        private void DrawColumna(Rect r, Entrada[] entradas, int start, int end, bool badge, bool esProcedimientos)
         {
             // BeginGroup recorta cualquier desbordamiento residual: la
             // paginación ya está pensada para que nunca haga falta, pero un
@@ -694,14 +789,15 @@ namespace Alkahest.Game
             float espacio = UiStyles.S(14f);
             for (int i = start; i < end; i++)
             {
-                float alto = EntradaAltura(entradas[i], r.width, badge);
-                DrawEntrada(new Rect(0f, y, r.width, alto), entradas[i], badge);
+                int patenteIdx = PatenteIdxDe(i, esProcedimientos);
+                float alto = EntradaAltura(entradas[i], r.width, badge, patenteIdx);
+                DrawEntrada(new Rect(0f, y, r.width, alto), entradas[i], badge, patenteIdx);
                 y += alto + espacio;
             }
             GUI.EndGroup();
         }
 
-        private void DrawEntrada(Rect r, Entrada e, bool badge)
+        private void DrawEntrada(Rect r, Entrada e, bool badge, int patenteIdx = -1)
         {
             // (playtest 12) La ficha de SUSTANCIAS tiene maqueta propia
             // (miniatura + columna de texto): se despacha aparte en vez de
@@ -731,6 +827,24 @@ namespace Alkahest.Game
                 y += UiStyles.S(3f);
                 float altoDetalle = UiStyles.Alto(_estiloDetalle, e.Cuerpo, r.width);
                 GUI.Label(new Rect(r.x, y, r.width, altoDetalle), e.Cuerpo, _estiloDetalle);
+                y += altoDetalle;
+            }
+
+            // (playtest 25, CONTRATO_PERSISTE.md §6.4) Botón "Bautizar" bajo
+            // la ficha de una patente sin nombre -- mismo gesto que bautizar
+            // una sustancia (T + campo), pero sin tener que cerrar el libro:
+            // el contrato pide "mismo flujo que las sustancias", y aquí SÍ
+            // hay sitio para el botón en la propia página (a diferencia del
+            // catálogo de SUSTANCIAS, que vive detrás de un cursor apuntando
+            // en el mundo). Ver AbrirVentanaBautizoPatente/DrawVentanaBautizoPatente.
+            if (NecesitaBotonBautizoPatente(patenteIdx))
+            {
+                y += UiStyles.S(4f);
+                float anchoBoton = Mathf.Min(r.width, UiStyles.S(140f));
+                if (GUI.Button(new Rect(r.x, y, anchoBoton, UiStyles.S(AltoBotonBautizarPatente)), "Bautizar", _estiloBotonPagina))
+                {
+                    AbrirVentanaBautizoPatente(patenteIdx);
+                }
             }
         }
 
@@ -783,6 +897,61 @@ namespace Alkahest.Game
                 float altoCuerpo = UiStyles.Alto(_estiloDetalle, e.Cuerpo, anchoTexto);
                 GUI.Label(new Rect(xTexto, y, anchoTexto, altoCuerpo), e.Cuerpo, _estiloDetalle);
             }
+        }
+
+        // ===================================================================
+        // BAUTIZO DE PATENTE (playtest 25, CONTRATO_PERSISTE.md §6.4): ventana
+        // flotante PARALELA a NamingUi.cs (ver doc del campo
+        // _patenteEnEdicionIdx) para bautizar una patente desde su propia
+        // ficha en PROCEDIMIENTOS. Solo puede haber una abierta a la vez.
+        // ===================================================================
+
+        /// <summary>Abre la ventana de bautizo para la patente `idx` de Hornada, precargando su nombre actual (vacío si aún no tiene). Sube UiStyles.EscribiendoTexto para que ningún atajo de una sola tecla (J, AvPág/RePág...) le robe letras al campo -- mismo contrato que NamingUi.</summary>
+        private void AbrirVentanaBautizoPatente(int idx)
+        {
+            if (idx < 0 || idx >= Hornada.PatenteCount) return;
+            _patenteEnEdicionIdx = idx;
+            var patente = Hornada.GetPatente(idx);
+            _patenteNombreField = patente.Nombre ?? "";
+            _ventanaBautizoPatenteRect = new Rect((Screen.width - UiStyles.S(280f)) * 0.5f, (Screen.height - UiStyles.S(180f)) * 0.5f, UiStyles.S(280f), UiStyles.S(180f));
+            UiStyles.EscribiendoTexto = true;
+        }
+
+        /// <summary>Cierra la ventana de bautizo SIN guardar (Bautizar() ya guarda por su cuenta antes de llamar aquí) -- baja EscribiendoTexto y suelta el foco de teclado, igual que hace NamingUi al cerrarse.</summary>
+        private void CerrarVentanaBautizoPatente()
+        {
+            if (_patenteEnEdicionIdx < 0) return;
+            _patenteEnEdicionIdx = -1;
+            UiStyles.EscribiendoTexto = false;
+            GUI.FocusControl(null);
+        }
+
+        private void DrawVentanaBautizoPatente()
+        {
+            if (_patenteEnEdicionIdx < 0) return;
+            _ventanaBautizoPatenteRect = GUILayout.Window(VentanaBautizoPatenteId, _ventanaBautizoPatenteRect, DrawVentanaBautizoPatenteContenido, "Bautizar procedimiento");
+        }
+
+        private void DrawVentanaBautizoPatenteContenido(int id)
+        {
+            GUILayout.Label("Nombre:");
+            GUI.SetNextControlName("JournalHudPatenteNombre");
+            _patenteNombreField = GUILayout.TextField(_patenteNombreField, 40);
+
+            GUILayout.Space(6f);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Bautizar"))
+            {
+                Hornada.BautizarPatente(_patenteEnEdicionIdx, _patenteNombreField);
+                CerrarVentanaBautizoPatente();
+            }
+            if (GUILayout.Button("Cerrar")) CerrarVentanaBautizoPatente();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("ESC para cerrar", _estiloAyudaPie ?? GUI.skin.label);
+
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
         // ===================================================================
@@ -933,9 +1102,26 @@ namespace Alkahest.Game
             // desplazamientos por rangos (leyes <= 24 -> 5 bits, bautizos <= 17
             // materiales pero la versión sube también al REbautizar -> se le dan
             // 16 bits) no hay colisión posible hasta 65.535 rebautizos.
-            int firma = (_knowledge.CountDiscovered() << 21)
-                      ^ ((_knowledge.NamingVersion & 0xFFFF) << 5)
-                      ^ (_knowledge.LeyesVersion & 0x1F);
+            // (playtest 25) + Hornada.PatentesVersion (5 bits, bits 27-31,
+            // el último hueco que quedaba en los 32 bits del `int` original):
+            // mismo criterio de "inalcanzable en una partida real" que ya
+            // acepta LeyesVersion arriba -- sube tanto al CONGELAR una
+            // patente nueva como al (re)bautizarla, así que sin este término
+            // un rebautizo de patente no invalidaría la caché y el diario
+            // seguiría enseñando el nombre viejo.
+            // (playtest 25, FIX) + ObservacionesVersion (16 bits, bits 32-47
+            // de un `long` -- ya no cabía en el `int`, ver doc de
+            // _cacheFirma): sin este término, anotar una observación
+            // (RegistrarObservacionPropiedad, la llaman BancoChispa y
+            // EnsayoMaestro) sobre un material YA descubierto no tocaba
+            // ningún otro contador de esta fórmula, así que la ficha de
+            // SUSTANCIAS podía quedarse sin la línea nueva hasta que otro
+            // evento cualquiera invalidara la caché por casualidad.
+            long firma = ((long)_knowledge.CountDiscovered() << 21)
+                       ^ (((long)_knowledge.NamingVersion & 0xFFFF) << 5)
+                       ^ ((long)_knowledge.LeyesVersion & 0x1F)
+                       ^ (((long)Hornada.PatentesVersion & 0x1F) << 27)
+                       ^ (((long)_knowledge.ObservacionesVersion & 0xFFFF) << 32);
             if (firma == _cacheFirma) return;
             _cacheFirma = firma;
 
@@ -966,6 +1152,7 @@ namespace Alkahest.Game
                     _entradasLeyes[_entradasLeyesCount++] = new Entrada { Titulo = tituloL, Cuerpo = detalleL, Propaga = ley.catalitica };
 
                     ConstruirEntradaProcedimiento(ley, out string tituloP, out string detalleP);
+                    _entradaProcedimientoPatenteIdx[_entradasProcedimientosCount] = -1; // receta de ley, no una patente -- ver DrawEntradaProcedimiento.
                     _entradasProcedimientos[_entradasProcedimientosCount++] = new Entrada { Titulo = tituloP, Cuerpo = detalleP, Propaga = ley.catalitica };
                 }
                 else
@@ -990,6 +1177,26 @@ namespace Alkahest.Game
                 }
             }
 
+            // (playtest 25, CONTRATO_PERSISTE.md §6.4) PATENTES: se añaden a
+            // continuación de las recetas de ley, en la MISMA lista/columna
+            // de PROCEDIMIENTOS -- "página en una sección nueva" del
+            // contrato reutiliza la sección PROCEDIMIENTOS ya existente
+            // (creada en el playtest 10) en vez de abrir una CUARTA pestaña:
+            // ambas son "el cómo, por escrito", el mismo capítulo del libro.
+            // Sin hueco por patente no bautizada aún (a diferencia de LEYES):
+            // la ficha SÍ se muestra siempre (con su botón de bautizo si
+            // falta nombre, ver DrawEntradaProcedimiento) -- ocultarla hasta
+            // que tenga nombre dejaría al jugador sin dónde pulsar para
+            // ponérselo.
+            int patentes = Mathf.Min(Hornada.PatenteCount, Hornada.MaxPatentes);
+            for (int p = 0; p < patentes && _entradasProcedimientosCount < MaxProcedimientos; p++)
+            {
+                var patente = Hornada.GetPatente(p);
+                ConstruirEntradaPatente(patente, out string tituloPat, out string detallePat);
+                _entradaProcedimientoPatenteIdx[_entradasProcedimientosCount] = p;
+                _entradasProcedimientos[_entradasProcedimientosCount++] = new Entrada { Titulo = tituloPat, Cuerpo = detallePat, Propaga = false };
+            }
+
             // (playtest 18) Contador "N de M" de la cabecera de LEYES (ver
             // DrawContenido/_tituloLeyesConContador): se recalcula aquí, en el
             // mismo disparador que ya gobierna cuándo hace falta reconstruir
@@ -1008,6 +1215,16 @@ namespace Alkahest.Game
 
                 string chips = BuildChips(matId);
                 if (string.IsNullOrEmpty(chips)) chips = "(sin transformaciones presenciadas todavía)";
+
+                // (playtest 25, CONTRATO_PERSISTE.md §6.4) Observaciones del
+                // Ensayo/BancoChispa (RegistrarObservacionPropiedad) --
+                // "anota en la ficha del material (sección observaciones
+                // existente)": esta ES esa sección, la misma que ya muestran
+                // los chips de WitnessFlags. Se añaden como línea propia
+                // tras los chips, nunca sustituyéndolos: son dos fuentes
+                // distintas de lo mismo ("qué le has visto hacer a esto").
+                string observaciones = _knowledge.ObservacionesDe(matId);
+                if (!string.IsNullOrEmpty(observaciones)) chips = chips + "\n" + observaciones;
 
                 // (playtest 12) Invitación discreta a bautizar, integrada en la
                 // propia ficha (distinta del globo junto al cursor de
@@ -1134,6 +1351,38 @@ namespace Alkahest.Game
                     $"1. Junta {nombreA} con {nombreB} en la misma celda{cond} (viértelos juntos o deja que se toquen).\n" +
                     "2. Ambos lados se CONSUMEN al transformarse: para repetirlo hace falta traer más de los dos.";
             }
+        }
+
+        /// <summary>
+        /// (playtest 25, CONTRATO_PERSISTE.md §6.4) Página de una PATENTE:
+        /// pasos NUMERADOS con máquina + condición + resultado, hasta 4
+        /// hacia atrás (contrato, literal) -- Hornada.Patente.Pasos ya viene
+        /// congelado con esa cota (ver Hornada.CongelarPatente). Máquina y
+        /// condición son los literales que B pasó a Hornada.RegistrarOp
+        /// ("crisol"/"prensa"/"banco de chispa", "tier0"/"combustible:..."/
+        /// "lento"...) -- se muestran TAL CUAL, son ya frases de bitácora.
+        /// </summary>
+        private void ConstruirEntradaPatente(Hornada.Patente patente, out string titulo, out string detalle)
+        {
+            titulo = string.IsNullOrEmpty(patente.Nombre) ? "(patente sin bautizar)" : patente.Nombre;
+
+            string cuerpo = "";
+            var pasos = patente.Pasos;
+            for (int i = 0; i < pasos.Length; i++)
+            {
+                var paso = pasos[i];
+                string entrada = _knowledge.NombreParaHud(paso.MatEntrada);
+                string salida = _knowledge.NombreParaHud(paso.MatSalida);
+                cuerpo += (i + 1) + ". " + paso.Maquina + ": " + entrada + " -> " + salida + " (" + paso.Condicion + ")";
+                cuerpo += "\n";
+            }
+
+            string resultado = _knowledge.NombreParaHud(patente.MatResultado);
+            cuerpo += "Resultado: " + resultado + ".";
+            if (string.IsNullOrEmpty(patente.Nombre))
+                cuerpo += " " + TextoInvitaBautizoPatente;
+
+            detalle = cuerpo;
         }
 
         private string BuildChips(byte matId)

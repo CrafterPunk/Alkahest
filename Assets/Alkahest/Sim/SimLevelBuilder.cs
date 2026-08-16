@@ -621,25 +621,6 @@ namespace Alkahest.Sim
         public const int SotanoLedgeHeight = 6;
 
         // =================================================================
-        // EL CORAZÓN DE LA MAREA (CONTRATO_MAREA.md sección 3.4). Cámara
-        // pequeña en el ZÓCALO del sótano (x333..392, la misma franja de
-        // SotanoPlinthX0..X1 -- justo bajo el pozo, WellX0..X1=343..382),
-        // hoy carvada dentro de la piedra maciza que deja FillWorldStone en
-        // BuildCuartoIntimo (el builder ACTIVO -- BuildTestLevel/BuildSotano,
-        // que sí excavan el pozo, no se llaman desde AlkahestSim.Start hoy).
-        // El pozo NO se abre hasta esta cámara en esta ronda: el tramo de
-        // piedra entre uno y otra es del jugador y su cincel, a propósito
-        // (ver ExcavateCorazon). Deja >=2 celdas de piedra sólida a cada
-        // lado dentro del zócalo (352-333=19, 392-373=19 por X; por Y la
-        // cámara cae entera dentro del sótano interior, SotanoInteriorY0..Y1)
-        // -- de sobra, esto no es un ajuste fino.
-        // =================================================================
-        public const int CorazonMareaX0 = 352;
-        public const int CorazonMareaX1 = 373;
-        public const int CorazonMareaY0 = SotanoInteriorY0 + 1; // 14
-        public const int CorazonMareaY1 = SotanoInteriorY0 + 6; // 19
-
-        // =================================================================
         // ENTREGA: la Tolva del Maestro + espacio de maniobra alrededor (ver
         // Game/DeliveryChute.cs). Mismas proporciones internas que el diseño
         // original (jambas a +12/-33 del zócalo), solo reubicadas y con la
@@ -1020,6 +1001,86 @@ namespace Alkahest.Sim
         public const int CanoAguaY = CuartoY0 + 13;
         /// <summary>Fila del caño de NUTRIENTE, encima del de agua. Separación amplia para que las dos chapas de rótulo no se pisen (el problema de "los caños con los títulos apilados" del playtest 15).</summary>
         public const int CanoNutrienteY = CuartoY0 + 21;
+        /// <summary>
+        /// LO QUE PERSISTE (playtest 25, contrato §4.5): "el caño de NUTRIENTE
+        /// pasa a ser el caño de LIMO: misma boca, otro material". Alias
+        /// documentado en vez de renombrar `CanoNutrienteY` -- el nombre viejo
+        /// sigue describiendo la POSICIÓN física (encima del caño de agua,
+        /// misma columna de montaje), y el alias nuevo describe qué sale por
+        /// ahí ahora (`AlkahestGameBootstrap.SpawnCanoBasico` pasa
+        /// `MaterialId.Limo`, no `MaterialId.Nutrient` -- ver ese archivo). Es
+        /// EXACTAMENTE la misma celda: no hay dos caños, hay un caño con dos
+        /// nombres para dos épocas del proyecto.
+        /// </summary>
+        public const int CanoLimoY = CanoNutrienteY;
+
+        // =================================================================
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.5) --
+        // el REAMUEBLADO del cuarto íntimo: Crisol/Prensa/BancoChispa/Ensayo
+        // (Game/, encargo B/C) SOLO necesitan el ANCLA de una celda de aquí
+        // abajo -- cada uno talla su PROPIA mampostería en su Init() (ver
+        // Game/Crisol.cs::CarveBasin, Game/Prensa.cs::TallarLecho,
+        // Game/BancoChispa.cs::TallarRanura -- los tres vía PaintStable, mismo
+        // patrón que Game/Cincel.cs, así que SimLevelBuilder NO necesita
+        // excavar sus cubetas). La ÚNICA excepción es
+        // Game/EnsayoMaestro.cs::TallarCubeta, que NO talla suelo -- su propio
+        // comentario dice "suelo ya es piedra maciza del cuarto, no hace
+        // falta tallar debajo" -- así que el suelo UNIFORME que este archivo
+        // sí construye (ver BuildCuartoFloor, llamado desde BuildCuartoIntimo)
+        // es lo que hace cierta esa frase.
+        //
+        // SITIOS ELEGIDOS (suelo y=CuartoY0+2=170, huelga de piso último
+        // sólido -- mismo criterio que `CunaCriaturaY`), leídos de izquierda
+        // a derecha, la MISMA lectura narrativa del cuarto que ya usaban
+        // caños->criatura->capullo, ahora caños->Crisol->Prensa->BancoChispa->
+        // Columna->Ensayo->pasillo (a la Tolva):
+        //   caños+pila (250..263) -> [6 huelga] -> CRISOL (huella real
+        //   270..284, 15 celdas: ver Crisol.CubetaAncho/TolvaAncho/
+        //   HuecoEntreCubetaYTolva) -> [6] -> PRENSA (291..297, 7 celdas) ->
+        //   [6] -> BANCO DE CHISPA (304..308, 5 celdas) -> [6] -> COLUMNA DE
+        //   ENSAYO (315..319, 5 celdas) -> [29, sala abierta de sobra] ->
+        //   ENSAYO DEL MAESTRO (349..353, 5 celdas) -> [4] -> pared derecha
+        //   del cuarto (357) -> pasillo pre-carvado -> Tolva.
+        // El orden es la PROGRESIÓN del jugador: hervir (Crisol) -> prensar
+        // lo templado/recocido -> leer lo invisible (chispa) -> observar en
+        // vidrio (Columna) -> el veredicto final antes de cruzar a entregar
+        // (Ensayo, "junto a la boca del pasillo" -- el contrato lo pide así
+        // literalmente). Las huellas de Crisol/Prensa/BancoChispa/Ensayo se
+        // derivan de sus propias constantes de ancho (copiadas aquí en el
+        // comentario para huelga, NO duplicadas como código: si alguno de
+        // esos archivos cambia su ancho, este comentario puede quedar
+        // desactualizado -- la huelga de 6 real la decide siempre el archivo
+        // dueño de la geometría, esto es documentación de intención).
+        // =================================================================
+
+        /// <summary>Ancla (centro de la cubeta) del Crisol -- Game/Crisol.cs la lee tal cual (`SimLevelBuilder.CrisolX`).</summary>
+        public const int CrisolX = 274;
+        /// <summary>Ancla (centro del lecho) de la Prensa.</summary>
+        public const int PrensaX = 294;
+        /// <summary>Ancla (centro de la ranura) del Banco de Chispa.</summary>
+        public const int BancoChispaX = 306;
+        /// <summary>Ancla (centro del plinto) del Ensayo del Maestro -- junto a la boca del pasillo (357..358), el veredicto final antes de cruzar a la Tolva.</summary>
+        public const int EnsayoPlintoX = 351;
+
+        /// <summary>Pared IZQUIERDA de la Columna de Ensayo (contrato §4.5) -- mismo criterio de nombre que CunaX0/CharcoX0/RepisaX0 (el X0 de una estructura es siempre su borde izquierdo, no su centro).</summary>
+        public const int ColumnaX0 = 315;
+        /// <summary>3 de hueco interior + 2 muros de Crystal (contrato, valor EXACTO).</summary>
+        public const int ColumnaAncho = 5;
+        /// <summary>Alto de los muros de Crystal, de pie sobre el suelo (contrato, valor EXACTO).</summary>
+        public const int ColumnaAlto = 22;
+
+        // ---- El pasillo PRE-CARVADO a la Tolva (contrato §4.5) --------------
+        /// <summary>6 de alto (contrato, valor EXACTO).</summary>
+        private const int PasilloTolvaAlto = 6;
+        /// <summary>
+        /// Banda vertical del túnel: dentro de la franja de solape real entre
+        /// el cuarto (`CuartoY0..CuartoY1`=168..209) y la boca de la Tolva
+        /// (`ChuteMouthY0..Y1`=189..238) documentada en el docblock de la
+        /// clase ("LA TOLVA, SELLADA") -- 189..209, 21 filas. Centrada con
+        /// margen a ambos lados (6 filas por debajo hasta 189, 9 por encima
+        /// hasta 209): ni pegada al suelo del cuarto ni al techo.
+        /// </summary>
+        private const int PasilloTolvaY0 = 195;
 
         /// <summary>
         /// Dónde nace el aprendiz (contrato). TERCERA RONDA: el aprendiz
@@ -1059,6 +1120,22 @@ namespace Alkahest.Sim
         /// es el propio grupo cuna/charco/repisa/criatura. Verificado
         /// numéricamente en el informe de la ronda (réplica en Python de la
         /// misma aritmética de cámara).
+        ///
+        /// CUARTA RONDA (contrato §4.5, encargo A): `BuildCuna`/`BuildRepisa`
+        /// dejan de llamarse desde `BuildCuartoIntimo` (el cuarto ya no
+        /// siembra criatura/capullo, ver el comentario en ese método), así
+        /// que el remate físico de la U que describe este párrafo YA NO SE
+        /// PINTA -- el aprendiz nace flotando sobre aire excavado, no sobre
+        /// un borde de piedra real. `CunaTopY` (y por tanto la fórmula de
+        /// `AprendizY` de abajo) SIGUE existiendo y sigue valiendo 179: es
+        /// una constante derivada de `CunaX0/CunaWidth/CunaHeight`, que no
+        /// toqué, así que el NÚMERO no cambia. Deliberadamente NO recoloqué
+        /// el punto de aparición solo porque su vecindario dejó de
+        /// construirse (regla 47 de CLAUDE.md, en corolario: mover un sitio
+        /// ya validado sin una razón que lo exija es el mismo error que
+        /// reutilizar uno por el nombre) -- cae ahora sobre el hueco abierto
+        /// entre `BuildCuartoFloor` y la nueva maquinaria de la izquierda del
+        /// Crisol (`CrisolX`=274), con sitio de sobra.
         /// </summary>
         public const int AprendizX = 290; // (tercera ronda; antes 300)
         public const int AprendizY = CunaTopY + 1; // 180 (tercera ronda; antes 176): justo sobre el remate de la cuna, mirando dentro.
@@ -1075,8 +1152,21 @@ namespace Alkahest.Sim
         {
             FillWorldStone(grid);
             ExcavateCuarto(grid);
-            BuildCuna(grid);
-            BuildRepisa(grid);
+            BuildCuartoFloor(grid); // (contrato §4.5) suelo UNIFORME de la sala entera -- ver el docblock, es lo que hace cierta la frase de EnsayoMaestro.TallarCubeta ("suelo ya es piedra maciza del cuarto").
+            // (contrato §4.5, encargo A) BuildCuna/BuildRepisa YA NO SE
+            // LLAMAN -- el cuarto íntimo deja de sembrar criatura/capullo
+            // esta ronda (el encargo del taller de materiales, B, ya dejó
+            // CunaCriaturaX/Y y CapulloX/Y sin usar salvo en líneas
+            // COMENTADAS de AlkahestGameBootstrap.cs, confirmando que la
+            // criatura se aparca por contrato, no por descuido mío). Los dos
+            // métodos se CONSERVAN intactos sin llamantes (regla 15: bifurcar
+            // -- documentar por qué se deja de llamar algo -- no borrar), por
+            // si una ronda futura reintroduce la cría en otra zona. El hueco
+            // que dejan (CunaX0=285..CunaX0+CunaWidth-1 y RepisaX0..+RepisaWidth-1,
+            // ambas sobre CuartoY0) es justo el que ocupa la nueva maquinaria
+            // de abajo -- ver el bloque "SITIOS ELEGIDOS" más arriba.
+            //   BuildCuna(grid);
+            //   BuildRepisa(grid);
             // (playtest 23) EL MONTÓN DE NUTRIENTE YA NO SE COLOCA -- el
             // método PlaceNutrienteMound se conserva intacto sin llamantes
             // (regla 15: bifurcar, no borrar). Cesar, jugando el 22:
@@ -1092,8 +1182,9 @@ namespace Alkahest.Sim
             // "responde a los segundos de que TÚ le des de comer".
             //   PlaceNutrienteMound(grid);
             PlaceCharco(grid);
+            BuildColumnaEnsayo(grid); // (contrato §4.5) la Columna de Ensayo, muros de Crystal, abierta por arriba.
             BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
-            ExcavateCorazon(grid);    // (CONTRATO_MAREA.md sección 3.4) la cámara del corazón, lejos del cuarto íntimo -- ver el docblock de CorazonMareaX0 y hermanas.
+            CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
         }
 
@@ -1114,29 +1205,6 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, CuartoX0, CuartoY0, CuartoX1 - CuartoX0 + 1, CuartoY1 - CuartoY0 + 1, MaterialId.Empty);
         }
 
-        /// <summary>
-        /// (CONTRATO_MAREA.md sección 3.4) Carva la cámara del corazón (rect
-        /// a Empty) dentro del zócalo, y siembra el FONDO (la fila
-        /// CorazonMareaY0, no la cámara entera) con Marea -- dormida hasta
-        /// que Game/MareaDirector encienda SimStepper.MareaActiva: hasta
-        /// entonces solo fluye como un líquido más, sin convertir ni
-        /// amortiguar nada (ver SimStepper.ProcessMarea). NO se toca nada
-        /// del pozo aquí a propósito -- ni WellX0/X1 ni el tramo entre el
-        /// zócalo y esta cámara están excavados por este builder (ver el
-        /// docblock de CorazonMareaX0 arriba): esa piedra es del cincel del
-        /// jugador, no de este método.
-        /// </summary>
-        private static void ExcavateCorazon(CellGrid grid)
-        {
-            DrawSolidRect(grid, CorazonMareaX0, CorazonMareaY0,
-                CorazonMareaX1 - CorazonMareaX0 + 1, CorazonMareaY1 - CorazonMareaY0 + 1, MaterialId.Empty);
-
-            for (int x = CorazonMareaX0; x <= CorazonMareaX1; x++)
-            {
-                grid.SetCell(x, CorazonMareaY0, MaterialId.Marea);
-            }
-        }
-
         private static void BuildCuna(CellGrid grid)
         {
             DrawUShape(grid, CunaX0, CuartoY0, CunaWidth, CunaHeight, WallThickness);
@@ -1145,6 +1213,77 @@ namespace Alkahest.Sim
         private static void BuildRepisa(CellGrid grid)
         {
             DrawSolidRect(grid, RepisaX0, RepisaY0, RepisaWidth, RepisaHeight, MaterialId.Stone);
+        }
+
+        /// <summary>
+        /// (contrato §4.5) Suelo UNIFORME de la sala entera: las
+        /// <see cref="WallThickness"/> filas de abajo del cuarto
+        /// (`CuartoY0..CuartoY0+WallThickness-1`), a todo su ancho
+        /// (`CuartoX0..CuartoX1`), macizas de Stone. Antes de esta ronda el
+        /// suelo solo existía DEBAJO de las estructuras en U que lo tallaban
+        /// ellas mismas (`BuildCuna`/`PlaceCharco`, vía `DrawUShape`); ahora
+        /// que la sala aloja maquinaria que se auto-talla (Crisol/Prensa/
+        /// BancoChispa, ver `Game/*.cs`) el suelo tiene que existir ANTES de
+        /// que ellas lo pisen. La única pieza que lo EXIGE explícitamente es
+        /// `Game/EnsayoMaestro.cs::TallarCubeta`, cuyo propio comentario dice
+        /// "suelo ya es piedra maciza del cuarto, no hace falta tallar
+        /// debajo" -- sin este método esa frase sería falsa y el plinto del
+        /// Ensayo flotaría sobre aire. Se llama justo después de
+        /// `ExcavateCuarto` (que vació TODA la sala a Empty, suelo incluido)
+        /// y antes de cualquier estructura.
+        /// </summary>
+        private static void BuildCuartoFloor(CellGrid grid)
+        {
+            DrawSolidRect(grid, CuartoX0, CuartoY0, CuartoX1 - CuartoX0 + 1, WallThickness, MaterialId.Stone);
+        }
+
+        /// <summary>
+        /// (contrato §4.5) La Columna de Ensayo: dos muros de pie de
+        /// <see cref="MaterialId.Crystal"/> (StaticSolid, regla 7 de
+        /// CLAUDE.md -- no cae, no compite en densidad; es vidrio de
+        /// laboratorio, no una sustancia que fluya), 1 celda de grosor cada
+        /// uno, separados por 3 celdas de hueco interior
+        /// (`ColumnaAncho`=5 = 1+3+1), de pie sobre el suelo
+        /// (`CuartoY0+WallThickness`=171) hasta `ColumnaAlto`=22 celdas más
+        /// arriba (171+22-1=192) -- ABIERTA POR ARRIBA a propósito (el
+        /// contrato lo pide así: se observa desde fuera cayendo materia
+        /// dentro, no es una cubeta cerrada). Quedan 209-192=17 celdas de
+        /// aire libre de sala por encima del remate, así que nada de lo que
+        /// se vierta desde arriba choca con techo antes de entrar.
+        /// </summary>
+        private static void BuildColumnaEnsayo(CellGrid grid)
+        {
+            int y0 = CuartoY0 + WallThickness;
+            int x1 = ColumnaX0 + ColumnaAncho - 1;
+            for (int y = y0; y < y0 + ColumnaAlto; y++)
+            {
+                if (CellGrid.InBounds(ColumnaX0, y)) grid.SetCell(ColumnaX0, y, MaterialId.Crystal);
+                if (CellGrid.InBounds(x1, y)) grid.SetCell(x1, y, MaterialId.Crystal);
+            }
+        }
+
+        /// <summary>
+        /// (contrato §4.5) El pasillo PRE-CARVADO del cuarto a la boca de la
+        /// Tolva, 6 de alto (<see cref="PasilloTolvaAlto"/>), desde la pared
+        /// derecha del cuarto (`CuartoX1+1`=358) hasta el borde de la boca ya
+        /// tallada por `BuildDeliveryNiche` (`ChuteMouthX0`=392) -- un tramo
+        /// de 35 celdas que hoy es piedra lisa sin tallar (ver el docblock de
+        /// la clase, "23 celdas de piedra lisa" entre `CuartoX1` y
+        /// `ChuteWallX0`=380).
+        ///
+        /// SE LLAMA DESPUÉS de `BuildDeliveryNiche`, a propósito: esa función
+        /// pinta la "torre" del contrafuerte (`torreX0`=`ChuteWallX0`+4=384,
+        /// hasta `ChuteMouthY1`=238) de Stone SOBRE lo que hubiera antes -- si
+        /// este método corriera primero, la torre volvería a sellar el tramo
+        /// x=384..391 del pasillo. Llamarlo después dibuja el hueco ENCIMA de
+        /// la piedra ya puesta, sin que nada lo tape después (nada más pinta
+        /// esa franja en `BuildCuartoIntimo`).
+        /// </summary>
+        private static void CarvePasilloTolva(CellGrid grid)
+        {
+            int x0 = CuartoX1 + 1;
+            int x1 = ChuteMouthX0;
+            DrawSolidRect(grid, x0, PasilloTolvaY0, x1 - x0 + 1, PasilloTolvaAlto, MaterialId.Empty);
         }
 
         private static void PlaceNutrienteMound(CellGrid grid)

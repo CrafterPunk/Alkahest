@@ -396,6 +396,15 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     sí. Corregido a 1 (marea: repta) y 4 (Rocío: corre). Pariente de la regla 47 (no confiar en
     el NOMBRE de una constante): tampoco confiar en la ESCALA aparente de un campo.
 
+51. **UNA GARANTÍA PROCEDURAL CUANTIFICA SOBRE LO ENTREGABLE, NO SOBRE LO FÍSICO (playtest
+    25)**: el solver de persistencia eligió como "ganador garantizado" al estado FUNDIDO —
+    umbral térmico 255 porque nada lo transforma hacia arriba, físicamente cierto y jugablemente
+    absurdo: lo fundido se TEMPLA en el viaje al plinto del Ensayo, así que el material que
+    llegaba al examen era OTRO. Una invariante de diseño ("toda semilla tiene solución") debe
+    formularse en términos de estados que el JUGADOR puede presentar, no de estados que existen.
+    Corolario que lo cazó: todo solver imprime su resultado en el log de seed — el bug se vio en
+    el PRIMER arranque leyendo "ganador=19" ("un assert que no se puede leer no protege nada").
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -493,6 +502,31 @@ pistas de arco (canal prioritario del HintSystem), victoria ≥24 Rocío en el c
 AQUIETA") / derrota sin criaturas ("LA MAREA OS TRAGÓ") — `DayCycle.TerminarPartida`, desenlace
 clásico intacto. Reglas 49-50 nacieron de la integración. Visión completa, guion esperado y
 preguntas abiertas en `docs/HANDOFF.md` sección Playtest 24.
+**DESCARTADO POR CESAR tras probarlo** ("atrevida e interesante, pero la descarté") y RETIRADO
+DEL CÓDIGO entero en el playtest 25 (revert quirúrgico a playtest 23 + borrado de MareaDirector;
+los docs se quedan como archivo de la decisión). Las reglas 49-50 sobreviven: son del proyecto.
+
+**Playtest 25 — LA DIRECCIÓN VIGENTE: "LO QUE PERSISTE"** (dirección de Cesar, diseño de Fable en
+`docs/DISENO_LO_QUE_PERSISTE.md`, TRES encargos Sonnet en paralelo sobre
+`docs/CONTRATO_PERSISTE.md`; compilado 0 errores/0 warnings a la primera y verificado en el Unity
+real vía MCP): el eje del juego cambia de "aprender a fabricar" a **descubrir qué persiste ante
+condiciones**. RETÍCULO DE ESTADOS: 5 bases por seed × 8 estados (`EstadoMateria`, ids 18..57,
+`Count=58`), el historial vive en el ESTADO (markoviano, grafo no conmutativo: fundir→prensar
+escupe; prensar→hornear da cerámico; templar≠recocer). LIMO primigenio (id 17, caño ex-nutriente)
+que se separa por calor en las 5 bases. Máquinas: `Crisol` (rescoldo tier0 raw 120 + temp máxima
+decidida por el COMBUSTIBLE; calcina/ceramiza/recuece), `Prensa` (Compactar/Reventar/Escupir/
+Resistir), `BancoChispa` (conductividad 0/1/2 — LA propiedad invisible), Columna de ensayo en el
+nivel, `EnsayoMaestro` (el pedido de calor se ensaya A LA VISTA, estrellas por margen real).
+Pedidos = ARCO FIJO de 5 (`GenerateOrdersPersiste`), el 5º compra el PROCEDIMIENTO (paga doble).
+`Hornada` (ring 8 ops) + PATENTES v0 en sección PROCEDIMIENTOS del diario. SOLVER DE GARANTÍA en
+`Universe.Create` (BFS, escalera tier0→tier1, 3 garantías, log por seed) — los pedidos imposibles
+son estructuralmente imposibles. Criatura/Capullo APARCADOS (spawns comentados, archivos
+intactos): volverán como organismos-solución (el "veneno para ratas" de Cesar). Regla 51 nació
+del primer arranque. Guion esperado y preguntas abiertas en HANDOFF sección Playtest 25.
+BACKLOG NUEVO de esta dirección (v2): biblioteca transversal entre mundos (firmas funcionales +
+persistencia JSON), alambique/condensación, fragilidad-frío, configuración fantasma visual sobre
+máquinas, royalties por patente, hornada por-lote (v0 es global), teatro físico para
+FlotaInsoluble, automatización como premio de lategame.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

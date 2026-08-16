@@ -47,16 +47,6 @@ namespace Alkahest.Game
     {
         private enum Phase { Title, DayIntro, Playing, DayEnd, EndScreen }
 
-        /// <summary>
-        /// [playtest 24, LA MAREA] El desenlace del ARCO DE LA MAREA (ver
-        /// <see cref="TerminarPartida"/>), independiente del desenlace
-        /// clásico por Favor (<see cref="OrderSystem.Desenlace"/>, que sigue
-        /// intacto -- ver <see cref="DrawEndScreen"/>). `Ninguno` es el
-        /// default: mientras nadie llame a TerminarPartida, EndScreen sigue
-        /// dibujando el desenlace clásico de siempre.
-        /// </summary>
-        private enum DesenlaceMarea { Ninguno, Victoria, Derrota }
-
         public const int TotalDays = 3;
         private const float DayDurationSeconds = 6f * 60f; // "6:00" en el HUD.
 
@@ -156,10 +146,6 @@ namespace Alkahest.Game
         private HintSystem _hints;
 
         private Phase _phase;
-
-        /// <summary>[playtest 24, LA MAREA] Ver <see cref="TerminarPartida"/>/<see cref="DesenlaceMarea"/>. Ninguno mientras el arco de la marea no haya decidido nada.</summary>
-        private DesenlaceMarea _desenlaceMarea = DesenlaceMarea.Ninguno;
-
         private int _day = 1;
         private float _timeRemaining;
         private int _consecutiveZeroOrderDays;
@@ -216,11 +202,24 @@ namespace Alkahest.Game
             // (playtest 21) Cada partida nueva (primera carga o "Reintentar"
             // tras un reload de escena, ver RestartRun) arranca con el HUD
             // silenciado -- ver el docblock de HudSilenciado para el porqué.
+            // (playtest 25) "LO QUE PERSISTE" apaga esto de inmediato en
+            // EnterCuartoIntimoSilencioso, pero se deja el arranque en true
+            // aquí tal cual: sigue siendo el estado correcto para el primer
+            // frame real (Título) y para el modo clásico, que este encargo
+            // no toca.
             HudSilenciado = true;
-            // (playtest 24, LA MAREA) igual de explícito, aunque una escena
-            // recién cargada ya nace con el enum en Ninguno por defecto: una
-            // partida nueva no puede heredar el desenlace de la anterior.
-            _desenlaceMarea = DesenlaceMarea.Ninguno;
+
+            // (playtest 25, CONTRATO_PERSISTE.md §6.3) Hornada es ESTÁTICA
+            // (sobrevive a un reload de escena si el dominio no se recarga,
+            // ver el docblock de Hornada.Limpiar) -- AlkahestGameBootstrap.cs
+            // ya llama a MachineFocus.Limpiar() en su TrySpawn() pero ese
+            // archivo está fuera del alcance de este encargo, así que el
+            // reinicio de Hornada se ancla aquí en su lugar: DayCycle.Init
+            // es, igual que MachineFocus.Limpiar, lo primero que corre en
+            // CUALQUIER partida nueva (título o "Reintentar"). DECISIÓN
+            // fuera del contrato literal (que solo especifica DÓNDE vive
+            // Hornada, no quién la limpia).
+            Hornada.Limpiar();
 
             if (_skipTitleOnLoad)
             {
@@ -264,14 +263,20 @@ namespace Alkahest.Game
                 //  4) (el cuarto punto, "no dibujar el reloj", vive en
                 //     DrawPlayingHud -- ver ese método).
                 //
-                // Lo único que SÍ sigue corriendo cada frame de Playing: la
-                // detección de la primera acción del jugador, que apaga
-                // HudSilenciado (ver su docblock), y el desbloqueo de
-                // encargos al cavar hasta la Tolva (tercera ronda del pivot,
-                // ver ActualizarDesbloqueoDeEncargos -- este último SÍ está
-                // throttleado internamente, no corre de verdad cada frame).
+                // (playtest 25, CONTRATO_PERSISTE.md §6.5) DetectarPrimeraAccion
+                // sigue corriendo -- es barata (solo teclado/ratón) y
+                // completamente inerte ahora: con HudSilenciado ya puesto a
+                // false desde EnterCuartoIntimoSilencioso, su única línea de
+                // trabajo (`if (!HudSilenciado) return;`) vuelve
+                // inmediatamente cada vez, así que dejarla no cuesta nada y
+                // evita otro hueco de "por qué se llama esto si ya no hace
+                // nada" sin explicar. ActualizarDesbloqueoDeEncargos() YA NO
+                // SE LLAMA aquí a propósito: "LO QUE PERSISTE" no tiene gate
+                // de cavado (ver el docblock grande de
+                // EnterCuartoIntimoSilencioso) -- el método y TolvaAlcanzable
+                // se CONSERVAN íntegros más abajo (regla 11/26 de CLAUDE.md)
+                // para cuando el gate de cavado vuelva en otra dirección.
                 DetectarPrimeraAccion();
-                ActualizarDesbloqueoDeEncargos();
             }
         }
 
@@ -374,6 +379,22 @@ namespace Alkahest.Game
             if (_supplies != null) _supplies.AlEmpezarJornada(day);
             if (_hints != null) _hints.ReiniciarParaJornada(day);
             EnterPlaying();
+
+            // (playtest 25, CONTRATO_PERSISTE.md §6.5) "LO QUE PERSISTE" ya
+            // NO tiene gate de cavado: el túnel hasta la Tolva llega
+            // PRE-TALLADO desde SimLevelBuilder (encargo A, contrato §4.5),
+            // así que ni "esperar a que el jugador cave" ni "silenciar el
+            // HUD hasta el primer movimiento" describen ya esta dirección --
+            // el Maestro habla desde el minuto uno, con el HUD entero
+            // visible. Sustituye a los dos mecanismos DEL PIVOT anterior que
+            // vivían más abajo en este archivo (ActualizarDesbloqueoDeEncargos/
+            // TolvaAlcanzable, que generaban con GenerateOrdersPivot solo tras
+            // detectar el primer golpe de cincel): se CONSERVAN íntegros,
+            // sin llamarse desde Update (regla 26/11 de CLAUDE.md, "no tocar
+            // lo que puede volver"), para el día en que el gate de cavado
+            // regrese en otra dirección de diseño.
+            HudSilenciado = false;
+            if (_orderSystem != null) _orderSystem.GenerateOrdersPersiste();
         }
 
         /// <summary>
@@ -544,26 +565,6 @@ namespace Alkahest.Game
             {
                 EnterDayIntro(_day + 1);
             }
-        }
-
-        /// <summary>
-        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.4] Cierre de
-        /// partida del arco de la marea: lo llama Game/MareaDirector.cs (el
-        /// otro archivo de este mismo encargo) cuando el Rocío alcanza el
-        /// corazón (victoria) o la marea despierta engulle a la última
-        /// criatura (derrota). Salta DIRECTO a Phase.EndScreen -- el cuarto
-        /// íntimo ya vive fuera del ciclo clásico Título-&gt;3 jornadas-&gt;
-        /// final (ver EnterCuartoIntimoSilencioso), así que no hay ninguna
-        /// jornada que cerrar antes de mostrar el desenlace. DrawEndScreen
-        /// dibuja el desenlace de LA MAREA en vez del de Favor mientras
-        /// <see cref="_desenlaceMarea"/> no sea Ninguno -- el desenlace
-        /// clásico se conserva íntegro (regla 26 de CLAUDE.md) para cuando
-        /// la sesión cronometrada vuelva.
-        /// </summary>
-        public void TerminarPartida(bool victoria)
-        {
-            _desenlaceMarea = victoria ? DesenlaceMarea.Victoria : DesenlaceMarea.Derrota;
-            _phase = Phase.EndScreen;
         }
 
         private void RestartRun(int? seed)
@@ -906,17 +907,6 @@ namespace Alkahest.Game
         {
             DrawFullscreenDim();
 
-            // [playtest 24, LA MAREA] El desenlace del ARCO DE LA MAREA
-            // manda sobre el clásico por Favor en cuanto TerminarPartida lo
-            // fija -- ver el docblock de ese método. El resto de este
-            // método (desenlace por Favor, 4 escalones) se queda íntegro
-            // debajo, sin tocar, para el modo clásico.
-            if (_desenlaceMarea != DesenlaceMarea.Ninguno)
-            {
-                DrawEndScreenMarea();
-                return;
-            }
-
             int favorFinal = _orderSystem != null ? _orderSystem.Favor : 0;
             var desenlace = OrderSystem.DesenlaceParaFavor(favorFinal);
 
@@ -986,61 +976,6 @@ namespace Alkahest.Game
             GUILayout.Space(UiStyles.S(6f));
             GUILayout.Label("\"Nuevo universo\" sortea otra seed y otro carácter -- nunca repite este mundo.",
                 UiStyles.CuerpoTenue);
-
-            GUILayout.FlexibleSpace();
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Reintentar mismo universo", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
-            {
-                int? seed = (_sim != null && _sim.Universe != null) ? _sim.Universe.Seed : (int?)null;
-                RestartRun(seed);
-            }
-            if (GUILayout.Button("Nuevo universo", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
-            {
-                RestartRun(null);
-            }
-            if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
-            {
-                QuitGame();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.EndArea();
-        }
-
-        /// <summary>
-        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.4] Las DOS
-        /// pantallas finales del arco de la marea. TEXTOS LITERALES del
-        /// contrato, palabra por palabra -- la voz de bitácora de este
-        /// proyecto no reescribe ni "mejora" un texto que ya viene cerrado
-        /// entre los dos encargos paralelos de esta ronda. Debajo, las
-        /// MISMAS stats (seed, descubiertos, bautizados -- sin Favor, que no
-        /// significa nada en este arco) y los MISMOS botones de reinicio que
-        /// ya usa el desenlace clásico, mismo AbrirPanel/mismo idioma visual.
-        /// </summary>
-        private void DrawEndScreenMarea()
-        {
-            UiStyles.Preparar();
-            AbrirPanel(520f, 380f);
-
-            bool victoria = _desenlaceMarea == DesenlaceMarea.Victoria;
-            string tituloTexto = victoria ? "EL MUNDO SE AQUIETA" : "LA MAREA OS TRAGÓ";
-            string subtitulo = victoria
-                ? "El Rocío alcanzó el corazón. La marea se retira a dormir, y por primera vez el taller respira. Vosotros, y lo que criasteis, sois la razón."
-                : "La última criatura se apagó bajo la marea. El mundo terminó de digerirse a sí mismo, y nadie quedó para masticar en dirección contraria.";
-            Color colorTitulo = victoria ? UiStyles.Oro : UiStyles.Peligro;
-
-            var titulo = UiStyles.TituloGrande;
-            var previo = titulo.normal.textColor;
-            titulo.normal.textColor = colorTitulo;
-            GUILayout.Label(tituloTexto, titulo, GUILayout.Height(UiStyles.S(42f)));
-            titulo.normal.textColor = previo;
-
-            GUILayout.Label(subtitulo, UiStyles.Subtitulo);
-
-            GUILayout.Space(UiStyles.S(10f));
-            GUILayout.Label($"Seed: {(_sim != null && _sim.Universe != null ? _sim.Universe.Seed.ToString() : "?")}", UiStyles.Cuerpo);
-            GUILayout.Label($"Materiales descubiertos: {(_knowledge != null ? _knowledge.CountDiscovered() : 0)}", UiStyles.Cuerpo);
-            GUILayout.Label($"Materiales bautizados: {(_knowledge != null ? _knowledge.CountNamed() : 0)}", UiStyles.Cuerpo);
 
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();

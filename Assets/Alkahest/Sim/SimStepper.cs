@@ -41,20 +41,6 @@ namespace Alkahest.Sim
         public int ActiveChunks { get; private set; }
         public double LastStepMs { get; private set; }
 
-        /// <summary>
-        /// (CONTRATO_MAREA.md sección 3.2) Gate global de LA MAREA. Empieza
-        /// dormido (default false) a propósito: el corazón del sótano existe
-        /// desde el minuto uno (sembrado por SimLevelBuilder.BuildCuartoIntimo)
-        /// pero mientras esto sea false sus celdas Marea SOLO fluyen como
-        /// líquido -- no convierten vecinos, no amortiguan temperatura y
-        /// ProcessMarea ni siquiera pinta celdas nuevas en Step(). Campo de
-        /// INSTANCIA público (no propiedad de solo lectura): es Game/ quien
-        /// lo enciende una vez, cuando el jugador "despierta" la marea (fuera
-        /// de este encargo, ver Game/MareaDirector -- SIM no decide CUÁNDO,
-        /// solo obedece el interruptor).
-        /// </summary>
-        public bool MareaActiva;
-
         // ---------------------------------------------------------------------------------
         // Ring buffer de eventos notables (M4: SubstanceKnowledge lee esto cada frame para
         // los "auto-observaciones" del diario -- vistoArder, vistoCristalizar, etc).
@@ -95,6 +81,27 @@ namespace Alkahest.Sim
         private const uint LeyEventCooldownTicks = 30;
         private const uint LeyEventNuncaEmpujado = uint.MaxValue; // sentinela: "aún no se ha empujado ningún evento para esta ley".
         private readonly uint[] _ultimoTickPorLey;
+
+        // ---------------------------------------------------------------------------------
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.3) -- sales propias
+        // de los dos procesos nuevos (regla del proyecto: sal propia por uso nuevo). Ambas
+        // como `const uint` a propósito (no `int`): así `(uint)seed ^ SalLimoSeparacion` no
+        // necesita conversión implícita de constante -- ya son del mismo tipo que pide
+        // XorShift.FromCell (regla 21 de CLAUDE.md, cast explícito toda sal que mezcle
+        // constante+campo).
+        // ---------------------------------------------------------------------------------
+        private const uint SalDisolucion = 237;
+        private const uint SalLimoSeparacion = 239;
+        /// <summary>Temp raw a partir de la cual el Limo se separa (contrato 4.3, valor EXACTO del contrato). Nota de honestidad para quien audite esto: el propio contrato describe este umbral como "alcanzable con el rescoldo tier0" (~116°C), pero 150 &gt; Universe.CrisolTier0Raw (118) -- con solo el rescoldo NUNCA se alcanza; hace falta combustible (tier1). Implementado tal cual el número congelado; discrepancia anotada como pregunta al director, no corregida aquí.</summary>
+        // (fix integración) 112 (= 104 °C), no los 150 del contrato original: el
+        // contrato decía "150 (60°C)" -- aritmética rota, raw 150 son 180 °C, por
+        // encima del rescoldo tier 0 del crisol (Universe.CrisolTier0Raw = 120) que
+        // el propio contrato promete como suficiente para separar el limo. 112 está
+        // SIEMPRE al alcance del tier 0 y por encima del ambiente (70): hervir limo
+        // es el primer gesto del juego y no puede exigir combustible que aún no
+        // existe. La separación es del LIMO, no del agua: no depende del
+        // waterBoilC sorteado. (Regla 50.)
+        private const byte LimoSeparaRaw = 112;
 
         /// <summary>Array fijo (no crece) de eventos notables; leer entre un "lastSeenHead" propio y <see cref="EventHead"/>, ambos módulo EventBufferSize.</summary>
         public SimNotableEvent[] Events => _events;
@@ -188,11 +195,6 @@ namespace Alkahest.Sim
 
             MorphTick();
 
-            // (CONTRATO_MAREA.md sección 3.3) FUERA del barrido de celdas
-            // (no es una regla por-celda, es "el corazón late una vez por
-            // tick"): ver EmitMareaTick para el porqué de la posición.
-            EmitMareaTick();
-
             _sw.Stop();
             LastStepMs = _sw.Elapsed.TotalMilliseconds;
         }
@@ -232,19 +234,7 @@ namespace Alkahest.Sim
                     break;
                 case MaterialArchetype.Liquid:
                     ProcessLiquid(x, y, idx, def);
-                    // LA MAREA (CONTRATO_MAREA.md sección 3.2, regla 33): es un
-                    // proceso PROPIO de SimStepper, no una reacción sorteada --
-                    // no pasa por MaybeReact/ReactionEngine, así que no puede
-                    // desalinear la invariante Leyes[i]<->Reactions.At(i) ni
-                    // ensuciar el diario con una "ley" que no lo es. El Rocío
-                    // SÍ sigue el camino normal (MaybeReact): no tiene
-                    // reacciones propias en el roster, así que ese camino es
-                    // un no-op barato para él, pero no hay motivo para
-                    // exceptuarlo.
-                    if (m == MaterialId.Marea)
-                        ProcessMarea(_cellFinalX, _cellFinalY, _cellFinalIdx);
-                    else
-                        MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
+                    MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
                     break;
                 case MaterialArchetype.Gas:
                     ProcessGas(x, y, idx, def);
@@ -646,6 +636,23 @@ namespace Alkahest.Sim
         {
             if (y == 0) return;
 
+            // ---------------------------------------------------------------
+            // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.3)
+            // -- los DOS únicos procesos nuevos de SimStepper, los dos
+            // muestreados 1/8 (mismo patrón que MaybeReact) y los dos ANTES
+            // del flujo/gravedad de abajo: si cualquiera transforma la celda,
+            // vuelve inmediatamente (la celda ya no es la Liquid que era, y
+            // el resto de este método asume `def` todavía válido).
+            // ---------------------------------------------------------------
+            if (def.id == MaterialId.Limo)
+            {
+                if (ProcessLimoSeparacion(x, y, idx)) return;
+            }
+            else if (def.id == MaterialId.Water)
+            {
+                if (ProcessDisolucionAgua(x, y, idx)) return;
+            }
+
             int belowIdx = idx - W;
             var belowDef = _universe.Get(_grid.mat[belowIdx]);
 
@@ -695,6 +702,91 @@ namespace Alkahest.Sim
             }
         }
 
+        // ---------------------------------------------------------------------------------
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.3) -- los dos
+        // procesos nuevos. Cero allocs (ninguno asigna memoria; las sales son `const uint`,
+        // los XorShift son structs por valor).
+        // ---------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Separación del limo por calor (contrato 4.3): con `temp >= LimoSeparaRaw`,
+        /// muestreada 1/8, la celda de Limo se convierte en el POLVO de la base sorteada
+        /// por <see cref="XorShift.FromCell"/> con tick FIJO 0 (determinista POR CELDA:
+        /// hervir dos veces el mismo sitio da lo mismo, no depende de CUÁNDO se hierve) y
+        /// los pesos <see cref="Universe.PesoEnLimo"/>. Devuelve true si transformó la
+        /// celda (el llamante debe `return` sin seguir procesándola como Liquid este tick).
+        /// </summary>
+        private bool ProcessLimoSeparacion(int x, int y, int idx)
+        {
+            if (((x + y + (int)_tick) & 7) != 0) return false; // muestreo 1/8, patrón de MaybeReact.
+            if (_grid.temp[idx] < LimoSeparaRaw) return false;
+
+            var rng = XorShift.FromCell(0, x, y, (uint)_universe.Seed ^ SalLimoSeparacion);
+            byte destino = PickBaseDelLimo(rng);
+            Transform(idx, destino);
+            return true;
+        }
+
+        /// <summary>Elige la base (Polvo de) según los pesos <see cref="Universe.PesoEnLimo"/> (suman 100, contrato 4.2/4.4).</summary>
+        private byte PickBaseDelLimo(XorShift rng)
+        {
+            int total = 0;
+            for (int b = 0; b < MaterialId.BasesCount; b++) total += _universe.PesoEnLimo(b);
+            if (total <= 0) return MaterialId.MatDe(0, EstadoMateria.Polvo); // salvaguarda defensiva: el solver de Universe.Create garantiza pesos positivos que suman 100, esto no debería disparar nunca.
+
+            int roll = rng.Next(total);
+            int acumulado = 0;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                acumulado += _universe.PesoEnLimo(b);
+                if (roll < acumulado) return MaterialId.MatDe(b, EstadoMateria.Polvo);
+            }
+            return MaterialId.MatDe(MaterialId.BasesCount - 1, EstadoMateria.Polvo); // defensivo por redondeo, no debería alcanzarse.
+        }
+
+        /// <summary>
+        /// Disolución (contrato 4.3, solo Water): con un vecino ortogonal Polvo/Calcinado
+        /// soluble, muestreada 1/8, 20% por muestreo: el agua -> Solucion de esa base, el
+        /// polvo -> Empty (1+1=1, masa simple y legible). Devuelve true si disolvió (el
+        /// llamante debe `return` sin seguir procesando esta celda como Liquid este tick).
+        /// </summary>
+        private bool ProcessDisolucionAgua(int x, int y, int idx)
+        {
+            if (((x + y + (int)_tick) & 7) != 0) return false; // muestreo 1/8, patrón de MaybeReact.
+
+            // Orden fijo Izq/Der/Abajo/Arriba, coste acotado: el primer vecino soluble que
+            // aparece gana (no hace falta elegir "el mejor", solo uno cualquiera).
+            if (!TryFindVecinoSoluble(x - 1, y, out int nIdx, out byte baseIdx)
+                && !TryFindVecinoSoluble(x + 1, y, out nIdx, out baseIdx)
+                && !TryFindVecinoSoluble(x, y - 1, out nIdx, out baseIdx)
+                && !TryFindVecinoSoluble(x, y + 1, out nIdx, out baseIdx))
+            {
+                return false;
+            }
+
+            var rng = XorShift.FromCell(_tick, x, y, SalDisolucion);
+            if (!rng.ChancePercent(20)) return false;
+
+            Transform(idx, MaterialId.MatDe(baseIdx, EstadoMateria.Solucion));
+            Transform(nIdx, MaterialId.Empty);
+            return true;
+        }
+
+        /// <summary>Vecino en (nx,ny) es un Polvo/Calcinado soluble (Universe.SolubleEnAgua ya restringe a esos dos estados, contrato §3) -- si sí, devuelve su índice y la base.</summary>
+        private bool TryFindVecinoSoluble(int nx, int ny, out int nIdx, out byte baseIdx)
+        {
+            nIdx = -1;
+            baseIdx = 0;
+            if (!CellGrid.InBounds(nx, ny)) return false;
+            int idx = CellGrid.Idx(nx, ny);
+            byte m = _grid.mat[idx];
+            if (m == MaterialId.Empty) return false;
+            if (!_universe.SolubleEnAgua(m)) return false;
+            nIdx = idx;
+            baseIdx = (byte)MaterialId.BaseDe(m);
+            return true;
+        }
+
         /// <summary>Busca la primera celda vacía en línea recta (hasta `steps` celdas) y se mueve ahí.</summary>
         private bool TryFlow(int x, int y, int idx, int dir, int steps)
         {
@@ -720,184 +812,6 @@ namespace Alkahest.Sim
                 // Es gas: lo consideramos "atravesable" para el barrido y seguimos buscando un hueco vacío más allá.
             }
             return false;
-        }
-
-        // ---------------------------------------------------------------------------------
-        // LA MAREA (CONTRATO_MAREA.md sección 3.2). Proceso PROPIO de
-        // SimStepper -- NO es una reacción de ReactionEngine ni una ley de la
-        // seed (regla 33 de CLAUDE.md), así que vive fuera de MaybeReact/
-        // ProcessReactions por completo: ver el `case MaterialArchetype.Liquid`
-        // de ProcessIfNeeded, que llama aquí EN VEZ DE MaybeReact cuando
-        // m == MaterialId.Marea. ProcessLiquid ya movió la celda (estratifica
-        // por densidad como cualquier líquido); esto solo añade lo que hace a
-        // la marea la marea: curar, arder, comer y enfriar.
-        //
-        // Muestreo 1/8 por celda asentada (mismo patrón exacto que
-        // MaybeReact) -- coste acotado: en un charco de marea grande no se
-        // comprueban las 4 reglas de abajo en las 8/8 partes cada tick, solo
-        // en 1/8, igual que las reacciones de contacto normales.
-        // -----------------------------------------------------------------
-        private const uint SalMareaFuego = 231;      // sal propia (CLAUDE.md regla 21/CONTRATO_MAREA sección 1) -- no reutilizada por ningún otro literal de este archivo.
-        private const uint SalMareaConversion = 233; // sal propia, distinta de la de fuego: decisiones independientes, mismo tick/celda.
-        private const uint SalMareaEmision = 235;    // sal propia, para elegir la posición de la celda emitida en EmitMareaTick (ver Step()).
-        private const byte MareaAmortiguacionRaw = 50; // = -20°C (CellGrid.RawToC(50)): objetivo del "apagón térmico" de la marea, ver el paso 4 de ProcessMarea.
-
-        /// <summary>
-        /// (CONTRATO_MAREA.md sección 3.3) Ritmo de emisión del corazón: una
-        /// celda de Marea nueva cada este número de ticks, mientras
-        /// <see cref="MareaActiva"/> esté encendido -- ver <see cref="EmitMareaTick"/>,
-        /// llamado desde Step(). ~0,67s a 30Hz: presión de fondo, no tsunami.
-        /// </summary>
-        public const uint MareaEmisionCadaTicks = 20;
-
-        /// <summary>
-        /// Probabilidad (0-100) de que un vecino de material <paramref name="matId"/>
-        /// se convierta en Marea este muestreo (paso 3, CONTRATO_MAREA.md).
-        /// 0 = inmune o no-objetivo (Stone/Empty/Marea/Rocio/Fire/Smoke/Steam);
-        /// 1 = "lenta" (Vivium y sólidos estáticos no-piedra: Ice/Crystal/
-        /// CrystalSeed -- CrystalSeed es Powder por arquetipo pero el contrato
-        /// lo agrupa aquí a propósito, por eso este picker es por MATERIAL, no
-        /// por MaterialArchetype); 6 = el resto (líquidos/polvos/gases
-        /// restantes del roster, y explícitamente Nutrient/Slime/Ash, aunque
-        /// esos tres ya caen en la rama `default` por su arquetipo).
-        /// </summary>
-        private static int MareaConversionChancePct(byte matId)
-        {
-            switch (matId)
-            {
-                case MaterialId.Stone:   // la muralla: nunca. Da sentido al cincel.
-                case MaterialId.Empty:
-                case MaterialId.Marea:
-                case MaterialId.Rocio:
-                case MaterialId.Fire:
-                case MaterialId.Smoke:
-                case MaterialId.Steam:
-                    return 0;
-                case MaterialId.Vivium:
-                case MaterialId.Ice:
-                case MaterialId.Crystal:
-                case MaterialId.CrystalSeed:
-                    return 1; // engullir un cuerpo o una muralla de hielo se VE venir.
-                default:
-                    return 6; // el hambre del mundo, de verdad.
-            }
-        }
-
-        /// <summary>Empuja temp[idx] 1 raw hacia <paramref name="targetRaw"/> (nunca lo cruza: se para si ya coincide).</summary>
-        private void PullTempToward(int idx, byte targetRaw)
-        {
-            byte t = _grid.temp[idx];
-            if (t < targetRaw) _grid.temp[idx] = (byte)(t + 1);
-            else if (t > targetRaw) _grid.temp[idx] = (byte)(t - 1);
-        }
-
-        private void ProcessMarea(int x, int y, int idx)
-        {
-            // (fix integración) EL GATE VA AQUÍ, no solo en EmitMareaTick:
-            // el docblock de MareaActiva promete que la marea dormida "no
-            // convierte vecinos ni amortigua temperatura", y esta función es
-            // exactamente donde ambas cosas ocurren. Sin esta línea, la fila
-            // sembrada en el corazón empezaría a digerir el sótano desde el
-            // tick 0, antes de que el jugador la despierte.
-            if (!MareaActiva) return;
-
-            // Mismo patrón de muestreo 1/8 que MaybeReact -- coste acotado.
-            if (((x + y + (int)_tick) & 7) != 0) return;
-
-            // 1) CURACIÓN, prioridad máxima y SIN azar (CONTRATO_MAREA sección
-            //    3.2 punto 1): el jugador tiene que poder CONTAR su cura, así
-            //    que esto no tira ningún dado. Un vecino Rocío basta: esta
-            //    celda -> Sand (materia muerta, inerte -- no vuelve a ser
-            //    marea nunca), el Rocío que curó -> Empty (se consume, 1:1).
-            //    Orden de comprobación fijo (Izq/Der/Abajo/Arriba, DirX/DirY):
-            //    determinista sin necesitar XorShift para nada de este paso.
-            for (int d = 0; d < 4; d++)
-            {
-                int nx = x + DirX[d], ny = y + DirY[d];
-                if (!CellGrid.InBounds(nx, ny)) continue;
-                int nidx = CellGrid.Idx(nx, ny);
-                if (_grid.mat[nidx] == MaterialId.Rocio)
-                {
-                    Transform(idx, MaterialId.Sand);
-                    Transform(nidx, MaterialId.Empty);
-                    return; // esta celda ya no es marea: nada más que hacer.
-                }
-            }
-
-            // 2) FUEGO, arma con pérdida (punto 2): ~10% por muestreo si hay
-            //    Fuego ortogonal. Lo quemado no se recupera (-> Smoke, no
-            //    vuelve a ser marea nunca, a diferencia del agua que el
-            //    fuego solo apaga a Steam).
-            if (HasOrthogonalNeighbor(x, y, MaterialId.Fire))
-            {
-                var fireRng = XorShift.FromCell(_tick, x, y, SalMareaFuego);
-                if (fireRng.ChancePercent(10))
-                {
-                    Transform(idx, MaterialId.Smoke);
-                    return; // ya no es marea.
-                }
-            }
-
-            // 3) CONVERSIÓN, el hambre del mundo (punto 3): UN vecino
-            //    ortogonal elegido al azar (sal propia), probabilidad según
-            //    su material (MareaConversionChancePct). El MISMO vecino
-            //    elegido aquí es el que recibe la amortiguación térmica del
-            //    paso 4 -- sin bucle extra, un único vecino por muestreo.
-            var convRng = XorShift.FromCell(_tick, x, y, SalMareaConversion);
-            int dir = convRng.Next(4);
-            int cnx = x + DirX[dir], cny = y + DirY[dir];
-            bool haveNeighbor = CellGrid.InBounds(cnx, cny);
-            int cnidx = haveNeighbor ? CellGrid.Idx(cnx, cny) : -1;
-
-            if (haveNeighbor)
-            {
-                int chancePct = MareaConversionChancePct(_grid.mat[cnidx]);
-                if (chancePct > 0 && convRng.ChancePercent(chancePct))
-                {
-                    Transform(cnidx, MaterialId.Marea);
-                }
-            }
-
-            // 4) AMORTIGUACIÓN TÉRMICA (punto 4): 1 raw hacia 50 (-20°C) por
-            //    muestreo, en la PROPIA celda y en el vecino elegido en el
-            //    paso 3 (haya cambiado de material o no) -- la marea apaga la
-            //    estrategia térmica cerca de sí: ni placas ni criatura
-            //    calientan "a través" de ella.
-            PullTempToward(idx, MareaAmortiguacionRaw);
-            if (haveNeighbor) PullTempToward(cnidx, MareaAmortiguacionRaw);
-        }
-
-        /// <summary>
-        /// (CONTRATO_MAREA.md sección 3.3) El corazón MANA: llamado desde
-        /// Step() FUERA del barrido de celdas, tras MorphTick. Mientras
-        /// <see cref="MareaActiva"/> esté encendido, cada
-        /// <see cref="MareaEmisionCadaTicks"/> ticks pinta UNA celda de Marea
-        /// en una posición al azar dentro del rectángulo del corazón
-        /// (SimLevelBuilder.CorazonMarea*), y solo si esa celda está vacía o
-        /// es un líquido que no sea ya Marea -- ritmo lento, presión de
-        /// fondo, no tsunami. No usa (x,y) de una celda concreta que se esté
-        /// procesando (esto corre una vez por tick, no por celda), así que el
-        /// ancla de XorShift.FromCell es la esquina del propio rectángulo:
-        /// fija y determinista, con el tick como única semilla que varía.
-        /// </summary>
-        private void EmitMareaTick()
-        {
-            if (!MareaActiva) return;
-            if (_tick % MareaEmisionCadaTicks != 0) return;
-
-            var rng = XorShift.FromCell(_tick, SimLevelBuilder.CorazonMareaX0, SimLevelBuilder.CorazonMareaY0, SalMareaEmision);
-            int ex = SimLevelBuilder.CorazonMareaX0 + rng.Next(SimLevelBuilder.CorazonMareaX1 - SimLevelBuilder.CorazonMareaX0 + 1);
-            int ey = SimLevelBuilder.CorazonMareaY0 + rng.Next(SimLevelBuilder.CorazonMareaY1 - SimLevelBuilder.CorazonMareaY0 + 1);
-            if (!CellGrid.InBounds(ex, ey)) return; // defensivo: el rect del corazón siempre cae dentro del mundo, pero una constante mal tocada algún día no debe reventar aquí.
-
-            int eidx = CellGrid.Idx(ex, ey);
-            byte curMat = _grid.mat[eidx];
-            if (curMat == MaterialId.Marea) return; // ya es marea, nada que emitir encima.
-            var curDef = _universe.Get(curMat);
-            bool esVacioOLiquido = curMat == MaterialId.Empty || curDef.archetype == MaterialArchetype.Liquid;
-            if (!esVacioOLiquido) return; // no desplaza piedra, polvo asentado, etc.
-
-            Transform(eidx, MaterialId.Marea);
         }
 
         // ---------------------------------------------------------------------------------

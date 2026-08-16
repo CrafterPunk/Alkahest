@@ -126,6 +126,36 @@ namespace Alkahest.Game
         private readonly string[] _playerName = new string[MaterialId.Count];
         private readonly WitnessFlags[] _witness = new WitnessFlags[MaterialId.Count];
 
+        // -----------------------------------------------------------------
+        // (playtest 25, CONTRATO_PERSISTE.md §2/§6.4) BASES INNOMINADAS: las
+        // <see cref="MaterialId.BasesCount"/> materias base viven en HASTA 8
+        // MaterialId cada una (Polvo/Fundido/Templado/.../Solucion, ver
+        // Alkahest.Sim.EstadoMateria) pero "una base = un nombre, no ocho" --
+        // bautizar CUALQUIER estado nombra la BASE entera; el nombre
+        // guardado aquí NUNCA lleva el sufijo de estado (eso es cosmético,
+        // ver SufijoEstado/NombreParaHud) para que reabrir NamingUi sobre
+        // otro estado de la misma base y volver a pulsar "Bautizar" sin
+        // tocar el campo no vaya ACUMULANDO sufijos ("arena (fundido)
+        // (fundido)..."). _playerName sigue siendo la fuente de verdad para
+        // TODO lo demás innominado (Azoth/CrystalSeed/Crystal/Vivium/Slime/
+        // Acid, el roster viejo): esas no tienen "base" que agrupar.
+        // -----------------------------------------------------------------
+        private readonly string[] _baseName = new string[MaterialId.BasesCount];
+
+        // -----------------------------------------------------------------
+        // (playtest 25, CONTRATO_PERSISTE.md §5.3/§6.4) OBSERVACIONES DE
+        // PROPIEDAD: líneas de texto libre presenciadas por el jugador
+        // (BancoChispa: "encendió la lámpara"/"la lámpara ni parpadeó";
+        // EnsayoMaestro: cómo murió o sobrevivió una muestra) -- DISTINTAS
+        // de <see cref="WitnessFlags"/> (un enum cerrado de 6 transformaciones
+        // de SimStepper, chips fijos). Aquí es texto libre acumulado por
+        // material, mismo criterio "una vez por línea distinta" que
+        // BuildChips en JournalHud.cs usa para las WitnessFlags: sin
+        // duplicar la misma observación si el jugador repite el mismo
+        // ensayo/análisis dos veces sobre el mismo material.
+        // -----------------------------------------------------------------
+        private readonly string[] _observaciones = new string[MaterialId.Count];
+
         private float _flaskPollTimer;
         private int _lastEventHead;
 
@@ -155,11 +185,21 @@ namespace Alkahest.Game
         // termina (fix playtest 10, ver DispararAvisoBautizoTrasLey).
         private readonly string[] _leyBannerCola = new string[LeyBannerCapacidad];
         private readonly byte[] _leyBannerColaMat = new byte[LeyBannerCapacidad];
+        // (playtest 25) Título por entrada de la cola: "LEY DESCUBIERTA" para
+        // ApplyLey, "¡NUEVO PROCEDIMIENTO!" para ActualizarPatentes -- MISMA
+        // cola/animación/panel (ver DrawLeyBanner), solo cambia el rótulo, en
+        // vez de duplicar toda la maquinaria de banner para un segundo tipo
+        // de aviso "estilo LEY DESCUBIERTA" (contrato §6.4, literal).
+        private readonly string[] _leyBannerColaTitulo = new string[LeyBannerCapacidad];
         private int _leyBannerColaCount;
         private int _leyBannerColaLeidos;
         private string _leyBannerActual;
+        private string _leyBannerActualTitulo;
         private byte _leyBannerActualMat;
         private float _leyBannerHasta;
+
+        /// <summary>(playtest 25) Último Hornada.PatenteCount visto -- sube solo al CONGELAR una patente nueva (a diferencia de PatentesVersion, que también sube al bautizar), así que es la señal correcta de "hay un descubrimiento nuevo que anunciar", nunca un re-bautizo.</summary>
+        private int _ultimoPatenteCountVisto;
 
         // ---------------------------------------------------------------------------------
         // (fix playtest 10) INVITACIÓN A BAUTIZAR: "esto no tiene nombre — T para
@@ -211,10 +251,25 @@ namespace Alkahest.Game
             return n;
         }
 
-        /// <summary>Nombre puesto por el jugador, o "???" si todavía no se ha bautizado (o el id es inválido).</summary>
+        /// <summary>
+        /// Nombre puesto por el jugador, o "???" si todavía no se ha
+        /// bautizado (o el id es inválido). (playtest 25) Para una
+        /// base×estado (<see cref="MaterialId.EsBaseEstado"/>) devuelve el
+        /// nombre de la BASE, SIN sufijo de estado -- este es el valor que
+        /// NamingUi.cs (fuera del alcance de este encargo) precarga en su
+        /// campo de texto al reabrir la ventana para renombrar: si llevara
+        /// el sufijo ("arena (fundido)"), un re-bautizo sin editar el campo
+        /// grabaría el sufijo COMO SI fuera el nombre de la base. El sufijo
+        /// es puramente cosmético y vive en <see cref="NombreParaHud"/>.
+        /// </summary>
         public string NombreDe(byte matId)
         {
             if (matId >= MaterialId.Count) return "???";
+            if (MaterialId.EsBaseEstado(matId))
+            {
+                string baseName = _baseName[MaterialId.BaseDe(matId)];
+                return string.IsNullOrEmpty(baseName) ? "???" : baseName;
+            }
             return _playerName[matId] ?? "???";
         }
 
@@ -255,14 +310,58 @@ namespace Alkahest.Game
                 case MaterialId.Fire: return "fuego";
                 case MaterialId.Ash: return "ceniza";
                 case MaterialId.Ice: return "hielo";
-                default: return null; // lo innominado: Slime, Azoth, CrystalSeed, Vivium, Crystal, Acid.
+                // (playtest 25, CONTRATO_PERSISTE.md §6.4) EL LIMO ES
+                // VOCABULARIO: "el Maestro lo conoce" -- misma excepción
+                // documentada que la firma visual fija del limo en
+                // Sim/Universe.cs (regla 17 de CLAUDE.md, "solo varía lo
+                // innominado"). Las 40 variantes base×estado (18..57) NO
+                // pasan por aquí: caen al default (null) a propósito, son
+                // "lo innominado" nuevo -- ver NombreDe/NombreParaHud/
+                // Bautizar para cómo se nombran (por BASE, no por matId).
+                case MaterialId.Limo: return "limo";
+                default: return null; // lo innominado: Slime, Azoth, CrystalSeed, Vivium, Crystal, Acid, y las 40 variantes base×estado.
             }
         }
 
-        /// <summary>Nombre para los HUD: el que le puso el jugador &gt; el común de taller &gt; "???".</summary>
+        /// <summary>
+        /// Sufijo fijo de estado (contrato §6.4: "(fundido)", "(cerámico)"...)
+        /// -- SOLO cosmético, nunca se guarda en <see cref="_baseName"/> ni en
+        /// el campo que precarga NamingUi (ver NombreDe). Polvo es el estado
+        /// NATAL de la base: sin sufijo, es literalmente "la arena", no "la
+        /// arena (en polvo)".
+        /// </summary>
+        private static string SufijoEstado(EstadoMateria e)
+        {
+            switch (e)
+            {
+                case EstadoMateria.Fundido: return " (fundido)";
+                case EstadoMateria.Templado: return " (templado)";
+                case EstadoMateria.Recocido: return " (recocido)";
+                case EstadoMateria.Compacto: return " (compacto)";
+                case EstadoMateria.Ceramico: return " (cerámico)";
+                case EstadoMateria.Calcinado: return " (calcinado)";
+                case EstadoMateria.Solucion: return " (disuelto)";
+                default: return ""; // Polvo: estado natal, sin sufijo.
+            }
+        }
+
+        /// <summary>
+        /// Nombre para los HUD: el que le puso el jugador &gt; el común de
+        /// taller &gt; "???". (playtest 25) Para una base×estado, el nombre
+        /// de la BASE + el sufijo fijo de su estado (ver SufijoEstado) --
+        /// "una base = un nombre, no ocho" (contrato §6.4), pero el sufijo sí
+        /// distingue "arena" de "arena (fundido)" en cualquier rótulo del
+        /// juego (Tolva, encargos, diario, Ensayo).
+        /// </summary>
         public string NombreParaHud(byte matId)
         {
             if (matId >= MaterialId.Count) return "???";
+            if (MaterialId.EsBaseEstado(matId))
+            {
+                string baseName = _baseName[MaterialId.BaseDe(matId)];
+                if (string.IsNullOrEmpty(baseName)) return "???";
+                return baseName + SufijoEstado(MaterialId.EstadoDe(matId));
+            }
             string propio = _playerName[matId];
             if (!string.IsNullOrEmpty(propio)) return propio;
             return NombreComun(matId) ?? "???";
@@ -281,17 +380,95 @@ namespace Alkahest.Game
         {
             if (matId == MaterialId.Empty || matId >= MaterialId.Count) return false;
             if (NombreComun(matId) != null) return false;
+            // (playtest 25) Una base×estado necesita bautizo si su BASE
+            // sigue sin nombre -- consultar _playerName[matId] aquí (como
+            // antes de esta ronda) siempre daría "vacío" para estos ids,
+            // porque nunca se escribe en _playerName para ellos (ver
+            // Bautizar): el aviso "T para bautizarlo" se habría quedado
+            // pegado para siempre incluso tras nombrar la base.
+            if (MaterialId.EsBaseEstado(matId)) return string.IsNullOrEmpty(_baseName[MaterialId.BaseDe(matId)]);
             return string.IsNullOrEmpty(_playerName[matId]);
         }
 
-        /// <summary>Pone/quita el nombre de un material. Nombre vacío o solo espacios equivale a "olvidarlo" (vuelve a mostrar "???").</summary>
+        /// <summary>
+        /// Pone/quita el nombre de un material. Nombre vacío o solo espacios
+        /// equivale a "olvidarlo" (vuelve a mostrar "???"). (playtest 25)
+        /// Para una base×estado, bautiza la BASE entera (contrato §6.4: "una
+        /// base = un nombre, no ocho") -- da igual en qué estado concreto
+        /// apuntaba el jugador al pulsar T, el nombre se aplica a los 8.
+        /// </summary>
         public void Bautizar(byte matId, string nombre)
         {
             if (matId >= MaterialId.Count) return;
-            _playerName[matId] = string.IsNullOrWhiteSpace(nombre) ? null : nombre.Trim();
+            string limpio = string.IsNullOrWhiteSpace(nombre) ? null : nombre.Trim();
+
+            if (MaterialId.EsBaseEstado(matId))
+            {
+                _baseName[MaterialId.BaseDe(matId)] = limpio;
+            }
+            else
+            {
+                _playerName[matId] = limpio;
+            }
             _discovered[matId] = true; // bautizar implica conocerlo.
             NamingVersion++; // ver doc de la clase: JournalHud detecta re-bautizos con esto.
         }
+
+        /// <summary>
+        /// (playtest 25, CONTRATO_PERSISTE.md §5.3/§6.4) Anota en la ficha
+        /// del material una línea de observación PRESENCIADA -- lo llama el
+        /// BancoChispa (B, encendió/no la lámpara) y EnsayoMaestro (C, cómo
+        /// sobrevivió o murió una muestra). "Una vez por línea distinta":
+        /// repetir el mismo ensayo/análisis sobre el mismo material no
+        /// duplica la observación en la ficha, mismo espíritu que
+        /// JournalHud.BuildChips con las WitnessFlags.
+        /// </summary>
+        public void RegistrarObservacionPropiedad(byte matId, string observacion)
+        {
+            if (matId >= MaterialId.Count || string.IsNullOrEmpty(observacion)) return;
+
+            string previas = _observaciones[matId];
+            if (!string.IsNullOrEmpty(previas))
+            {
+                // (barato) split manual sin LINQ/regex: el hot path de esta
+                // llamada es "una vez por análisis", no por frame, pero el
+                // proyecto evita asignaciones innecesarias por costumbre.
+                if (previas == observacion) return;
+                int idx = previas.IndexOf(observacion, System.StringComparison.Ordinal);
+                if (idx >= 0)
+                {
+                    bool inicio = idx == 0 || previas[idx - 1] == ' ';
+                    int fin = idx + observacion.Length;
+                    bool final = fin == previas.Length || (fin + 2 < previas.Length && previas[fin] == ' ');
+                    if (inicio && final) return; // ya estaba, como línea completa (no como subcadena de otra).
+                }
+                _observaciones[matId] = previas + " · " + observacion;
+            }
+            else
+            {
+                _observaciones[matId] = observacion;
+            }
+
+            _discovered[matId] = true; // presenciar una propiedad implica conocer el material.
+            // (playtest 25, FIX) Sube SOLO cuando el texto cambió de verdad
+            // (los `return` de arriba ya cortaron los no-op) -- ver
+            // ObservacionesVersion. Sin este contador, registrar una
+            // observación sobre un material YA descubierto (el caso normal:
+            // ensayar algo que ya conoces) no tocaba CountDiscovered ni
+            // NamingVersion ni LeyesVersion, así que la firma de caché de
+            // JournalHud no cambiaba y la observación podía quedarse
+            // invisible en el diario hasta que otro evento cualquiera
+            // invalidara la caché por casualidad -- el mismo hueco que la
+            // regla 48 de CLAUDE.md pide cerrar (propiedad nueva sin
+            // consumidor de verdad).
+            ObservacionesVersion++;
+        }
+
+        /// <summary>Observaciones de propiedad acumuladas (RegistrarObservacionPropiedad) para la ficha de SUSTANCIAS del diario. Cadena vacía si no hay ninguna.</summary>
+        public string ObservacionesDe(byte matId) => matId < MaterialId.Count ? (_observaciones[matId] ?? "") : "";
+
+        /// <summary>Sube cada vez que RegistrarObservacionPropiedad cambia de verdad el texto de un material -- mismo patrón que NamingVersion/LeyesVersion/Hornada.PatentesVersion, para que JournalHud sepa cuándo reconstruir la ficha de SUSTANCIAS.</summary>
+        public int ObservacionesVersion { get; private set; }
 
         /// <summary>
         /// Nombre "de ley": como NombreParaHud, pero con una descripción de
@@ -382,8 +559,39 @@ namespace Alkahest.Game
             PollFlask();
             PollHover();
             ConsumeEvents();
+            ActualizarPatentes();
             ActualizarBannerLey();
             if (!DayCycle.InputLocked) ActualizarAvisoBautizo();
+        }
+
+        /// <summary>
+        /// (playtest 25, CONTRATO_PERSISTE.md §6.4) "Se ofrece PATENTAR
+        /// (aviso en pantalla estilo 'LEY DESCUBIERTA')": encola un banner
+        /// por cada patente CONGELADA nueva desde el último frame (barato:
+        /// una comparación de enteros casi siempre). Solo el ANUNCIO vive
+        /// aquí -- el bautizo de verdad (elegir nombre) pasa por el libro,
+        /// sección PROCEDIMIENTOS (ver JournalHud.cs): NamingUi.cs no se
+        /// toca en este encargo y su API está atada a un MaterialId real de
+        /// la sim, no a un índice de patente, así que no puede reutilizarse
+        /// tal cual para esto (DECISIÓN documentada en el resumen del
+        /// encargo).
+        /// </summary>
+        private void ActualizarPatentes()
+        {
+            int actual = Hornada.PatenteCount;
+            if (actual <= _ultimoPatenteCountVisto) return;
+
+            for (int i = _ultimoPatenteCountVisto; i < actual; i++)
+            {
+                // Nunca se nombra la sustancia (regla 13/17 de CLAUDE.md: no
+                // reventar la circularidad de "???" con un texto que la
+                // describe igual): el aviso apunta al LIBRO, no al material.
+                EncolarLeyBanner(
+                    "Habéis producido algo que nunca habíais fijado así. Patentadlo en vuestro libro (J), sección PROCEDIMIENTOS.",
+                    MaterialId.Empty,
+                    "¡NUEVO PROCEDIMIENTO!");
+            }
+            _ultimoPatenteCountVisto = actual;
         }
 
         /// <summary>
@@ -546,10 +754,11 @@ namespace Alkahest.Game
             LeyesVersion++;
 
             var ley = _sim.Universe.Leyes[leyIndice];
-            EncolarLeyBanner(ConstruirTextoLey(ley), MaterialParaInvitarBautizo(ley));
+            EncolarLeyBanner(ConstruirTextoLey(ley), MaterialParaInvitarBautizo(ley), "LEY DESCUBIERTA");
         }
 
-        private void EncolarLeyBanner(string texto, byte matId)
+        /// <summary>(playtest 25) `titulo` nuevo, con valor por defecto para no tocar la llamada de ApplyLey: ver doc de <see cref="_leyBannerColaTitulo"/> (misma cola sirve a los dos avisos "estilo LEY DESCUBIERTA" del juego).</summary>
+        private void EncolarLeyBanner(string texto, byte matId, string titulo = "LEY DESCUBIERTA")
         {
             // (playtest 18) Ya NO es defensivo-imposible: con 13-16 leyes por universo un
             // vertido puede disparar varias reacciones casi a la vez y llenar la cola de
@@ -561,6 +770,7 @@ namespace Alkahest.Game
             if (_leyBannerColaCount >= LeyBannerCapacidad) return;
             _leyBannerCola[_leyBannerColaCount] = texto;
             _leyBannerColaMat[_leyBannerColaCount] = matId;
+            _leyBannerColaTitulo[_leyBannerColaCount] = titulo;
             _leyBannerColaCount++;
         }
 
@@ -685,6 +895,7 @@ namespace Alkahest.Game
 
             _leyBannerActual = _leyBannerCola[_leyBannerColaLeidos];
             _leyBannerActualMat = _leyBannerColaMat[_leyBannerColaLeidos];
+            _leyBannerActualTitulo = _leyBannerColaTitulo[_leyBannerColaLeidos];
             _leyBannerColaLeidos++;
             _leyBannerHasta = Time.time + LeyBannerDuracionSeg;
         }
@@ -714,7 +925,11 @@ namespace Alkahest.Game
         /// </summary>
         private void DrawLeyBanner()
         {
-            const string titulo = "LEY DESCUBIERTA";
+            // (playtest 25) Antes literal "LEY DESCUBIERTA": ahora la misma
+            // cola/panel sirve también al aviso de patente (ver
+            // ActualizarPatentes), así que el título viaja con cada entrada
+            // de la cola en vez de estar fijo.
+            string titulo = _leyBannerActualTitulo ?? "LEY DESCUBIERTA";
             string texto = _leyBannerActual;
 
             float pad = UiStyles.S(14f);

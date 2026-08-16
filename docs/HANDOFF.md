@@ -2089,7 +2089,14 @@ placa→aceite se encuentra solo? ¿el frío se comporta como un charco local es
 
 ---
 
-## Playtest 24 → LA MAREA: la super-modificación (Fable dirige; dos encargos Sonnet en paralelo)
+## Playtest 24 → LA MAREA — **DESCARTADO POR CESAR** (retirado del código en el playtest 25)
+
+> Cesar, tras leer la visión y probar la build: "fue una idea atrevida e interesante, pero la
+> descarté". El código se retiró ENTERO en la ronda siguiente (revert quirúrgico a playtest 23 +
+> borrado de MareaDirector); esta sección queda como archivo de la decisión (las decisiones se
+> documentan, no se borran). Las reglas 49-50 de CLAUDE.md, nacidas de su integración, SÍ
+> sobreviven — son del proyecto, no de la marea. Su reemplazo: la dirección de Cesar
+> "descubrir qué persiste", ver playtest 25 y docs/DISENO_LO_QUE_PERSISTE.md.
 
 **El mandato de Cesar, literal**: "necesito un juego y lo que tengo ahora hay experimentación...
 quiero que ensayes tú una nueva dirección creativa, disruptiva si cabe el término... quiero probar
@@ -2179,3 +2186,101 @@ se queda en espectáculo del sótano (el pozo está lejos del cuarto)? ¿9 s de 
 leen como agonía evitable o como muerte súbita injusta? ¿24 celdas de Rocío son el número
 correcto? ¿hace falta que la marea EMITA también desde celdas convertidas lejanas (frentes
 secundarios) para que fortificar importe de verdad?
+
+---
+
+## Playtest 25 → LO QUE PERSISTE: el cambio de eje (dirección de Cesar; Fable dirige; TRES encargos Sonnet en paralelo)
+
+**El mandato de Cesar**: la idea central cambia de "aprender cómo fabricar cosas" a "DESCUBRIR
+QUÉ PERSISTE ante determinadas condiciones". Toda propiedad relevante debe ser observable y
+manipulable; el orden de las operaciones debe importar; toda semilla debe garantizar al menos una
+solución persistente; procesos patentables; pedidos por propiedad, no por objeto. Diseño completo
+respondiendo sus 8 puntos: `docs/DISENO_LO_QUE_PERSISTE.md`. Contrato de implementación:
+`docs/CONTRATO_PERSISTE.md`.
+
+**La visión en una frase**: cada semilla es una pregunta — ¿qué puede durar aquí? — y el
+laboratorio es cómo el jugador le arranca la respuesta al mundo.
+
+### Lo construido
+
+**El retículo de estados (el corazón).** 5 materias base por semilla × 8 estados
+(Polvo/Fundido/Templado/Recocido/Compacto/Cerámico/Calcinado/Solución), cada estado un MaterialId
+propio (18..57, `Count` 17→58), generados por tabla en `Universe.Create`. EL HISTORIAL VIVE EN EL
+ESTADO (materiales markovianos): el orden importa porque el grafo es no conmutativo — fundir y
+prensar escupe líquido (nada); prensar y hornear da cerámico (el techo). Enfriar RÁPIDO en el
+mundo = Templado (duro, la prensa lo revienta); enfriar LENTO dentro del crisol = Recocido
+(dúctil, la prensa lo compacta). Solo 3 transiciones viven en MaterialDef (fundir/templar/
+evaporar-precipita); calcinar, ceramizar y recocer son del Crisol. Dos ejes de legibilidad
+visual: la BASE se reconoce por el tono (sorteado como innominado), el ESTADO por el tratamiento
+fijo entre universos (fundido brilla, compacto prieto, calcinado carbonizado...).
+
+**El Limo primigenio.** El caño de nutriente ahora gotea LIMO (la criatura está aparcada, ver
+abajo): una suspensión turbia de la que desciende TODA la materia base del universo. Calentarlo
+(raw 112, al alcance del rescoldo) lo separa: cada celda precipita el polvo de una base por
+sorteo determinista por-celda con pesos por seed. El primer gesto del juego ya es el juego.
+
+**Las máquinas.** CRISOL (la central): rescoldo propio tier0 (raw 120 — hierve TODO lo acuoso en
+toda seed, no funde nada) y temperatura máxima decidida por el COMBUSTIBLE que le cargues
+(la progresión térmica es descubrimiento, no un dial); calcina en banda sostenida, ceramiza el
+compacto, y recuece lo fundido que muere dentro (gana la carrera al templado del mundo con +4 raw
+de margen). PRENSA: E y la mandíbula cae — compacta lo dócil, revienta lo frágil, ESCUPE los
+líquidos (desplazamiento físico, no números). BANCO DE CHISPA: el instrumento de análisis puro —
+dos bornes y una lámpara que delata la conductividad (0/1/2), LA propiedad invisible. Columna de
+ensayo de cristal en el nivel (estratificación/disolución/flotación se observan solas).
+
+**Pedidos por propiedad + el Ensayo del Maestro.** Arco fijo de 5, de uno en uno (el arco ES el
+tutorial): separar limo → algo que aguante el rojo → algo que encienda la lámpara → algo que
+flote sin disolverse → el PROCEDIMIENTO por escrito (paga doble: el conocimiento vale más que la
+sustancia). El pedido de calor se resuelve en el ENSAYO junto a la Tolva: la muestra se calienta
+A LA VISTA 5s y se cuentan supervivientes; estrellas ★/★★/★★★ por margen real de umbral (Favor
+x1/x1.5/x2) — el espectro de soluciones "mejores o peores" instaurado desde el pedido 2. El fallo
+no consume el pedido y dice CÓMO murió la muestra.
+
+**Hornada + patentes v0.** Las máquinas registran cada op (entrada→salida+condición) en un ring
+de 8; el primer (base,estado) jamás producido congela una PATENTE (hasta 4 pasos), que entra como
+página numerada en la sección PROCEDIMIENTOS del diario y se bautiza con el flujo de siempre.
+
+**El solver de garantía.** En `Create`, BFS sobre los ~41 nodos con la escalera térmica
+tier0→tier1: garantiza en TODA semilla (reintenta el sorteo hasta 50 veces, clampea si agota) que
+(1) existe la escalera hervir→calcinar→combustible→fundir, (2) existe un ganador ENTREGABLE con
+umbral ≥ ensayo+10, (3) hay conductor alcanzable, base soluble y base insoluble. La temp del
+pedido de calor sale del solver — los pedidos imposibles son estructuralmente imposibles ahora.
+Log por seed: "Persistencia: ganador=<id> a N pasos, combustible=base K (verificado)".
+
+**La criatura APARCADA, no borrada** (regla 15): Criatura/Capullo intactos en el repo, sus spawns
+comentados. Volverán como el escalón vivo del sistema (organismos que satisfacen predicados — el
+sueño del "veneno para ratas" de Cesar).
+
+### Fixes de integración (Fable, sobre los encargos)
+
+1. **Regla 50 otra vez, dos números míos del contrato**: tier0 118→120 (el agua de la seed
+   hierve hasta raw 119: con 118 el rescoldo no evaporaba en el peor sorteo) y separación del
+   limo 150→112 (mi contrato decía "150 (60°C)" — aritmética rota, raw 150 son 180°C,
+   inalcanzable sin combustible). El agente A SEÑALÓ la inconsistencia en vez de obedecerla a
+   ciegas — exactamente lo que el contrato le pide.
+2. **El ganador fundido (regla 51 nueva)**: el solver elegía como "ganador garantizado" al estado
+   FUNDIDO (umbral 255: nada lo transforma hacia arriba — físicamente cierto, jugablemente
+   absurdo: se templa en el viaje al plinto). Cazado EN EL PRIMER ARRANQUE gracias al log del
+   solver ("ganador=19"). Fundido y Solución excluidos de la candidatura: la garantía cuantifica
+   sobre estados ENTREGABLES.
+
+**Verificado**: compilado en el Unity real vía MCP con CERO errores y CERO warnings a la primera
+(tres agentes en paralelo, 15 archivos, ~1.500 líneas nuevas — el contrato congelado funciona);
+escena regenerada; 40s de play sin excepción; solver verificado en dos seeds reales (ganador
+entregable a 2 pasos en ambas).
+
+### Guion esperado de la partida
+
+Apareces en el laboratorio con dos caños (agua y limo turbio) y el primer pedido ya visible:
+"separadme el limo". Viertes limo en el crisol → hierve solo (rescoldo) → precipitan arenas de
+colores → entregas una, pura → pedido 2: "algo que aguante el rojo". Pruebas tu polvo en el
+plinto: FUNDE a mitad del ensayo (el fallo te lo dice) → tuestas polvos en el crisol → uno se
+vuelve negro carbón → ¡NUEVO PROCEDIMIENTO! (patente) → lo cargas de combustible: el crisol RUGE
+→ ahora sí: pruebas el calcinado en el plinto y AGUANTA (★★) → pedido 3: la lámpara → pasas todo
+tu catálogo por el banco de chispa... → pedido 5: el Maestro te compra el LIBRO. Cada eslabón
+enseña el siguiente y cada respuesta abre dos preguntas.
+
+**Preguntas abiertas para el playtest**: ¿la separación del limo se LEE (celdas precipitando en
+colores) o hace falta más teatro? ¿el crisol comunica sus 3 modos (rescoldo/combustible/
+enfriando)? ¿20s de calcinación sostenida son eternos o justos? ¿el arco de 5 pedidos dura una
+sesión buena (~30-45 min)? ¿la patente se siente como MI descubrimiento o como un popup?

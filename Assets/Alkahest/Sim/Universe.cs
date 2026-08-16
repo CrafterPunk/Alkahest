@@ -34,17 +34,62 @@ namespace Alkahest.Sim
         public const byte Crystal = 15;
         public const byte Acid = 16;
 
-        // LA MAREA (CONTRATO_MAREA.md): un proceso propio de SimStepper, NO
-        // una reacción sorteada del roster de arriba (regla 33 -- la marea no
-        // perturba el sorteo de leyes ni el diario). Marea sube desde el
-        // corazón del sótano y convierte lo que toca; Rocío es lo que exuda
-        // la criatura al digerirla y es su única cura real. Ver
-        // SimStepper.ProcessMarea y Game/Criatura.EscogerProductoDigestion
-        // (fuera de este encargo) para el resto de la cadena.
-        public const byte Marea = 17;
-        public const byte Rocio = 18;
+        // =================================================================
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 2) — el
+        // limo primigenio y el bloque bases×estados. `Count` pasa de 17 a
+        // 18 + 5*8 = 58: 41 materiales nuevos (Limo + 40 variantes), byte
+        // sigue con holgura de sobra (255).
+        // =================================================================
+        /// <summary>El material primigenio: líquido turbio del que descienden las 5 bases de la seed (ver DescripciónEnDISENO_LO_QUE_PERSISTE.md §9). Su separación por calor es un proceso ESPECIAL de SimStepper (§4.3 del contrato), no una transición de MaterialDef.</summary>
+        public const byte Limo = 17;
+        /// <summary>Primera celda del bloque bases×estados. Mapeo fijo: id = BaseEstado0 + base*8 + (byte)estado (ver <see cref="EstadoMateria"/>).</summary>
+        public const byte BaseEstado0 = 18;
+        /// <summary>Materias base por semilla (sorteadas en <see cref="Universe.Create"/>).</summary>
+        public const int BasesCount = 5;
 
-        public const int Count = 19;
+        public const int Count = 58; // 18 + 5*8
+
+        /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
+        public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
+
+        /// <summary>Índice de base (0..4) de un id del bloque bases×estados. No valida el rango -- llamar solo tras comprobar <see cref="EsBaseEstado"/>.</summary>
+        public static int BaseDe(byte id) => (id - BaseEstado0) / 8;
+
+        /// <summary>Estado de un id del bloque bases×estados. No valida el rango -- llamar solo tras comprobar <see cref="EsBaseEstado"/>.</summary>
+        public static EstadoMateria EstadoDe(byte id) => (EstadoMateria)((id - BaseEstado0) % 8);
+
+        /// <summary>Construye el id de (base, estado) según el mapeo fijo del contrato.</summary>
+        public static byte MatDe(int baseIdx, EstadoMateria estado) => (byte)(BaseEstado0 + baseIdx * 8 + (byte)estado);
+    }
+
+    /// <summary>
+    /// Los 8 estados canónicos del retículo de "lo que persiste" (playtest 25,
+    /// CONTRATO_PERSISTE.md sección 2). Cada (base, estado) es un MaterialId
+    /// propio, generado en bucle en <see cref="Universe.Create"/> desde
+    /// tablas por seed (cero código por-material) -- el orden/valor de este
+    /// enum ES el mapeo fijo que usa <see cref="MaterialId.MatDe"/>, no
+    /// reordenar.
+    /// </summary>
+    public enum EstadoMateria : byte
+    {
+        Polvo = 0,     // estado natal (Powder)
+        Fundido = 1,   // líquido incandescente (Liquid, brilla)
+        Templado = 2,  // enfriado RÁPIDO en el mundo: duro (StaticSolid)
+        Recocido = 3,  // enfriado LENTO dentro del crisol: dúctil (StaticSolid)
+        Compacto = 4,  // prensado (StaticSolid)
+        Ceramico = 5,  // compacto cocido: el techo de resistencia (StaticSolid)
+        Calcinado = 6, // tostado sin fundir (Powder; a veces combustible)
+        Solucion = 7,  // disuelto en agua (Liquid, agua teñida del color de la base)
+    }
+
+    /// <summary>Cómo responde un material a la Prensa (playtest 25, Encargo B). Nuevo enum en Alkahest.Sim, archivo Universe.cs por contrato.</summary>
+    public enum RespuestaPrensa : byte
+    {
+        Nada = 0,       // materiales ajenos (piedra, etc.): intocados.
+        Compactar = 1,  // pasa al estado Compacto de su base.
+        Reventar = 2,   // pasa al estado Polvo (frágil: el templado revienta).
+        Escupir = 3,    // se desplaza a la celda libre lateral más cercana (líquidos: no se comprimen).
+        Resistir = 4,   // nada, y el rótulo lo dice ("resiste la prensa": dato ganado).
     }
 
     /// <summary>
@@ -237,12 +282,56 @@ namespace Alkahest.Sim
         /// <summary>Descripción corta cacheada de la firma visual por material ("granate, manchas lentas, borde escarchado"), indexada por id. Consumida por el diario.</summary>
         private readonly string[] _firmaPorMaterial;
 
+        // ===================================================================
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 3) — la
+        // API pública de tablas/retículo/garantía. Las tablas están indexadas
+        // por MaterialId completo (0..Count-1, ver los métodos de abajo) o por
+        // baseIdx (0..BasesCount-1); se sortean en <see cref="Create"/> (ver
+        // el bloque "SORTEO DE PERSISTENCIA" y sus métodos privados) y quedan
+        // congeladas para toda la partida, igual que Leyes/AfinidadDelUniverso.
+        // ===================================================================
+
+        /// <summary>El rescoldo propio del Crisol sin combustible: ~116°C, hierve agua y limo, no funde nada (FusionRaw mínimo de una base es 130). La lee B (Game/Crisol.cs).</summary>
+        // (fix integración) 120, no los 118 del contrato original: el agua de la
+        // seed hierve a 80..118 °C = raw 100..119 (ver waterBoilC más abajo), así
+        // que con 118 el rescoldo NO llegaba a hervir agua/soluciones en el peor
+        // sorteo -- y evaporar-para-recristalizar es bucle nuclear del juego, no
+        // puede depender de la suerte de la seed. 120 cubre el peor caso (119) y
+        // sigue por debajo de toda fusión (raw >= 130): el tier 0 hierve TODO lo
+        // acuoso en toda semilla y no funde nada en ninguna. Regla 50: el valor
+        // se deriva del código que lo consume, no del nombre.
+        public const byte CrisolTier0Raw = 120;
+
+        private readonly byte[] _umbralPersistenciaRaw;      // [MaterialId.Count]
+        private readonly RespuestaPrensa[] _prensaPorMaterial; // [MaterialId.Count]
+        private readonly byte[] _conductividadPorMaterial;    // [MaterialId.Count]
+        private readonly bool[] _solubleEnAguaPorMaterial;    // [MaterialId.Count]
+        private readonly bool[] _esCombustiblePorMaterial;    // [MaterialId.Count]
+        private readonly byte[] _tempCombustibleRawPorMaterial; // [MaterialId.Count]
+
+        private readonly byte[] _fusionRaw;      // [BasesCount]
+        private readonly byte[] _calcinacionRaw; // [BasesCount]
+        private readonly byte[] _ceramizaRaw;    // [BasesCount], 0 = esta base no ceramiza
+        private readonly byte[] _solidificaRaw;  // [BasesCount]
+        private readonly int[] _pesoEnLimo;      // [BasesCount], suman 100
+
+        /// <summary>matId del persistente garantizado de esta seed (solver de garantía, ver Create -> ResolverGarantiaPersistencia). Alcanzable en ≤50 reintentos de tabla o clampeado en el último.</summary>
+        public readonly byte GanadorGarantizado;
+        /// <summary>Temp del pedido CALOR (raw 165..180), SIEMPRE por debajo de UmbralPersistenciaRaw(GanadorGarantizado) - 10.</summary>
+        public readonly byte TempEnsayoCalorRaw;
+        /// <summary>baseIdx cuyo Calcinado es combustible alcanzable con el rescoldo tier0 (CalcinacionRaw &lt;= CrisolTier0Raw) — la escalera hervir→calcinar→combustible→fundir existe en toda seed.</summary>
+        public readonly int BaseCombustibleGarantizada;
+
         private Universe(int seed, MaterialDef[] materials, ReactionEngine reactions,
             byte vivGrowMinRaw, byte vivGrowMaxRaw, byte vivGrowChancePct,
             byte habitoTolerarVecinosPunta, byte habitoBifurcarPct, byte habitoPersistenciaPct, sbyte habitoSesgoVerticalPct,
             byte crystallizeMaxTempRaw, byte crystallizeChancePct,
             Edicto edicto, string edictoDescripcion, string caracterDelUniverso, string[] firmaPorMaterial,
-            LeyDelUniverso[] leyes, int leyCrecimientoIndice, byte[] afinidadDelUniverso)
+            LeyDelUniverso[] leyes, int leyCrecimientoIndice, byte[] afinidadDelUniverso,
+            byte[] umbralPersistenciaRaw, RespuestaPrensa[] prensaPorMaterial, byte[] conductividadPorMaterial,
+            bool[] solubleEnAguaPorMaterial, bool[] esCombustiblePorMaterial, byte[] tempCombustibleRawPorMaterial,
+            byte[] fusionRaw, byte[] calcinacionRaw, byte[] ceramizaRaw, byte[] solidificaRaw, int[] pesoEnLimo,
+            byte ganadorGarantizado, byte tempEnsayoCalorRaw, int baseCombustibleGarantizada)
         {
             Seed = seed;
             Materials = materials;
@@ -263,9 +352,38 @@ namespace Alkahest.Sim
             Leyes = leyes;
             LeyCrecimientoIndice = leyCrecimientoIndice;
             AfinidadDelUniverso = afinidadDelUniverso;
+            _umbralPersistenciaRaw = umbralPersistenciaRaw;
+            _prensaPorMaterial = prensaPorMaterial;
+            _conductividadPorMaterial = conductividadPorMaterial;
+            _solubleEnAguaPorMaterial = solubleEnAguaPorMaterial;
+            _esCombustiblePorMaterial = esCombustiblePorMaterial;
+            _tempCombustibleRawPorMaterial = tempCombustibleRawPorMaterial;
+            _fusionRaw = fusionRaw;
+            _calcinacionRaw = calcinacionRaw;
+            _ceramizaRaw = ceramizaRaw;
+            _solidificaRaw = solidificaRaw;
+            _pesoEnLimo = pesoEnLimo;
+            GanadorGarantizado = ganadorGarantizado;
+            TempEnsayoCalorRaw = tempEnsayoCalorRaw;
+            BaseCombustibleGarantizada = baseCombustibleGarantizada;
         }
 
         public MaterialDef Get(byte id) => Materials[id];
+
+        // ---- API pública de tablas (CONTRATO_PERSISTE.md sección 3) ----
+        /// <summary>Temp raw máxima que `id` aguanta sin transformar/arder (dato de tabla, usado por el Ensayo y el solver — no siempre coincide con un campo de MaterialDef, ver comentario en ConstruirUmbralPersistencia).</summary>
+        public byte UmbralPersistenciaRaw(byte id) => id < _umbralPersistenciaRaw.Length ? _umbralPersistenciaRaw[id] : (byte)255;
+        public RespuestaPrensa Prensa(byte id) => id < _prensaPorMaterial.Length ? _prensaPorMaterial[id] : RespuestaPrensa.Nada;
+        public byte Conductividad(byte id) => id < _conductividadPorMaterial.Length ? _conductividadPorMaterial[id] : (byte)0;
+        public bool SolubleEnAgua(byte id) => id < _solubleEnAguaPorMaterial.Length && _solubleEnAguaPorMaterial[id];
+        public bool EsCombustible(byte id) => id < _esCombustiblePorMaterial.Length && _esCombustiblePorMaterial[id];
+        public byte TempCombustibleRaw(byte id) => id < _tempCombustibleRawPorMaterial.Length ? _tempCombustibleRawPorMaterial[id] : (byte)0;
+
+        public byte FusionRaw(int baseIdx) => _fusionRaw[baseIdx];
+        public byte CalcinacionRaw(int baseIdx) => _calcinacionRaw[baseIdx];
+        public byte CeramizaRaw(int baseIdx) => _ceramizaRaw[baseIdx];
+        public byte SolidificaRaw(int baseIdx) => _solidificaRaw[baseIdx];
+        public int PesoEnLimo(int baseIdx) => _pesoEnLimo[baseIdx];
 
         /// <summary>Descripción corta y cacheada de la firma visual de un material ("granate, manchas lentas, borde escarchado"). Usada por el diario; nunca se construye por frame.</summary>
         public string DescribirFirma(byte matId)
@@ -621,102 +739,58 @@ namespace Alkahest.Sim
                 fluidity = 4,
             };
 
+            // ===================================================================
+            // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4) — el
+            // limo primigenio + las 40 variantes base×estado, generadas EN
+            // BUCLE desde tablas sorteadas por seed (cero código por-material,
+            // ver ResolverPersistencia/ConstruirPolvoBases/
+            // ConstruirEstadosDerivados más abajo). Dos pasadas de MaterialDef
+            // alrededor de SortearFirmasVisuales: los 5 Polvo ANTES (entran al
+            // sorteo de firma visual como innominados nuevos, contrato 4.1) y
+            // los 35 estados derivados DESPUÉS (tiñen su color desde el tono
+            // final que le tocó a su Polvo -- no pueden sortearse antes de que
+            // ese tono exista).
             // -----------------------------------------------------------------
-            // LA MAREA y EL ROCÍO (CONTRATO_MAREA.md sección 3.1). Los dos
-            // quedan FUERA del sorteo de densidad de arriba (liquidDensity[]
-            // solo baraja los 5 líquidos "variables" del roster de leyes) --
-            // sus densidades son FIJAS por contrato, no varían por seed: la
-            // marea siempre debe hundirse bajo TODO líquido variable (el tope
-            // de ese sorteo, con jitter, es ~186) para poder SUBIR desde el
-            // fondo del corazón desplazando lo que haya encima, y el Rocío
-            // siempre debe flotar sobre ella. Se registran en liquidDensity[]
-            // de todas formas (y se leen de ahí, no como literal) para que el
-            // patrón "density = liquidDensity[id]" sea uniforme para
-            // cualquier líquido del roster, sortee su valor o no.
-            liquidDensity[MaterialId.Marea] = 200;
-            liquidDensity[MaterialId.Rocio] = 80;
-
-            mats[MaterialId.Marea] = new MaterialDef
+            mats[MaterialId.Limo] = new MaterialDef
             {
-                id = MaterialId.Marea,
-                devName = "Marea",
+                id = MaterialId.Limo,
+                devName = "Limo",
                 archetype = MaterialArchetype.Liquid,
-                // Violeta muy oscuro -- TINTADO ~20% hacia el baseColor del
-                // PRIMER material de AfinidadDelUniverso más abajo, JUSTO
-                // DESPUÉS de sortearla (busca "TINTE DE LA MAREA" en este
-                // mismo método): la marea ES la química de esta semilla
-                // hecha carne, así que no puede quedar con un color 100% fijo
-                // como el resto del vocabulario del taller. El valor de aquí
-                // es el color BASE pre-tinte.
-                baseColor = new Color32(46, 22, 58, 255),
-                colorJitter = 10,
-                density = liquidDensity[MaterialId.Marea], // 200: se hunde bajo TODO líquido variable del roster (tope ~186 con jitter) -- sube desde el fondo, no cae desde arriba.
-                // (contrato §3.1, CORREGIDO EN INTEGRACIÓN) El contrato
-                // decía "~120" asumiendo una escala 0-255, pero fluidity se
-                // consume en TryFlow como Nº DE CELDAS a escanear por tick:
-                // la escala real del roster es 1-4. Con 120, una celda de
-                // marea sobre piso despejado cruzaría todo el tramo libre EN
-                // UN TICK (tsunami, no marea) y pagaría hasta 120 iteraciones
-                // de escaneo por celda asentada por tick. fluidity=1 es la
-                // lectura correcta de "repta, no salpica": el avance lateral
-                // mínimo del motor, un dedo de oscuridad que gana UNA celda
-                // cada vez -- la presión de la marea viene de la EMISIÓN y la
-                // CONVERSIÓN, nunca de la velocidad de chapoteo.
-                fluidity = 1,
-                // No arde, no congela, no hierve (contrato): sus campos de
-                // transición de fase quedan en los sentinelas short.MaxValue/
-                // MinValue por defecto de MaterialDef -- la marea no cambia
-                // de fase nunca, su única debilidad es el Rocío/fuego/piedra
-                // de SimStepper.ProcessMarea, no la temperatura.
-                emitsGlow = false,
-                emision = 30,
-                // EXCEPCIÓN DOCUMENTADA A LA REGLA 17 (CLAUDE.md): la regla
-                // dice que solo lo INNOMINADO sortea firma visual por seed y
-                // el vocabulario del taller se ve siempre igual (patron=Liso,
-                // borde=Neto). La Marea no es ni una cosa ni la otra -- no es
-                // vocabulario del taller (nace del corazón, no de un grifo) y
-                // tampoco pasa por SortearFirmasVisuales (no está en
-                // UnnamedMaterialIds) -- pero por la MISMA razón que el
-                // vocabulario (regla 13/17: "si todo cambia, nada se
-                // reconoce"), su patrón/borde deben ser FIJOS entre universos:
-                // el jugador tiene que reconocer la marea de un vistazo en
-                // CUALQUIER semilla, es la amenaza central del juego, no una
-                // sustancia más que descubrir. Por eso patron/borde (y el
-                // resto de la firma: escala/fuerza/ritmo/semilla) están
-                // escritos a mano aquí, nunca sorteados.
-                patron = PatronMorfologico.Pulso,
-                borde = BordeMorfologico.Halo,
-                patronEscala = 4,   // periodo ~5 celdas (SimRenderer.PatronPeriodoCeldas/MorphPulse): varias bandas visibles incluso en la cámara del corazón (22 celdas de ancho).
-                patronFuerza = 90,  // contraste visible sin gritar (rango útil 40..150 documentado en MaterialDef.patronFuerza).
-                ritmoAnim = 36,     // late LENTO y grave -- un corazón, no un parpadeo nervioso.
-                semillaPatron = 128,
-            };
-
-            mats[MaterialId.Rocio] = new MaterialDef
-            {
-                id = MaterialId.Rocio,
-                devName = "Rocio",
-                archetype = MaterialArchetype.Liquid,
-                baseColor = new Color32(232, 214, 150, 255),
-                colorJitter = 8,
-                density = liquidDensity[MaterialId.Rocio], // 80: ligero, flota sobre el agua y sobre la propia marea.
-                // (contrato §3.1, CORREGIDO EN INTEGRACIÓN) Misma escala
-                // real 1-4 que se explica en Marea: "alta" = 4, el tope del
-                // roster (como el agua) -- el Rocío corre y se desparrama, es
-                // el anti-marea y debe llegar fácil a donde se le vierte.
-                fluidity = 4,
-                // Sin transiciones térmicas (contrato): sentinelas por defecto.
-                emitsGlow = true, // la cura BRILLA -- se ve en la oscuridad del sótano.
-                emision = 140,    // mismo rango (70..180) que un innominado sorteado con emitsGlow=true, fijo aquí por la misma excepción documentada arriba en Marea.
-                // Misma excepción a la regla 17 que Marea (ver el comentario
-                // grande de arriba): es el anti-marea y tiene que reconocerse
-                // igual de fijo. patron=Liso no usa patronFuerza/patronEscala/
-                // ritmoAnim/semillaPatron (MaterialDef.patron, "Liso no lo
-                // usa") así que se dejan en sus valores por defecto a
-                // propósito, ni siquiera se escriben aquí.
-                patron = PatronMorfologico.Liso,
+                // Turbio pardo-grisáceo FIJO en toda seed: el primigenio se
+                // reconoce entre universos, la MISMA excepción documentada a
+                // la regla 17 de CLAUDE.md que ya vale para el vocabulario del
+                // taller (contrato sección 4.1) -- por eso NO entra en
+                // UnnamedMaterialIds/SortearFirmasVisuales.
+                baseColor = new Color32(94, 86, 72, 255),
+                colorJitter = 12,
+                // Densidad entre agua y aceite (contrato 4.1): la media de
+                // liquidDensity[Water]/[Oil], ya sorteadas arriba -- así el
+                // limo estratifica de forma legible frente a los dos líquidos
+                // del vocabulario en TODA seed, sea cual sea su reparto.
+                density = (short)((liquidDensity[MaterialId.Water] + liquidDensity[MaterialId.Oil]) / 2),
+                fluidity = 2,
+                patron = PatronMorfologico.Motas,
                 borde = BordeMorfologico.Neto,
+                patronEscala = 3,
+                patronFuerza = 90,
+                ritmoAnim = 20,
+                emision = 0,
+                semillaPatron = (byte)rng.Next(256),
+                // Sin transiciones de MaterialDef (contrato 4.1): su
+                // separación por calor es el proceso ESPECIAL de SimStepper
+                // (sal SalLimoSeparacion, contrato 4.3), no fusión/ebullición
+                // genérica.
             };
+
+            byte waterBoilsAtRaw = CellGrid.CToRaw(waterBoilC);
+            ResolverPersistencia(mats, rng, waterBoilsAtRaw,
+                out PersistenciaTablas tablasPersistencia,
+                out byte[] umbralPersistenciaRaw, out RespuestaPrensa[] prensaPorMaterial,
+                out byte[] conductividadPorMaterial, out bool[] solubleEnAguaPorMaterial,
+                out bool[] esCombustiblePorMaterial, out byte[] tempCombustibleRawPorMaterial,
+                out byte ganadorGarantizado, out byte tempEnsayoCalorRaw, out int baseCombustibleGarantizada);
+
+            ConstruirPolvoBases(mats, rng, tablasPersistencia);
 
             // -----------------------------------------------------------------
             // FIRMA VISUAL (playtest 12): sortea patrón/borde/color de LO
@@ -728,7 +802,17 @@ namespace Alkahest.Sim
             // — hacía que el suelo firme del jugador (agua, arena...) también
             // se moviera un poco entre partidas. Se retira a propósito: el
             // vocabulario del taller debe leerse IDÉNTICO en toda seed.
+            // (playtest 25) UnnamedMaterialIds ahora incluye las 5 bases en
+            // Polvo (contrato 4.1) -- la maquinaria de abajo no cambia, todo
+            // deriva de UnnamedMaterialIds.Length, así que ampliar ese array
+            // (ver su declaración) basta para que las 3 garantías/arrays
+            // paralelos de SortearFirmasVisuales se amplíen solos.
             SortearFirmasVisuales(mats, rng, out string caracterDelUniverso, out string[] firmaPorMaterial);
+
+            // (playtest 25) Los 35 estados derivados: ahora sí, con el tono
+            // final de cada Polvo ya fijado por SortearFirmasVisuales.
+            ConstruirEstadosDerivados(mats, rng, tablasPersistencia, waterBoilsAtRaw,
+                mats[MaterialId.Water].baseColor, liquidDensity[MaterialId.Water]);
 
             // -----------------------------------------------------------------
             // Tabla de reacciones de contacto (ver ReactionEngine/SimStepper).
@@ -825,26 +909,6 @@ namespace Alkahest.Sim
                 afinidadDelUniverso[1] = segundo; // en el peor caso (rarísimo, 50 intentos fallidos con 11 candidatos) repite el primero -- inofensivo, el picker simplemente tendría dos copias del mismo material entre las que elegir.
             }
 
-            // -----------------------------------------------------------------
-            // TINTE DE LA MAREA (CONTRATO_MAREA.md sección 3.1): tiene que
-            // ocurrir AQUÍ, justo DESPUÉS de sortear afinidadDelUniverso (y
-            // ANTES de que nada más la lea) -- la marea ES la química de esta
-            // semilla hecha carne, así que su color se mezcla 80/20 hacia el
-            // baseColor del PRIMER material afín de la run (afinidadDelUniverso[0],
-            // ya resuelto a un MaterialDef real en mats[] a estas alturas: todo
-            // el roster fijo se construyó arriba). Mezcla manual en vez de
-            // Color32.Lerp (que no existe en UnityEngine.Color32) -- esto corre
-            // UNA vez por Universe.Create, así que el coste es irrelevante.
-            {
-                Color32 baseMarea = mats[MaterialId.Marea].baseColor;
-                Color32 afin = mats[afinidadDelUniverso[0]].baseColor;
-                mats[MaterialId.Marea].baseColor = new Color32(
-                    (byte)Mathf.RoundToInt(baseMarea.r * 0.8f + afin.r * 0.2f),
-                    (byte)Mathf.RoundToInt(baseMarea.g * 0.8f + afin.g * 0.2f),
-                    (byte)Mathf.RoundToInt(baseMarea.b * 0.8f + afin.b * 0.2f),
-                    baseMarea.a); // alfa NUNCA se mezcla: la marea sigue opaca (regla 23, "lo innominado nace opaco" -- mismo criterio aunque la marea no sea innominada).
-            }
-
             SortearLeyesGeneradas(rng, nucleoReactions, frioMaxTempRaw, calorMinTempRaw, afinidadDelUniverso,
                 out Reaction[] leyesGeneradasReactions, out LeyDelUniverso[] leyesGeneradasDescriptores);
 
@@ -915,7 +979,12 @@ namespace Alkahest.Sim
                 habitoTolerarVecinosPunta, habitoBifurcarPct, habitoPersistenciaPct, habitoSesgoVerticalPct,
                 crystallizeMaxTempRaw, crystallizeChancePct,
                 edicto, edictoDescripcion, caracterDelUniverso, firmaPorMaterial,
-                leyes, leyCrecimientoIndice, afinidadDelUniverso);
+                leyes, leyCrecimientoIndice, afinidadDelUniverso,
+                umbralPersistenciaRaw, prensaPorMaterial, conductividadPorMaterial,
+                solubleEnAguaPorMaterial, esCombustiblePorMaterial, tempCombustibleRawPorMaterial,
+                tablasPersistencia.FusionRaw, tablasPersistencia.CalcinacionRaw, tablasPersistencia.CeramicoUmbral,
+                tablasPersistencia.SolidificaRaw, tablasPersistencia.PesoEnLimo,
+                ganadorGarantizado, tempEnsayoCalorRaw, baseCombustibleGarantizada);
         }
 
         private static string DescribeEdicto(Edicto edicto)
@@ -955,23 +1024,35 @@ namespace Alkahest.Sim
         // ===================================================================
 
         /// <summary>
-        /// Los 6 materiales innominados de esta run (ver CLAUDE.md regla 13).
+        /// Los innominados de esta run (ver CLAUDE.md regla 13): los 6
+        /// originales + (playtest 25, contrato sección 4.1) las 5 bases en
+        /// estado Polvo -- "las 5 bases en estado Polvo entran al sorteo de
+        /// firma visual como innominados nuevos". TODA la maquinaria de abajo
+        /// (SortearFirmasVisuales y sus arrays paralelos: hueSlots,
+        /// procOrder, arquetipos, patronPorIdx, huePorIdx...) deriva su
+        /// tamaño de <c>UnnamedMaterialIds.Length</c>, así que ampliar este
+        /// array basta -- ninguna otra línea de ese método necesitó tocarse.
         /// El vocabulario del taller (Stone/Sand/Water/Oil/Nutrient/Fire/
-        /// Smoke/Ash/Steam/Ice) NO pasa por aquí: se queda con los valores
-        /// por defecto de MaterialDef (patron=Liso, patronFuerza=0, borde=
-        /// Neto) y el baseColor tal cual se definió arriba, sin tocar un solo
-        /// byte — es el suelo firme desde el que el jugador juzga todo lo
-        /// demás. (Se valoró darles un patrón fijo MUY tenue idéntico en toda
-        /// seed —la excepción que el diseño permite— pero se descartó: con
-        /// patronFuerza en 0 el campo `patron` es inerte de todas formas, así
-        /// que la "excepción" no aportaba nada que un `patronFuerza` en 0 no
-        /// garantizara ya, y cada byte que se toca aquí es un byte más que
-        /// vigilar si mañana alguien reintroduce jitter global por error.)
+        /// Smoke/Ash/Steam/Ice) y el Limo (excepción documentada aparte, ver
+        /// su MaterialDef en Create) NO pasan por aquí: se quedan con los
+        /// valores por defecto de MaterialDef (patron=Liso, patronFuerza=0,
+        /// borde=Neto) y el baseColor tal cual se definió arriba, sin tocar
+        /// un solo byte — es el suelo firme desde el que el jugador juzga
+        /// todo lo demás. (Se valoró darles un patrón fijo MUY tenue idéntico
+        /// en toda seed —la excepción que el diseño permite— pero se
+        /// descartó: con patronFuerza en 0 el campo `patron` es inerte de
+        /// todas formas, así que la "excepción" no aportaba nada que un
+        /// `patronFuerza` en 0 no garantizara ya, y cada byte que se toca
+        /// aquí es un byte más que vigilar si mañana alguien reintroduce
+        /// jitter global por error.)
         /// </summary>
         private static readonly byte[] UnnamedMaterialIds =
         {
             MaterialId.Azoth, MaterialId.CrystalSeed, MaterialId.Crystal,
             MaterialId.Vivium, MaterialId.Slime, MaterialId.Acid,
+            MaterialId.MatDe(0, EstadoMateria.Polvo), MaterialId.MatDe(1, EstadoMateria.Polvo),
+            MaterialId.MatDe(2, EstadoMateria.Polvo), MaterialId.MatDe(3, EstadoMateria.Polvo),
+            MaterialId.MatDe(4, EstadoMateria.Polvo),
         };
 
         /// <summary>
@@ -1514,7 +1595,7 @@ namespace Alkahest.Sim
             MaterialId.Vivium, MaterialId.CrystalSeed,
         };
 
-        /// <summary>Sentinela "no encontrado" para los pickers de producto de abajo. 255 no es un id de material válido (MaterialId.Count == 19, CONTRATO_MAREA.md): nunca puede confundirse con un resultado real.</summary>
+        /// <summary>Sentinela "no encontrado" para los pickers de producto de abajo. 255 no es un id de material válido (MaterialId.Count == 58 desde CONTRATO_PERSISTE.md, antes 17): nunca puede confundirse con un resultado real.</summary>
         private const byte SinProductoValido = 255;
 
         private static byte[] ConcatBytes(byte[] a, byte[] b)
@@ -1998,6 +2079,619 @@ namespace Alkahest.Sim
             // registrado por LogWarning más arriba): R10 queda en
             // mejor-esfuerzo, no hay ninguna ley más que convertir sin violar
             // R5.
+        }
+
+        // ===================================================================
+        // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md secciones 4.2 y
+        // 4.4) — tablas de propiedades por seed + el solver de garantía.
+        // Todo este bloque corre UNA vez por Universe.Create (mismo criterio
+        // que el sorteo de leyes/firma visual arriba: List<>/Queue<> aquí son
+        // aceptables, esto no es hot-path). Puro DATO -- ningún método de
+        // aquí abajo toca MaterialDef/mats[]; eso lo hacen por separado
+        // ConstruirPolvoBases/ConstruirEstadosDerivados, más abajo del todo.
+        // ===================================================================
+
+        /// <summary>Un candidato de tabla de persistencia (contrato 4.2): vector por base + modificadores de estado ya resueltos a valores absolutos. Puro dato, sin depender de MaterialDef -- por eso reintentar el sorteo dentro del solver (ResolverPersistencia) es barato.</summary>
+        private sealed class PersistenciaTablas
+        {
+            public readonly byte[] FusionRaw = new byte[MaterialId.BasesCount];
+            public readonly byte[] CalcinacionRaw = new byte[MaterialId.BasesCount];
+            public readonly byte[] SolidificaRaw = new byte[MaterialId.BasesCount];
+            /// <summary>Umbral de persistencia del Compacto de esta base (FusionRaw + 10..20, contrato 4.2).</summary>
+            public readonly byte[] CompactoUmbral = new byte[MaterialId.BasesCount];
+            /// <summary>CeramizaRaw del contrato: temp a la que Compacto->Ceramico Y umbral de persistencia del Ceramico resultante (mismo número a propósito: es a la vez el umbral que hay que cruzar y lo que aguanta después). 0 = esta base no ceramiza.</summary>
+            public readonly byte[] CeramicoUmbral = new byte[MaterialId.BasesCount];
+            /// <summary>Umbral de persistencia del Calcinado de esta base (FusionRaw + 15..30, contrato 4.2) -- DISTINTO de CalcinacionRaw (la temp a la que Polvo->Calcinado).</summary>
+            public readonly byte[] CalcinadoUmbral = new byte[MaterialId.BasesCount];
+            public readonly short[] DensidadPolvo = new short[MaterialId.BasesCount];
+            public readonly byte[] ConductividadBase = new byte[MaterialId.BasesCount];
+            public readonly bool[] SolubleBase = new bool[MaterialId.BasesCount];
+            public readonly bool[] CombustibleBase = new bool[MaterialId.BasesCount];
+            public readonly byte[] TempCombustibleRawBase = new byte[MaterialId.BasesCount];
+            public readonly int[] PesoEnLimo = new int[MaterialId.BasesCount];
+        }
+
+        /// <summary>
+        /// Sortea UN candidato de tabla (contrato 4.2): vector por base
+        /// (fusión 130..170, calcinación 100..125 -- SIEMPRE por debajo de
+        /// fusión por construcción de rangos, ni hace falta clampear --,
+        /// solidificación, densidades, conductividad, solubilidad) +
+        /// modificadores de estado con TENDENCIA FIJA (regla 17 de
+        /// CLAUDE.md) y magnitud por seed.
+        /// </summary>
+        private static PersistenciaTablas SortearTablaPersistencia(System.Random rng)
+        {
+            var t = new PersistenciaTablas();
+
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                t.FusionRaw[b] = (byte)(130 + rng.Next(41));      // 130..170
+                t.CalcinacionRaw[b] = (byte)(100 + rng.Next(26)); // 100..125
+                t.SolidificaRaw[b] = (byte)(t.FusionRaw[b] - (15 + rng.Next(16))); // 15..30 por debajo de la fusión: histéresis, y siempre muy por encima de CellGrid.AmbientRaw (70) -- TODO enfriamiento en el mundo cruza este umbral y templa, el gesto central del orden-importa (contrato 4.1).
+                t.CompactoUmbral[b] = (byte)Mathf.Min(255, t.FusionRaw[b] + 10 + rng.Next(11));  // +10..20 sobre el polvo.
+                t.CalcinadoUmbral[b] = (byte)Mathf.Min(255, t.FusionRaw[b] + 15 + rng.Next(16)); // +15..30 sobre el polvo.
+
+                bool ceramiza = rng.Next(100) < 65; // ~65% de las bases ceramiza esta seed; el resto vuelve a Fundido si se recalienta (Game/Crisol.cs, fuera de este archivo).
+                t.CeramicoUmbral[b] = ceramiza ? (byte)Mathf.Min(255, t.CompactoUmbral[b] + 25 + rng.Next(16)) : (byte)0; // +25..40 SOBRE COMPACTO.
+
+                t.ConductividadBase[b] = (byte)rng.Next(3); // 0/1/2 uniforme.
+            }
+
+            // Densidades bien repartidas (contrato 4.2): anclas elegidas para
+            // que SIEMPRE straddleen el rango real de liquidDensity[Water]
+            // (34..186, ver densitySlots+jitter arriba en Create) sea cual
+            // sea el reparto de esta seed -- garantiza "al menos una base más
+            // densa que el agua y una menos" sin depender de qué slot le
+            // tocó al agua esta run.
+            short[] densAnclas = { 15, 70, 125, 180, 230 };
+            int[] densOrden = { 0, 1, 2, 3, 4 };
+            ShuffleFisherYates(densOrden, rng);
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                int jitter = rng.Next(-4, 5);
+                t.DensidadPolvo[b] = (short)Mathf.Clamp(densAnclas[densOrden[b]] + jitter, 1, 250);
+            }
+
+            // Solubilidad: 2-3 de las 5 bases (contrato 4.2).
+            int nSolubles = 2 + rng.Next(2);
+            int[] solOrden = { 0, 1, 2, 3, 4 };
+            ShuffleFisherYates(solOrden, rng);
+            for (int i = 0; i < nSolubles; i++) t.SolubleBase[solOrden[i]] = true;
+
+            // Combustible (Calcinado): 1-2 de las 5 bases, TempCombustibleRaw 150..175.
+            int nCombustibles = 1 + rng.Next(2);
+            int[] combOrden = { 0, 1, 2, 3, 4 };
+            ShuffleFisherYates(combOrden, rng);
+            for (int i = 0; i < nCombustibles; i++)
+            {
+                int b = combOrden[i];
+                t.CombustibleBase[b] = true;
+                t.TempCombustibleRawBase[b] = (byte)(150 + rng.Next(26));
+            }
+
+            // Pesos de separación del limo: SIEMPRE positivos (las 5 bases
+            // tienen que poder salir del limo -- lo exige la garantía 3, ver
+            // EvaluarGarantia) y suman 100.
+            int[] pesosCrudos = new int[MaterialId.BasesCount];
+            int sumaCruda = 0;
+            for (int b = 0; b < MaterialId.BasesCount; b++) { pesosCrudos[b] = 1 + rng.Next(30); sumaCruda += pesosCrudos[b]; }
+            int sumaRepartida = 0;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                t.PesoEnLimo[b] = Mathf.Max(1, pesosCrudos[b] * 100 / sumaCruda);
+                sumaRepartida += t.PesoEnLimo[b];
+            }
+            t.PesoEnLimo[MaterialId.BasesCount - 1] += 100 - sumaRepartida; // ajuste de redondeo en la última.
+            if (t.PesoEnLimo[MaterialId.BasesCount - 1] < 1)
+            {
+                // Salvaguarda (no debería ocurrir con 5 bases de mínimo 1 cada
+                // una, pero el ajuste de redondeo de arriba podría en teoría
+                // llevarse el mínimo si sumaRepartida > 100 por acumulación):
+                // reparto llano.
+                for (int b = 0; b < MaterialId.BasesCount; b++) t.PesoEnLimo[b] = 20;
+            }
+
+            return t;
+        }
+
+        /// <summary>Umbral de persistencia (contrato §3) de la variante (b, estado). Compartido por el solver y por ConstruirEstadosDerivados: es LA MISMA tabla, no dos copias.</summary>
+        private static byte UmbralPersistenciaEstado(PersistenciaTablas t, int b, EstadoMateria e, byte waterBoilsAtRaw)
+        {
+            switch (e)
+            {
+                case EstadoMateria.Polvo: return t.FusionRaw[b];
+                case EstadoMateria.Fundido: return 255; // nada lo transforma más arriba en v1 (contrato 4.1: "nada más tiene transiciones").
+                case EstadoMateria.Templado: return t.FusionRaw[b]; // el contrato no da modificador térmico propio para este estado (solo Prensa=Reventar) -- mismo umbral que su Polvo.
+                case EstadoMateria.Recocido: return t.FusionRaw[b]; // ídem (solo Prensa=Compactar).
+                case EstadoMateria.Compacto: return t.CompactoUmbral[b];
+                case EstadoMateria.Ceramico: return t.CeramicoUmbral[b] != 0 ? t.CeramicoUmbral[b] : t.CompactoUmbral[b]; // si esta base no ceramiza, el material igual existe (p.ej. F3/DevPalette) con el umbral de su Compacto.
+                case EstadoMateria.Calcinado: return t.CalcinadoUmbral[b];
+                case EstadoMateria.Solucion: return waterBoilsAtRaw; // coincide con su propio boilsAt: evaporar precipita justo ahí.
+                default: return 255;
+            }
+        }
+
+        /// <summary>Respuesta a la Prensa (contrato §3) por ESTADO -- tendencia fija entre universos (regla 17), no varía por seed. Calcinado/Solucion no los nombra el contrato (4.2 solo da Polvo/Fundido/Templado/Recocido/Compacto/Ceramico): DECISIÓN -- Calcinado es Powder igual que Polvo (misma respuesta, produce el Compacto de su base); Solucion es Liquid igual que Fundido/Limo/agua (Escupir: los líquidos no se comprimen).</summary>
+        private static RespuestaPrensa PrensaEstado(EstadoMateria e)
+        {
+            switch (e)
+            {
+                case EstadoMateria.Polvo: return RespuestaPrensa.Compactar;
+                case EstadoMateria.Fundido: return RespuestaPrensa.Escupir;
+                case EstadoMateria.Templado: return RespuestaPrensa.Reventar;
+                case EstadoMateria.Recocido: return RespuestaPrensa.Compactar;
+                case EstadoMateria.Compacto: return RespuestaPrensa.Resistir;
+                case EstadoMateria.Ceramico: return RespuestaPrensa.Resistir;
+                case EstadoMateria.Calcinado: return RespuestaPrensa.Compactar; // DECISIÓN, ver docblock del método.
+                case EstadoMateria.Solucion: return RespuestaPrensa.Escupir;    // DECISIÓN, ver docblock del método.
+                default: return RespuestaPrensa.Nada;
+            }
+        }
+
+        /// <summary>Conductividad (contrato §3) por (base, estado). Ceramico/Solucion son las DOS excepciones que el contrato nombra explícitamente; el resto (DECISIÓN) hereda la conductividad de su base -- "conductora o iónica" es un rasgo de la sustancia, no del estado.</summary>
+        private static byte ConductividadEstado(PersistenciaTablas t, int b, EstadoMateria e)
+        {
+            switch (e)
+            {
+                case EstadoMateria.Polvo: return 0; // polvo suelto no conduce.
+                case EstadoMateria.Ceramico: return 0; // CONTRATO explícito: "no conduce".
+                case EstadoMateria.Solucion: return (byte)(t.ConductividadBase[b] > 0 ? 2 : 0); // CONTRATO explícito: colapsa "conductora o iónica" en un único chequeo (DECISIÓN de simplificación).
+                default: return t.ConductividadBase[b];
+            }
+        }
+
+        /// <summary>SolubleEnAgua (contrato §3): "solo puede ser true para estados Polvo/Calcinado" -- literal.</summary>
+        private static bool SolubleEstado(PersistenciaTablas t, int b, EstadoMateria e)
+        {
+            if (e != EstadoMateria.Polvo && e != EstadoMateria.Calcinado) return false;
+            return t.SolubleBase[b];
+        }
+
+        /// <summary>EsCombustible (contrato §3): ligado al Calcinado únicamente (contrato 4.2: "combustible en 1-2 de las 5 bases" habla del Calcinado). El `flammable` clásico de MaterialDef es un sistema aparte que v1 no conecta aquí.</summary>
+        private static bool CombustibleEstado(PersistenciaTablas t, int b, EstadoMateria e)
+        {
+            return e == EstadoMateria.Calcinado && t.CombustibleBase[b];
+        }
+
+        private static byte TempCombustibleEstado(PersistenciaTablas t, int b, EstadoMateria e)
+        {
+            return CombustibleEstado(t, b, e) ? t.TempCombustibleRawBase[b] : (byte)0;
+        }
+
+        /// <summary>Añade a `outEdges` los ids alcanzables desde `node` en UNA operación del retículo (contrato 4.4: separar/fundir@tier/templar/recocer/prensar/calcinar@tier/ceramizar@tier/disolver/evaporar), respetando `tier` para las 3 operaciones marcadas "@tier". Puramente ABSTRACTO (el solver verifica con grafo, no con la sim, contrato 4.4/DISENO §5): separar/templar/recocer/prensar/disolver/evaporar no llevan "@tier" en el contrato y se modelan aquí SIN gate térmico -- el gate real que SimStepper aplica a separar (temp&gt;=LimoSeparaRaw) es un mecanismo de JUEGO aparte, no una restricción de alcanzabilidad de la tabla.</summary>
+        private static void AddEdgesFrom(PersistenciaTablas t, byte tier, byte node, List<byte> outEdges)
+        {
+            outEdges.Clear();
+            if (node == MaterialId.Limo)
+            {
+                for (int b = 0; b < MaterialId.BasesCount; b++) outEdges.Add(MaterialId.MatDe(b, EstadoMateria.Polvo)); // separar
+                return;
+            }
+            if (!MaterialId.EsBaseEstado(node)) return;
+
+            int baseIdx = MaterialId.BaseDe(node);
+            var estado = MaterialId.EstadoDe(node);
+            switch (estado)
+            {
+                case EstadoMateria.Polvo:
+                    if (t.FusionRaw[baseIdx] <= tier) outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Fundido)); // fundir@tier
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Compacto)); // prensar (Compactar)
+                    if (t.CalcinacionRaw[baseIdx] <= tier) outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Calcinado)); // calcinar@tier
+                    if (t.SolubleBase[baseIdx]) outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Solucion)); // disolver
+                    break;
+                case EstadoMateria.Fundido:
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Templado)); // templar
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Recocido)); // recocer
+                    break;
+                case EstadoMateria.Templado:
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Polvo)); // prensar (Reventar)
+                    break;
+                case EstadoMateria.Recocido:
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Compacto)); // prensar (Compactar)
+                    break;
+                case EstadoMateria.Compacto:
+                    if (t.CeramicoUmbral[baseIdx] != 0 && t.CeramicoUmbral[baseIdx] <= tier) outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Ceramico)); // ceramizar@tier
+                    break;
+                case EstadoMateria.Ceramico:
+                    break; // Resistir: sin arista útil.
+                case EstadoMateria.Calcinado:
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Compacto)); // prensar (Compactar, ver PrensaEstado).
+                    if (t.SolubleBase[baseIdx]) outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Solucion)); // disolver
+                    break;
+                case EstadoMateria.Solucion:
+                    outEdges.Add(MaterialId.MatDe(baseIdx, EstadoMateria.Polvo)); // evaporar
+                    break;
+            }
+        }
+
+        /// <summary>BFS real (con distancia) sobre los ~41 nodos (Limo + 40 variantes) del retículo, a un `tier` térmico dado. `dist[Limo]=0`; nodos no alcanzados quedan en `reached[id]=false` (su `dist` no se usa).</summary>
+        private static void BfsPersistencia(PersistenciaTablas t, byte tier, out bool[] reached, out int[] dist)
+        {
+            reached = new bool[MaterialId.Count];
+            dist = new int[MaterialId.Count];
+            var queue = new Queue<byte>();
+            var edges = new List<byte>(8);
+
+            reached[MaterialId.Limo] = true;
+            queue.Enqueue(MaterialId.Limo);
+
+            while (queue.Count > 0)
+            {
+                byte node = queue.Dequeue();
+                AddEdgesFrom(t, tier, node, edges);
+                foreach (var next in edges)
+                {
+                    if (reached[next]) continue;
+                    reached[next] = true;
+                    dist[next] = dist[node] + 1;
+                    queue.Enqueue(next);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Evalúa las 3 garantías del contrato (4.4) para UN candidato de
+        /// tabla, calculando primero la escalera térmica (tier0 =
+        /// CrisolTier0Raw, tier1 = mejor TempCombustibleRaw alcanzable CON LO
+        /// YA ALCANZADO a tier0). `tempEnsayo` se sortea aquí (165..180,
+        /// consume rng incluso si el intento falla -- da igual, es tabla
+        /// pura y el intento se descarta entero de todas formas).
+        /// </summary>
+        private static void EvaluarGarantia(PersistenciaTablas t, System.Random rng, byte waterBoilsAtRaw,
+            out byte tempEnsayo, out byte ganador, out int baseCombustible, out int pasos, out bool ok)
+        {
+            BfsPersistencia(t, CrisolTier0Raw, out bool[] reached0, out _);
+
+            byte tier1 = CrisolTier0Raw;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                byte calc = MaterialId.MatDe(b, EstadoMateria.Calcinado);
+                if (t.CombustibleBase[b] && reached0[calc] && t.TempCombustibleRawBase[b] > tier1)
+                    tier1 = t.TempCombustibleRawBase[b];
+            }
+            BfsPersistencia(t, tier1, out bool[] reachedFinal, out int[] distFinal);
+
+            // Garantía 1: ≥1 base combustible alcanzable a tier0.
+            bool g1 = false; int g1Base = -1;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                if (t.CombustibleBase[b] && t.CalcinacionRaw[b] <= CrisolTier0Raw) { g1 = true; g1Base = b; break; }
+            }
+
+            tempEnsayo = (byte)(165 + rng.Next(16)); // 165..180
+
+            // Garantía 2: ≥1 variante alcanzable con umbral >= tempEnsayo+10.
+            // (fix integración, cazado EN EL PRIMER ARRANQUE con el log del
+            // solver: "ganador=19" = base 0 FUNDIDO) Fundido y Solucion se
+            // EXCLUYEN de la candidatura a ganador: Fundido devuelve umbral
+            // 255 ("nada lo transforma más arriba", físicamente cierto) y
+            // ganaba SIEMPRE por umbral>mejorUmbral -- pero la garantía es
+            // para el pedido AguantaCalor, y eso exige un estado ENTREGABLE:
+            // lo fundido se TEMPLA en el viaje al plinto (freezesInto del
+            // mundo) y lo que el Ensayo mediría es el Templado, cuyo umbral
+            // es otro. Un ganador que no puede llegar al examen siendo él
+            // mismo no garantiza nada. Solucion se excluye por la razón
+            // simétrica: su umbral ES su evaporación (siempre < tempEnsayo,
+            // jamás ganaría, pero se excluye explícito por claridad).
+            ganador = 0; bool g2 = false; int mejorUmbral = -1; pasos = 0;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                for (int e8 = 0; e8 < 8; e8++)
+                {
+                    var estado = (EstadoMateria)e8;
+                    if (estado == EstadoMateria.Fundido || estado == EstadoMateria.Solucion) continue;
+                    byte id = MaterialId.MatDe(b, estado);
+                    if (!reachedFinal[id]) continue;
+                    byte umbral = UmbralPersistenciaEstado(t, b, estado, waterBoilsAtRaw);
+                    if (umbral >= tempEnsayo + 10 && umbral > mejorUmbral)
+                    {
+                        mejorUmbral = umbral; ganador = id; g2 = true; pasos = distFinal[id];
+                    }
+                }
+            }
+
+            // Garantía 3: ≥1 variante conductora alcanzable + ≥1 base soluble + ≥1 base insoluble alcanzables.
+            bool g3cond = false, g3sol = false, g3insol = false;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                for (int e8 = 0; e8 < 8; e8++)
+                {
+                    byte id = MaterialId.MatDe(b, (EstadoMateria)e8);
+                    if (reachedFinal[id] && ConductividadEstado(t, b, (EstadoMateria)e8) >= 1) g3cond = true;
+                }
+                bool baseAlcanzada = reachedFinal[MaterialId.MatDe(b, EstadoMateria.Polvo)] || reachedFinal[MaterialId.MatDe(b, EstadoMateria.Calcinado)];
+                if (baseAlcanzada && t.SolubleBase[b]) g3sol = true;
+                if (baseAlcanzada && !t.SolubleBase[b]) g3insol = true;
+            }
+
+            baseCombustible = g1Base;
+            ok = g1 && g2 && g3cond && g3sol && g3insol;
+        }
+
+        /// <summary>
+        /// CLAMPEO FINAL (contrato 4.4): si 50 sorteos de tabla no cumplieron
+        /// las 3 garantías por azar, se fuerza a mano el mínimo imprescindible
+        /// sobre la base 0 (y la 1 para la garantía de insoluble) -- nunca se
+        /// relajan las garantías, se ajustan los NÚMEROS. Los caminos usados
+        /// (separar, prensar) son operaciones SIN "@tier": Polvo(0) y
+        /// Compacto(0) son alcanzables sin depender de ningún combustible, así
+        /// que el clampeo no puede fallar por falta de tier.
+        /// </summary>
+        private static void ClampearGarantia(PersistenciaTablas t, byte tempEnsayo, out byte ganador, out int baseCombustible, out int pasos)
+        {
+            t.CombustibleBase[0] = true;
+            if (t.CalcinacionRaw[0] > CrisolTier0Raw) t.CalcinacionRaw[0] = CrisolTier0Raw;
+            if (t.TempCombustibleRawBase[0] == 0) t.TempCombustibleRawBase[0] = 150;
+
+            // Ganador: Compacto(0), a 2 pasos (Limo -separar-> Polvo(0) -prensar-> Compacto(0)), con margen de sobra sobre tempEnsayo+10.
+            t.CompactoUmbral[0] = (byte)Mathf.Min(255, tempEnsayo + 20);
+            ganador = MaterialId.MatDe(0, EstadoMateria.Compacto);
+            pasos = 2;
+            baseCombustible = 0;
+
+            // Conductividad alcanzable: Compacto(0) hereda la base.
+            t.ConductividadBase[0] = 2;
+
+            // Soluble + insoluble alcanzables (ambas bases SIEMPRE
+            // alcanzables como Polvo, vía separar, sin tier).
+            t.SolubleBase[0] = true;
+            if (MaterialId.BasesCount > 1) t.SolubleBase[1] = false;
+        }
+
+        /// <summary>
+        /// El solver de garantía completo (contrato 4.4): reintenta el sorteo
+        /// de tabla hasta 50 veces (tabla pura, microsegundos) y si agota,
+        /// clampea la última. Devuelve las tablas finales YA VALIDADAS +
+        /// las 6 tablas de propiedades por MaterialId (contrato §3) + los 3
+        /// campos de la garantía. `Debug.Assert` + línea de log (formato del
+        /// log de leyes) al final.
+        /// </summary>
+        private static void ResolverPersistencia(
+            MaterialDef[] mats, System.Random rng, byte waterBoilsAtRaw,
+            out PersistenciaTablas tablas,
+            out byte[] umbralPersistenciaRaw, out RespuestaPrensa[] prensaPorMaterial,
+            out byte[] conductividadPorMaterial, out bool[] solubleEnAguaPorMaterial,
+            out bool[] esCombustiblePorMaterial, out byte[] tempCombustibleRawPorMaterial,
+            out byte ganadorGarantizado, out byte tempEnsayoCalorRaw, out int baseCombustibleGarantizada)
+        {
+            const int MaxIntentosTabla = 50;
+
+            PersistenciaTablas t = null;
+            byte tempEnsayo = 0, ganador = 0;
+            int baseCombustible = -1, pasos = 0;
+            bool ok = false;
+
+            for (int intento = 0; intento < MaxIntentosTabla; intento++)
+            {
+                t = SortearTablaPersistencia(rng);
+                EvaluarGarantia(t, rng, waterBoilsAtRaw, out tempEnsayo, out ganador, out baseCombustible, out pasos, out ok);
+                if (ok) break;
+            }
+
+            if (!ok)
+            {
+                ClampearGarantia(t, tempEnsayo, out ganador, out baseCombustible, out pasos);
+                UnityEngine.Debug.LogWarning($"[ChaosAlchemy] Persistencia: {MaxIntentosTabla} sorteos de tabla no cumplieron las 3 garantías por azar -- CLAMPEADA la última (ver ClampearGarantia).");
+            }
+
+            UnityEngine.Debug.Assert(baseCombustible >= 0 && baseCombustible < MaterialId.BasesCount,
+                "[ChaosAlchemy] INVARIANTE ROTA: BaseCombustibleGarantizada fuera de rango tras el solver de persistencia (CONTRATO_PERSISTE.md sección 4.4).");
+            UnityEngine.Debug.Assert(MaterialId.EsBaseEstado(ganador),
+                "[ChaosAlchemy] INVARIANTE ROTA: GanadorGarantizado no es una variante base×estado (CONTRATO_PERSISTE.md sección 4.4).");
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            UnityEngine.Debug.Log($"[ChaosAlchemy] Persistencia: ganador={ganador} a {pasos} pasos, combustible=base {baseCombustible} (verificado).");
+#endif
+
+            // ---- Tablas de propiedades por MaterialId completo (contrato §3), vocabulario+Limo primero con defaults sensatos, luego el bloque bases×estado desde `t`. ----
+            umbralPersistenciaRaw = new byte[MaterialId.Count];
+            prensaPorMaterial = new RespuestaPrensa[MaterialId.Count];
+            conductividadPorMaterial = new byte[MaterialId.Count];
+            solubleEnAguaPorMaterial = new bool[MaterialId.Count];
+            esCombustiblePorMaterial = new bool[MaterialId.Count];
+            tempCombustibleRawPorMaterial = new byte[MaterialId.Count];
+
+            for (byte id = 0; id < MaterialId.BaseEstado0; id++)
+            {
+                // Vocabulario del taller + Limo: el contrato solo fija Prensa
+                // para dos casos ("Limo/agua: Escupir", 4.2) -- el resto de
+                // esta franja (DECISIÓN) se deja en Nada/0/false, coherente
+                // con que esta mecánica es nueva y estos materiales no
+                // participan del retículo. UmbralPersistenciaRaw se deriva de
+                // lo que YA transforma a ese material en el mundo (para que
+                // el Ensayo tenga un dato no arbitrario incluso si algún día
+                // se prueba con vocabulario), salvo Limo (112, el mismo
+                // LimoSeparaRaw de SimStepper -- valor exacto duplicado a
+                // propósito, contrato 4.3, ninguna dependencia entre archivos).
+                umbralPersistenciaRaw[id] = id == MaterialId.Limo ? (byte)112 : UmbralPersistenciaVocabulario(mats[id]); // 112 = LimoSeparaRaw de SimStepper (fix integración: era 150, ver el comentario de esa constante).
+                prensaPorMaterial[id] = (id == MaterialId.Water || id == MaterialId.Limo) ? RespuestaPrensa.Escupir : RespuestaPrensa.Nada;
+                conductividadPorMaterial[id] = 0;
+                solubleEnAguaPorMaterial[id] = false;
+                esCombustiblePorMaterial[id] = false;
+                tempCombustibleRawPorMaterial[id] = 0;
+            }
+
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                for (int e8 = 0; e8 < 8; e8++)
+                {
+                    var estado = (EstadoMateria)e8;
+                    byte id = MaterialId.MatDe(b, estado);
+                    umbralPersistenciaRaw[id] = UmbralPersistenciaEstado(t, b, estado, waterBoilsAtRaw);
+                    prensaPorMaterial[id] = PrensaEstado(estado);
+                    conductividadPorMaterial[id] = ConductividadEstado(t, b, estado);
+                    solubleEnAguaPorMaterial[id] = SolubleEstado(t, b, estado);
+                    esCombustiblePorMaterial[id] = CombustibleEstado(t, b, estado);
+                    tempCombustibleRawPorMaterial[id] = TempCombustibleEstado(t, b, estado);
+                }
+            }
+
+            tablas = t;
+            ganadorGarantizado = ganador;
+            tempEnsayoCalorRaw = tempEnsayo;
+            baseCombustibleGarantizada = baseCombustible;
+        }
+
+        /// <summary>UmbralPersistenciaRaw de un material del vocabulario (0..16): el primer umbral que YA lo transforma en el mundo (flammable primero -- arder es la muerte más temprana --, si no fusión, si no ebullición, si no 255 = persiste siempre, como Stone).</summary>
+        private static byte UmbralPersistenciaVocabulario(MaterialDef def)
+        {
+            if (def.flammable && def.ignitionTemp != short.MaxValue) return (byte)Mathf.Clamp(def.ignitionTemp, 0, 255);
+            if (def.meltsAt != short.MaxValue) return (byte)Mathf.Clamp(def.meltsAt, 0, 255);
+            if (def.boilsAt != short.MaxValue) return (byte)Mathf.Clamp(def.boilsAt, 0, 255);
+            return 255;
+        }
+
+        /// <summary>Interpola linealmente byte a byte entre dos Color32 (mismo espíritu que SimRenderer.LerpByte, copiado aquí para no tocar SimRenderer -- sección 7 del contrato). El alfa siempre sale en 255 (todas las variantes bases×estado son opacas, mismo criterio que lo innominado, regla 23).</summary>
+        private static Color32 LerpColor32(Color32 from, Color32 to, float t01)
+        {
+            byte r = (byte)Mathf.RoundToInt(Mathf.Lerp(from.r, to.r, t01));
+            byte g = (byte)Mathf.RoundToInt(Mathf.Lerp(from.g, to.g, t01));
+            byte b = (byte)Mathf.RoundToInt(Mathf.Lerp(from.b, to.b, t01));
+            return new Color32(r, g, b, 255);
+        }
+
+        /// <summary>
+        /// Construye los 5 MaterialDef en estado Polvo (contrato 4.1), ANTES
+        /// de SortearFirmasVisuales: color/patrón/borde placeholder (los
+        /// rellena esa llamada, ya con estos 5 ids dentro de
+        /// UnnamedMaterialIds) -- aquí solo lo que SortearFirmasVisuales NO
+        /// toca (arquetipo, densidad, fluidez, transición Polvo->Fundido).
+        /// </summary>
+        private static void ConstruirPolvoBases(MaterialDef[] mats, System.Random rng, PersistenciaTablas t)
+        {
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                byte id = MaterialId.MatDe(b, EstadoMateria.Polvo);
+                mats[id] = new MaterialDef
+                {
+                    id = id,
+                    devName = $"Base{b}Polvo",
+                    archetype = MaterialArchetype.Powder,
+                    baseColor = new Color32(160, 160, 160, 255), // placeholder: SortearFirmasVisuales lo sobreescribe a continuación.
+                    colorJitter = 16,
+                    density = t.DensidadPolvo[b],
+                    fluidity = 1,
+                    meltsAt = t.FusionRaw[b],
+                    meltsInto = MaterialId.MatDe(b, EstadoMateria.Fundido),
+                };
+            }
+        }
+
+        /// <summary>
+        /// Construye los 35 MaterialDef de los estados derivados (contrato
+        /// 4.1), DESPUÉS de SortearFirmasVisuales: cada uno tiñe su color
+        /// desde el tono FINAL que le tocó a su Polvo (dos ejes de
+        /// legibilidad -- la base se reconoce por el tono, el estado por el
+        /// tratamiento) con reglas FIJAS entre universos. Patrón/borde
+        /// también fijos por estado (ninguno de los dos se sortea aquí).
+        /// </summary>
+        private static void ConstruirEstadosDerivados(MaterialDef[] mats, System.Random rng, PersistenciaTablas t,
+            byte waterBoilsAtRaw, Color32 waterColor, short waterDensity)
+        {
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                Color32 tono = mats[MaterialId.MatDe(b, EstadoMateria.Polvo)].baseColor;
+                Color.RGBToHSV(tono, out float h, out float s, out float v);
+
+                // Fundido: tono saturado + brillo alto + emitsGlow, patron Pulso.
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Fundido);
+                    Color32 c = Color.HSVToRGB(h, 0.90f, 0.95f, true);
+                    c.a = 255;
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Fundido", archetype = MaterialArchetype.Liquid,
+                        baseColor = c, colorJitter = 10, density = t.DensidadPolvo[b], fluidity = 3,
+                        emitsGlow = true,
+                        freezesAt = t.SolidificaRaw[b], freezesInto = MaterialId.MatDe(b, EstadoMateria.Templado),
+                        patron = PatronMorfologico.Pulso, borde = BordeMorfologico.Halo,
+                        patronEscala = 3, patronFuerza = 110, ritmoAnim = 90, emision = 150,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Templado: tono + blanco 25%, borde Neto, patron Liso (liso vítreo).
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Templado);
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Templado", archetype = MaterialArchetype.StaticSolid,
+                        baseColor = LerpColor32(tono, new Color32(255, 255, 255, 255), 0.25f), colorJitter = 8,
+                        density = short.MaxValue, // StaticSolid: no cae ni compite en densidad de líquidos (regla 7) -- mismo criterio que Stone/Ice/Crystal.
+                        patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,
+                        patronEscala = 3, patronFuerza = 0, ritmoAnim = 0, emision = 0,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Recocido: tono + gris 20%, patron Vetas suaves.
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Recocido);
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Recocido", archetype = MaterialArchetype.StaticSolid,
+                        baseColor = LerpColor32(tono, new Color32(128, 128, 128, 255), 0.20f), colorJitter = 10,
+                        density = short.MaxValue,
+                        patron = PatronMorfologico.Vetas, borde = BordeMorfologico.Neto,
+                        patronEscala = 4, patronFuerza = 40, ritmoAnim = 10, emision = 0,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Compacto: tono oscurecido 30%, jitter bajo, patron Celdas prieto.
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Compacto);
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Compacto", archetype = MaterialArchetype.StaticSolid,
+                        baseColor = LerpColor32(tono, new Color32(0, 0, 0, 255), 0.30f), colorJitter = 6, // "jitter bajo" explícito del contrato.
+                        density = short.MaxValue,
+                        patron = PatronMorfologico.Celdas, borde = BordeMorfologico.Neto,
+                        patronEscala = 2, patronFuerza = 160, ritmoAnim = 10, emision = 0, // "prieto": escala pequeña + fuerza alta.
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Ceramico: tono desaturado + pálido, borde Neto, patron Liso.
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Ceramico);
+                    Color32 c = Color.HSVToRGB(h, s * 0.35f, Mathf.Min(1f, v + 0.25f), true);
+                    c.a = 255;
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Ceramico", archetype = MaterialArchetype.StaticSolid,
+                        baseColor = c, colorJitter = 8,
+                        density = short.MaxValue,
+                        patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,
+                        patronEscala = 3, patronFuerza = 0, ritmoAnim = 0, emision = 0,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Calcinado: tono oscurecido 50% hacia carbón, patron Motas.
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Calcinado);
+                    short densCalcinado = (short)Mathf.Clamp(Mathf.RoundToInt(t.DensidadPolvo[b] * 0.7f), 1, short.MaxValue - 1); // -30% (contrato 4.2), a diferencia de los StaticSolid de arriba SÍ importa: Calcinado es Powder y compite de verdad por flotar/hundirse.
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Calcinado", archetype = MaterialArchetype.Powder,
+                        baseColor = LerpColor32(tono, new Color32(20, 18, 16, 255), 0.50f), colorJitter = 14,
+                        density = densCalcinado, fluidity = 1,
+                        patron = PatronMorfologico.Motas, borde = BordeMorfologico.Difuso,
+                        patronEscala = 2, patronFuerza = 90, ritmoAnim = 30, emision = 0,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+                // Solucion: color del AGUA teñido 60% hacia el tono base (tech del tinte).
+                {
+                    byte id = MaterialId.MatDe(b, EstadoMateria.Solucion);
+                    mats[id] = new MaterialDef
+                    {
+                        id = id, devName = $"Base{b}Solucion", archetype = MaterialArchetype.Liquid,
+                        baseColor = LerpColor32(waterColor, tono, 0.60f), colorJitter = 10,
+                        density = waterDensity, fluidity = 4, // DECISIÓN: densidad de la solución = la del agua (es sobre todo agua) -- el contrato no la fija.
+                        boilsAt = waterBoilsAtRaw, boilsInto = MaterialId.MatDe(b, EstadoMateria.Polvo),
+                        patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,
+                        patronEscala = 3, patronFuerza = 0, ritmoAnim = 0, emision = 0,
+                        semillaPatron = (byte)rng.Next(256),
+                    };
+                }
+            }
         }
     }
 }

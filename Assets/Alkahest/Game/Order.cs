@@ -19,6 +19,39 @@ namespace Alkahest.Game
         Cold,
         /// <summary>La celda es exactamente TargetMat (solo se genera si hay algo bautizado y descubierto).</summary>
         NamedMaterial,
+
+        // =================================================================
+        // (playtest 25, CONTRATO_PERSISTE.md §6.1) EL ARCO DE "LO QUE
+        // PERSISTE": cinco tipos nuevos, exclusivos de
+        // OrderSystem.GenerateOrdersPersiste() -- los seis de arriba siguen
+        // intactos para el modo clásico (regla 26 de CLAUDE.md: nada se
+        // borra, se añade al lado).
+        // =================================================================
+
+        /// <summary>
+        /// N celdas del MISMO Polvo de una base×estado -- CUALQUIER base
+        /// vale, pero la PRIMERA celda entregada fija cuál (ver
+        /// <see cref="Order.LockedMat"/>): "una sola de sus arenas, pura",
+        /// no una mezcla de bases distintas.
+        /// </summary>
+        Pureza,
+        /// <summary>
+        /// NO se resuelve en la Tolva (ver OrderSystem.MatchesOrder, que
+        /// siempre devuelve false para este tipo): lo cumple
+        /// <see cref="EnsayoMaestro"/> sometiendo la muestra al calor del
+        /// crisol.
+        /// </summary>
+        AguantaCalor,
+        /// <summary>Ídem AguantaCalor: se resuelve en <see cref="EnsayoMaestro"/>, nunca en la Tolva.</summary>
+        Conduce,
+        /// <summary>N celdas cuya densidad es menor que la del agua Y que no son solubles (Universe.SolubleEnAgua) -- por tabla, en la Tolva.</summary>
+        FlotaInsoluble,
+        /// <summary>
+        /// Se autocompleta al entregar CUALQUIER celda mientras el jugador
+        /// tenga ≥1 patente registrada (<see cref="Hornada.TieneAlMenosUnaPatente"/>):
+        /// "el cómo, por escrito", no una sustancia concreta.
+        /// </summary>
+        Procedimiento,
     }
 
     /// <summary>
@@ -48,6 +81,18 @@ namespace Alkahest.Game
 
         public int Progreso;
         public bool Completado;
+
+        /// <summary>
+        /// (playtest 25) SOLO para <see cref="OrderType.Pureza"/>: la PRIMERA
+        /// celda de polvo entregada fija qué base×estado exacto cuenta para
+        /// el resto del pedido ("una sola de sus arenas, pura" -- no una
+        /// mezcla). Null hasta la primera entrega válida; se fija en
+        /// OrderSystem.TryDeliverCell, nunca en MatchesOrder (que es
+        /// estático y no puede mutar nada). Mutable a propósito, como
+        /// Progreso/Completado: esta clase ya es mutada en sitio por
+        /// OrderSystem mientras el jugador entrega.
+        /// </summary>
+        public byte? LockedMat;
 
         public Order(int id, string descripcion, OrderType tipo, int minCells, int recompensa,
             int? minTempC = null, byte? targetMat = null)
