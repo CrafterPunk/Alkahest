@@ -222,7 +222,24 @@ namespace Alkahest.Game
             if (sim == null || sim.Universe == null) return 0.5f; // defensivo: sin universo, templado neutro.
 
             var rng = XorShift.FromCell(0u, celdaCunaX, celdaCunaY, (uint)sim.Universe.Seed ^ SalTemperamentoOriginal);
-            return rng.NextByte() / 255f;
+
+            // (playtest 23) EL RESCOLDO ORIGINAL SIEMPRE NACE CÁLIDO -- ya no
+            // uniforme 0..1. Cesar, jugando el 22: "si la mascota me toca del
+            // frío no puedo evolucionar en ningún sentido". Tenía razón por
+            // aritmética, no por mala suerte: con sorteo uniforme, ~la mitad
+            // de las partidas arrancan con criatura fría; una fría CONTENTA
+            // empuja su anillo hacia FloorSeguridadRaw=30 (-60°C) y el capullo
+            // solo avanza por encima de VivGrowMinRaw (~25-40°C según semilla)
+            // -- capullo muerto, partida trabada, sin ningún error visible.
+            // La sala inicial tiene UN solo consumidor de temperatura (el
+            // capullo, que pide CALOR), así que la generación 1 nace del lado
+            // que la sala puede consumir; la VARIACIÓN entra por la
+            // descendencia (ver Capullo.Eclosionar: la primera cría nace
+            // FRÍA a propósito -- es la capacidad nueva, no un defecto).
+            // Ventana 0.72..0.90: claramente cálida sin ser extrema (el
+            // extremo 1.0 empuja a 100°C y evaporaría la pila de agua de al
+            // lado sin que el jugador haya hecho nada).
+            return 0.72f + (rng.NextByte() / 255f) * 0.18f;
         }
 
         /// <summary>Temperamento normalizado 0..1 de ESTA instancia. Lo lee <see cref="Capullo.Eclosionar"/> para calcular la herencia con desviación de su cría.</summary>
@@ -1587,21 +1604,31 @@ namespace Alkahest.Game
             return UiStyles.TextoTenue;
         }
 
+        /// <summary>
+        /// (playtest 23) EL RÓTULO HABLA EN VERBOS CON CONSECUENCIA. Cesar,
+        /// jugando el 22: "hay estados como frío/contento/tibio que todavía
+        /// no comunican claramente qué significan o qué no permiten". Un
+        /// instrumento se lee por lo que HACE y por lo que te pide, no por un
+        /// adjetivo: la función dice el efecto real sobre el mundo (una fría
+        /// CONGELA de verdad -- raw 30 queda por debajo de Water.freezesAt en
+        /// TODA semilla, es la capacidad de hacer HIELO) y el estado dice la
+        /// ACCIÓN que le toca al jugador, si hay alguna.
+        /// </summary>
         private string FraseFuncionTemperamento()
         {
-            if (_temperamento < UmbralFrio) return "enfría la sala";
-            if (_temperamento > UmbralCalor) return "calienta la sala";
-            return "apenas toca la sala";
+            if (_temperamento < UmbralFrio) return "congela lo que la rodea";
+            if (_temperamento > UmbralCalor) return "irradia calor";
+            return "apenas altera la sala";
         }
 
         private string NombreEstado()
         {
             switch (_estado)
             {
-                case Estado.Hambrienta: return "hambrienta";
+                case Estado.Hambrienta: return "hambrienta — viértele nutriente";
                 case Estado.Contenta: return "contenta";
-                case Estado.Aletargada: return "aletargada";
-                default: return "asustada";
+                case Estado.Aletargada: return "aletargada — recuperándose";
+                default: return "asustada — aleja el peligro";
             }
         }
     }

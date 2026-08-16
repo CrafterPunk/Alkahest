@@ -371,6 +371,16 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     caños dentro de la roca, invisibles, sin ningún error. Cuando el plano tiene dos zonas vivas a
     la vez, el nombre de una constante ya no basta para saber si es la correcta.
 
+48. **CADA ESTADO Y CADA TEMPERAMENTO NECESITA UN VERBO VISIBLE Y UN CONSUMIDOR REAL (playtest
+    23, la regla de diseño del slice)**: el calor tenía consumidor (el capullo) y el frío no tenía
+    ninguno — por eso una criatura fría era un callejón sin salida y Cesar reportó "me tocó fría y
+    no puedo evolucionar". La generación 1 nace ahora con los dos polos garantizados (Rescoldo
+    original SIEMPRE cálido 0.72..0.90; primera cría SIEMPRE fría 0.08..0.25) y el frío tiene dos
+    consumidores: el HIELO (universal — raw 30 < freezesAt 52..67 en toda semilla) y las leyes con
+    `condicion=Frio` de la semilla. La herencia fina ±0.16 queda para las generaciones 2+.
+    Criterio general: antes de añadir un eje de variación, nombrar (a) el verbo con el que el
+    jugador lo LEE y (b) el consumidor con el que lo APROVECHA; sin ambos, es ruido.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -444,6 +454,16 @@ que era una buena intuición de Cesar y sigue siendo el siguiente paso barato.
 La sección "LA TENSIÓN DE FONDO DEL PROYECTO" del HANDOFF resume, para quien tenga que opinar desde
 fuera, el problema central: cómo hacer legible un simulador profundo sin simplificarlo — y la
 hipótesis actual, que es DARLE UN CUERPO.
+
+**Playtest 23** (FABLE de vuelta en dirección; código escrito por Fable sin agentes; compilado y
+arrancado SIN ERRORES en el Unity real vía MCP) — **LA CADENA COMPLETA del encargo de Cesar**:
+descubrir → transformar → capacidad nueva → preguntas nuevas. Diagnóstico con números de sus dos
+"trabados" (temperamento inicial uniforme = mitad de partidas con capullo incubable-nunca; herencia
+±0.16 = crías clon); regla 48 como respuesta; primera criatura siempre cálida, primera cría siempre
+fría → HIELO como capacidad nueva universal; rótulos en verbos con acción; fuera el loot del suelo;
+encargos del pivot que piden exactamente lo que el jugador acaba de aprender a hacer (hielo + lo
+bautizado POR SU NOMBRE); fix de la O (panel vacío indistinguible de "no se abrió", regla 43).
+Guion esperado de la partida en `docs/HANDOFF.md` sección Playtest 23.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

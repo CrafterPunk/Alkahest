@@ -507,6 +507,49 @@ namespace Alkahest.Game
             return $"Trae {minCells} celdas de lo que llamáis \"{nombre}\".";
         }
 
+        /// <summary>
+        /// (playtest 23) LOS PRIMEROS ENCARGOS DEL PIVOT -- los que aparecen
+        /// cuando el jugador cava hasta la Tolva. NO son los de la jornada 1
+        /// clásica: aquellos (Flammable + Hot 80°C) eran IMPOSIBLES en el
+        /// cuarto íntimo -- no hay aceite sin excavar el taller, y el anillo
+        /// cálido de la criatura empuja como mucho hacia ~54-84°C según
+        /// semilla, nunca 80°C garantizados. El jugador habría cavado 23
+        /// celdas de roca para encontrarse dos peticiones incumplibles: el
+        /// premio de cavar convertido en un muro (regla 43: un encargo que no
+        /// puedes cumplir tampoco se distingue de un juego roto).
+        ///
+        /// Los dos de ahora CIERRAN el bucle del slice, cada uno apuntando a
+        /// una capacidad que el jugador ACABA de ganar:
+        ///  · ALGO HELADO (-5°C): solo se fabrica con la cría FRÍA del
+        ///    capullo (el ambiente jamás congela nada, ver regla 31; el hielo
+        ///    conserva su temperatura en el frasco, ver Flask). Es la
+        ///    validación externa de la capacidad nueva.
+        ///  · LO QUE VOSOTROS BAUTIZASTEIS: si ya nombró algo (el producto de
+        ///    la digestión, típicamente), el Maestro se lo pide POR SU
+        ///    NOMBRE -- bautizar deja de ser decorativo y pasa a tener valor
+        ///    mecánico. Si aún no nombró nada, este encargo simplemente no
+        ///    aparece (un solo encargo es mejor que uno imposible).
+        /// </summary>
+        public void GenerateOrdersPivot()
+        {
+            ActiveOrders.Clear();
+            int universeSeed = (_sim != null && _sim.Universe != null) ? _sim.Universe.Seed : 0;
+            var rng = new System.Random(universeSeed * 31 + 1);
+
+            int celdasFrio = Volumen(30, rng);
+            AddOrder(OrderType.Cold, celdasFrio, 30,
+                "Algo helado -- " + celdasFrio + " celdas a -5°C o menos. (Nada aquí abajo se congela solo...)",
+                minTempC: -5);
+
+            byte target = PickNamedMaterial(rng);
+            if (target != MaterialId.Empty)
+            {
+                int celdasNombrado = Volumen(50, rng);
+                AddOrder(OrderType.NamedMaterial, celdasNombrado, 35,
+                    DescribirNamedMaterial(celdasNombrado, target), targetMat: target);
+            }
+        }
+
         private void AddNamedOrFallback(System.Random rng)
         {
             byte target = PickNamedMaterial(rng);

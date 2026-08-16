@@ -227,10 +227,14 @@ namespace Alkahest.Game
             _pivote.localScale = new Vector3(escala, escala, 1f);
         }
 
+        /// <summary>Último veredicto del sondeo de calor -- lo lee el rótulo de mundo (OnGUI) para decir INCUBANDO/DETENIDO sin sondear por frame.</summary>
+        private bool _tibioUltimoSondeo;
+
         private void SondearCalor(float dtSondeo)
         {
             byte tempRaw = _sim.SampleTempRaw(_celdaRepisaX, _celdaRepisaY + 2);
             bool tibio = tempRaw > _sim.Universe.VivGrowMinRaw;
+            _tibioUltimoSondeo = tibio;
             if (tibio)
             {
                 _progreso = Mathf.Clamp01(_progreso + dtSondeo / DuracionCalorSegundos);
@@ -282,12 +286,28 @@ namespace Alkahest.Game
                 celdaX = cp.x + 3;
                 celdaY = cp.y - 1;
 
-                // HERENCIA CON DESVIACIÓN (playtest 22, decisión de Cesar:
-                // "hereda con desviación, no tirada nueva" -- ver el
-                // docblock de la clase). Se fija ANTES de Init porque su
-                // firma está CONGELADA por CONTRATO_PIVOT.md.
-                Criatura.TemperamentoHeredadoPendiente =
-                    HeredarTemperamentoConDesviacion(progenitor.TemperamentoNormalizado, _sim.Universe.Seed);
+                // (playtest 23) LA PRIMERA CRÍA DE LA RUN SIEMPRE NACE FRÍA
+                // -- NO hereda con desviación fina. Cesar, jugando el 22: "el
+                // huevo produce algo igual a la criatura inicial solo que más
+                // pequeña, con lo que no aporta a la evolución: sigues
+                // trabado". Con desviación ±0.16 sobre un progenitor cálido
+                // (0.72..0.90, ver Criatura.SortearOHeredarTemperamento) la
+                // cría era matemáticamente incapaz de cruzar al frío jamás.
+                // Y el FRÍO es la capacidad nueva que la incubación debe
+                // entregar: una cría fría empuja su anillo hacia raw 30, por
+                // debajo de Water.freezesAt (52..67) en TODA semilla -- HIELO,
+                // algo que el jugador no podía fabricar antes. La generación 1
+                // enseña el EJE entero (naciste con el polo cálido; criaste el
+                // polo frío); las generaciones SIGUIENTES -- cuando exista más
+                // de un capullo por run -- ya heredarán fino con
+                // HeredarTemperamentoConDesviacion (se conserva intacta más
+                // abajo para ese futuro, regla 15: no borrar, bifurcar).
+                // Ventana 0.08..0.25: inconfundiblemente fría sin el extremo
+                // 0.0. Determinista por (semilla, repisa), nunca
+                // UnityEngine.Random.
+                var rngPrimeraCria = XorShift.FromCell(0u, _celdaRepisaX, _celdaRepisaY,
+                    (uint)_sim.Universe.Seed ^ SalHerenciaTemperamento);
+                Criatura.TemperamentoHeredadoPendiente = 0.08f + (rngPrimeraCria.NextByte() / 255f) * 0.17f;
             }
 
             var criaturaGo = new GameObject("Criatura (cría)");
@@ -316,6 +336,43 @@ namespace Alkahest.Game
         /// +0.154 -> cría2 CALIENTE (0.771, cruza el umbral de 0.65). Dos
         /// generaciones, elegidas por el jugador, mueven el temperamento de
         /// "templado" a "caliente" con claridad.
+        /// </summary>
+        // ===================================================================
+        // RÓTULO DE MUNDO (playtest 23). Cesar, jugando el 22, sobre los
+        // estados: "no comunican claramente qué significan". El capullo era
+        // el caso peor: sus grietas dicen CUÁNTO progresó, pero nada decía
+        // POR QUÉ no progresaba -- y "se detuvo porque hace frío" es
+        // exactamente la lección que enseña el vínculo con la criatura
+        // cálida. Mismo patrón que el rótulo de Criatura: de cerca, sin
+        // tecla, verbos con consecuencia.
+        // ===================================================================
+        private const float RangoRotuloPleno = 2.6f;
+        private const float RangoRotuloDesvanece = 3.8f;
+
+        private void OnGUI()
+        {
+            if (_sim == null || _eclosionado || DayCycle.InputLocked || DayCycle.HudSilenciado) return;
+            if (_pivote == null || _jugador == null) return;
+
+            float cercania = UiStyles.Cercania(_pivote.position, _jugador, RangoRotuloPleno, RangoRotuloDesvanece);
+            if (cercania <= 0f) return;
+
+            UiStyles.Preparar();
+            string texto;
+            Color color;
+            if (_tibioUltimoSondeo) { texto = "incubando — avanza con el calor"; color = UiStyles.Aviso; }
+            else { texto = "detenido — hace demasiado frío aquí"; color = UiStyles.Frio; }
+            UiStyles.PlacaMundo(_pivote.position, texto,
+                new Color(color.r, color.g, color.b, color.a * cercania), UiStyles.S(46f));
+        }
+
+        /// <summary>
+        /// (playtest 23) HOY SIN LLAMANTES, CONSERVADA A PROPÓSITO (regla 15):
+        /// la herencia fina ±0.16 es el mecanismo correcto para las
+        /// generaciones 2+ cuando exista más de un capullo por run. La
+        /// primera cría la puentea deliberadamente (ver Eclosionar: nace
+        /// FRÍA garantizada, porque la generación 1 debe enseñar el eje
+        /// completo, no una variación imperceptible).
         /// </summary>
         private float HeredarTemperamentoConDesviacion(float delProgenitor, int seed)
         {

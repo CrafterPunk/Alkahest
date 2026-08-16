@@ -382,7 +382,10 @@ namespace Alkahest.Game
             if (!TolvaAlcanzable()) return;
 
             _encargosDesbloqueados = true;
-            if (_orderSystem != null) _orderSystem.GenerateOrdersForDay(_day);
+            // (playtest 23) Los encargos del pivot, NO los de la jornada
+            // clásica: aquellos pedían inflamable y 80°C, imposibles en el
+            // cuarto íntimo -- ver el docblock de GenerateOrdersPivot.
+            if (_orderSystem != null) _orderSystem.GenerateOrdersPivot();
             // "Que se note (es la recompensa de cavar)": aviso breve, ver
             // DrawEncargosDesbloqueadosBanner. OrdersHud (encargo aparte,
             // guardado por HudSilenciado, no por esto) recogerá la lista

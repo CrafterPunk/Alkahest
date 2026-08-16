@@ -104,6 +104,72 @@ en el proyecto pero no integrado con la sim.
   divide W y H (256x144 lo cumple; hay una guardia con LogError en SimRenderer.Init si se rompe).
 - Unity a veces abre ventanas en el 2º monitor (`computer_switch_display`).
 
+## Playtest 23 → LA CADENA COMPLETA: descubrir → transformar → capacidad nueva → preguntas
+## nuevas — Fable de vuelta en dirección; compilado y arrancado sin errores vía MCP
+Ronda dirigida y ESCRITA por Fable 5 (sin agentes: cambios quirúrgicos, y la cuota de agentes
+había demostrado ser frágil). Verificado en el Unity real: compila limpio y arranca sin errores.
+
+**El encargo de Cesar**, literal: *"¿Podemos construir una progresión donde, experimentando,
+consiga crear nuevas herramientas vivas, nuevas fuentes y nuevas sustancias útiles, hasta sentir
+que estoy domesticando el sistema?... La prioridad absoluta es una versión inicial sencilla,
+legible, agradable, con pocas cosas, pero que ya permita sentir una pequeña cadena real de
+descubrimiento → transformación → nueva capacidad → nueva experimentación."*
+
+### EL DIAGNÓSTICO, con números — sus dos "trabados" eran el mismo bug
+1. **El temperamento inicial se sorteaba uniforme 0..1** → en ~la mitad de las partidas la
+   criatura nacía FRÍA. Una fría contenta empuja su anillo hacia raw 30 (−60°C) y el capullo solo
+   avanza por encima de `VivGrowMinRaw` (~25-40°C): **capullo muerto, partida trabada**. Le pasó a
+   él, y no era mala suerte: era estructural.
+2. **La herencia desviaba ±0.16** sobre un eje 0..1 → la cría era casi el padre. Su *"nació lo
+   mismo pero más pequeña"*.
+3. El dato que lo resuelve todo: **el frío YA podía congelar agua en toda semilla** (raw 30 <
+   `freezesAt` 52..67). La capacidad existía; faltaba el camino hasta ella y el cartel que la
+   nombrara.
+
+### LA REGLA DE LA RONDA
+**Cada estado y cada temperamento necesita un VERBO visible y un CONSUMIDOR real.** El calor tenía
+consumidor (el capullo); el frío no tenía ninguno — por eso era un callejón. Ahora el frío tiene
+dos: el HIELO (universal, determinista, vocabulario) y las leyes con `condicion=Frio` de cada
+semilla (variable, descubrible). En la primera semilla probada tras el cambio, 4 de las 6 leyes
+sorteadas exigían frío: la cría fría es la llave de la mayor parte de la química de ese universo.
+
+### LO HECHO (6 archivos, cambios quirúrgicos)
+1. **`Criatura.SortearOHeredarTemperamento`**: el Rescoldo original nace SIEMPRE cálido
+   (0.72..0.90 por semilla). La sala inicial tiene un solo consumidor térmico y pide calor; la
+   generación 1 nace del lado que la sala puede consumir. No extremo (1.0 evaporaría la pila).
+2. **`Capullo.Eclosionar`**: la primera cría de la run nace SIEMPRE fría (0.08..0.25). La
+   generación 1 enseña el EJE entero (naciste con el polo cálido, criaste el polo frío); la
+   herencia fina ±0.16 se conserva intacta para las generaciones 2+ (regla 15).
+3. **Rótulos en VERBOS con consecuencia**: *"congela lo que la rodea"* / *"irradia calor"* /
+   *"hambrienta — viértele nutriente"* / *"asustada — aleja el peligro"*. Y el capullo, que no
+   tenía rótulo, ahora dice **por qué** no avanza: *"incubando — avanza con el calor"* /
+   *"detenido — hace demasiado frío aquí"*.
+4. **Fuera el loot del suelo** (`PlaceNutrienteMound` bifurcado, no borrado): *"hace pensar en
+   exploración/recolección tipo Minecraft"*. El caño de nutriente lo hacía redundante, y quitarlo
+   convierte el PRIMER acto del jugador en alimentarla ÉL — más íntimo, más causal, y enseña el
+   frasco de paso.
+5. **Encargos del pivot (`GenerateOrdersPivot`)**: los de la jornada clásica (inflamable + 80°C)
+   eran IMPOSIBLES en el cuarto íntimo — el premio de cavar 23 celdas era un muro. Ahora: **"algo
+   helado a −5°C"** (= la cría fría, la validación externa de la capacidad nueva) y, si ya
+   bautizó algo, **el Maestro se lo pide POR SU NOMBRE** — bautizar gana valor mecánico.
+6. **Fix de la O**: no era la tecla — con cero encargos el panel medía solo cabecera y se abría a
+   un panel casi vacío indistinguible de "no se abrió" (regla 43). Ahora lo dice: *"nadie os ha
+   oído todavía — la Tolva sigue sellada tras la roca, hacia la derecha"*.
+
+### LA PARTIDA QUE DEBERÍA SALIR (guion esperado del playtest)
+Despierta hambrienta → el rótulo te dice qué hacer → la alimentas → se enciende e irradia →
+viertes agua encima → exuda algo nuevo → lo bautizas → el capullo junto a ella se agrieta →
+nace la cría FRÍA, azul → acercas agua → **HIELO** → cavas hasta la Tolva → te pide exactamente
+hielo, y lo que tú bautizaste, por su nombre. Cada eslabón enseña el siguiente.
+
+### QUÉ NO ENTRÓ (anotado, decidido, no olvidado)
+Identidad perceptual profunda de materiales (coral/venas — bloqueada por el Gray-Scott de dos
+campos del backlog); pedidos narrativos ("veneno para ratas") — exigen un sistema de PROPIEDADES
+de material, que es la fase siguiente natural si este slice funciona; breeding dirigido
+multi-generación (la herencia fina ya está lista esperándolo); análisis por olor/sensación.
+
+---
+
 ## Playtest 22 → HERRAMIENTAS VIVAS: las máquinas son criaturas — pendiente de validar
 Ronda accidentada (tres reinicios del sandbox y un límite de cuota que cortó a un agente a mitad),
 pero el código llegó entero. **Sin verificar en el editor: el MCP de Unity se cayó antes de poder

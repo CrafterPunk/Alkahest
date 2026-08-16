@@ -1058,7 +1058,20 @@ namespace Alkahest.Sim
             ExcavateCuarto(grid);
             BuildCuna(grid);
             BuildRepisa(grid);
-            PlaceNutrienteMound(grid);
+            // (playtest 23) EL MONTÓN DE NUTRIENTE YA NO SE COLOCA -- el
+            // método PlaceNutrienteMound se conserva intacto sin llamantes
+            // (regla 15: bifurcar, no borrar). Cesar, jugando el 22:
+            // "algunos materiales/semillas aparecen tirados por el mapa, y
+            // eso no me gusta porque hace pensar en exploración/recolección
+            // tipo Minecraft. Quiero que la fantasía sea fabricar, criar,
+            // transformar y descubrir desde el laboratorio". Además el caño
+            // de nutriente (CanoNutrienteY, infinito, coste 0) dejó el montón
+            // redundante -- y quitarle a la criatura la comida pre-servida
+            // convierte el PRIMER acto del jugador en ALIMENTARLA ÉL (el
+            // rótulo de hambre le dice cómo): más íntimo, más causal, y
+            // enseña el frasco de paso. El "primer estirón en 15s" pasa a ser
+            // "responde a los segundos de que TÚ le des de comer".
+            //   PlaceNutrienteMound(grid);
             PlaceCharco(grid);
             BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).

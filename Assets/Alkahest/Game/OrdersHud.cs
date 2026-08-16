@@ -75,6 +75,9 @@ namespace Alkahest.Game
 
         private bool Expandido => _expandidoManual || Time.time < _autoExpandUntil;
 
+        /// <summary>(playtest 23) Lo que enseña el panel cuando aún no existe ningún encargo -- en el pivot no los hay hasta cavar hasta la Tolva. Cero strings por frame: es const.</summary>
+        private const string TextoSinEncargos = "(nadie os ha oído todavía -- la Tolva del Maestro sigue sellada tras la roca, hacia la derecha)";
+
         private const string TituloColapsado = "ENCARGOS  ·  O expande";
         private const string TituloExpandido = "ENCARGOS  ·  O pliega";
 
@@ -237,6 +240,15 @@ namespace Alkahest.Game
                 }
                 alto += gapFila;
             }
+            // (playtest 23, fix del reporte de Cesar "al presionar la O no se
+            // desplegó el menú de misiones"): no era la tecla -- era que en el
+            // pivot los encargos NO EXISTEN hasta cavar hasta la Tolva, y con
+            // cero encargos este panel medía solo cabecera+Favor: se abría a
+            // un panel casi vacío que no parecía "abierto". Con cero encargos
+            // se mide (y dibuja, ver abajo) una línea que lo DICE, en vez de
+            // callar -- regla 43: lo indistinguible de "no pasó nada" no
+            // ocurrió.
+            if (orders.Count == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior) + gapFila;
             alto += pad - (orders.Count > 0 ? gapFila : 0f); // el último encargo ya dejó el aire de abajo: no duplicarlo.
 
             var panel = new Rect(Screen.width - ancho - margen, margen, ancho, alto);
@@ -258,6 +270,14 @@ namespace Alkahest.Game
             float fracFavor = _metaCacheada > 0 ? (float)_orderSystem.Favor / _metaCacheada : 1f;
             UiStyles.Barra(new Rect(x, y, interior, altoBarraFavor), fracFavor, UiStyles.Oro);
             y += altoBarraFavor + gapFila;
+
+            // (playtest 23) Cero encargos: decirlo. Ver el comentario de la medición.
+            if (orders.Count == 0)
+            {
+                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior);
+                GUI.Label(new Rect(x, y, interior, altoTexto), TextoSinEncargos, UiStyles.CuerpoTenue);
+                y += altoTexto + gapFila;
+            }
 
             // ---- 3) Encargos: fila compacta siempre, detalle solo si expandido ----
             for (int i = 0; i < orders.Count; i++)
