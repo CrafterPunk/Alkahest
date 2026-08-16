@@ -381,6 +381,21 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     Criterio general: antes de añadir un eje de variación, nombrar (a) el verbo con el que el
     jugador lo LEE y (b) el consumidor con el que lo APROVECHA; sin ambos, es ruido.
 
+49. **LA PROMESA DE UN DOCBLOCK ES UN CONTRATO EJECUTABLE (playtest 24)**: el docblock de
+    `SimStepper.MareaActiva` prometía "mientras sea false sus celdas SOLO fluyen: no convierten,
+    no amortiguan" — pero `ProcessMarea` no comprobaba el gate: la marea dormida habría digerido
+    el sótano desde el tick 0, con la documentación jurando lo contrario. Al auditar código de un
+    encargo, leer cada promesa de comportamiento en los comentarios y buscar LA LÍNEA que la
+    cumple; una promesa sin línea es un bug ya escrito.
+
+50. **ANTES DE FIJAR UN NÚMERO DE CONFIG, LEER CÓMO LO CONSUME EL MOTOR (playtest 24)**: el
+    contrato pedía `fluidity ~120` asumiendo una escala 0-255, pero `TryFlow` lo consume como Nº
+    DE CELDAS a escanear por tick (escala real del roster: 1-4). 120 habría hecho que la marea
+    cruzara todo un piso despejado EN UN TICK (tsunami, no marea) pagando hasta 120 iteraciones
+    por celda asentada por tick. El nombre del campo no dice sus unidades; el código que lo lee,
+    sí. Corregido a 1 (marea: repta) y 4 (Rocío: corre). Pariente de la regla 47 (no confiar en
+    el NOMBRE de una constante): tampoco confiar en la ESCALA aparente de un campo.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -464,6 +479,20 @@ fría → HIELO como capacidad nueva universal; rótulos en verbos con acción; 
 encargos del pivot que piden exactamente lo que el jugador acaba de aprender a hacer (hielo + lo
 bautizado POR SU NOMBRE); fix de la O (panel vacío indistinguible de "no se abrió", regla 43).
 Guion esperado de la partida en `docs/HANDOFF.md` sección Playtest 23.
+
+**Playtest 24** (Fable dirige e integra; dos encargos Sonnet en paralelo sobre
+`docs/CONTRATO_MAREA.md`; compilado y arrancado sin errores en el Unity real vía MCP) — **LA
+MAREA, la super-modificación pedida por Cesar** ("quiero probar tu visión... todo de golpe"): la
+afinidad de la semilla se vuelve EL ANTAGONISTA. Corazón en el zócalo del sótano
+(`CorazonMarea*`), `MaterialId.Marea=17` (convierte 6%/1%, piedra INMUNE, amortigua temp hacia
+-20°C, tintada 20% al color del afín, firma visual FIJA Pulso/Halo — excepción documentada a la
+regla 17) y `MaterialId.Rocio=18` (la cura: brilla, mata marea 1:1 SIN azar). La criatura digiere
+Marea→Rocío SIEMPRE (caso previo a los 3 escalones), le teme Y la digiere a la vez, muere a 9 s de
+núcleo cubierto (cuerpo → Marea). `MareaDirector`: despertar (12 celdas talladas o 300 s), 3
+pistas de arco (canal prioritario del HintSystem), victoria ≥24 Rocío en el corazón ("EL MUNDO SE
+AQUIETA") / derrota sin criaturas ("LA MAREA OS TRAGÓ") — `DayCycle.TerminarPartida`, desenlace
+clásico intacto. Reglas 49-50 nacieron de la integración. Visión completa, guion esperado y
+preguntas abiertas en `docs/HANDOFF.md` sección Playtest 24.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

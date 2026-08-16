@@ -47,6 +47,16 @@ namespace Alkahest.Game
     {
         private enum Phase { Title, DayIntro, Playing, DayEnd, EndScreen }
 
+        /// <summary>
+        /// [playtest 24, LA MAREA] El desenlace del ARCO DE LA MAREA (ver
+        /// <see cref="TerminarPartida"/>), independiente del desenlace
+        /// clásico por Favor (<see cref="OrderSystem.Desenlace"/>, que sigue
+        /// intacto -- ver <see cref="DrawEndScreen"/>). `Ninguno` es el
+        /// default: mientras nadie llame a TerminarPartida, EndScreen sigue
+        /// dibujando el desenlace clásico de siempre.
+        /// </summary>
+        private enum DesenlaceMarea { Ninguno, Victoria, Derrota }
+
         public const int TotalDays = 3;
         private const float DayDurationSeconds = 6f * 60f; // "6:00" en el HUD.
 
@@ -146,6 +156,10 @@ namespace Alkahest.Game
         private HintSystem _hints;
 
         private Phase _phase;
+
+        /// <summary>[playtest 24, LA MAREA] Ver <see cref="TerminarPartida"/>/<see cref="DesenlaceMarea"/>. Ninguno mientras el arco de la marea no haya decidido nada.</summary>
+        private DesenlaceMarea _desenlaceMarea = DesenlaceMarea.Ninguno;
+
         private int _day = 1;
         private float _timeRemaining;
         private int _consecutiveZeroOrderDays;
@@ -203,6 +217,10 @@ namespace Alkahest.Game
             // tras un reload de escena, ver RestartRun) arranca con el HUD
             // silenciado -- ver el docblock de HudSilenciado para el porqué.
             HudSilenciado = true;
+            // (playtest 24, LA MAREA) igual de explícito, aunque una escena
+            // recién cargada ya nace con el enum en Ninguno por defecto: una
+            // partida nueva no puede heredar el desenlace de la anterior.
+            _desenlaceMarea = DesenlaceMarea.Ninguno;
 
             if (_skipTitleOnLoad)
             {
@@ -526,6 +544,26 @@ namespace Alkahest.Game
             {
                 EnterDayIntro(_day + 1);
             }
+        }
+
+        /// <summary>
+        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.4] Cierre de
+        /// partida del arco de la marea: lo llama Game/MareaDirector.cs (el
+        /// otro archivo de este mismo encargo) cuando el Rocío alcanza el
+        /// corazón (victoria) o la marea despierta engulle a la última
+        /// criatura (derrota). Salta DIRECTO a Phase.EndScreen -- el cuarto
+        /// íntimo ya vive fuera del ciclo clásico Título-&gt;3 jornadas-&gt;
+        /// final (ver EnterCuartoIntimoSilencioso), así que no hay ninguna
+        /// jornada que cerrar antes de mostrar el desenlace. DrawEndScreen
+        /// dibuja el desenlace de LA MAREA en vez del de Favor mientras
+        /// <see cref="_desenlaceMarea"/> no sea Ninguno -- el desenlace
+        /// clásico se conserva íntegro (regla 26 de CLAUDE.md) para cuando
+        /// la sesión cronometrada vuelva.
+        /// </summary>
+        public void TerminarPartida(bool victoria)
+        {
+            _desenlaceMarea = victoria ? DesenlaceMarea.Victoria : DesenlaceMarea.Derrota;
+            _phase = Phase.EndScreen;
         }
 
         private void RestartRun(int? seed)
@@ -868,6 +906,17 @@ namespace Alkahest.Game
         {
             DrawFullscreenDim();
 
+            // [playtest 24, LA MAREA] El desenlace del ARCO DE LA MAREA
+            // manda sobre el clásico por Favor en cuanto TerminarPartida lo
+            // fija -- ver el docblock de ese método. El resto de este
+            // método (desenlace por Favor, 4 escalones) se queda íntegro
+            // debajo, sin tocar, para el modo clásico.
+            if (_desenlaceMarea != DesenlaceMarea.Ninguno)
+            {
+                DrawEndScreenMarea();
+                return;
+            }
+
             int favorFinal = _orderSystem != null ? _orderSystem.Favor : 0;
             var desenlace = OrderSystem.DesenlaceParaFavor(favorFinal);
 
@@ -937,6 +986,61 @@ namespace Alkahest.Game
             GUILayout.Space(UiStyles.S(6f));
             GUILayout.Label("\"Nuevo universo\" sortea otra seed y otro carácter -- nunca repite este mundo.",
                 UiStyles.CuerpoTenue);
+
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Reintentar mismo universo", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
+            {
+                int? seed = (_sim != null && _sim.Universe != null) ? _sim.Universe.Seed : (int?)null;
+                RestartRun(seed);
+            }
+            if (GUILayout.Button("Nuevo universo", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
+            {
+                RestartRun(null);
+            }
+            if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
+            {
+                QuitGame();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.4] Las DOS
+        /// pantallas finales del arco de la marea. TEXTOS LITERALES del
+        /// contrato, palabra por palabra -- la voz de bitácora de este
+        /// proyecto no reescribe ni "mejora" un texto que ya viene cerrado
+        /// entre los dos encargos paralelos de esta ronda. Debajo, las
+        /// MISMAS stats (seed, descubiertos, bautizados -- sin Favor, que no
+        /// significa nada en este arco) y los MISMOS botones de reinicio que
+        /// ya usa el desenlace clásico, mismo AbrirPanel/mismo idioma visual.
+        /// </summary>
+        private void DrawEndScreenMarea()
+        {
+            UiStyles.Preparar();
+            AbrirPanel(520f, 380f);
+
+            bool victoria = _desenlaceMarea == DesenlaceMarea.Victoria;
+            string tituloTexto = victoria ? "EL MUNDO SE AQUIETA" : "LA MAREA OS TRAGÓ";
+            string subtitulo = victoria
+                ? "El Rocío alcanzó el corazón. La marea se retira a dormir, y por primera vez el taller respira. Vosotros, y lo que criasteis, sois la razón."
+                : "La última criatura se apagó bajo la marea. El mundo terminó de digerirse a sí mismo, y nadie quedó para masticar en dirección contraria.";
+            Color colorTitulo = victoria ? UiStyles.Oro : UiStyles.Peligro;
+
+            var titulo = UiStyles.TituloGrande;
+            var previo = titulo.normal.textColor;
+            titulo.normal.textColor = colorTitulo;
+            GUILayout.Label(tituloTexto, titulo, GUILayout.Height(UiStyles.S(42f)));
+            titulo.normal.textColor = previo;
+
+            GUILayout.Label(subtitulo, UiStyles.Subtitulo);
+
+            GUILayout.Space(UiStyles.S(10f));
+            GUILayout.Label($"Seed: {(_sim != null && _sim.Universe != null ? _sim.Universe.Seed.ToString() : "?")}", UiStyles.Cuerpo);
+            GUILayout.Label($"Materiales descubiertos: {(_knowledge != null ? _knowledge.CountDiscovered() : 0)}", UiStyles.Cuerpo);
+            GUILayout.Label($"Materiales bautizados: {(_knowledge != null ? _knowledge.CountNamed() : 0)}", UiStyles.Cuerpo);
 
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();

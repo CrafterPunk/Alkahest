@@ -121,6 +121,31 @@ namespace Alkahest.Game
         public static Criatura Principal { get; private set; }
 
         /// <summary>
+        /// [playtest 24, LA MAREA -- ver CONTRATO_MAREA.md §4.3.1] Cuántas
+        /// criaturas siguen vivas AHORA MISMO -- lo lee
+        /// <see cref="MareaDirector"/> cada 2s para decidir la DERROTA (la
+        /// marea despierta y `NumVivas == 0`). Registro público de solo
+        /// lectura sobre <see cref="_activas"/>, que ya llevaba la cuenta
+        /// entera para otro propósito (herencia de temperamento) -- no hace
+        /// falta ningún contador nuevo.
+        /// </summary>
+        public static int NumVivas => _activas.Count;
+
+        /// <summary>
+        /// [playtest 24, LA MAREA -- fix de integración sobre §4.5] ¿Alguna
+        /// criatura de ESTA partida ha exudado ya Rocío al menos una vez?
+        /// Lo lee MareaDirector para disparar la pista "eso que exuda tu
+        /// criatura HIERE a la marea" EN EL MOMENTO de la primera exudación
+        /// -- no cuando el Rocío llega al corazón, que es demasiado tarde
+        /// para enseñar nada (a esas alturas el jugador ya entendió la cura
+        /// solo, o no habría cruzado medio sótano con ella). Se pone en
+        /// false en el Init de la criatura PRINCIPAL (la que no nace de
+        /// capullo: una por partida, ver Principal), que es el reinicio por
+        /// partida que ya usan los demás estáticos de esta clase.
+        /// </summary>
+        public static bool RocioExudado { get; private set; }
+
+        /// <summary>
         /// TODAS las Criaturas vivas ahora mismo (madre + cualquier cría
         /// previa). Lo usa <see cref="Capullo.Eclosionar"/> para encontrar
         /// "quien lo cuidó" -- ver <see cref="MasCercanaA"/> -- en vez de
@@ -344,6 +369,16 @@ namespace Alkahest.Game
         // CONFIG — amenaza (Asustada)
         // -----------------------------------------------------------------
         private const int RadioAmenazaCeldas = 10;
+
+        // -----------------------------------------------------------------
+        // CONFIG — MUERTE POR MAREA (playtest 24, LA MAREA -- ver
+        // CONTRATO_MAREA.md §4.3.4 y el docblock de
+        // <see cref="SondearMareaEnNucleo"/> para el diseño completo).
+        // -----------------------------------------------------------------
+        private const float TiempoMuerteMareaSeg = 9f;
+
+        /// <summary>Segundos acumulados con el NÚCLEO cubierto de Marea (ver SondearMareaEnNucleo). Sube por sondeo cuando está cubierto, baja a MITAD de ritmo cuando no.</summary>
+        private float _contadorMareaEnNucleo;
 
         // -----------------------------------------------------------------
         // CONFIG — AUTOCALENTAMIENTO ("EL RESCOLDO SE CALIENTA A SÍ MISMO",
@@ -570,6 +605,7 @@ namespace Alkahest.Game
             _temperamento = SortearOHeredarTemperamento(sim, celdaCunaX, celdaCunaY);
 
             if (!esCria) Principal = this;
+            if (!esCria) RocioExudado = false; // partida nueva: nadie ha exudado la cura todavía (ver el docblock de RocioExudado).
             _activas.Add(this);
 
             BuildVisuals();
@@ -784,6 +820,11 @@ namespace Alkahest.Game
                 _accPoll -= IntervaloSondeo;
                 SondearComida();
                 SondearDigestionYAmenaza();
+                // [playtest 24, LA MAREA] Mismo sondeo de 0,4s, sin escaneo
+                // nuevo por frame -- ver el docblock de SondearMareaEnNucleo.
+                // Si acaba de morir, no tiene sentido seguir actualizando un
+                // GameObject que ya pidió su destrucción este mismo frame.
+                if (SondearMareaEnNucleo()) return;
             }
             if (_digestionEnCurso)
             {
@@ -897,13 +938,26 @@ namespace Alkahest.Game
                     int d2 = dx * dx + dy * dy;
                     int mat = _sim.SampleMaterial(cx + dx, y);
 
-                    // AMENAZA: Fire/Acid cerca asustan -- salvo que el Acid
-                    // sea justo lo que la propia criatura acaba de exudar
-                    // (ver _ultimoProductoDigestion): si no, un Rescoldo que
-                    // digiere algo y produce Acid se asusta de SU PROPIO
-                    // producto y queda encerrado en Asustada sin que el
-                    // jugador haga nada.
+                    // AMENAZA: Fire/Acid/Marea cerca asustan -- salvo que el
+                    // Acid sea justo lo que la propia criatura acaba de
+                    // exudar (ver _ultimoProductoDigestion): si no, un
+                    // Rescoldo que digiere algo y produce Acid se asusta de
+                    // SU PROPIO producto y queda encerrado en Asustada sin
+                    // que el jugador haga nada. La Marea NO necesita esa
+                    // misma exclusión: nunca puede ser _ultimoProductoDigestion
+                    // (EscogerProductoDigestion jamás devuelve Marea, ver ese
+                    // método), así que asustarse de ella siempre es correcto.
+                    //
+                    // NOTA DE DISEÑO (CONTRATO_MAREA.md §4.3.2, dejada aquí a
+                    // propósito): MIEDO y DIGESTIÓN COEXISTEN -- la marea la
+                    // asusta Y la digiere a la vez, la criatura sufre para
+                    // fabricar la cura. Estar Asustada NO bloquea la
+                    // digestión hoy (SondearDigestionYAmenaza mide ambas
+                    // cosas en el MISMO barrido, sin que una condicione a la
+                    // otra) y así debe seguir: no añadir un `if (!Asustada)`
+                    // delante de la digestión sin volver al contrato primero.
                     if (d2 <= rAmenaza2 && (mat == MaterialId.Fire
+                        || mat == MaterialId.Marea
                         || (mat == MaterialId.Acid && mat != _ultimoProductoDigestion)))
                     {
                         sumaAmenaza += new Vector2(dx, dy);
@@ -968,6 +1022,12 @@ namespace Alkahest.Game
             // algo genuinamente distinto para repetirse, nunca se rearma sola.
             _ultimoProductoDigestion = producto;
 
+            // [playtest 24, LA MAREA] La primera exudación de Rocío de la
+            // partida es EL momento didáctico del arco (ver el docblock de
+            // RocioExudado): se marca aquí, donde ocurre de verdad, y el
+            // MareaDirector lo recoge en su siguiente sondeo de 2s.
+            if (producto == MaterialId.Rocio) RocioExudado = true;
+
             _pulsoExtra = 1f;
             _digestionEnCurso = false;
         }
@@ -985,6 +1045,85 @@ namespace Alkahest.Game
                     if (_sim.SampleMaterial(x, y) != mat) continue;
                     _sim.Paint(x, y, 0, MaterialId.Empty);
                     consumidas++;
+                }
+            }
+        }
+
+        // ===================================================================
+        // MUERTE POR MAREA (playtest 24, LA MAREA -- CONTRATO_MAREA.md
+        // §4.3.4). Se sondea en el MISMO ciclo de 0,4s que ya usan
+        // SondearComida/SondearDigestionYAmenaza (ver el bloque `if
+        // (_accPoll >= IntervaloSondeo)` de Update) -- NUNCA un escaneo por
+        // frame nuevo, la regla de siempre de esta clase.
+        // ===================================================================
+
+        /// <summary>
+        /// Si el NÚCLEO de la criatura -- LA MISMA celda que
+        /// <see cref="ApplyCalorTick"/> usa como núcleo, `(cx=_celdaCunaX,
+        /// cy=_celdaCunaY+AlturaCuerpoCeldas)`: se reutiliza el mismo
+        /// cálculo con la misma constante en vez de inventar una posición
+        /// propia (regla 47 de CLAUDE.md) -- es Marea, la criatura está
+        /// siendo engullida de verdad. El contador SUMA el intervalo de
+        /// este sondeo (0,4s) mientras el núcleo siga cubierto y BAJA a
+        /// MITAD de ritmo (0,2s por sondeo) en cuanto se libera -- así que
+        /// salir un instante de la marea no borra de golpe el peligro
+        /// acumulado (huir tiene que costar algo), pero recuperarse del
+        /// todo es más rápido que morir, dando un margen real para escapar
+        /// en vez de una cuenta atrás que solo sube.
+        ///
+        /// A los <see cref="TiempoMuerteMareaSeg"/>=9s acumulados, la
+        /// criatura muere: <see cref="ConvertirCuerpoAMarea"/> transforma su
+        /// CUERPO entero (el Vivium sembrado/crecido) en Marea -- la imagen
+        /// más dura del juego, engullida de verdad, no borrada en silencio
+        /// como hace la poda (<see cref="PodarExcesoCuerpo"/>, que sí usa
+        /// Empty) -- y el GameObject se destruye (OnDestroy ya la saca de
+        /// <see cref="_activas"/>, que es lo que <see cref="NumVivas"/> y el
+        /// MareaDirector observan para la derrota).
+        ///
+        /// Devuelve true si la criatura acaba de morir en esta llamada, para
+        /// que Update() corte ahí mismo -- no tiene sentido seguir
+        /// actualizando latido/color/zarcillos/calor de un GameObject que ya
+        /// pidió su propia destrucción este frame.
+        /// </summary>
+        private bool SondearMareaEnNucleo()
+        {
+            int cx = _celdaCunaX;
+            int cy = _celdaCunaY + AlturaCuerpoCeldas; // MISMO cálculo que ApplyCalorTick usa como núcleo.
+            bool nucleoEnMarea = _sim.SampleMaterial(cx, cy) == MaterialId.Marea;
+
+            _contadorMareaEnNucleo = nucleoEnMarea
+                ? _contadorMareaEnNucleo + IntervaloSondeo
+                : Mathf.Max(0f, _contadorMareaEnNucleo - IntervaloSondeo * 0.5f);
+
+            if (_contadorMareaEnNucleo < TiempoMuerteMareaSeg) return false;
+
+            ConvertirCuerpoAMarea();
+            Destroy(gameObject);
+            return true;
+        }
+
+        /// <summary>
+        /// El cuerpo entero (recorrido como ya hace <see cref="PodarCuerpoCompleto"/>,
+        /// mismo radio) pasa de Vivium a Marea, celda a celda -- MISMO patrón
+        /// que <see cref="ConvertirCuerpoAMarea"/> comparte con el resto de
+        /// esta clase que muta la grilla: <see cref="AlkahestSim.Paint"/>
+        /// (esto TRANSFORMA materia que ya existía, no la crea de la nada;
+        /// regla 22/29 -- PaintStable es para lo que nace, no para lo que se
+        /// convierte).
+        /// </summary>
+        private void ConvertirCuerpoAMarea()
+        {
+            if (_sim == null) return;
+            int cx = _celdaCunaX;
+            int cyBase = _celdaCunaY + AlturaCuerpoCeldas;
+            int r = RadioSondeoComidaCeldas; // mismo radio que PodarCuerpoCompleto -- cubre de sobra TallaMaxCeldas.
+            for (int dy = -r; dy <= r; dy++)
+            {
+                int y = cyBase + dy;
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int x = cx + dx;
+                    if (_sim.SampleMaterial(x, y) == MaterialId.Vivium) _sim.Paint(x, y, 0, MaterialId.Marea);
                 }
             }
         }
@@ -1030,6 +1169,19 @@ namespace Alkahest.Game
         /// </summary>
         private static byte EscogerProductoDigestion(Universe universo, byte matEntrada)
         {
+            // [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.3.3, EL ESLABÓN
+            // CENTRAL DEL JUEGO] CASO PREVIO a los tres escalones: digerir
+            // Marea exuda SIEMPRE Rocío, en TODO universo -- no depende de
+            // la química sorteada de esta semilla (a diferencia de todo lo
+            // demás que digiere esta criatura). La criatura es lo único del
+            // mundo que mastica en dirección CONTRARIA: el mundo se digiere
+            // a sí mismo hacia la marea, ella lo digiere hacia la cura. La
+            // exclusión de _ultimoProductoDigestion (ver ese docblock) hace
+            // el resto sola: tras exudar Rocío, para volver a digerir hace
+            // falta traerle OTRA marea -- el jugador hace de porteador entre
+            // el frente de la marea y su criatura.
+            if (matEntrada == MaterialId.Marea) return MaterialId.Rocio;
+
             // ESCALÓN 1: ley cuyo reactivo sea lo que se le dio de comer.
             var leyes = universo.Leyes;
             if (leyes != null)

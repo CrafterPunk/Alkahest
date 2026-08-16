@@ -106,6 +106,17 @@ namespace Alkahest.Game
         private bool _everUnlocked;
         private bool _oculto;
 
+        // -----------------------------------------------------------------
+        // [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.5] CANAL DE
+        // PRIORIDAD: ver EncolarPistaDeMarea más abajo.
+        // -----------------------------------------------------------------
+        /// <summary>Cuánto se ve una pista prioritaria antes de devolver el turno a la rotación normal de jornada -- mismo tiempo de lectura que las pistas de jornada 2/3 (SegundosPorPistaOtras): son igual de cortas, una línea ejecutable cada una.</summary>
+        private const float SegundosPistaPrioritaria = SegundosPorPistaOtras;
+
+        private string _pistaPrioritaria;
+        private float _pistaPrioritariaSegundosRestantes;
+        private bool _pistaPrioritariaArchivada;
+
         // ---------------------------------------------------------------------------------
         // (fix playtest 10) API ESTÁTICA DE SOLO LECTURA para que el diario (Game/
         // JournalHud.cs, en reescritura en paralelo esta misma ronda -- ver
@@ -149,12 +160,35 @@ namespace Alkahest.Game
             _playSeconds = 0f;
         }
 
+        /// <summary>
+        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.5] Canal de
+        /// PRIORIDAD para Game/MareaDirector.cs (mismo playtest): INTERRUMPE
+        /// la cola normal de jornada y muestra esta línea con la MISMA placa
+        /// y el MISMO estilo -- las tres pistas del arco de la marea
+        /// (despertar / primer Rocío / marea subiendo) no pueden esperar su
+        /// turno en una rotación que va a 8-9s por frase y puede llevar
+        /// minutos en dar la vuelta. NO toca `_playSeconds`/`_registrada`
+        /// (la rotación normal de jornada sigue corriendo por debajo y
+        /// retoma exactamente donde le tocaría estar en cuanto la prioridad
+        /// expira, ver OnGUI) ni pasa por la cola: es un interruptor
+        /// aparte, no una entrada más de <see cref="_pistas"/>.
+        /// </summary>
+        public void EncolarPistaDeMarea(string pista)
+        {
+            _pistaPrioritaria = pista;
+            _pistaPrioritariaSegundosRestantes = SegundosPistaPrioritaria;
+            _pistaPrioritariaArchivada = false;
+        }
+
         private void Update()
         {
             if (!DayCycle.InputLocked)
             {
                 _everUnlocked = true;
                 _playSeconds += Time.deltaTime;
+
+                if (_pistaPrioritariaSegundosRestantes > 0f)
+                    _pistaPrioritariaSegundosRestantes -= Time.deltaTime;
 
                 var kb = Keyboard.current;
                 // (fix playtest 10) H es un atajo de una tecla como cualquier otro del
@@ -169,19 +203,43 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (!_everUnlocked || DayCycle.InputLocked || DayCycle.HudSilenciado || _oculto) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
-            if (_playSeconds >= _duracion) return;
+
+            // [playtest 24, LA MAREA] La pista PRIORITARIA (ver
+            // EncolarPistaDeMarea) se dibuja EN VEZ de la rotación normal
+            // mientras esté viva -- incluso si `_playSeconds >= _duracion`
+            // ya apagó la rotación normal hace rato (el arco de la marea
+            // puede disparar sus tres avisos bien entrada la partida, mucho
+            // después de que la cola de jornada 1/2/3 haya terminado de
+            // rotar).
+            bool prioritaria = _pistaPrioritariaSegundosRestantes > 0f;
+            if (!prioritaria && _playSeconds >= _duracion) return;
 
             UiStyles.Preparar();
 
-            int i = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
-            string texto = _pistas[i];
-
-            // Archivo para el diario (ver PistasMostradas arriba): una sola vez por
-            // índice, no un Contains() por frame -- barato incluso a 60+ FPS.
-            if (i >= 0 && i < _registrada.Length && !_registrada[i])
+            string texto;
+            if (prioritaria)
             {
-                _registrada[i] = true;
-                if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
+                texto = _pistaPrioritaria;
+                // Archivo para el diario, una sola vez por pista prioritaria
+                // (mismo criterio de coste que el bloque normal de abajo).
+                if (!_pistaPrioritariaArchivada)
+                {
+                    _pistaPrioritariaArchivada = true;
+                    if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
+                }
+            }
+            else
+            {
+                int i = Mathf.Min((int)(_playSeconds / _segundosPista), _pistas.Length - 1);
+                texto = _pistas[i];
+
+                // Archivo para el diario (ver PistasMostradas arriba): una sola vez por
+                // índice, no un Contains() por frame -- barato incluso a 60+ FPS.
+                if (i >= 0 && i < _registrada.Length && !_registrada[i])
+                {
+                    _registrada[i] = true;
+                    if (!_pistasMostradas.Contains(texto)) _pistasMostradas.Add(texto);
+                }
             }
 
             float pad = UiStyles.S(9f);

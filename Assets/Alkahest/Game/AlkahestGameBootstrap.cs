@@ -170,7 +170,12 @@ namespace Alkahest.Game
             var capullo = capulloGo.AddComponent<Capullo>();
             capullo.Init(_sim, apprentice.transform, SimLevelBuilder.CapulloX, SimLevelBuilder.CapulloY);
 
-            SpawnDayCycle(orderSystem, knowledge, supplies, hints);
+            var dayCycle = SpawnDayCycle(orderSystem, knowledge, supplies, hints);
+
+            // [playtest 24, LA MAREA] Tras DayCycle, con las referencias
+            // reales (ver el docblock de SpawnMareaDirector) -- CONTRATO_MAREA.md
+            // §4.2/§4.6 pide explícitamente "spawn tras DayCycle".
+            SpawnMareaDirector(dayCycle, hints);
 
             // (M5 audio) EL TALLER SUENA: se instancia AL FINAL, cuando ya
             // existen todas las dependencias que necesita (frasco, grifos,
@@ -447,12 +452,37 @@ namespace Alkahest.Game
             director.Init(_sim, orderSystem, knowledge, flask, player, _dispensers);
         }
 
-        private void SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,
+        /// <summary>
+        /// [playtest 24, LA MAREA] Pasa a devolver el DayCycle creado (antes
+        /// era `void`): MareaDirector.cs (mismo playtest) necesita esa
+        /// referencia real para llamar `TerminarPartida` -- cambio de firma
+        /// contenido en este MISMO archivo, un método PRIVADO de este
+        /// bootstrap, no una de las firmas congeladas por contrato
+        /// (Criatura.Init/Capullo.Init sí lo están, ver CONTRATO_PIVOT.md;
+        /// esta no).
+        /// </summary>
+        private DayCycle SpawnDayCycle(OrderSystem orderSystem, SubstanceKnowledge knowledge,
             MasterSupplies supplies, HintSystem hints)
         {
             var go = new GameObject("DayCycle");
             var cycle = go.AddComponent<DayCycle>();
             cycle.Init(_sim, orderSystem, knowledge, supplies, hints);
+            return cycle;
+        }
+
+        /// <summary>
+        /// [playtest 24, LA MAREA -- CONTRATO_MAREA.md §4.2/§4.6] El
+        /// director del arco: sondea cada 2s (victoria/derrota/pistas) y
+        /// decide el despertar de la marea. Se crea DESPUÉS de DayCycle
+        /// (necesita su referencia real para TerminarPartida) y de HintSystem
+        /// (ya existía antes en este método, para el sistema de pistas del
+        /// arco -- ver EncolarPistaDeMarea).
+        /// </summary>
+        private void SpawnMareaDirector(DayCycle dayCycle, HintSystem hints)
+        {
+            var go = new GameObject("MareaDirector");
+            var director = go.AddComponent<MareaDirector>();
+            director.Init(_sim, dayCycle, hints);
         }
     }
 }

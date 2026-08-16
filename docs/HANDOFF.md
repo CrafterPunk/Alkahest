@@ -2086,3 +2086,96 @@ aleteo. `CarryAnchor`, física y tamaño de mundo intactos.
 Preguntas abiertas para el próximo playtest: ¿el momento "LEY DESCUBIERTA" desbloquea de verdad la
 comprensión del motor? ¿quedó limpio el audio? ¿el fuego se lee ya como fuego y el camino
 placa→aceite se encuentra solo? ¿el frío se comporta como un charco local estable?
+
+---
+
+## Playtest 24 → LA MAREA: la super-modificación (Fable dirige; dos encargos Sonnet en paralelo)
+
+**El mandato de Cesar, literal**: "necesito un juego y lo que tengo ahora hay experimentación...
+quiero que ensayes tú una nueva dirección creativa, disruptiva si cabe el término... quiero probar
+tu visión después de una super modificación no una pequeña, todo de golpe, confío en ti."
+
+**LA VISIÓN EN UNA FRASE**: el mundo se está digiriendo a sí mismo; tú, tus criaturas y las leyes
+que descubras sois lo único que mastica en dirección contraria.
+
+### Qué es LA MAREA
+
+La afinidad de la semilla (playtest 18, `Universe.AfinidadDelUniverso`) deja de ser un dato de
+sabor y se convierte en EL ANTAGONISTA. Desde un CORAZÓN enterrado en el zócalo del sótano
+(`SimLevelBuilder.CorazonMarea*`, x352..373 y14..19, cámara carvada + fila de Marea dormida) mana
+una marea violeta-oscura TINTADA 20% hacia el color del material afín de la run — la marea ES la
+química de esta semilla hecha carne. Convierte lo que toca en sí misma (6% líquidos/polvos/
+orgánicos por muestreo, 1% Vivium/hielo/cristal — engullir un cuerpo SE VE VENIR), amortigua la
+temperatura hacia -20°C a su alrededor (apaga la estrategia térmica cerca del frente), y la PIEDRA
+ES INMUNE — el cincel pasa de herramienta a FORTIFICACIÓN.
+
+Sus dos debilidades: el FUEGO la quema con pérdida (10% → Smoke, no se recupera lo quemado), y el
+ROCÍO — oro pálido, brilla en la oscuridad — la mata 1:1 SIN AZAR (Marea+Rocío → Sand+Empty,
+determinista: el jugador puede CONTAR su cura). El Rocío solo sale de un sitio: la criatura
+digiriendo Marea (caso previo a los tres escalones de `EscogerProductoDigestion`, igual en TODO
+universo). La criatura le TEME a la marea y la digiere A LA VEZ — sufre para fabricar la cura — y
+muere si la marea cubre su núcleo 9 s (su cuerpo Vivium se convierte en Marea: engullida de
+verdad, no borrada).
+
+### El arco
+
+- **Despertar** (`MareaDirector`, sondeo 2 s): 12 celdas REALMENTE talladas con el cincel
+  (`Cincel.CeldasTalladas` — abrir camino a la Tolva son ~23, así que el primer viaje al mundo
+  YA la despierta: "el mundo también se abre hacia ti") o 300 s jugables. Pista: "Algo se ha
+  despertado abajo."
+- **Primer Rocío**: flag `Criatura.RocioExudado` marcado en `CompletarDigestion` (fix de
+  integración: la pista didáctica dispara EN el momento de exudar, no cuando el Rocío llega al
+  corazón — ahí ya no enseña nada). Pista: "Eso que exuda tu criatura HIERE a la marea."
+- **La marea sube** (por encima de `SotanoY1-20`): "La piedra la frena; el cincel ya no es solo
+  una herramienta."
+- **VICTORIA**: ≥24 celdas de Rocío dentro del rect del corazón (≈2 frascadas — exige el VIAJE por
+  el pozo, no una gota simbólica) → "EL MUNDO SE AQUIETA". **DERROTA**: marea despierta y
+  `Criatura.NumVivas == 0` → "LA MAREA OS TRAGÓ". Ambas en `DayCycle.TerminarPartida` +
+  `DrawEndScreenMarea` (el desenlace clásico por Favor queda íntegro para el modo cronometrado).
+
+### Por qué esto convierte la experimentación en JUEGO
+
+Todo lo que ya existía gana propósito sin cambiar: el cincel fortifica (piedra inmune), la mudanza
+es retirada, el taller clásico enterrado es un ARSENAL que reclamar (el grifo de aceite = arma de
+fuego), los túneles que caves son riesgo (la marea sube por ellos), el capullo son vidas extra, y
+las leyes con condición térmica de cada semilla siguen siendo el laboratorio — pero ahora hay un
+RELOJ DE PRESIÓN lento que da significado a saber más que el mundo.
+
+### Implementación (dos encargos Sonnet en paralelo sobre docs/CONTRATO_MAREA.md, congelado)
+
+- **Encargo A (Sim)**: `MaterialId.Marea=17/Rocio=18/Count=19`; defs con firma visual FIJA entre
+  universos (excepción documentada a la regla 17: Pulso/Halo para la marea, la amenaza central se
+  reconoce en cualquier seed); `SimStepper.ProcessMarea` (proceso PROPIO, jamás ReactionEngine —
+  regla 33 intacta) con muestreo 1/8 y sales nuevas 231/233/235; emisión 1 celda/20 ticks;
+  `SimStepper.MareaActiva` (gate, default false); cámara del corazón en `BuildCuartoIntimo`.
+- **Encargo B (Game)**: `MareaDirector` (nuevo), `Cincel.CeldasTalladas`, miedo+digestión+muerte
+  en `Criatura`, `DayCycle.TerminarPartida`, `HintSystem.EncolarPistaDeMarea` (canal de prioridad
+  que interrumpe la rotación, misma placa).
+- **Fixes de integración (Fable)**: (1) fluidity 120/200 del contrato corregida a 1/4 — el campo
+  se consume como Nº de celdas a escanear por tick (escala real 1-4), 120 habría sido un tsunami
+  de un tick y hasta 120 iteraciones/celda/tick; (2) el gate `MareaActiva` faltaba DENTRO de
+  `ProcessMarea` (el docblock prometía "dormida no convierte" pero nada lo cumplía: habría digerido
+  el sótano desde el tick 0); (3) pista de primer Rocío movida del corazón al momento de exudación.
+
+**Verificado**: compila sin errores ni warnings en el Unity real (vía MCP), escena regenerada,
+30 s de play sin excepción, MareaDirector spawneado. `Unity_RunCommand` no devolvió logs (fallo
+del lado del paquete de Unity AI), así que el despertar forzado no se pudo probar en vivo: el
+primer despertar real lo verá Cesar.
+
+### Guion esperado de la partida
+
+Despiertas con tu Rescoldo → lo alimentas, nace la cría fría, aprendes hielo (cadena del playtest
+23 intacta) → cavas hacia la Tolva → AL ABRIR EL CAMINO, la marea despierta (pista) → sigues
+jugando, la marea sube por el sótano → la ves por el pozo, o sube hasta tocar tus túneles → pruebas
+cosas: el agua se corrompe, la piedra aguanta, el fuego muerde con humo → aspiras marea con el
+frasco y se la viertes a tu criatura (se asusta... y la digiere) → EXUDA ORO QUE BRILLA → pista:
+eso la HIERE → decides: ¿fortificar y criar, o bajar YA con dos frascadas? → el viaje por el pozo
+con el frasco lleno de Rocío, la marea subiendo por el mismo hueco → viertes sobre el corazón,
+24 celdas → EL MUNDO SE AQUIETA.
+
+**Preguntas abiertas para el playtest**: ¿el ritmo de emisión (1 celda/20 ticks) da un juego de
+~20-40 min o hay que acelerarlo tras el despertar? ¿la marea llega a AMENAZAR el cuarto íntimo o
+se queda en espectáculo del sótano (el pozo está lejos del cuarto)? ¿9 s de núcleo cubierto se
+leen como agonía evitable o como muerte súbita injusta? ¿24 celdas de Rocío son el número
+correcto? ¿hace falta que la marea EMITA también desde celdas convertidas lejanas (frentes
+secundarios) para que fortificar importe de verdad?

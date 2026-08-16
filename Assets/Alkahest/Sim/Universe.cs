@@ -34,7 +34,17 @@ namespace Alkahest.Sim
         public const byte Crystal = 15;
         public const byte Acid = 16;
 
-        public const int Count = 17;
+        // LA MAREA (CONTRATO_MAREA.md): un proceso propio de SimStepper, NO
+        // una reacción sorteada del roster de arriba (regla 33 -- la marea no
+        // perturba el sorteo de leyes ni el diario). Marea sube desde el
+        // corazón del sótano y convierte lo que toca; Rocío es lo que exuda
+        // la criatura al digerirla y es su única cura real. Ver
+        // SimStepper.ProcessMarea y Game/Criatura.EscogerProductoDigestion
+        // (fuera de este encargo) para el resto de la cadena.
+        public const byte Marea = 17;
+        public const byte Rocio = 18;
+
+        public const int Count = 19;
     }
 
     /// <summary>
@@ -612,6 +622,103 @@ namespace Alkahest.Sim
             };
 
             // -----------------------------------------------------------------
+            // LA MAREA y EL ROCÍO (CONTRATO_MAREA.md sección 3.1). Los dos
+            // quedan FUERA del sorteo de densidad de arriba (liquidDensity[]
+            // solo baraja los 5 líquidos "variables" del roster de leyes) --
+            // sus densidades son FIJAS por contrato, no varían por seed: la
+            // marea siempre debe hundirse bajo TODO líquido variable (el tope
+            // de ese sorteo, con jitter, es ~186) para poder SUBIR desde el
+            // fondo del corazón desplazando lo que haya encima, y el Rocío
+            // siempre debe flotar sobre ella. Se registran en liquidDensity[]
+            // de todas formas (y se leen de ahí, no como literal) para que el
+            // patrón "density = liquidDensity[id]" sea uniforme para
+            // cualquier líquido del roster, sortee su valor o no.
+            liquidDensity[MaterialId.Marea] = 200;
+            liquidDensity[MaterialId.Rocio] = 80;
+
+            mats[MaterialId.Marea] = new MaterialDef
+            {
+                id = MaterialId.Marea,
+                devName = "Marea",
+                archetype = MaterialArchetype.Liquid,
+                // Violeta muy oscuro -- TINTADO ~20% hacia el baseColor del
+                // PRIMER material de AfinidadDelUniverso más abajo, JUSTO
+                // DESPUÉS de sortearla (busca "TINTE DE LA MAREA" en este
+                // mismo método): la marea ES la química de esta semilla
+                // hecha carne, así que no puede quedar con un color 100% fijo
+                // como el resto del vocabulario del taller. El valor de aquí
+                // es el color BASE pre-tinte.
+                baseColor = new Color32(46, 22, 58, 255),
+                colorJitter = 10,
+                density = liquidDensity[MaterialId.Marea], // 200: se hunde bajo TODO líquido variable del roster (tope ~186 con jitter) -- sube desde el fondo, no cae desde arriba.
+                // (contrato §3.1, CORREGIDO EN INTEGRACIÓN) El contrato
+                // decía "~120" asumiendo una escala 0-255, pero fluidity se
+                // consume en TryFlow como Nº DE CELDAS a escanear por tick:
+                // la escala real del roster es 1-4. Con 120, una celda de
+                // marea sobre piso despejado cruzaría todo el tramo libre EN
+                // UN TICK (tsunami, no marea) y pagaría hasta 120 iteraciones
+                // de escaneo por celda asentada por tick. fluidity=1 es la
+                // lectura correcta de "repta, no salpica": el avance lateral
+                // mínimo del motor, un dedo de oscuridad que gana UNA celda
+                // cada vez -- la presión de la marea viene de la EMISIÓN y la
+                // CONVERSIÓN, nunca de la velocidad de chapoteo.
+                fluidity = 1,
+                // No arde, no congela, no hierve (contrato): sus campos de
+                // transición de fase quedan en los sentinelas short.MaxValue/
+                // MinValue por defecto de MaterialDef -- la marea no cambia
+                // de fase nunca, su única debilidad es el Rocío/fuego/piedra
+                // de SimStepper.ProcessMarea, no la temperatura.
+                emitsGlow = false,
+                emision = 30,
+                // EXCEPCIÓN DOCUMENTADA A LA REGLA 17 (CLAUDE.md): la regla
+                // dice que solo lo INNOMINADO sortea firma visual por seed y
+                // el vocabulario del taller se ve siempre igual (patron=Liso,
+                // borde=Neto). La Marea no es ni una cosa ni la otra -- no es
+                // vocabulario del taller (nace del corazón, no de un grifo) y
+                // tampoco pasa por SortearFirmasVisuales (no está en
+                // UnnamedMaterialIds) -- pero por la MISMA razón que el
+                // vocabulario (regla 13/17: "si todo cambia, nada se
+                // reconoce"), su patrón/borde deben ser FIJOS entre universos:
+                // el jugador tiene que reconocer la marea de un vistazo en
+                // CUALQUIER semilla, es la amenaza central del juego, no una
+                // sustancia más que descubrir. Por eso patron/borde (y el
+                // resto de la firma: escala/fuerza/ritmo/semilla) están
+                // escritos a mano aquí, nunca sorteados.
+                patron = PatronMorfologico.Pulso,
+                borde = BordeMorfologico.Halo,
+                patronEscala = 4,   // periodo ~5 celdas (SimRenderer.PatronPeriodoCeldas/MorphPulse): varias bandas visibles incluso en la cámara del corazón (22 celdas de ancho).
+                patronFuerza = 90,  // contraste visible sin gritar (rango útil 40..150 documentado en MaterialDef.patronFuerza).
+                ritmoAnim = 36,     // late LENTO y grave -- un corazón, no un parpadeo nervioso.
+                semillaPatron = 128,
+            };
+
+            mats[MaterialId.Rocio] = new MaterialDef
+            {
+                id = MaterialId.Rocio,
+                devName = "Rocio",
+                archetype = MaterialArchetype.Liquid,
+                baseColor = new Color32(232, 214, 150, 255),
+                colorJitter = 8,
+                density = liquidDensity[MaterialId.Rocio], // 80: ligero, flota sobre el agua y sobre la propia marea.
+                // (contrato §3.1, CORREGIDO EN INTEGRACIÓN) Misma escala
+                // real 1-4 que se explica en Marea: "alta" = 4, el tope del
+                // roster (como el agua) -- el Rocío corre y se desparrama, es
+                // el anti-marea y debe llegar fácil a donde se le vierte.
+                fluidity = 4,
+                // Sin transiciones térmicas (contrato): sentinelas por defecto.
+                emitsGlow = true, // la cura BRILLA -- se ve en la oscuridad del sótano.
+                emision = 140,    // mismo rango (70..180) que un innominado sorteado con emitsGlow=true, fijo aquí por la misma excepción documentada arriba en Marea.
+                // Misma excepción a la regla 17 que Marea (ver el comentario
+                // grande de arriba): es el anti-marea y tiene que reconocerse
+                // igual de fijo. patron=Liso no usa patronFuerza/patronEscala/
+                // ritmoAnim/semillaPatron (MaterialDef.patron, "Liso no lo
+                // usa") así que se dejan en sus valores por defecto a
+                // propósito, ni siquiera se escriben aquí.
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Neto,
+            };
+
+            // -----------------------------------------------------------------
             // FIRMA VISUAL (playtest 12): sortea patrón/borde/color de LO
             // INNOMINADO y deja el vocabulario del taller con su color EXACTO
             // e intacto (sin jitter siquiera) — ver SortearFirmasVisuales.
@@ -716,6 +823,26 @@ namespace Alkahest.Sim
                 for (int t = 0; t < 50 && segundo == afinidadDelUniverso[0]; t++)
                     segundo = afinidadPool[rng.Next(afinidadPool.Count)];
                 afinidadDelUniverso[1] = segundo; // en el peor caso (rarísimo, 50 intentos fallidos con 11 candidatos) repite el primero -- inofensivo, el picker simplemente tendría dos copias del mismo material entre las que elegir.
+            }
+
+            // -----------------------------------------------------------------
+            // TINTE DE LA MAREA (CONTRATO_MAREA.md sección 3.1): tiene que
+            // ocurrir AQUÍ, justo DESPUÉS de sortear afinidadDelUniverso (y
+            // ANTES de que nada más la lea) -- la marea ES la química de esta
+            // semilla hecha carne, así que su color se mezcla 80/20 hacia el
+            // baseColor del PRIMER material afín de la run (afinidadDelUniverso[0],
+            // ya resuelto a un MaterialDef real en mats[] a estas alturas: todo
+            // el roster fijo se construyó arriba). Mezcla manual en vez de
+            // Color32.Lerp (que no existe en UnityEngine.Color32) -- esto corre
+            // UNA vez por Universe.Create, así que el coste es irrelevante.
+            {
+                Color32 baseMarea = mats[MaterialId.Marea].baseColor;
+                Color32 afin = mats[afinidadDelUniverso[0]].baseColor;
+                mats[MaterialId.Marea].baseColor = new Color32(
+                    (byte)Mathf.RoundToInt(baseMarea.r * 0.8f + afin.r * 0.2f),
+                    (byte)Mathf.RoundToInt(baseMarea.g * 0.8f + afin.g * 0.2f),
+                    (byte)Mathf.RoundToInt(baseMarea.b * 0.8f + afin.b * 0.2f),
+                    baseMarea.a); // alfa NUNCA se mezcla: la marea sigue opaca (regla 23, "lo innominado nace opaco" -- mismo criterio aunque la marea no sea innominada).
             }
 
             SortearLeyesGeneradas(rng, nucleoReactions, frioMaxTempRaw, calorMinTempRaw, afinidadDelUniverso,
@@ -1387,7 +1514,7 @@ namespace Alkahest.Sim
             MaterialId.Vivium, MaterialId.CrystalSeed,
         };
 
-        /// <summary>Sentinela "no encontrado" para los pickers de producto de abajo. 255 no es un id de material válido (MaterialId.Count == 17): nunca puede confundirse con un resultado real.</summary>
+        /// <summary>Sentinela "no encontrado" para los pickers de producto de abajo. 255 no es un id de material válido (MaterialId.Count == 19, CONTRATO_MAREA.md): nunca puede confundirse con un resultado real.</summary>
         private const byte SinProductoValido = 255;
 
         private static byte[] ConcatBytes(byte[] a, byte[] b)

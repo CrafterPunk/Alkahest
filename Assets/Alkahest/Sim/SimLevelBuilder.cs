@@ -621,6 +621,25 @@ namespace Alkahest.Sim
         public const int SotanoLedgeHeight = 6;
 
         // =================================================================
+        // EL CORAZÓN DE LA MAREA (CONTRATO_MAREA.md sección 3.4). Cámara
+        // pequeña en el ZÓCALO del sótano (x333..392, la misma franja de
+        // SotanoPlinthX0..X1 -- justo bajo el pozo, WellX0..X1=343..382),
+        // hoy carvada dentro de la piedra maciza que deja FillWorldStone en
+        // BuildCuartoIntimo (el builder ACTIVO -- BuildTestLevel/BuildSotano,
+        // que sí excavan el pozo, no se llaman desde AlkahestSim.Start hoy).
+        // El pozo NO se abre hasta esta cámara en esta ronda: el tramo de
+        // piedra entre uno y otra es del jugador y su cincel, a propósito
+        // (ver ExcavateCorazon). Deja >=2 celdas de piedra sólida a cada
+        // lado dentro del zócalo (352-333=19, 392-373=19 por X; por Y la
+        // cámara cae entera dentro del sótano interior, SotanoInteriorY0..Y1)
+        // -- de sobra, esto no es un ajuste fino.
+        // =================================================================
+        public const int CorazonMareaX0 = 352;
+        public const int CorazonMareaX1 = 373;
+        public const int CorazonMareaY0 = SotanoInteriorY0 + 1; // 14
+        public const int CorazonMareaY1 = SotanoInteriorY0 + 6; // 19
+
+        // =================================================================
         // ENTREGA: la Tolva del Maestro + espacio de maniobra alrededor (ver
         // Game/DeliveryChute.cs). Mismas proporciones internas que el diseño
         // original (jambas a +12/-33 del zócalo), solo reubicadas y con la
@@ -1074,6 +1093,7 @@ namespace Alkahest.Sim
             //   PlaceNutrienteMound(grid);
             PlaceCharco(grid);
             BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
+            ExcavateCorazon(grid);    // (CONTRATO_MAREA.md sección 3.4) la cámara del corazón, lejos del cuarto íntimo -- ver el docblock de CorazonMareaX0 y hermanas.
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
         }
 
@@ -1092,6 +1112,29 @@ namespace Alkahest.Sim
         private static void ExcavateCuarto(CellGrid grid)
         {
             DrawSolidRect(grid, CuartoX0, CuartoY0, CuartoX1 - CuartoX0 + 1, CuartoY1 - CuartoY0 + 1, MaterialId.Empty);
+        }
+
+        /// <summary>
+        /// (CONTRATO_MAREA.md sección 3.4) Carva la cámara del corazón (rect
+        /// a Empty) dentro del zócalo, y siembra el FONDO (la fila
+        /// CorazonMareaY0, no la cámara entera) con Marea -- dormida hasta
+        /// que Game/MareaDirector encienda SimStepper.MareaActiva: hasta
+        /// entonces solo fluye como un líquido más, sin convertir ni
+        /// amortiguar nada (ver SimStepper.ProcessMarea). NO se toca nada
+        /// del pozo aquí a propósito -- ni WellX0/X1 ni el tramo entre el
+        /// zócalo y esta cámara están excavados por este builder (ver el
+        /// docblock de CorazonMareaX0 arriba): esa piedra es del cincel del
+        /// jugador, no de este método.
+        /// </summary>
+        private static void ExcavateCorazon(CellGrid grid)
+        {
+            DrawSolidRect(grid, CorazonMareaX0, CorazonMareaY0,
+                CorazonMareaX1 - CorazonMareaX0 + 1, CorazonMareaY1 - CorazonMareaY0 + 1, MaterialId.Empty);
+
+            for (int x = CorazonMareaX0; x <= CorazonMareaX1; x++)
+            {
+                grid.SetCell(x, CorazonMareaY0, MaterialId.Marea);
+            }
         }
 
         private static void BuildCuna(CellGrid grid)
