@@ -176,8 +176,26 @@ namespace Alkahest.Net
             var nmPrefab = FindAnyObjectByType<Unity.Netcode.NetworkManager>();
             if (nmPrefab != null && nmPrefab.NetworkConfig != null && nmPrefab.NetworkConfig.PlayerPrefab != null)
             {
-                try { nmPrefab.AddNetworkPrefab(nmPrefab.NetworkConfig.PlayerPrefab); }
-                catch (System.Exception) { /* ya registrado: exactamente lo que queríamos */ }
+                // (fix 2) SOLO si no está ya en la lista: AddNetworkPrefab a
+                // ciegas duplicaba la entrada cuando la escena venía con el
+                // registro del editor, y NGO ante un duplicate
+                // GlobalObjectIdHash invalida el registro entero (visto en el
+                // arranque de Cesar: 'ANFITRIÓN no hacía nada'). Este es EL
+                // único punto de registro (el builder ya no puebla la lista).
+                bool yaRegistrado = false;
+                var listaPrefabs = nmPrefab.NetworkConfig.Prefabs;
+                if (listaPrefabs != null && listaPrefabs.Prefabs != null)
+                {
+                    foreach (var entrada in listaPrefabs.Prefabs)
+                    {
+                        if (entrada != null && entrada.Prefab == nmPrefab.NetworkConfig.PlayerPrefab) { yaRegistrado = true; break; }
+                    }
+                }
+                if (!yaRegistrado)
+                {
+                    try { nmPrefab.AddNetworkPrefab(nmPrefab.NetworkConfig.PlayerPrefab); }
+                    catch (System.Exception) { /* carrera improbable: ya registrado */ }
+                }
             }
 
             if (Instancia != null && Instancia != this)

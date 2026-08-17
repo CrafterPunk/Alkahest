@@ -663,6 +663,7 @@ namespace Alkahest.Sim
             mats[MaterialId.Ice] = new MaterialDef
             {
                 id = MaterialId.Ice,
+                caeSolido = true, cohesionCeldas = 4, // (playtest 29) el hielo cae al perder apoyo -- los puentes helados piden arte, no fe.
                 devName = "Ice",
                 archetype = MaterialArchetype.StaticSolid,
                 baseColor = new Color32(196, 226, 236, 235),
@@ -734,6 +735,7 @@ namespace Alkahest.Sim
             mats[MaterialId.Crystal] = new MaterialDef
             {
                 id = MaterialId.Crystal,
+                caeSolido = true, cohesionCeldas = 5, // (playtest 29) el cristal crecido sin apoyo se desprende: las torres piden base.
                 devName = "Crystal",
                 archetype = MaterialArchetype.StaticSolid,
                 // (pase visual M5) Era (170,220,235), casi el mismo pálido que el
@@ -2745,6 +2747,7 @@ namespace Alkahest.Sim
                     mats[id] = new MaterialDef
                     {
                         id = id, devName = $"Base{b}Templado", archetype = MaterialArchetype.StaticSolid,
+                        caeSolido = true, cohesionCeldas = 3, // frágil hasta en esto: ménsulas cortas.
                         baseColor = LerpColor32(tono, new Color32(255, 255, 255, 255), 0.25f), colorJitter = 8,
                         density = short.MaxValue, // StaticSolid: no cae ni compite en densidad de líquidos (regla 7) -- mismo criterio que Stone/Ice/Crystal.
                         patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,
@@ -2758,6 +2761,7 @@ namespace Alkahest.Sim
                     mats[id] = new MaterialDef
                     {
                         id = id, devName = $"Base{b}Recocido", archetype = MaterialArchetype.StaticSolid,
+                        caeSolido = true, cohesionCeldas = 5,
                         baseColor = LerpColor32(tono, new Color32(128, 128, 128, 255), 0.20f), colorJitter = 10,
                         density = short.MaxValue,
                         patron = PatronMorfologico.Vetas, borde = BordeMorfologico.Neto,
@@ -2771,6 +2775,7 @@ namespace Alkahest.Sim
                     mats[id] = new MaterialDef
                     {
                         id = id, devName = $"Base{b}Compacto", archetype = MaterialArchetype.StaticSolid,
+                        caeSolido = true, cohesionCeldas = 6,
                         baseColor = LerpColor32(tono, new Color32(0, 0, 0, 255), 0.30f), colorJitter = 6, // "jitter bajo" explícito del contrato.
                         density = short.MaxValue,
                         patron = PatronMorfologico.Celdas, borde = BordeMorfologico.Neto,
@@ -2786,6 +2791,7 @@ namespace Alkahest.Sim
                     mats[id] = new MaterialDef
                     {
                         id = id, devName = $"Base{b}Ceramico", archetype = MaterialArchetype.StaticSolid,
+                        caeSolido = true, cohesionCeldas = 8, // el techo de cohesión: la cerámica voladiza como ninguna.
                         baseColor = c, colorJitter = 8,
                         density = short.MaxValue,
                         patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,

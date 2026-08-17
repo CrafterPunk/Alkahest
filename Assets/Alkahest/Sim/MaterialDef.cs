@@ -92,6 +92,16 @@ namespace Alkahest.Sim
         public byte fluidity;
 
         public bool flammable;
+
+        // -----------------------------------------------------------------
+        // GRAVEDAD CON COHESIÓN (playtest 29, decisión de Cesar: "haz lo de
+        // la gravedad... ¿todo pixel necesita base o habrá un principio de
+        // cohesión con apoyos sensatos?" -- se eligió COHESIÓN).
+        // -----------------------------------------------------------------
+        /// <summary>¿Este StaticSolid CAE cuando pierde apoyo? La PIEDRA jamás (es la arquitectura del mundo entero) y la obra del taller tampoco; los productos sólidos del retículo, el hielo y el cristal sí. Solo aplica a archetype StaticSolid.</summary>
+        public bool caeSolido;
+        /// <summary>Alcance de MÉNSULA en celdas: un sólido sin apoyo directo se sostiene si a ≤ este número de celdas en horizontal, a través de materia sólida CONTINUA, hay una celda con apoyo debajo. Fijo por estado (vocabulario, regla 17): lo cerámico voladiza más que lo templado. 0 = sin cohesión (cae si no tiene apoyo debajo).</summary>
+        public byte cohesionCeldas;
         /// <summary>Id del material en el que se convierte al arder (normalmente Fire).</summary>
         public byte burnsInto;
         /// <summary>Temperatura (raw, ver CellGrid.CToRaw) a partir de la cual puede autoignizar por contacto.</summary>

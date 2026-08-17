@@ -80,9 +80,14 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     entera, revirtiéndola a un snapshot de rondas atrás. Ante cualquier duda sobre el estado del
     código, comparar contra un clon fresco de GitHub antes de editar, y no acumular varias rondas
     de trabajo sin commit — un commit reciente es la única red de seguridad real.
-7. **`StaticSolid` no cae**: `SimStepper` no le aplica gravedad (Cristal, Hielo). Toda mecánica
-   que dependa de que la materia baje sola tiene que arrastrarla ella misma (ver
-   `DeliveryChute.ArrastreTick`, playtest 8).
+7. **`StaticSolid` no cae... SALVO los marcados `caeSolido` (matizada en playtest 29)**: la
+   PIEDRA y la obra del taller JAMÁS caen (son la arquitectura del mundo); los productos sólidos
+   del retículo, el hielo y el cristal SÍ caen al perder apoyo, con PRINCIPIO DE COHESIÓN
+   (`MaterialDef.cohesionCeldas`: ménsula de K celdas por materia continua -- cerámico 8,
+   compacto 6, recocido 5, cristal 5, hielo 4, templado 3; ver
+   `SimStepper.SolidoTieneApoyo/ProcessSolidoCohesion`). Caída recta, solo a hueco vacío (los
+   líquidos sostienen: el hielo sigue flotando). El arrastre manual de la Tolva/columna
+   (`ArrastreTick`) sigue vigente para lo que NO cae solo.
 8. El ring buffer de eventos de `SimStepper` (`Events`/`EventHead`) lo consumen ya TRES clases,
    cada una de forma **NO destructiva** con su propio índice (`SubstanceKnowledge`,
    `Audio/DirectorDeAudio`, y la lógica de "LEY DESCUBIERTA" dentro de `SubstanceKnowledge`, ver

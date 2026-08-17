@@ -24,6 +24,8 @@ namespace Alkahest.Net
     /// </summary>
     public sealed class TallerSesionHud : MonoBehaviour
     {
+        /// <summary>(fix del atasco) Aviso persistente de la caída a modo local sin Steam -- se muestra en el panel hasta que la sesión arranca.</summary>
+        private string _avisoLocal;
         private const int VentanaId = 0x414C4B4E; // "ALKN"
 
         /// <summary>Jugadores máximos del lobby. Cuatro: el mandato de Cesar para este POC.</summary>
@@ -106,6 +108,11 @@ namespace Alkahest.Net
                     break;
             }
 
+            if (!string.IsNullOrEmpty(_avisoLocal))
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label(_avisoLocal, UiStyles.CuerpoTenue);
+            }
             if (!string.IsNullOrEmpty(sessionCoordinator.LastError))
             {
                 GUILayout.Space(6f);
@@ -134,7 +141,19 @@ namespace Alkahest.Net
             // juega con amigos de verdad.
             if (GUILayout.Button("ANFITRIÓN — abre tu taller (hasta 4)", UiStyles.Boton))
             {
-                sessionCoordinator.StartHost(sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam), MaxJugadores);
+                // (fix del atasco de Cesar) Si Steam NO está abierto, este
+                // botón moría con un error y "no ocurría nada": ahora cae
+                // SOLO a taller local -- jugar en solitario dándole a
+                // ANFITRIÓN es un camino válido. El aviso queda a la vista.
+                var modo = sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam);
+                bool steamListo = FriendsLoop.Platform.SteamBootstrap.Instance != null
+                    && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady;
+                if (modo == TransportMode.Steam && !steamListo)
+                {
+                    modo = TransportMode.LocalLoopback;
+                    _avisoLocal = "Steam no está abierto: taller LOCAL (solo este PC). Para jugar con amigos, abre Steam antes.";
+                }
+                sessionCoordinator.StartHost(modo, MaxJugadores);
             }
 
             if (GUILayout.Button("UNIRME al taller de un amigo (Steam)", UiStyles.Boton))

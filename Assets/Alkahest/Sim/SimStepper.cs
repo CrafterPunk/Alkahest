@@ -249,6 +249,19 @@ namespace Alkahest.Sim
                 case MaterialArchetype.StaticSolid:
                     // (fix playtest) El hielo YA NO inyecta frío a vecinos: creaba una zona fría
                     // autosostenida que seguía congelando tras apagar la piedra fría.
+                    //
+                    // (playtest 29, GRAVEDAD CON COHESIÓN -- decisión de Cesar)
+                    // Los sólidos marcados con def.caeSolido (estados del
+                    // retículo, hielo, cristal -- JAMÁS la piedra, que es la
+                    // arquitectura del mundo) caen recto al perder apoyo,
+                    // con principio de MÉNSULA: se sostienen si a
+                    // ≤ cohesionCeldas en horizontal, por materia sólida
+                    // continua, alguien tiene apoyo debajo. Vigas y voladizos
+                    // sensatos sí; alfombras flotantes no. Coste: solo corre
+                    // en chunks despiertos (un sólido asentado duerme igual
+                    // que siempre) y el escaneo lateral está acotado por
+                    // cohesionCeldas (≤8).
+                    if (def.caeSolido) ProcessSolidoCohesion(x, y, idx, def);
                     break;
             }
 
@@ -828,6 +841,55 @@ namespace Alkahest.Sim
                 // Es gas: lo consideramos "atravesable" para el barrido y seguimos buscando un hueco vacío más allá.
             }
             return false;
+        }
+
+        // ---------------------------------------------------------------------------------
+        // Sólidos con gravedad (playtest 29) -- ver el case StaticSolid de ProcessIfNeeded.
+        // ---------------------------------------------------------------------------------
+
+        /// <summary>
+        /// ¿La celda (x,y) tiene APOYO? Directo: lo de abajo no es vacío.
+        /// Por cohesión: recorriendo la fila hacia un lado, a través de
+        /// celdas SÓLIDAS continuas (StaticSolid o Powder asentado cuentan
+        /// como materia portante; un hueco corta la viga), hay a
+        /// ≤ cohesionCeldas una celda con apoyo directo. La piedra es apoyo
+        /// y también portante: una viga empotrada en el muro se sostiene.
+        /// </summary>
+        private bool SolidoTieneApoyo(int x, int y, byte cohesion)
+        {
+            if (y <= 0) return true; // el fondo del mundo sostiene.
+            if (_grid.mat[CellGrid.Idx(x, y - 1)] != MaterialId.Empty) return true;
+            if (cohesion == 0) return false;
+
+            for (int dir = -1; dir <= 1; dir += 2)
+            {
+                for (int d = 1; d <= cohesion; d++)
+                {
+                    int nx = x + dir * d;
+                    if (!CellGrid.InBounds(nx, y)) break;
+                    byte m = _grid.mat[CellGrid.Idx(nx, y)];
+                    if (m == MaterialId.Empty) break; // la viga se corta: no hay materia que transmita el apoyo.
+                    var a = _universe.Get(m).archetype;
+                    if (a != MaterialArchetype.StaticSolid && a != MaterialArchetype.Powder) break; // líquido/gas no transmiten carga.
+                    if (_grid.mat[CellGrid.Idx(nx, y - 1)] != MaterialId.Empty) return true; // ese vecino sí está apoyado: ménsula válida.
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Caída recta de un sólido sin apoyo: una celda por tick, solo a hueco VACÍO (los líquidos sostienen -- el hielo sigue flotando en el agua, como siempre). Sin deslizamiento lateral: un sólido no es un polvo.</summary>
+        private void ProcessSolidoCohesion(int x, int y, int idx, MaterialDef def)
+        {
+            if (SolidoTieneApoyo(x, y, def.cohesionCeldas)) return;
+
+            int belowIdx = CellGrid.Idx(x, y - 1);
+            _grid.SwapCells(idx, belowIdx);
+            _grid.WakeChunk(x, y, _tick);
+            _grid.WakeChunk(x, y - 1, _tick);
+            _cellMoved = true;
+            _cellFinalX = x;
+            _cellFinalY = y - 1;
+            _cellFinalIdx = belowIdx;
         }
 
         // ---------------------------------------------------------------------------------

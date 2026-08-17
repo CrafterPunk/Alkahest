@@ -2420,3 +2420,24 @@ si algo no compila, empezar ahí. **La prueba**: build MULTI, abrir el .exe DOS 
 `-transport local`, ANFITRIÓN en una y UNIRME local en la otra: dos imps de colores con nombre,
 el agua del host apareciendo en el cliente, el invitado acarreando limo a la boca del crisol.
 Con amigos: sin `-transport`, lobby de Steam (invitación por overlay).
+
+---
+
+## Playtest 29 (parcial, mismo commit que los fixes del multi) → GRAVEDAD CON COHESIÓN
+
+GO de Cesar tras la evaluación de pros/contras; su pregunta exacta — "¿todo pixel va a necesitar
+una base o habrá un principio de cohesión que permita construir con apoyos sensatos?" — se
+respondió eligiendo COHESIÓN: un sólido se sostiene si tiene apoyo debajo O si a ≤K celdas en
+horizontal, a través de materia sólida CONTINUA (StaticSolid o Powder; un hueco corta la viga,
+los líquidos no transmiten carga), alguien tiene apoyo directo. K fijo por material (vocabulario,
+regla 17): cerámico 8 > compacto 6 > recocido 5 = cristal 5 > hielo 4 > templado 3 (frágil hasta
+en esto). La PIEDRA y la obra del taller jamás caen. Caída recta 1 celda/tick, solo a VACÍO (los
+líquidos sostienen: el hielo sigue flotando en el agua); sin deslizamiento lateral (un sólido no
+es un polvo). Coste: solo chunks despiertos, escaneo acotado por K; un sólido asentado duerme
+como siempre. Regla 7 de CLAUDE.md matizada. Consecuencia de juego deseada: construir pasa a
+tener INGENIERÍA — vigas y voladizos sensatos sí, alfombras flotantes no; lo fundido vertido en
+el aire ya no queda como calcomanía. También en este lote: fix del arranque multi (registro
+ÚNICO del prefab de avatar — el doble registro editor+runtime hacía que NGO invalidara todo y
+ANFITRIÓN "no hiciera nada") y ANFITRIÓN que cae solo a taller LOCAL con aviso si Steam no está
+abierto. Máquinas como objetos de red (mudanza para invitados): pospuesto a la siguiente ronda
+por decisión de Cesar ("con que el host pueda ahora me basta").

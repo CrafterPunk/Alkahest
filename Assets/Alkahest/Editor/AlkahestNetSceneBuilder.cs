@@ -336,36 +336,13 @@ namespace Alkahest.EditorTools
                 // template — nada de spawn manual desde código.
                 networkManager.NetworkConfig.PlayerPrefab = avatarPrefab;
 
-                // (fix del primer build, NRE en esta línea) La lista interna
-                // de NetworkPrefabs puede estar SIN INICIALIZAR en un
-                // NetworkManager recién añadido en modo editor (NGO la crea
-                // en Initialize, no en el constructor): el acceso directo
-                // .Prefabs.Prefabs reventó la build con
-                // NullReferenceException. Registro DEFENSIVO: si la lista no
-                // existe todavía, no pasa nada -- SimSync.Awake reintenta el
-                // registro en runtime (red de seguridad simétrica), y NGO 2.x
-                // además trata PlayerPrefab como prefab conocido al
-                // inicializar.
-                try
-                {
-                    var prefabs = networkManager.NetworkConfig.Prefabs;
-                    bool yaRegistrado = false;
-                    if (prefabs != null && prefabs.Prefabs != null)
-                    {
-                        foreach (var p in prefabs.Prefabs)
-                        {
-                            if (p != null && p.Prefab == avatarPrefab) { yaRegistrado = true; break; }
-                        }
-                    }
-                    if (!yaRegistrado && prefabs != null)
-                    {
-                        prefabs.Add(new NetworkPrefab { Prefab = avatarPrefab });
-                    }
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning("[ChaosAlchemy] Registro del prefab de avatar pospuesto a runtime (SimSync.Awake): " + e.Message);
-                }
+                // (fix 2 del arranque, error 'duplicate GlobalObjectIdHash')
+                // El registro en la LISTA de prefabs vive ahora en UN SOLO
+                // sitio: SimSync.Awake, en runtime. Registrarlo también aquí
+                // (como hacía la primera versión) duplicaba la entrada al
+                // arrancar y NGO INVALIDABA el registro entero -- el avatar
+                // no spawneaba y ANFITRIÓN parecía no hacer nada. El editor
+                // solo asigna PlayerPrefab; la lista la puebla el runtime.
             }
             else
             {
