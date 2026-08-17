@@ -44,6 +44,57 @@ namespace Alkahest.Game
         public static readonly Color Frio = new Color(0.55f, 0.85f, 1.00f, 1f);
         public static readonly Color Hueco = new Color(0f, 0f, 0f, 0.55f);
 
+        // -----------------------------------------------------------------
+        // (playtest 31, LA IDENTIDAD) LOS COLORES DEL TALLER. Cesar: "el menú
+        // de bautizar tiene que dejar de parecer un menú de Windows XP".
+        // Un menú de sistema se reconoce por tres cosas: fondo gris neutro,
+        // borde de widget del SO y tipografía de sistema. Las tres se
+        // sustituyen aquí de una vez: CARBONCILLO como fondo de todo lo que
+        // el jugador escribe o pulsa, LATÓN como el metal de los filos (el
+        // mismo material del que están hechas las guías del crisol y el labio
+        // de las bocas -- no un azul de widget), y las dos fuentes reales
+        // (ver CargarFuentes).
+        // -----------------------------------------------------------------
+        /// <summary>#1a1a1f — el carboncillo del taller: fondo de campos, botones y paneles ceremoniales.</summary>
+        public static readonly Color Carboncillo = new Color(0.102f, 0.102f, 0.122f, 1f);
+        /// <summary>#a87e3a — latón: el metal de los filos y los marcos. Más apagado que <see cref="Oro"/>, que se reserva para el TEXTO importante.</summary>
+        public static readonly Color Laton = new Color(0.659f, 0.494f, 0.227f, 1f);
+        /// <summary>Latón viejo, para las líneas interiores y los remaches (un filo nunca es de un solo tono).</summary>
+        public static readonly Color LatonOscuro = new Color(0.36f, 0.27f, 0.13f, 1f);
+        /// <summary>Pergamino-oscuro: el "papel" de los paneles de rito y del diario. NO es un papel claro: es vitela ahumada a la luz de un fuego.</summary>
+        public static readonly Color Pergamino = new Color(0.145f, 0.128f, 0.128f, 1f);
+
+        // -----------------------------------------------------------------
+        // (playtest 31) TIPOGRAFÍA = ALMA. Las dos únicas fuentes del
+        // proyecto viven en Assets/Alkahest/Resources/Fuentes:
+        //   · Cinzel   — lapidaria romana: TÍTULOS y nada más ("CHAOS
+        //                ALCHEMY", "BAUTIZO", secciones del diario,
+        //                desenlaces). Respira: pide espaciado entre letras
+        //                (ver Espaciar) y NUNCA se usa para párrafos.
+        //   · Alegreya — humanista: TODO el cuerpo. Tiene la x pequeña, así
+        //                que los cuerpos suben un punto respecto a la fuente
+        //                de sistema que había antes.
+        // REGLA DURA: si Resources.Load devuelve null (build sin las fuentes,
+        // o carpeta Resources no incluida), TODO sigue funcionando con la
+        // fuente por defecto -- por eso jamás se comprueba != null antes de
+        // dibujar: `GUIStyle.font = null` significa "usa la del skin", que es
+        // exactamente el comportamiento anterior a esta ronda.
+        // -----------------------------------------------------------------
+
+        /// <summary>Cinzel (lapidaria) — solo títulos. Null si no se pudo cargar: el juego sigue, con la fuente por defecto.</summary>
+        public static Font FuenteTitulos { get; private set; }
+        /// <summary>Alegreya (humanista) — todo el cuerpo. Null si no se pudo cargar.</summary>
+        public static Font FuenteCuerpo { get; private set; }
+        private static bool _fuentesPedidas;
+
+        private static void CargarFuentes()
+        {
+            if (_fuentesPedidas) return;
+            _fuentesPedidas = true; // se intenta UNA vez por sesión, tanto si sale bien como si no (Resources.Load no es gratis y un fallo es permanente).
+            FuenteTitulos = Resources.Load<Font>("Fuentes/Cinzel");
+            FuenteCuerpo = Resources.Load<Font>("Fuentes/Alegreya");
+        }
+
         /// <summary>Factor de escala del HUD respecto a 720p (1.0 a 720p, 1.5 a 1080p, 2.0 a 1440p).</summary>
         public static float Escala { get; private set; } = 1f;
 
@@ -66,6 +117,13 @@ namespace Alkahest.Game
         public static GUIStyle Boton { get; private set; }
         public static GUIStyle Campo { get; private set; }
 
+        /// <summary>(playtest 31) TÍTULO DE RITO: Cinzel, oro, centrado, grande. Para "BAUTIZO" y los encabezados ceremoniales que no son el título del juego.</summary>
+        public static GUIStyle TituloRito { get; private set; }
+        /// <summary>(playtest 31) Línea ceremonial: cursiva tenue centrada, el susurro bajo un título ("El nombre que le des lo verá todo el taller").</summary>
+        public static GUIStyle Ceremonial { get; private set; }
+        /// <summary>(playtest 31) Nombre grande de una sustancia dentro de un rito (el que el jugador acaba de escribir, o "sin nombre").</summary>
+        public static GUIStyle NombreGrande { get; private set; }
+
         private static int _alturaConstruida = -1;
         private static readonly GUIContent _medida = new GUIContent();
 
@@ -81,33 +139,45 @@ namespace Alkahest.Game
             _alturaConstruida = Screen.height;
             Escala = Mathf.Clamp(Screen.height / 720f, 1f, 2.4f);
 
+            CargarFuentes();
+            VestirSkin(); // (playtest 31) ANTES de derivar nada de GUI.skin.label: los estilos copian el skin tal como esté en ese instante.
+
             var raiz = GUI.skin.label;
 
-            Titulo = Etiqueta(raiz, 15, FontStyle.Bold, TextAnchor.UpperLeft, Oro, false);
-            Cuerpo = Etiqueta(raiz, 13, FontStyle.Normal, TextAnchor.UpperLeft, Texto, true);
-            CuerpoDer = Etiqueta(raiz, 13, FontStyle.Normal, TextAnchor.UpperRight, Texto, false);
-            CuerpoLinea = Etiqueta(raiz, 13, FontStyle.Normal, TextAnchor.UpperLeft, Texto, false);
-            CuerpoCentrado = Etiqueta(raiz, 14, FontStyle.Normal, TextAnchor.UpperCenter, Texto, true);
-            CuerpoTenue = Etiqueta(raiz, 12, FontStyle.Normal, TextAnchor.UpperLeft, TextoTenue, true);
-            TenueCentrado = Etiqueta(raiz, 11, FontStyle.Normal, TextAnchor.UpperCenter, TextoTenue, false);
-            Numero = Etiqueta(raiz, 15, FontStyle.Bold, TextAnchor.UpperRight, Oro, false);
-            Chip = Etiqueta(raiz, 12, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false);
-            ChipMini = Etiqueta(raiz, 10, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false);
-            Alerta = Etiqueta(raiz, 13, FontStyle.Bold, TextAnchor.UpperCenter, Aviso, true);
-            Reloj = Etiqueta(raiz, 21, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false);
-            TituloGrande = Etiqueta(raiz, 30, FontStyle.Bold, TextAnchor.MiddleCenter, Oro, false);
-            Subtitulo = Etiqueta(raiz, 14, FontStyle.Italic, TextAnchor.MiddleCenter, TextoTenue, true);
+            // (playtest 31) Los CUERPOS suben un punto: Alegreya tiene la x
+            // más pequeña que la fuente de sistema que había antes, así que a
+            // igualdad de puntos se lee más chica. Los títulos NO suben --
+            // Cinzel es una capital lapidaria, ya ocupa todo el cuerpo.
+            Titulo = Etiqueta(raiz, 16, FontStyle.Bold, TextAnchor.UpperLeft, Oro, false, FuenteTitulos);
+            Cuerpo = Etiqueta(raiz, 14, FontStyle.Normal, TextAnchor.UpperLeft, Texto, true);
+            CuerpoDer = Etiqueta(raiz, 14, FontStyle.Normal, TextAnchor.UpperRight, Texto, false);
+            CuerpoLinea = Etiqueta(raiz, 14, FontStyle.Normal, TextAnchor.UpperLeft, Texto, false);
+            CuerpoCentrado = Etiqueta(raiz, 15, FontStyle.Normal, TextAnchor.UpperCenter, Texto, true);
+            CuerpoTenue = Etiqueta(raiz, 13, FontStyle.Normal, TextAnchor.UpperLeft, TextoTenue, true);
+            TenueCentrado = Etiqueta(raiz, 12, FontStyle.Normal, TextAnchor.UpperCenter, TextoTenue, false);
+            Numero = Etiqueta(raiz, 16, FontStyle.Bold, TextAnchor.UpperRight, Oro, false);
+            Chip = Etiqueta(raiz, 13, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false);
+            ChipMini = Etiqueta(raiz, 11, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false);
+            Alerta = Etiqueta(raiz, 14, FontStyle.Bold, TextAnchor.UpperCenter, Aviso, true);
+            Reloj = Etiqueta(raiz, 21, FontStyle.Bold, TextAnchor.MiddleCenter, Texto, false, FuenteTitulos);
+            TituloGrande = Etiqueta(raiz, 30, FontStyle.Normal, TextAnchor.MiddleCenter, Oro, false, FuenteTitulos);
+            Subtitulo = Etiqueta(raiz, 15, FontStyle.Italic, TextAnchor.MiddleCenter, TextoTenue, true);
+
+            TituloRito = Etiqueta(raiz, 22, FontStyle.Normal, TextAnchor.MiddleCenter, Oro, false, FuenteTitulos);
+            Ceremonial = Etiqueta(raiz, 13, FontStyle.Italic, TextAnchor.UpperCenter, OroTenue, true);
+            NombreGrande = Etiqueta(raiz, 19, FontStyle.Normal, TextAnchor.MiddleLeft, Texto, false, FuenteTitulos);
 
             Boton = new GUIStyle(GUI.skin.button) { fontSize = F(14), fontStyle = FontStyle.Bold };
             Boton.normal.textColor = Texto;
             Boton.hover.textColor = Oro;
             Boton.active.textColor = Oro;
 
-            Campo = new GUIStyle(GUI.skin.textField) { fontSize = F(14) };
+            Campo = new GUIStyle(GUI.skin.textField) { fontSize = F(15) };
             Campo.normal.textColor = Texto;
+            Campo.focused.textColor = Texto;
         }
 
-        private static GUIStyle Etiqueta(GUIStyle raiz, int tam, FontStyle fuente, TextAnchor anclaje, Color color, bool ajustar)
+        private static GUIStyle Etiqueta(GUIStyle raiz, int tam, FontStyle fuente, TextAnchor anclaje, Color color, bool ajustar, Font tipografia = null)
         {
             var s = new GUIStyle(raiz)
             {
@@ -120,8 +190,156 @@ namespace Alkahest.Game
                 padding = new RectOffset(0, 0, 0, 0),
                 margin = new RectOffset(0, 0, 0, 0),
             };
+            // null = "hereda la del skin" (Alegreya, ver VestirSkin) -- es el
+            // caso de TODOS los cuerpos; solo los títulos piden Cinzel.
+            if (tipografia != null) s.font = tipografia;
             s.normal.textColor = color;
             return s;
+        }
+
+        // -----------------------------------------------------------------
+        // (playtest 31) EL SKIN VESTIDO: por qué esto arregla TODA la UI de
+        // una vez. Un GUIStyle con `font == null` resuelve su tipografía
+        // contra `GUI.skin.font` EN EL MOMENTO DE DIBUJAR -- así que basta
+        // con poner Alegreya ahí para que hereden JournalHud (que construye
+        // sus estilos propios copiando GUI.skin.label), OrdersHud, HintSystem,
+        // FlaskHud, DevPalette y cualquier HUD futuro, sin tocar sus archivos.
+        // El mismo argumento vale para los FONDOS: reestilando
+        // GUI.skin.textField/button/window aquí, el campo de texto del
+        // BAUTIZO, el de la seed en el título y el de bautizar procedimientos
+        // del diario dejan de ser widgets del sistema los tres a la vez.
+        //
+        // Las texturas se generan UNA vez por sesión y llevan
+        // HideFlags.HideAndDontSave: sin eso, la primera recarga de escena
+        // (DayCycle.RestartRun) las destruiría dejando al skin -- que es un
+        // objeto compartido y sobrevive a la recarga -- apuntando a texturas
+        // muertas, o sea recuadros en blanco donde antes había campos.
+        // -----------------------------------------------------------------
+        private static bool _skinVestido;
+        private static Texture2D _texCampo, _texCampoFoco, _texBoton, _texBotonHover, _texVentana;
+
+        private static void VestirSkin()
+        {
+            if (_skinVestido) return;
+            _skinVestido = true;
+
+            _texCampo = TexturaMarco(Carboncillo, LatonOscuro, new Color(0f, 0f, 0f, 0.35f));
+            _texCampoFoco = TexturaMarco(new Color(0.135f, 0.125f, 0.115f, 1f), Laton, new Color(0f, 0f, 0f, 0.30f));
+            _texBoton = TexturaMarco(new Color(0.125f, 0.118f, 0.128f, 1f), LatonOscuro, new Color(0f, 0f, 0f, 0.25f));
+            _texBotonHover = TexturaMarco(new Color(0.20f, 0.17f, 0.13f, 1f), Laton, new Color(0f, 0f, 0f, 0.20f));
+            _texVentana = TexturaMarco(Pergamino, Laton, new Color(0f, 0f, 0f, 0.40f));
+
+            var skin = GUI.skin;
+            if (skin == null) return;
+
+            if (FuenteCuerpo != null) skin.font = FuenteCuerpo;
+
+            // CARET VISIBLE (encargo explícito): el cursor de escritura del
+            // skin por defecto es blanco fino sobre gris; sobre carboncillo
+            // se perdía. Oro y con parpadeo lento -- se ve que el taller
+            // espera a que escribas.
+            skin.settings.cursorColor = Oro;
+            skin.settings.cursorFlashSpeed = 0.9f;
+            skin.settings.selectionColor = new Color(Laton.r, Laton.g, Laton.b, 0.45f);
+
+            VestirEstilo(skin.textField, _texCampo, _texCampoFoco, Texto, 8, 6);
+            VestirEstilo(skin.textArea, _texCampo, _texCampoFoco, Texto, 8, 6);
+            VestirEstilo(skin.button, _texBoton, _texBotonHover, Texto, 10, 7);
+            skin.button.hover.textColor = Oro;
+            skin.button.active.textColor = Oro;
+            VestirEstilo(skin.box, _texVentana, _texVentana, Texto, 8, 6);
+
+            skin.window.normal.background = _texVentana;
+            skin.window.onNormal.background = _texVentana;
+            skin.window.border = new RectOffset(MarcoBorde, MarcoBorde, MarcoBorde, MarcoBorde);
+            skin.window.padding = new RectOffset(14, 14, 20, 14);
+            skin.window.normal.textColor = Oro;
+            skin.window.onNormal.textColor = Oro;
+            if (FuenteTitulos != null) skin.window.font = FuenteTitulos;
+        }
+
+        private static void VestirEstilo(GUIStyle s, Texture2D fondo, Texture2D fondoActivo, Color texto, int padX, int padY)
+        {
+            if (s == null) return;
+            s.normal.background = fondo;
+            s.hover.background = fondoActivo;
+            s.active.background = fondoActivo;
+            s.focused.background = fondoActivo;
+            s.onNormal.background = fondoActivo;
+            s.onHover.background = fondoActivo;
+            s.onActive.background = fondoActivo;
+            s.onFocused.background = fondoActivo;
+            s.normal.textColor = texto;
+            s.focused.textColor = texto;
+            s.border = new RectOffset(MarcoBorde, MarcoBorde, MarcoBorde, MarcoBorde);
+            s.padding = new RectOffset(padX, padX, padY, padY);
+        }
+
+        private const int MarcoLado = 16;
+        private const int MarcoBorde = 5;
+
+        /// <summary>
+        /// Textura 9-slice de "chapa del taller": relleno plano + filo de
+        /// latón de 1 téxel + línea de sombra interior. El centro es plano a
+        /// propósito (es lo que se estira): todo el carácter vive en los 5
+        /// téxeles de borde que el 9-slice conserva sin deformar.
+        /// </summary>
+        private static Texture2D TexturaMarco(Color fondo, Color filo, Color sombraInterior)
+        {
+            var tex = new Texture2D(MarcoLado, MarcoLado, TextureFormat.RGBA32, false, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave, // ver el bloque de arriba: el skin sobrevive a la recarga de escena, la textura también debe hacerlo.
+                name = "UiStylesMarco",
+            };
+
+            var px = new Color32[MarcoLado * MarcoLado];
+            for (int y = 0; y < MarcoLado; y++)
+            {
+                for (int x = 0; x < MarcoLado; x++)
+                {
+                    int d = Mathf.Min(Mathf.Min(x, MarcoLado - 1 - x), Mathf.Min(y, MarcoLado - 1 - y));
+                    Color c;
+                    if (d == 0) c = filo;                                     // filo de latón
+                    else if (d == 1) c = Color.Lerp(fondo, Color.black, 0.55f); // canto oscuro que hunde el marco
+                    else if (d == 2) c = Color.Lerp(fondo, sombraInterior, sombraInterior.a); // sombra interior proyectada
+                    else c = fondo;
+                    c.a = 1f;
+                    px[y * MarcoLado + x] = c;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        // -----------------------------------------------------------------
+        // (playtest 31) ESPACIADO DE CAPITALES. Cinzel es una lapidaria: en
+        // piedra las capitales van separadas, y pegadas se leen apelmazadas.
+        // IMGUI no tiene letter-spacing, así que se intercala un espacio fino
+        // entre caracteres -- pero UNA sola vez por cadena, cacheado: hacerlo
+        // en OnGUI asignaría un string por frame (regla de cero allocs).
+        // -----------------------------------------------------------------
+        private static readonly System.Collections.Generic.Dictionary<string, string> _espaciados =
+            new System.Collections.Generic.Dictionary<string, string>(8);
+
+        /// <summary>"CHAOS ALCHEMY" → "C H A O S   A L C H E M Y". Cacheado por cadena: no asigna nada a partir de la segunda llamada.</summary>
+        public static string Espaciar(string texto)
+        {
+            if (string.IsNullOrEmpty(texto)) return texto;
+            if (_espaciados.TryGetValue(texto, out string ya)) return ya;
+
+            var sb = new System.Text.StringBuilder(texto.Length * 2);
+            for (int i = 0; i < texto.Length; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(texto[i]);
+            }
+            string r = sb.ToString();
+            _espaciados[texto] = r;
+            return r;
         }
 
         // -----------------------------------------------------------------
@@ -252,6 +470,112 @@ namespace Alkahest.Game
             Rellenar(new Rect(r.x, r.yMax - t, r.width, t), borde);
             Rellenar(new Rect(r.x, r.y, t, r.height), borde);
             Rellenar(new Rect(r.xMax - t, r.y, t, r.height), borde);
+        }
+
+        // -----------------------------------------------------------------
+        // (playtest 31) EL PANEL DE RITO. La diferencia entre "una caja de
+        // diálogo" y "un momento del juego" no es el contenido: es que el
+        // fondo tenga PROFUNDIDAD (no un gris plano) y que el filo sea de un
+        // MATERIAL reconocible del mundo (latón, no un borde de widget).
+        // Aquí se dibuja a mano, con Rellenar, porque un 9-slice estirado no
+        // puede tener degradado ni esquinas de latón sin deformarlas.
+        // Coste: ~20 GUI.DrawTexture por frame en UNA ventana modal -- nada
+        // frente a lo que ya cuesta el diario, y cero asignaciones.
+        // -----------------------------------------------------------------
+
+        /// <summary>Bandas del degradado del pergamino. 10 basta para que no se vea escalonado a ninguna resolución y es barato.</summary>
+        private const int BandasPergamino = 10;
+
+        /// <summary>
+        /// Panel ceremonial: vitela ahumada (más cálida y clara arriba, casi
+        /// negra abajo, como iluminada por un fuego que está en el suelo del
+        /// taller), doble filete de latón y cantoneras. Es el fondo del
+        /// BAUTIZO y de cualquier rito que venga después.
+        /// </summary>
+        public static void PanelRito(Rect r)
+        {
+            // 1) Sombra proyectada: el panel FLOTA sobre el mundo.
+            float sombra = S(6f);
+            Rellenar(new Rect(r.x + sombra, r.y + sombra, r.width, r.height), new Color(0f, 0f, 0f, 0.45f));
+
+            // 2) La vitela, en bandas horizontales de arriba (cálida) a abajo (oscura).
+            for (int i = 0; i < BandasPergamino; i++)
+            {
+                float t = i / (float)(BandasPergamino - 1);
+                float y0 = r.y + r.height * (i / (float)BandasPergamino);
+                float y1 = r.y + r.height * ((i + 1) / (float)BandasPergamino);
+                Color c = Color.Lerp(new Color(0.175f, 0.152f, 0.140f, 0.985f),
+                                     new Color(0.072f, 0.062f, 0.068f, 0.985f), t * t);
+                Rellenar(new Rect(r.x, y0, r.width, y1 - y0 + 1f), c);
+            }
+
+            MarcoLaton(r);
+        }
+
+        /// <summary>
+        /// Marco de latón de dos filetes con cantoneras: filo exterior
+        /// grueso, aire, hilo interior fino, y cuatro escuadras en las
+        /// esquinas. Es EL gesto que separa un objeto del taller de un
+        /// rectángulo de sistema, y por eso vive suelto: lo usan el panel de
+        /// rito, el swatch del bautizo y el marco del diario.
+        /// </summary>
+        public static void MarcoLaton(Rect r) => MarcoLaton(r, Laton, 1f);
+
+        public static void MarcoLaton(Rect r, Color laton, float intensidad)
+        {
+            float g = Mathf.Max(2f, Mathf.Round(S(2f)));
+            float h = Mathf.Max(1f, Mathf.Round(S(1f)));
+            var fuerte = new Color(laton.r, laton.g, laton.b, laton.a * intensidad);
+            var tenue = new Color(laton.r * 0.62f, laton.g * 0.62f, laton.b * 0.62f, laton.a * 0.75f * intensidad);
+
+            // Filete exterior.
+            Rellenar(new Rect(r.x, r.y, r.width, g), fuerte);
+            Rellenar(new Rect(r.x, r.yMax - g, r.width, g), fuerte);
+            Rellenar(new Rect(r.x, r.y, g, r.height), fuerte);
+            Rellenar(new Rect(r.xMax - g, r.y, g, r.height), fuerte);
+
+            // Hilo interior, separado por aire: dos líneas leen como metal labrado; una sola, como un borde de ventana.
+            float m = S(5f);
+            var inte = new Rect(r.x + m, r.y + m, r.width - m * 2f, r.height - m * 2f);
+            Rellenar(new Rect(inte.x, inte.y, inte.width, h), tenue);
+            Rellenar(new Rect(inte.x, inte.yMax - h, inte.width, h), tenue);
+            Rellenar(new Rect(inte.x, inte.y, h, inte.height), tenue);
+            Rellenar(new Rect(inte.xMax - h, inte.y, h, inte.height), tenue);
+
+            // Cantoneras: escuadras macizas en las cuatro esquinas.
+            float l = S(14f);
+            Rellenar(new Rect(r.x, r.y, l, g * 2f), fuerte);
+            Rellenar(new Rect(r.x, r.y, g * 2f, l), fuerte);
+            Rellenar(new Rect(r.xMax - l, r.y, l, g * 2f), fuerte);
+            Rellenar(new Rect(r.xMax - g * 2f, r.y, g * 2f, l), fuerte);
+            Rellenar(new Rect(r.x, r.yMax - g * 2f, l, g * 2f), fuerte);
+            Rellenar(new Rect(r.x, r.yMax - l, g * 2f, l), fuerte);
+            Rellenar(new Rect(r.xMax - l, r.yMax - g * 2f, l, g * 2f), fuerte);
+            Rellenar(new Rect(r.xMax - g * 2f, r.yMax - l, g * 2f, l), fuerte);
+        }
+
+        /// <summary>
+        /// Filete separador con rombo central: la regla de un manuscrito.
+        /// Una línea recta a secas es una regla de CSS; con el rombo es una
+        /// página. `y` es la línea, `ancho` el tramo centrado en `cx`.
+        /// </summary>
+        public static void FileteRombo(float cx, float y, float ancho, Color color)
+        {
+            float h = Mathf.Max(1f, Mathf.Round(S(1f)));
+            float mitad = ancho * 0.5f;
+            float hueco = S(9f);
+            Rellenar(new Rect(cx - mitad, y, mitad - hueco, h), color);
+            Rellenar(new Rect(cx + hueco, y, mitad - hueco, h), color);
+
+            // Rombo: cuatro filas que crecen y decrecen (un cuadrado girado 45º dibujado con rectángulos).
+            float paso = Mathf.Max(1f, Mathf.Round(S(1.5f)));
+            for (int i = 0; i < 3; i++)
+            {
+                float w = paso * (i + 1);
+                Rellenar(new Rect(cx - w * 0.5f, y - paso * (2 - i), w, paso), color);
+                Rellenar(new Rect(cx - w * 0.5f, y + paso * (2 - i), w, paso), color);
+            }
+            Rellenar(new Rect(cx - paso * 1.5f, y, paso * 3f, paso), color);
         }
 
         /// <summary>Barra de progreso: hueco oscuro + relleno del color indicado.</summary>

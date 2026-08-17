@@ -215,22 +215,143 @@ namespace Alkahest.Game
 
             var px = new Color32[TexW * TexH];
 
-            // Un único color de base: oscuro, casi negro, ligeramente cálido
-            // en la sombra (misma familia que "abajo" del taller clásico,
-            // para no desentonar con la paleta general del juego) pero SIN
-            // gradiente vertical ni estructura -- "plano y uniforme" tal
-            // cual lo pide el encargo.
-            var baseColor = new Color(0.055f, 0.045f, 0.052f);
+            // =============================================================
+            // (playtest 31, ILUMINACIÓN DE ÁNIMO) LA ROCA DEL FONDO
+            // =============================================================
+            // Antes: un color plano + viñeta. Correcto para el "cuarto
+            // íntimo" del playtest 21 (donde la única luz debía venir de la
+            // criatura) pero, con el taller grande de vuelta y las máquinas
+            // dando luz propia (Game/MaquinariaSprites.Luz), un fondo
+            // absolutamente plano se lee como TELÓN: no hay nada detrás de
+            // las estaciones, solo vacío.
+            //
+            // Ahora la pared es ROCA, con tres capas MUY tenues (ninguna
+            // supera el 8% de desviación de brillo: la pared tiene que
+            // RETROCEDER, no competir con la materia, que es lo único
+            // saturado del cuadro):
+            //   1) gradiente vertical -- más fría arriba (la bóveda se pierde
+            //      en sombra) y más cálida abajo (cerca del suelo y de los
+            //      fuegos);
+            //   2) veta de roca de baja frecuencia (bloques de ~8 celdas con
+            //      hash estable): da la escala de la caverna;
+            //   3) grano fino, para que a la resolución de pantalla no se vea
+            //      ninguna banda plana.
+            // Más la viñeta que ya había, un punto más cerrada.
+            // El conjunto queda ~15% MÁS OSCURO que el fondo anterior: la
+            // penumbra es lo que permite que un halo cálido se lea como luz.
+            // =============================================================
+            // ROCA PROFUNDA (fuera del cuarto): casi negra. Es lo que se ve
+            // por el pasillo de la Tolva y por los bordes del encuadre.
+            var techo = new Color(0.030f, 0.027f, 0.037f);
+            var suelo = new Color(0.052f, 0.041f, 0.037f);
+
+            // LA PARED DEL CUARTO (dentro de CuartoX0..X1 / Y0..Y1). Mucho
+            // más clara que la roca profunda -- no por realismo, sino porque
+            // ANTES DE ESTA RONDA el taller entero flotaba sobre un vacío
+            // negro (visto jugando, captura de la iteración 1): las máquinas
+            // no tenían pared detrás, así que ninguna parecía estar DENTRO de
+            // un sitio. Una habitación se lee cuando tiene fondo.
+            // (tercera pasada, visto jugando) +15% en las dos: con el tinte
+            // global cálido de Sim/SimRenderer.TinteGlobal encima, la pared
+            // quedaba por debajo del umbral en que se distingue la sillería a
+            // escala de juego -- se veía "oscuro" pero no "de piedra".
+            var paredAlta = new Color(0.101f, 0.090f, 0.099f);  // arriba: la bóveda se apaga.
+            var paredBaja = new Color(0.173f, 0.136f, 0.110f);  // abajo: pardo cálido, la luz de los fuegos rebota en el zócalo.
 
             int rowsSinCeder = 0;
 
             for (int y = 0; y < TexH; y++)
             {
                 float ty = y / (float)(TexH - 1);
+                // Base vertical: en coordenadas de textura y=0 es ABAJO.
+                Color baseFila = Color.Lerp(suelo, techo, Mathf.Pow(ty, 0.85f));
+                int bloqueY = y / (Escala * 8); // veta de ~8 celdas de alto.
+
+                int celdaY = y / Escala;
+                bool filaCuarto = celdaY >= SimLevelBuilder.CuartoY0 - 2 && celdaY <= SimLevelBuilder.CuartoY1 + 2;
+                float tCuarto = filaCuarto
+                    ? Mathf.Clamp01((celdaY - SimLevelBuilder.CuartoY0) / (float)(SimLevelBuilder.CuartoY1 - SimLevelBuilder.CuartoY0))
+                    : 0f;
+                Color paredFila = Color.Lerp(paredBaja, paredAlta, Mathf.Pow(tCuarto, 0.75f));
 
                 for (int x = 0; x < TexW; x++)
                 {
                     float tx = x / (float)(TexW - 1);
+                    int celdaX = x / Escala;
+                    bool enCuarto = filaCuarto
+                        && celdaX >= SimLevelBuilder.CuartoX0 - 2 && celdaX <= SimLevelBuilder.CuartoX1 + 2;
+
+                    Color c;
+                    if (enCuarto)
+                    {
+                        c = paredFila;
+
+                        // --- SILLERÍA de la pared: piezas de 9x5 celdas a
+                        // soga corrida (hiladas alternas desplazadas media
+                        // pieza), con junta fina y BISEL -- el mismo lenguaje
+                        // de canto claro arriba / oscuro abajo que usa
+                        // SimRenderer.ComputeCellColor para la piedra de la
+                        // sim, para que fondo y primer plano rimen en vez de
+                        // contradecirse (lección del playtest 7).
+                        const int piezaW = 9 * Escala, piezaH = 5 * Escala;
+                        int hilada = y / piezaH;
+                        int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
+                        int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
+                        int ly = y % piezaH;
+                        uint hp = HashRoca((x + desfase) / piezaW, hilada, 5171u);
+                        float tono = 1f + ((hp & 63u) / 63f - 0.5f) * 0.18f; // variación de tono por pieza (pátina de la pared).
+                        c *= tono;
+
+                        if (lx == 0 || ly == 0) c *= 0.55f;                       // junta de mortero.
+                        else if (ly >= piezaH - 2) c *= 1.16f;                    // canto superior: le da la luz.
+                        else if (ly <= 2) c *= 0.80f;                             // canto inferior: en sombra.
+
+                        // --- NICHOS: hornacinas de sombra excavadas en la
+                        // pared, entre estación y estación (posiciones
+                        // derivadas del PLANO real, no fracciones del lienzo
+                        // -- misma disciplina que la viga/zócalo del taller
+                        // clásico, ver el docblock de la clase).
+                        c *= FactorNicho(celdaX, celdaY);
+
+                        // --- ZÓCALO: las 5 primeras celdas sobre el suelo,
+                        // más oscuras y sin sillería fina: el arranque del
+                        // muro, que es lo que hace que el suelo "nazca de
+                        // algo".
+                        int sobreSuelo = celdaY - (SimLevelBuilder.CuartoY0 + 3);
+                        if (sobreSuelo >= 0 && sobreSuelo < 5) c *= Mathf.Lerp(0.62f, 1f, sobreSuelo / 5f);
+
+                        // --- CORNISA: dos celdas bajo el techo, con luz.
+                        if (celdaY >= SimLevelBuilder.CuartoY1 - 2) c *= 1.25f;
+
+                        // --- EL REBOTE DE LA FRAGUA: la pared detrás del
+                        // crisol recibe su luz. Es el mismo principio que el
+                        // halo de fragua del taller clásico (ver el docblock
+                        // de la clase) y, como aquel, va anclado a una
+                        // coordenada REAL del plano -- la del horno
+                        // (SimLevelBuilder.CrisolX), no a una fracción del
+                        // lienzo. Es un rebote ESTÁTICO y flojo: la luz que
+                        // late la ponen los halos de la máquina
+                        // (Game/MaquinariaSprites.Luz), que sí saben si el
+                        // fuego está encendido; esto solo dice "aquí, en esta
+                        // pared, siempre ha habido un fuego delante".
+                        float dfx = (celdaX - (SimLevelBuilder.CrisolX + 18)) / 42f;
+                        float dfy = (celdaY - (SimLevelBuilder.CuartoY0 + 10)) / 30f;
+                        float d2 = dfx * dfx + dfy * dfy;
+                        if (d2 < 1f)
+                        {
+                            float k = (1f - d2) * (1f - d2);
+                            c.r *= 1f + 0.42f * k;
+                            c.g *= 1f + 0.26f * k;
+                            c.b *= 1f + 0.10f * k;
+                        }
+                    }
+                    else
+                    {
+                        c = baseFila;
+                        // Veta de roca profunda: bloques irregulares de ~10x8 celdas, ±6%.
+                        uint hv = HashRoca(x / (Escala * 10), bloqueY, 7411u);
+                        c *= 1f + ((hv & 63u) / 63f - 0.5f) * 0.12f;
+                    }
 
                     // Viñeta de encuadre: mismo lenguaje que la del taller
                     // clásico (fracción fija del lienzo entero, efecto de
@@ -238,7 +359,11 @@ namespace Alkahest.Game
                     // del plano) pero sin el halo de fragua que la acompañaba.
                     float nx = tx - 0.5f, ny = ty - 0.52f;
                     float vig = Mathf.Clamp01(1f - (nx * nx * 2.3f + ny * ny * 2.0f));
-                    Color c = baseColor * (0.62f + 0.38f * vig);
+                    c *= 0.72f + 0.28f * vig;
+
+                    // Grano fino: ±3%, rompe cualquier banda plana.
+                    uint hg = HashRoca(x, y, 991u);
+                    c *= 1f + ((hg & 31u) / 31f - 0.5f) * 0.06f;
 
                     px[y * TexW + x] = new Color(
                         Mathf.Clamp01(c.r),
@@ -263,6 +388,87 @@ namespace Alkahest.Game
             sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
             go.transform.position = Vector3.zero;
+        }
+
+        /// <summary>
+        /// (playtest 31) LAS HORNACINAS. Cuatro nichos de sombra excavados en
+        /// la pared del cuarto, en los HUECOS entre estaciones (derivados de
+        /// las anclas reales del plano: entre las fuentes y el crisol, entre
+        /// el crisol y la prensa, entre la columna y la chispa, y sobre el
+        /// ensayo). No son decoración gratuita: son lo que convierte una
+        /// pared corrida -- "todo es lineal", dijo Cesar -- en una pared con
+        /// tramos, que es como se lee la profundidad en un decorado 2D.
+        /// Devuelve un multiplicador de brillo: 1 fuera del nicho, ~0.45 en
+        /// su fondo, con un canto CLARO en el borde superior (la piedra que
+        /// sobresale recibe luz) para que se lea hueco y no mancha.
+        /// </summary>
+        private static float FactorNicho(int celdaX, int celdaY)
+        {
+            // Centros en X (celdas del plano) y media anchura.
+            // 182: hueco fuentes->crisol · 236: crisol->prensa ·
+            // 292: columna->chispa · 350: tras el ensayo, junto al pasillo.
+            // (segunda pasada, VISTO JUGANDO) Las hornacinas estaban a
+            // CuartoY0+12..+30 y NO SE VEÍAN NINGUNA: esa banda es
+            // exactamente la altura de las estaciones (20-35 celdas desde el
+            // suelo), así que las cuatro quedaban tapadas por el crisol, la
+            // prensa, la columna y el altar. La pared LIBRE de este cuarto es
+            // la de arriba -- de la coronación de las máquinas al techo --,
+            // así que ahí suben. Es también donde funcionan mejor: una
+            // hornacina alta se lee como respiradero de la cueva.
+            int y0 = SimLevelBuilder.CuartoY0 + 44;
+            int y1 = SimLevelBuilder.CuartoY0 + 62;
+
+            if (celdaY < y0 || celdaY > y1) return 1f;
+
+            int mejorDist = int.MaxValue;
+            int[] centros = _centrosNicho;
+            for (int i = 0; i < centros.Length; i++)
+            {
+                int d = celdaX - centros[i];
+                if (d < 0) d = -d;
+                if (d < mejorDist) mejorDist = d;
+            }
+
+            const int mediaAncho = 7;
+            if (mejorDist > mediaAncho + 1) return 1f;
+
+            // El arco: en las 4 filas de arriba el nicho se estrecha, así que
+            // la hornacina termina en curva y no en un rectángulo de cartón.
+            int desdeArriba = y1 - celdaY;
+            int anchoAqui = desdeArriba >= 4 ? mediaAncho : mediaAncho - (4 - desdeArriba);
+            if (anchoAqui < 0) return 1f;
+
+            if (mejorDist > anchoAqui) return 1f;
+            // (TERCERA PASADA, VISTO JUGANDO) 0.34 de fondo sobre una pared
+            // que ya es oscura daba un RECTÁNGULO NEGRO: no se leía como
+            // hueco excavado sino como textura que falta -- y encima caía
+            // justo debajo de una pilastra, así que el conjunto parecía una
+            // bandera colgada del techo. Un hueco en penumbra se lee por el
+            // CONTRASTE DE SU CANTO, no por ser negro: se sube el fondo a
+            // 0.72 (se hunde, no desaparece) y se baja el canto a 1.25.
+            if (mejorDist == anchoAqui || celdaY == y0) return 1.25f; // canto iluminado del vano.
+            return 0.72f; // fondo de la hornacina: se hunde, no es un agujero.
+        }
+
+        // (tercera pasada) Desplazados a los PUNTOS MEDIOS entre las
+        // pilastras de Sim/SimLevelBuilder.PilastraColumnas (182/236/292/350):
+        // hornacina y pilastra en la misma columna se estorbaban. Ahora se
+        // alternan -- pilastra, hornacina, pilastra, hornacina -- que es el
+        // ritmo de una crujía de verdad.
+        private static readonly int[] _centrosNicho = { 209, 264, 321 };
+
+        /// <summary>
+        /// (playtest 31) Hash entero estable para la veta y el grano de la
+        /// roca del fondo. No usa UnityEngine.Random (regla de oro del
+        /// proyecto) ni XorShift.FromCell (que está pensado para (tick,x,y)
+        /// del hot path de la sim): esto se ejecuta UNA vez, en la corrutina
+        /// de arranque, y solo necesita ser determinista y barato.
+        /// </summary>
+        private static uint HashRoca(int x, int y, uint sal)
+        {
+            uint h = (uint)(x * 73856093) ^ (uint)(y * 19349663) ^ sal;
+            h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+            return h;
         }
 
         /// <summary>

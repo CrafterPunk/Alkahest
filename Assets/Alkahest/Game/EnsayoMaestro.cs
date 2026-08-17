@@ -106,6 +106,12 @@ namespace Alkahest.Game
         private float _rotuloHasta;
 
         private SpriteRenderer _resalte, _latidoTrabajo, _destelloMarco, _brasas;
+
+        // (playtest 31) EL ALTAR ES LO ÚNICO QUE SE ENCIENDE EN SU RINCÓN:
+        // mientras el plinto calienta la muestra, la luz sube del hogar y
+        // baña el dosel. Es el momento más ceremonial del juego y hasta esta
+        // ronda ocurría en penumbra plana.
+        private MaquinariaSprites.Luz _luzHogar;
         private float _alfaResalte;
         private int _celdasBandejaPrev;
 
@@ -380,6 +386,13 @@ namespace Alkahest.Game
                 MaquinariaSprites.LechoBrasas(anchoHogar, HogarFilas), 19, anchoHogar * c, HogarFilas * c);
             _brasas.color = new Color(0.14f, 0.09f, 0.07f, 1f);
 
+            // (playtest 31) La luz del examen + la sombra que apoya el dais
+            // en el suelo del taller.
+            _luzHogar = MaquinariaSprites.Luz.Crear(transform, "LuzEnsayo",
+                new Vector3(_centro.x, (h.DaisY0 + 2f) * c, 0f), 40f * c, new Color(1f, 0.62f, 0.26f));
+            MaquinariaSprites.Sombra(transform, new Vector3(_centro.x, (_baseY - 0.3f) * c, 0f),
+                (_outX1 - _outX0 + 6) * c, 4f * c, 0.42f);
+
             // ---- LA BANDEJA DEL EXAMEN: marco de latón, hueco transparente.
             int spanBandeja = PlintoAncho + 2 * MuroGrosor; // 19
             int altoBandeja = PlintoAltoInterior + 1;       // 6
@@ -467,6 +480,15 @@ namespace Alkahest.Game
                 float i = calentando ? Mathf.Lerp(0.30f, 1f, t) : 0.05f; // en frío, casi negro (segunda pasada, mismo criterio que el Crisol).
                 _brasas.color = new Color(Mathf.Min(1f, 0.5f + 0.7f * i) * pulso, (0.15f + 0.42f * i) * pulso, (0.06f + 0.12f * i) * pulso, 1f);
             }
+            // (playtest 31) La luz SIGUE al hogar (misma `t` y misma fase que
+            // las brasas): imposible que el halo diga "encendido" con el
+            // hogar negro.
+            {
+                float tLuz = calentando ? Mathf.Clamp01(1f - (_calentandoHasta - Time.time) / RampSeconds) : 0f;
+                if (calentando) _luzHogar?.Latir(0.16f + 0.26f * tLuz, 0.05f, 1.1f, 0.21f);
+                else _luzHogar?.Intensidad(0.035f); // rescoldo del altar: se adivina, no alumbra.
+            }
+
             if (_latidoTrabajo != null)
                 _latidoTrabajo.color = new Color(1f, 0.5f, 0.18f, _pulsoTrabajo.AlfaTrabajo * 0.55f);
             if (_destelloMarco != null)

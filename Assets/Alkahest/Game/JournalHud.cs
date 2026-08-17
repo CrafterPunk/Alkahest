@@ -333,10 +333,16 @@ namespace Alkahest.Game
         // Pergamino apagado y lomo: coherentes con la paleta ciruela/latón
         // del taller (UiStyles.Tinta/Oro), NO blanco puro -- el reporte pide
         // explícitamente evitar quemar los ojos en un juego oscuro.
-        private static readonly Color _velo = new Color(0.02f, 0.015f, 0.03f, 0.86f);
-        private static readonly Color _papel = new Color(0.30f, 0.24f, 0.18f, 1f);
-        private static readonly Color _papelBorde = new Color(0.58f, 0.47f, 0.30f, 0.30f);
-        private static readonly Color _lomo = new Color(0.09f, 0.07f, 0.06f, 1f);
+        // (playtest 31, EL MISMO IDIOMA VISUAL QUE EL BAUTIZO) El papel baja
+        // de un pardo claro (0.30) a VITELA AHUMADA (0.17): con Cinzel en los
+        // títulos y el marco de latón alrededor, un papel claro delataba el
+        // "documento de ofimática" que el diario nunca quiso ser -- y además
+        // era la superficie MÁS clara de todo el juego, así que el libro
+        // abierto deslumbraba en una partida que transcurre en penumbra.
+        private static readonly Color _velo = new Color(0.02f, 0.015f, 0.03f, 0.90f);
+        private static readonly Color _papel = new Color(0.196f, 0.166f, 0.134f, 1f);
+        private static readonly Color _papelBorde = new Color(0.58f, 0.47f, 0.30f, 0.42f);
+        private static readonly Color _lomo = new Color(0.07f, 0.055f, 0.048f, 1f);
 
         private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS", "CONSEJOS" };
 
@@ -530,7 +536,12 @@ namespace Alkahest.Game
             // filete dorado), pero es el ÚNICO elemento en pantalla mientras
             // el libro está abierto, así que se permite un panel de fondo
             // más opaco que los paneles satélite de Ordenes/Frasco.
-            UiStyles.Panel(libro, UiStyles.TintaFuerte, UiStyles.Oro);
+            // (playtest 31) La tapa deja de ser "un panel más" y pasa a ser
+            // ENCUADERNACIÓN: mismo marco de latón con cantoneras del panel
+            // de rito del bautizo (UiStyles.MarcoLaton), para que el bautizo
+            // y el diario se lean como objetos del mismo taller.
+            UiStyles.Panel(libro, UiStyles.TintaFuerte, UiStyles.LatonOscuro);
+            UiStyles.MarcoLaton(libro);
 
             float padTapa = UiStyles.S(20f);
             var interior = new Rect(libro.x + padTapa, libro.y + padTapa, libro.width - padTapa * 2f, libro.height - padTapa * 2f);
@@ -565,7 +576,7 @@ namespace Alkahest.Game
         private void DrawCabecera(Rect r)
         {
             float altoTitulo = _estiloTituloLibro.lineHeight;
-            GUI.Label(new Rect(r.x, r.y, r.width, altoTitulo), "DIARIO DEL APRENDIZ", _estiloTituloLibro);
+            GUI.Label(new Rect(r.x, r.y, r.width, altoTitulo), UiStyles.Espaciar("DIARIO DEL APRENDIZ"), _estiloTituloLibro);
 
             // (playtest 12) "Que se note que este universo es OTRO": una línea
             // sobria, cacheada en Init (_tituloUniverso), nunca reconstruida
@@ -1001,15 +1012,24 @@ namespace Alkahest.Game
 
             var raiz = GUI.skin.label;
 
-            _estiloTituloLibro = NuevoEstilo(raiz, 21, FontStyle.Bold, TextAnchor.UpperCenter, UiStyles.Oro, false);
+            // (playtest 31) LA PORTADA Y LAS PESTAÑAS EN CINZEL. El resto de
+            // estilos de este archivo heredan Alegreya solos, sin tocarlos:
+            // copian GUI.skin.label, que UiStyles.VestirSkin ya dejó con la
+            // fuente de cuerpo puesta (un GUIStyle con font==null resuelve
+            // contra el skin al dibujar). Aquí solo se marcan a mano los tres
+            // niveles que son TÍTULO: tapa, pestañas y sección.
+            _estiloTituloLibro = NuevoEstilo(raiz, 21, FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.Oro, false);
+            if (UiStyles.FuenteTitulos != null) _estiloTituloLibro.font = UiStyles.FuenteTitulos;
             // (playtest 12) Línea de carácter del universo, bajo el título de
             // tapa -- ver DrawCabecera. Tenue a propósito: es un dato de
             // contexto, no compite con "DIARIO DEL APRENDIZ".
             _estiloSubtituloUniverso = NuevoEstilo(raiz, 12, FontStyle.Italic, TextAnchor.UpperCenter, UiStyles.OroTenue, false);
-            _estiloPestana = NuevoEstilo(raiz, 14, FontStyle.Bold, TextAnchor.MiddleCenter, UiStyles.TextoTenue, false);
+            _estiloPestana = NuevoEstilo(raiz, 13, FontStyle.Normal, TextAnchor.MiddleCenter, UiStyles.TextoTenue, false);
+            if (UiStyles.FuenteTitulos != null) _estiloPestana.font = UiStyles.FuenteTitulos;
             // Nivel 1: título de sección/capítulo, repetido como cabecera
             // corrida en ambas páginas del tramo.
-            _estiloTituloSeccion = NuevoEstilo(raiz, 15, FontStyle.Bold, TextAnchor.UpperLeft, UiStyles.OroTenue, false);
+            _estiloTituloSeccion = NuevoEstilo(raiz, 15, FontStyle.Normal, TextAnchor.UpperLeft, UiStyles.OroTenue, false);
+            if (UiStyles.FuenteTitulos != null) _estiloTituloSeccion.font = UiStyles.FuenteTitulos;
             // Nivel 2: entrada (una ley, un procedimiento, una sustancia).
             _estiloEntradaTitulo = NuevoEstilo(raiz, 15, FontStyle.Bold, TextAnchor.UpperLeft, UiStyles.Texto, true);
             // (playtest 12) Línea de firma visual en la ficha de SUSTANCIAS

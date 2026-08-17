@@ -562,6 +562,14 @@ namespace Alkahest.Game
             _destelloMarco = MaquinariaSprites.CrearCapa(lechoGo.transform, "Acuse", marco, 22, anchoLechoW, altoLechoW);
             _destelloMarco.color = new Color(1f, 1f, 0.9f, 0f);
 
+            // ---- (playtest 31) SOMBRA PROPIA de las dos jambas: la prensa
+            // no da luz (no tiene fuego), así que su segunda capa es
+            // exactamente esto -- apoyarse en el suelo en vez de flotar.
+            MaquinariaSprites.Sombra(transform, new Vector3((_outX0 + JambaAncho * 0.5f) * c, (_baseY - 0.3f) * c, 0f),
+                JambaAncho * 2.6f * c, 3.4f * c, 0.44f);
+            MaquinariaSprites.Sombra(transform, new Vector3((_outX1 - JambaAncho * 0.5f + 1f) * c, (_baseY - 0.3f) * c, 0f),
+                JambaAncho * 2.6f * c, 3.4f * c, 0.44f);
+
             // ---- La mandíbula: bloque dentado que cae entre las jambas.
             int spanMandibula = LechoAncho + 2;
             const int altoMandibula = 4;

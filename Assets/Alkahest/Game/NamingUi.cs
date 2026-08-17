@@ -75,9 +75,46 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class NamingUi : MonoBehaviour
     {
+        // =================================================================
+        // (playtest 31, LA IDENTIDAD) EL BAUTIZO DEJA DE SER UN DIÁLOGO Y
+        // PASA A SER UN RITO
+        // =================================================================
+        // Encargo literal de Cesar: "el menú de bautizar tiene que dejar de
+        // parecer un menú de Windows XP". Lo era, literalmente: una
+        // GUILayout.Window con el skin por defecto, título de barra del
+        // sistema, un swatch de 20x20 px y dos botones grises.
+        //
+        // Lo que se cambia y POR QUÉ (cada punto es una razón, no un gusto):
+        //  · FONDO: UiStyles.PanelRito -- vitela ahumada con degradado y
+        //    marco de latón con cantoneras. Un gris plano con borde de 1px es
+        //    la firma visual de un widget de sistema; el degradado + el metal
+        //    es la de un objeto que vive en el taller.
+        //  · TÍTULO "BAUTIZO" en Cinzel espaciado: es el único momento del
+        //    juego en que el jugador AÑADE algo permanente al mundo. Merece
+        //    una capital lapidaria, no una barra de título arrastrable.
+        //  · LA MUESTRA EN GRANDE: el swatch pasa de 20 px a 92 px de diseño
+        //    y deja de ser un color plano -- se genera con la FIRMA VISUAL
+        //    real del material (FirmaVisualFabrica, la misma que pinta las
+        //    redomas y el frasco), con su patrón y su animación. El jugador
+        //    tiene que estar mirando LA SUSTANCIA mientras la nombra, no un
+        //    cuadradito de leyenda.
+        //  · LA LÍNEA CEREMONIAL ("El nombre que le des lo verá todo el
+        //    taller"): dice la verdad del sistema -- los encargos del Maestro
+        //    pasan a pedir el material POR ESE NOMBRE (regla 13) -- y de paso
+        //    convierte el acto en una promesa.
+        //  · ENTER bautiza. Un rito no se cierra buscando el botón con el
+        //    ratón.
+        // El campo de texto ya no se reestila aquí: lo hace UiStyles.VestirSkin
+        // para TODA la UI de una vez (carboncillo + filo de latón + caret de
+        // oro), así que el de la seed del título y el de bautizar
+        // procedimientos del diario cambian con él.
+        // =================================================================
         private const int WindowId = 837480;
-        private const float WindowWidth = 260f;
-        private const float WindowHeight = 170f;
+        private const float AnchoDiseno = 420f;
+        private const float AltoDiseno = 330f;
+
+        /// <summary>Lado en TÉXELES del lienzo de la muestra grande. Mismo criterio que FlaskHud.SwatchLado (28) pero mayor: aquí el swatch se ve a 92 px de diseño, así que un lienzo pequeño se notaría estirado.</summary>
+        private const int MuestraLienzo = 44;
 
         private AlkahestSim _sim;
         private Flask _flask;
@@ -87,6 +124,15 @@ namespace Alkahest.Game
         private byte _targetMat;
         private string _nameField = "";
         private Rect _windowRect;
+        private bool _rectColocado;
+        private bool _pedirFoco;
+        /// <summary>Firma visual EN PALABRAS del material que se está bautizando, cacheada al abrir (DescribirFirma construye un string: llamarlo desde OnGUI sería una asignación por frame).</summary>
+        private string _firmaTexto;
+
+        // Muestra: fotogramas cacheados por material (nunca por frame), mismo
+        // patrón exacto que FlaskHud.ObtenerFirmaTexturas.
+        private readonly Texture2D[][] _muestraTexturas = new Texture2D[MaterialId.Count][];
+        private bool[] _esBordeMuestra;
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Flask flask, SubstanceKnowledge knowledge)
@@ -94,7 +140,17 @@ namespace Alkahest.Game
             _sim = sim;
             _flask = flask;
             _knowledge = knowledge;
-            _windowRect = new Rect((Screen.width - WindowWidth) * 0.5f, (Screen.height - WindowHeight) * 0.5f, WindowWidth, WindowHeight);
+        }
+
+        /// <summary>Misma disciplina que FlaskHud/JournalHud: las Texture2D creadas por código no se liberan solas al recargar la escena (DayCycle.RestartRun recrea este componente).</summary>
+        private void OnDestroy()
+        {
+            for (int m = 0; m < _muestraTexturas.Length; m++)
+            {
+                var t = _muestraTexturas[m];
+                if (t == null) continue;
+                for (int f = 0; f < t.Length; f++) if (t[f] != null) Destroy(t[f]);
+            }
         }
 
         private void Update()
@@ -186,8 +242,23 @@ namespace Alkahest.Game
             _targetMat = target;
             string current = _knowledge != null ? _knowledge.NombreDe(_targetMat) : "???";
             _nameField = current == "???" ? "" : current;
+            _firmaTexto = _sim != null && _sim.Universe != null ? _sim.Universe.DescribirFirma(_targetMat) : null;
             _open = true;
+            _pedirFoco = true; // (playtest 31) el rito empieza con el cursor YA dentro del campo: nadie debería tener que hacer clic para escribir.
             UiStyles.EscribiendoTexto = true; // (fix playtest 10) ver doc de clase y de UiStyles.EscribiendoTexto.
+        }
+
+        /// <summary>Confirma el nombre y cierra: el gesto único del rito (botón o Enter llevan aquí).</summary>
+        private void Consagrar()
+        {
+            if (_knowledge == null) return;
+            if (string.IsNullOrEmpty(_nameField) || _nameField.Trim().Length == 0)
+            {
+                Aviso("un nombre vacío no bautiza nada");
+                return;
+            }
+            _knowledge.Bautizar(_targetMat, _nameField);
+            Close();
         }
 
         private void Close()
@@ -254,40 +325,212 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (!_open || _sim == null || _sim.Universe == null || _knowledge == null) return;
-            _windowRect = GUILayout.Window(WindowId, _windowRect, DrawWindow, "Bautizar material");
+
+            UiStyles.Preparar();
+
+            float w = UiStyles.S(AnchoDiseno), h = UiStyles.S(AltoDiseno);
+            if (!_rectColocado || !Mathf.Approximately(_windowRect.width, w))
+            {
+                // Se coloca aquí y no en Init porque UiStyles.Escala solo se
+                // conoce dentro de OnGUI (depende de Screen.height, que en
+                // Init todavía puede ser el del editor sin maximizar).
+                _windowRect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
+                _rectColocado = true;
+            }
+
+            // ENTER = bautizar. Se lee ANTES de la ventana para que el evento
+            // no lo consuma el campo de texto (que lo trata como "fin de
+            // línea" y lo descarta sin avisar a nadie).
+            var e = Event.current;
+            if (e != null && e.type == EventType.KeyDown &&
+                (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter))
+            {
+                e.Use();
+                Consagrar();
+                return;
+            }
+
+            // GUIContent.none + estilo propio: sin barra de título del skin
+            // (era literalmente la barra de título de un menú de sistema).
+            _windowRect = GUI.Window(WindowId, _windowRect, DrawWindow, GUIContent.none, GUIStyle.none);
         }
 
         private void DrawWindow(int id)
         {
-            var def = _sim.Universe.Get(_targetMat);
-
-            GUILayout.BeginHorizontal();
-            Rect swatch = GUILayoutUtility.GetRect(20f, 20f, GUILayout.Width(20f));
-            var prevColor = GUI.color;
-            GUI.color = def.baseColor;
-            GUI.DrawTexture(swatch, Texture2D.whiteTexture);
-            GUI.color = prevColor;
-            GUILayout.Label($"Nombre actual: {_knowledge.NombreDe(_targetMat)}");
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(8f);
-            GUILayout.Label("Nuevo nombre:");
-            GUI.SetNextControlName("NamingUiField");
-            _nameField = GUILayout.TextField(_nameField, 40);
-
-            GUILayout.Space(6f);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Bautizar"))
+            // (segunda pasada, VISTO JUGANDO) EL ENTER NO LLEGABA. La
+            // comprobación de Return vivía SOLO en OnGUI, antes de
+            // GUI.Window: con el campo de texto enfocado, IMGUI entrega el
+            // KeyDown DENTRO del ámbito de la ventana, así que fuera nunca se
+            // veía y el rito solo se podía cerrar con el ratón -- justo lo que
+            // este panel venía a evitar. Se comprueba en LOS DOS sitios (el de
+            // fuera cubre el caso de ventana sin foco de campo) y se consume
+            // el evento en cuanto se atiende.
+            var ev = Event.current;
+            if (ev != null && ev.type == EventType.KeyDown &&
+                (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter))
             {
-                _knowledge.Bautizar(_targetMat, _nameField);
+                ev.Use();
+                Consagrar();
+                return;
             }
-            if (GUILayout.Button("Cerrar")) Close();
-            GUILayout.EndHorizontal();
 
-            GUILayout.Space(6f);
-            GUILayout.Label("T / ESC para cerrar");
+            var r = new Rect(0f, 0f, _windowRect.width, _windowRect.height);
+            UiStyles.PanelRito(r);
 
-            GUI.DragWindow(new Rect(0, 0, 10000, 20));
+            float pad = UiStyles.S(22f);
+            float x = pad, ancho = r.width - pad * 2f;
+            float y = UiStyles.S(18f);
+
+            // ---- TÍTULO: capital lapidaria espaciada, con su filete.
+            float altoTitulo = UiStyles.TituloRito.lineHeight;
+            GUI.Label(new Rect(x, y, ancho, altoTitulo), UiStyles.Espaciar("BAUTIZO"), UiStyles.TituloRito);
+            y += altoTitulo + UiStyles.S(9f);
+            UiStyles.FileteRombo(r.width * 0.5f, y, ancho * 0.80f, UiStyles.Laton); // (segunda pasada) LatonOscuro sobre vitela oscura no se veía: el filete es del mismo metal que el marco.
+
+            y += UiStyles.S(14f);
+
+            // ---- LA MUESTRA, EN GRANDE, con su marco de latón: el jugador
+            // mira la sustancia mientras la nombra.
+            float lado = UiStyles.S(92f);
+            var marco = new Rect(x, y, lado, lado);
+            UiStyles.Rellenar(marco, new Color(0f, 0f, 0f, 0.55f));
+            var dentro = new Rect(marco.x + UiStyles.S(4f), marco.y + UiStyles.S(4f),
+                                  marco.width - UiStyles.S(8f), marco.height - UiStyles.S(8f));
+
+            var tex = ObtenerMuestraFrame(_targetMat);
+            if (tex != null) GUI.DrawTexture(dentro, tex);
+            else UiStyles.Rellenar(dentro, _sim.Universe.Get(_targetMat).baseColor);
+            UiStyles.MarcoLaton(marco, UiStyles.Laton, 0.9f);
+
+            // ---- A la derecha de la muestra: nombre actual + firma visual.
+            float xTexto = marco.xMax + UiStyles.S(16f);
+            float anchoTexto = r.width - pad - xTexto;
+            string actual = _knowledge.NombreDe(_targetMat);
+            bool sinNombre = actual == "???";
+
+            GUI.Label(new Rect(xTexto, y + UiStyles.S(2f), anchoTexto, UiStyles.TenueCentrado.lineHeight),
+                      sinNombre ? "SIN NOMBRE" : "SE LLAMA", UiStyles.CuerpoTenue);
+
+            var estiloNombre = UiStyles.NombreGrande;
+            var previo = estiloNombre.normal.textColor;
+            estiloNombre.normal.textColor = sinNombre ? UiStyles.TextoTenue : UiStyles.Oro;
+            GUI.Label(new Rect(xTexto, y + UiStyles.S(18f), anchoTexto, UiStyles.S(30f)),
+                      sinNombre ? "—" : actual, estiloNombre);
+            estiloNombre.normal.textColor = previo;
+
+            // La firma visual descrita en palabras ("carmín, manchas lentas,
+            // borde escarchado"): la misma línea que enseña el diario, aquí
+            // como retrato hablado de lo que se está bautizando.
+            // (_firmaTexto se calcula UNA vez al abrir, en TryOpen:
+            // DescribirFirma construye un string y llamarlo desde OnGUI sería
+            // una asignación por frame -- la regla de oro del proyecto.)
+            if (!string.IsNullOrEmpty(_firmaTexto))
+            {
+                // Anclado ARRIBA (no centrado en un rect alto: quedaba
+                // flotando en mitad del hueco, sin relación con el nombre).
+                float yFirma = y + UiStyles.S(46f);
+                float altoFirma = UiStyles.Alto(UiStyles.Ceremonial, _firmaTexto, anchoTexto);
+                GUI.Label(new Rect(xTexto, yFirma, anchoTexto, altoFirma), _firmaTexto, UiStyles.Ceremonial);
+            }
+
+            y = marco.yMax + UiStyles.S(16f);
+
+            // ---- EL CAMPO. El estilo (carboncillo, filo de latón, caret de
+            // oro) lo pone UiStyles.VestirSkin para toda la UI.
+            GUI.Label(new Rect(x, y, ancho, UiStyles.CuerpoTenue.lineHeight), "EL NOMBRE QUE LE PONES", UiStyles.CuerpoTenue);
+            y += UiStyles.CuerpoTenue.lineHeight + UiStyles.S(4f);
+
+            float altoCampo = UiStyles.S(30f);
+            GUI.SetNextControlName("NamingUiField");
+            _nameField = GUI.TextField(new Rect(x, y, ancho, altoCampo), _nameField, 40, UiStyles.Campo);
+            if (_pedirFoco)
+            {
+                _pedirFoco = false;
+                GUI.FocusControl("NamingUiField");
+            }
+            y += altoCampo + UiStyles.S(10f);
+
+            // ---- LA LÍNEA CEREMONIAL.
+            float altoCeremonia = UiStyles.Alto(UiStyles.Ceremonial, LineaCeremonial, ancho);
+            GUI.Label(new Rect(x, y, ancho, altoCeremonia), LineaCeremonial, UiStyles.Ceremonial);
+            y += altoCeremonia + UiStyles.S(12f);
+
+            // ---- LOS DOS GESTOS.
+            float altoBoton = UiStyles.S(32f);
+            float sep = UiStyles.S(10f);
+            float anchoBoton = (ancho - sep) * 0.5f;
+            if (GUI.Button(new Rect(x, y, anchoBoton, altoBoton), "Bautizar (Enter)", UiStyles.Boton)) Consagrar();
+            if (GUI.Button(new Rect(x + anchoBoton + sep, y, anchoBoton, altoBoton), "Dejarlo así", UiStyles.Boton)) Close();
+            y += altoBoton + UiStyles.S(6f);
+
+            GUI.Label(new Rect(x, y, ancho, UiStyles.TenueCentrado.lineHeight), "T / ESC para cerrar", UiStyles.TenueCentrado);
+
+            GUI.DragWindow(new Rect(0f, 0f, r.width, UiStyles.S(46f))); // el título sigue siendo el asa, aunque ya no parezca una barra de sistema.
+        }
+
+        private const string LineaCeremonial = "El nombre que le des lo verá todo el taller.";
+
+        // =================================================================
+        // LA MUESTRA CON FIRMA VISUAL REAL
+        // =================================================================
+        // Mismo mecanismo que Game/FlaskHud.cs (que ya lo hacía para sus
+        // swatches de 28 téxeles): FirmaVisualFabrica genera los fotogramas
+        // UNA vez por material y aquí solo se elige cuál toca mostrar. Nunca
+        // se genera nada dentro de OnGUI más allá de la primera vez que se
+        // bautiza cada sustancia.
+        // =================================================================
+
+        private void PrepararBordeMuestra()
+        {
+            if (_esBordeMuestra != null) return;
+            const int banda = 4; // ~9% del lienzo, misma proporción que FlaskHud (3/28) y JournalHud (3/34).
+            _esBordeMuestra = new bool[MuestraLienzo * MuestraLienzo];
+            for (int yy = 0; yy < MuestraLienzo; yy++)
+            {
+                for (int xx = 0; xx < MuestraLienzo; xx++)
+                {
+                    int d = Mathf.Min(Mathf.Min(xx, MuestraLienzo - 1 - xx), Mathf.Min(yy, MuestraLienzo - 1 - yy));
+                    _esBordeMuestra[yy * MuestraLienzo + xx] = d < banda;
+                }
+            }
+        }
+
+        private Texture2D[] ObtenerMuestraTexturas(byte matId)
+        {
+            if (matId >= _muestraTexturas.Length || _sim == null || _sim.Universe == null) return null;
+            var ya = _muestraTexturas[matId];
+            if (ya != null) return ya;
+
+            PrepararBordeMuestra();
+            var def = _sim.Universe.Get(matId);
+            int frames = def.ritmoAnim > 0 ? FirmaVisualFabrica.AnimFrames : 1;
+            var texturas = new Texture2D[frames];
+
+            for (int f = 0; f < frames; f++)
+            {
+                var px = FirmaVisualFabrica.GenerarPixeles(MuestraLienzo, MuestraLienzo, def, f,
+                    null, _esBordeMuestra, sobreMundo: false);
+                var tex = new Texture2D(MuestraLienzo, MuestraLienzo, TextureFormat.RGBA32, false, false)
+                {
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                    name = "MuestraBautizo_" + def.devName + "_" + f,
+                };
+                tex.SetPixels32(px);
+                tex.Apply(false, true);
+                texturas[f] = tex;
+            }
+
+            _muestraTexturas[matId] = texturas;
+            return texturas;
+        }
+
+        private Texture2D ObtenerMuestraFrame(byte matId)
+        {
+            var texturas = ObtenerMuestraTexturas(matId);
+            if (texturas == null || texturas.Length == 0) return null;
+            int idx = Mathf.FloorToInt(Time.time * FirmaVisualFabrica.AnimFps) % texturas.Length;
+            return texturas[idx];
         }
     }
 }

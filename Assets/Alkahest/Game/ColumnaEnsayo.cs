@@ -370,6 +370,19 @@ namespace Alkahest.Game
             MaquinariaSprites.CrearCapa(vidrioGo.transform, "Sprite",
                 MaquinariaSprites.VidrioPanel(anchoInt, altoInt), OrdenVidrio, anchoInt * c, altoInt * c);
 
+            // ---- (playtest 31, ILUMINACIÓN DE ÁNIMO) EL VIDRIO ALUMBRA UN
+            // POCO, EN FRÍO. No es una fuente de energía: es que un fuste de
+            // vidrio de 40 celdas recoge la luz de todo el taller y la
+            // devuelve verdosa. Constante y muy tenue (0.10): lo justo para
+            // que la columna se despegue de la pared y para que el rincón del
+            // instrumento tenga OTRA temperatura de color que el del horno.
+            MaquinariaSprites.Luz.CrearOvalada(transform, "LuzVidrio",
+                new Vector3(_centro.x, (_intY0 + altoInt * 0.5f) * c, 0f),
+                (anchoInt + 16) * c, (altoInt + 10) * c, new Color(0.55f, 0.95f, 0.82f))
+                .Intensidad(0.10f);
+            MaquinariaSprites.Sombra(transform, new Vector3(_centro.x, (_intY0 - 1.3f) * c, 0f),
+                (anchoInt + 12) * c, 3.6f * c, 0.42f);
+
             // ---- ZUNCHOS DE LATÓN QUE CIÑEN EL FUSTE (segunda pasada del
             // playtest 27, visto jugando). La primera versión ponía un
             // nudillo a cada LADO cada 5 filas: catorce tacos en dos columnas

@@ -2287,6 +2287,106 @@ sesión buena (~30-45 min)? ¿la patente se siente como MI descubrimiento o como
 
 ---
 
+## Playtest 31 → LA IDENTIDAD (ronda nocturna de Opus 5 con ojos, 5 ciclos desplegar-jugar-mirar-corregir)
+
+**El encargo literal de Cesar** (mañana enseña el juego a sus amigos): *"el menú de bautizar tiene
+que dejar de parecer un menú de Windows XP y ascender a integrar un universo sencillo pero con
+alma, un lugar donde el jugador quiera pasar horas; iluminación; segunda capa de mejora para las
+máquinas más bonitas; ahora todo es lineal; sorpréndeme"*. Cinco batallas, en orden de impacto.
+
+### 1. TIPOGRAFÍA = ALMA (Game/UiStyles.cs)
+Las dos fuentes que ya vivían en `Assets/Alkahest/Resources/Fuentes/` entran en juego:
+**Cinzel** (lapidaria) para TÍTULOS y **Alegreya** (humanista) para TODO el cuerpo.
+`UiStyles.CargarFuentes` las carga UNA vez con `Resources.Load<Font>` y **cae a la fuente por
+defecto si devuelven null** (una build sin la carpeta Resources no se rompe: `GUIStyle.font=null`
+significa "la del skin", que es el comportamiento de siempre).
+**El truco que las aplica a TODA la UI sin tocar los demás archivos**: `UiStyles.VestirSkin()`
+escribe `GUI.skin.font = Alegreya`, y un GUIStyle con `font==null` resuelve contra el skin AL
+DIBUJAR -- así heredan JournalHud (que construye sus estilos copiando `GUI.skin.label`), OrdersHud,
+HintSystem, FlaskHud, DevPalette y cualquier HUD futuro. Los cuerpos suben un punto (Alegreya
+tiene la x más pequeña). `UiStyles.Espaciar()` da tracking a las capitales de Cinzel (cacheado por
+cadena: cero allocs por frame).
+`VestirSkin` además reestila `textField/textArea/button/box/window` con texturas 9-slice generadas
+(carboncillo + filo de latón + sombra interior, `HideFlags.HideAndDontSave` para que sobrevivan a
+la recarga de escena) y pone el **caret de oro** (`GUI.skin.settings.cursorColor`).
+
+### 2. EL BAUTIZO CON ALMA (Game/NamingUi.cs, Game/JournalHud.cs)
+La ventana pasa de `GUILayout.Window` con skin del sistema a **RITO**: `UiStyles.PanelRito`
+(vitela ahumada en 10 bandas de degradado + `MarcoLaton` de doble filete con cantoneras + sombra
+proyectada), título **"B A U T I Z O"** en Cinzel con filete de rombo, **la muestra del material a
+92 px** generada con su FIRMA VISUAL REAL (`FirmaVisualFabrica`, la misma que pinta redomas y
+frasco -- con su patrón y su animación), la firma descrita en palabras ("violeta, laberinto vivo,
+borde con halo"), el campo con foco automático, la línea ceremonial *"El nombre que le des lo verá
+todo el taller"* y **Enter bautiza**. VISTO Y PROBADO EN VIVO: bautizado "flor de niebla" (azoth) y
+"arena solar" (una base de la hornada).
+El diario habla el mismo idioma: tapa con `MarcoLaton`, portada y pestañas en Cinzel espaciado,
+papel de vitela oscura (0.30 -> 0.196: era la superficie más clara del juego y deslumbraba en una
+partida en penumbra).
+Título y desenlaces de `DayCycle` también en Cinzel espaciado, con filete de rombo.
+
+### 3. ILUMINACIÓN DE ÁNIMO (Sim/SimRenderer.cs, Game/WorkshopBackdrop.cs, máquinas)
+- **Tinte global**: `SimRenderer.TinteGlobal` multiplica el sprite de la sim en la GPU (coste cero
+  por celda, `ComputeCellColor` intacto). Segunda pasada: de neutro-frío a **sesgado en
+  temperatura** (0.930/0.845/0.775) -- con un tinte neutro el taller seguía leyéndose gris lavanda.
+- **Halos**: `MaquinariaSprites.Halo()` (radial, caída ^2.2) + la clase `Luz` (crear/intensidad/
+  latir con desfase; cero allocs por frame) + `SombraSuave()`/`Sombra()`. Son GameObjects HIJOS de
+  cada máquina, así que la mudanza los arrastra sola (regla 36). Fuentes reales: rescoldo y cámara
+  del **crisol** (siguen la MISMA intensidad que dibuja las brasas: imposible que el halo diga
+  "encendido" con el hogar negro), **brasero** cuando arde de verdad, **lámpara del banco de
+  chispa** (la única luz FRÍA del taller, apagada si no conduce: la ausencia sigue siendo el dato),
+  **vidrio de la columna** (verdosa, constante y floja), **hogar del ensayo**, **destellos de las
+  redomas** del estante. Sombras propias bajo crisol, brasero, prensa, chispa, ensayo y columna:
+  las estaciones se APOYAN en el suelo en vez de flotar.
+- **La pared**: el fondo era un color plano casi negro (herencia del "cuarto íntimo" del playtest
+  21) y con el taller grande eso se leía como TELÓN -- las máquinas flotaban en un vacío. Ahora,
+  DENTRO del rect real del cuarto (`CuartoX0..X1/Y0..Y1`), hay sillería a soga corrida con junta,
+  bisel y pátina por pieza, zócalo, cornisa, **hornacinas** y el **rebote de la fragua** anclado a
+  `SimLevelBuilder.CrisolX`; fuera, roca profunda con veta. Todo con el mismo troceo por corrutina
+  de siempre.
+
+### 4. SEGUNDA CAPA DE LAS MÁQUINAS
+Sombras propias en todas las estaciones + los halos de arriba (que es lo que le da volumen al
+latón ya existente). NO se rehízo geometría de mampostería (la lógica de tallado no se toca).
+
+### 5. ROMPER LA LÍNEA (Sim/SimLevelBuilder.cs, `AdornarCuarto`)
+Sin mover NINGUNA ancla de estación (hay réplicas de red y registros que dependen de ellas) y sin
+tocar el suelo BAJO las estaciones (sus `TallarEnPlano` asumen `baseY`):
+- **Terrazas**: el método descubre los huecos libres solo, preguntando a `ObraDelTaller` qué
+  columnas están ocupadas, y talla peldaños de 2-4 filas en cada costura entre estaciones.
+  *(Medido jugando: con el taller grande del playtest 27 los huecos son de 4-10 celdas, no de 20 --
+  por eso el margen bajó de 3 a 1 y el hueco mínimo de 12 a 4; con los valores iniciales no salió
+  ni una terraza.)*
+- **Pilastras colgantes** con ménsula desde el techo en las cuatro costuras de zona
+  (`PilastraColumnas` = 182/236/292/350), dejando >40 celdas de vano libre para volar.
+- **Arco de medio punto** sobre la boca del pasillo a la Tolva (perfil tabulado: este archivo NO
+  tiene `using UnityEngine` a propósito y no lo gana por ocho raíces cuadradas constantes).
+- Las hornacinas del fondo van en los PUNTOS MEDIOS entre pilastras (209/264/321): pilastra,
+  hornacina, pilastra, hornacina = una crujía.
+
+### Lo que SOLO se vio jugando (regla 52, tres correcciones de esta ronda)
+1. **Las hornacinas no se veían**: estaban a la altura de las estaciones (que miden 20-35 celdas),
+   o sea tapadas por las máquinas. Subieron a la pared libre de arriba.
+2. **Y entonces se veían DEMASIADO**: a 0.34 de brillo eran rectángulos negros que parecían
+   textura que falta, y encima caían justo bajo una pilastra ("una bandera colgada del techo").
+   Un hueco se lee por el CONTRASTE DE SU CANTO, no por ser negro: 0.72 de fondo, 1.25 de canto.
+3. **El Enter del bautizo no llegaba**: la comprobación vivía solo en `OnGUI`, antes de
+   `GUI.Window`; con el campo enfocado IMGUI entrega el KeyDown DENTRO del ámbito de la ventana.
+   Ahora se comprueba en los dos sitios.
+
+### Estado de verificación
+Compilado en el Unity real (0 errores / 0 warnings, consola limpia tras `Clear`+Ctrl+R), escena
+`AlkahestLab` regenerada y JUGADA: título, taller, hornada completa del crisol con su luz, bautizo
+por Enter y por botón, y diario abierto con las 4 pestañas. 5 ciclos de desplegar-mirar-corregir.
+
+**Lo que sigue debiendo** (honesto, para la ronda siguiente): las máquinas siguen siendo siluetas
+oscuras con filos de latón -- les falta pátina y remaches DENTRO del sprite (esta ronda se quedó en
+sombra + luz); el suelo del cuarto es una losa lisa de 218 celdas y las terrazas solo pueden actuar
+en las costuras (romper la línea de verdad pide mover anclas, que estaba prohibido); y no hay
+partículas de ninguna clase (chispas del banco, motas subiendo del crisol) -- es el siguiente
+escalón barato de "vida" en la escena.
+
+---
+
 ## Playtest 26 → EL TALLER QUE SE EXPLICA SOLO (dos encargos Sonnet + verificación con capturas por Fable en el PC de Cesar)
 
 **El feedback de Cesar (playtest 25)**: "no queda claro dónde van las cosas, dónde se reciben,
@@ -2452,3 +2552,13 @@ legible, con causas reales, caducidad y botón. Builds: la buena es `ChaosAlchem
 (`ChaosAlchemyDemo` es del template, borrable); en el editor manda la ESCENA ABIERTA (menú 2
 abre la MULTI). PENDIENTE al cierre de la ronda: compilación del lote 2 en Unity (desplegado
 completo; Cesar no estaba frente al PC — recompila al enfocar Unity).
+
+**LA VÍSPERA (playtests 31-32, ronda nocturna autónoma)**: resumen operativo — tramo 1 (Sonnet x2
+paralelos): máquinas en red con réplicas+mudanza de invitados, fuego real en brasero, vapor,
+ALAMBIQUE fabricable con cerámico (primer instrumento fruto del progreso), disolución visible,
+estante de redomas; tramo 2 (Opus con ojos, 6 iteraciones): tipografía Cinzel/Alegreya, bautizo
+como rito, luz de fragua, pared con sillería, terrazas. Verificado jugando; builds:
+ChaosAlchemyMulti (final) + Respaldo_TramoA_Multi. Fix definitivo: NetworkConfig null en editor.
+Deuda elegida a consciencia (3am, estabilidad > features): PARTÍCULAS (chispas del banco, motas
+del crisol, polvillo de la prensa) — primera tarea de la próxima ronda. Los commits 31/32
+comparten archivos: compilable garantizado solo tras subir ambos en orden.

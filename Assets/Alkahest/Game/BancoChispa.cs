@@ -87,6 +87,14 @@ namespace Alkahest.Game
         private string _chapaResultado;
 
         private SpriteRenderer _filamento, _resalte, _latidoTrabajo, _destelloMarco, _arco, _haloLampara;
+
+        // (playtest 31, ILUMINACIÓN DE ÁNIMO) La lámpara del banco es la única
+        // luz FRÍA del taller: el resto son fuegos. Que el cuarto cambie de
+        // temperatura de color justo aquí es lo que hace que esta estación se
+        // sienta un INSTRUMENTO y no otro horno. El halo pequeño de la propia
+        // ampolla (_haloLampara, playtest 27) se conserva: este otro es el que
+        // moja la piedra de alrededor.
+        private MaquinariaSprites.Luz _luzLampara;
         private float _alfaResalte;
         private int _celdasBandejaPrev;
 
@@ -439,6 +447,15 @@ namespace Alkahest.Game
                 MaquinariaSprites.FilamentoLampara(lamparaDiam), 20, lamparaDiam * c, lamparaDiam * 1.5f * c);
             MaquinariaSprites.CrearCapa(lamparaGo.transform, "Ampolla",
                 MaquinariaSprites.AmpollaLampara(lamparaDiam), 21, lamparaDiam * c, lamparaDiam * 1.5f * c);
+
+            // ---- (playtest 31) SOMBRA PROPIA bajo los dos plintos + LA LUZ
+            // de la lámpara sobre el cuarto.
+            MaquinariaSprites.Sombra(transform, new Vector3((_outX0 + PlintoAncho * 0.5f) * c, (_baseY - 0.3f) * c, 0f),
+                PlintoAncho * 2.4f * c, 3.2f * c, 0.40f);
+            MaquinariaSprites.Sombra(transform, new Vector3((_outX1 - PlintoAncho * 0.5f + 1f) * c, (_baseY - 0.3f) * c, 0f),
+                PlintoAncho * 2.4f * c, 3.2f * c, 0.40f);
+            _luzLampara = MaquinariaSprites.Luz.Crear(transform, "LuzLampara", _centroLampara,
+                34f * c, new Color(0.68f, 0.86f, 1f));
         }
 
         private void UpdateLamparaTint()
@@ -453,6 +470,7 @@ namespace Alkahest.Game
                 // huevo de piedra.
                 _filamento.color = new Color(0.46f, 0.38f, 0.28f, 1f);
                 if (_haloLampara != null) _haloLampara.color = new Color(0.75f, 0.88f, 1f, 0f);
+                _luzLampara?.Intensidad(0f); // (playtest 31) apagada de verdad: la AUSENCIA de luz sigue siendo el dato.
                 return;
             }
 
@@ -460,6 +478,7 @@ namespace Alkahest.Game
             float intensidad = (_ultimaConductividad == 2 ? 1f : 0.45f) * t * pulso;
             _filamento.color = new Color(0.55f + 0.45f * intensidad, 0.70f + 0.30f * intensidad, 0.85f + 0.15f * intensidad, 1f);
             if (_haloLampara != null) _haloLampara.color = new Color(0.75f, 0.88f, 1f, intensidad * 0.42f);
+            _luzLampara?.Intensidad(intensidad * 0.30f); // (playtest 31) la lámpara moja de azul la piedra de alrededor mientras dura la lectura.
         }
 
         private void ActualizarVisual()

@@ -654,9 +654,18 @@ namespace Alkahest.Game
         {
             DrawFullscreenDim();
             UiStyles.Preparar();
-            AbrirPanel(460f, 300f);
+            var interior = AbrirPanel(480f, 320f);
 
-            GUILayout.Label("CHAOS ALCHEMY", UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(50f)));
+            // (playtest 31, TIPOGRAFÍA = ALMA) El título es lo PRIMERO que ve
+            // quien enciende el juego, y hasta esta ronda estaba escrito con
+            // la fuente de sistema. Ahora es una capital lapidaria (Cinzel)
+            // con espaciado -- una inscripción, no una etiqueta -- y lleva su
+            // filete con rombo debajo, como la portada de un tratado.
+            GUILayout.Space(UiStyles.S(6f));
+            GUILayout.Label(UiStyles.Espaciar("CHAOS ALCHEMY"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(46f)));
+            var filete = GUILayoutUtility.GetRect(10f, UiStyles.S(12f));
+            if (Event.current.type == EventType.Repaint)
+                UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
             GUILayout.Label("Domestica las leyes de un universo extraño", UiStyles.Subtitulo);
 
             GUILayout.Space(UiStyles.S(16f));
@@ -961,10 +970,13 @@ namespace Alkahest.Game
                     break;
             }
 
+            // (playtest 31) El desenlace se graba, no se imprime: Cinzel
+            // espaciado, igual que el título del juego -- son las dos únicas
+            // veces que el juego habla en mayúsculas de piedra.
             var titulo = UiStyles.TituloGrande;
             var previo = titulo.normal.textColor;
             titulo.normal.textColor = colorTitulo;
-            GUILayout.Label(tituloTexto, titulo, GUILayout.Height(UiStyles.S(42f)));
+            GUILayout.Label(UiStyles.Espaciar(tituloTexto), titulo, GUILayout.Height(UiStyles.S(42f)));
             titulo.normal.textColor = previo;
 
             GUILayout.Label(subtitulo, UiStyles.Subtitulo);

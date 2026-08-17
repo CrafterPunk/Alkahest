@@ -24,6 +24,34 @@ namespace Alkahest.Sim
         public static readonly Color BackgroundColor = new Color32(0x1A, 0x14, 0x18, 0xFF);
 
         /// <summary>
+        /// (playtest 31, ILUMINACIÓN DE ÁNIMO) TINTE GLOBAL DEL CUADRO. El
+        /// taller tenía que sentirse CUEVA CÁLIDA y se sentía "sala de
+        /// exposición": todo igual de iluminado en todas partes, así que
+        /// ninguna zona podía destacar por tener luz propia. Este multiplicador
+        /// baja el brillo general un ~16% y lo enfría un punto -- no porque la
+        /// oscuridad sea bonita por sí sola, sino porque LOS HALOS DE LAS
+        /// MÁQUINAS (Game/MaquinariaSprites.Luz) solo pueden leerse como luz
+        /// si hay penumbra alrededor contra la que destacar. Es un tinte del
+        /// SpriteRenderer (una multiplicación en la GPU sobre el sprite ya
+        /// compuesto), NO un cambio en ComputeCellColor: coste cero por celda,
+        /// y la textura de la sim sigue siendo exactamente la misma, así que
+        /// nada de lo que dependa del color de una celda (firma visual,
+        /// patrones, bordes) cambia de significado. Si algún día hace falta un
+        /// "amanecer/anochecer", este es el único punto que hay que animar.
+        /// </summary>
+        /// (SEGUNDA PASADA, VISTO JUGANDO) El primer tinte era neutro-frío
+        /// (0.845, 0.815, 0.865) y el taller seguía leyéndose GRIS LAVANDA:
+        /// la piedra ocupa el 70% del cuadro y su color base tira a ciruela,
+        /// así que un tinte neutro conserva esa frialdad y la penumbra
+        /// resultante es "sótano", no "cueva cálida". El tinte pasa a estar
+        /// SESGADO EN TEMPERATURA (rojo casi intacto, azul bajado el doble):
+        /// la piedra se vuelve parda, los halos naranjas del crisol se
+        /// integran en vez de flotar sobre un fondo de otro tono, y el frío
+        /// (agua, hielo, la lámpara del banco) DESTACA más por contraste,
+        /// que es lo que se quería de esa familia de materiales.
+        public static readonly Color TinteGlobal = new Color(0.930f, 0.845f, 0.775f, 1f);
+
+        /// <summary>
         /// Mismo color que <see cref="BackgroundColor"/> pero como Color32 fijo
         /// (playtest 12): lo usa el borde Difuso de ComputeCellColor para
         /// oscurecer hacia el fondo con LerpByte (que trabaja en bytes) sin
@@ -533,6 +561,7 @@ namespace Alkahest.Sim
             sr.sprite = Sprite.Create(_texture, new Rect(0, 0, CellGrid.W, CellGrid.H),
                 Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -5;
+            sr.color = TinteGlobal; // (playtest 31) ver TinteGlobal: la cueva se oscurece AQUÍ, no celda a celda.
 
             _quad = go.transform;
             _quad.SetParent(transform, false);
