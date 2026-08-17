@@ -45,7 +45,7 @@ namespace Alkahest.Game
     /// se busca con <c>FindAnyObjectByType</c> (regla 1 de CLAUDE.md), mismo
     /// patrón perezoso que DeliveryChute.
     /// </summary>
-    public sealed class EnsayoMaestro : MonoBehaviour, IMaquinaInteractiva
+    public sealed class EnsayoMaestro : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
     {
         // -----------------------------------------------------------------
         // GEOMETRÍA (playtest 27). Públicas: las lee Sim/SimLevelBuilder.cs.
@@ -87,8 +87,11 @@ namespace Alkahest.Game
         private int _plintoX, _baseY;
         private int _x0, _x1, _y0, _y1;      // interior útil de la bandeja.
         private int _daisX0, _daisX1;
-        private int _outX0, _outX1;
+        private int _outX0, _outX1, _outY0, _outY1;
         private Vector3 _centro, _centroRotulo;
+
+        /// <summary>(playtest 29) Handle en <see cref="SimLevelBuilder.ObraDelTaller"/> -- ver el docblock gemelo en Game/Crisol.cs (`_handleObra`).</summary>
+        private int _handleObra = -1;
 
         private float _accumulator;
 
@@ -116,6 +119,26 @@ namespace Alkahest.Game
         public Vector3 PuntoFoco => _centro;
         public float RangoFoco => ProximityRange;
 
+        // ---- IMovible (playtest 29, "la última estructura no la puedo
+        // mover" -- Cesar). Mismo patrón que Game/Crisol.cs: el ancla es la
+        // esquina inferior izquierda del rect EXTERIOR (dosel incluido), que
+        // es exactamente lo que mide TamanoMundo -- así la sombra de
+        // Game/Mudanza.cs puede alinearse a la huella real (ver
+        // IMovibleAnclaEsquina en ese archivo).
+        public Vector3 CentroMundo => _centro;
+        public Vector2 TamanoMundo => new Vector2(
+            (_outX1 - _outX0 + 1) * SimRenderer.CellWorldSize,
+            (_outY1 - _outY0 + 1) * SimRenderer.CellWorldSize);
+        public Vector2Int AnclaCelda => new Vector2Int(_outX0, _outY0);
+
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            int span = _outX1 - _outX0 + 1;
+            int alto = _outY1 - _outY0 + 1;
+            return anclaCelda.x >= 1 && anclaCelda.x + span - 1 <= CellGrid.W - 2
+                && anclaCelda.y >= 1 && anclaCelda.y + alto - 1 <= CellGrid.H - 2;
+        }
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap. FIRMA CONGELADA.</summary>
         public void Init(AlkahestSim sim, OrderSystem orders, Transform jugador)
         {
@@ -127,22 +150,45 @@ namespace Alkahest.Game
             _plintoX = SimLevelBuilder.EnsayoPlintoX;
             _baseY = SimLevelBuilder.CuartoY0 + 2;
 
+            RecalcularRegion();
+            BuildVisual();
+
+            MachineFocus.Registrar(this);
+            // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
+            // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
+            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
+            Mudanza.RegistrarMovible(this);
+        }
+
+        /// <summary>
+        /// (playtest 29) Extraído de Init para que <see cref="Reposicionar"/>
+        /// también pueda recalcular la geometría tras mover el ancla.
+        /// TAMBIÉN arrastra los sprites hijos: `BuildVisual` los parenta con
+        /// `SetParent(transform, false)` y luego fija su POSICIÓN ABSOLUTA
+        /// (world-space) -- Unity la convierte en un `localPosition` fijo
+        /// relativo al padre EN ESE MOMENTO. Mover `transform.position` aquí
+        /// arrastra a todos los hijos por el mismo delta sin recalcular cada
+        /// sprite a mano (mismo mecanismo que usa Game/Crisol.cs, que sí
+        /// fijaba `transform.position` desde el playtest 19; este archivo no
+        /// lo hacía porque hasta ahora nunca necesitó moverse).
+        /// </summary>
+        private void RecalcularRegion()
+        {
             var h = Calcular(_plintoX, _baseY);
             _x0 = h.BanX0; _x1 = h.BanX1; _y0 = h.BanY0; _y1 = h.BanY1;
             _daisX0 = h.DaisX0; _daisX1 = h.DaisX1;
-            _outX0 = h.OutX0; _outX1 = h.OutX1;
+            _outX0 = h.OutX0; _outX1 = h.OutX1; _outY0 = h.OutY0; _outY1 = h.OutY1;
 
             float c = SimRenderer.CellWorldSize;
             _centro = new Vector3((_x0 + PlintoAncho * 0.5f) * c, (_y0 + PlintoAltoInterior * 0.5f) * c, 0f);
             _centroRotulo = new Vector3(_centro.x, (_y1 + 3f) * c, 0f);
-
-            BuildVisual();
-            MachineFocus.Registrar(this);
+            transform.position = _centro;
         }
 
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
+            Mudanza.OlvidarMovible(this);
         }
 
         // ---- Huella compartida por la instancia y el tallado del plano ----
@@ -209,7 +255,89 @@ namespace Alkahest.Game
                     if (CellGrid.InBounds(h.OutX1 - k, y)) grid.SetCell(h.OutX1 - k, y, MaterialId.Stone);
                 }
 
-            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1); // el nicho del hogar queda dentro de este rect.
+            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
+            // hace la INSTANCIA en Init (ver `_handleObra`); este método es
+            // estático y corre antes de que exista ninguna instancia. Mismo
+            // rect exacto (el nicho del hogar queda dentro de él).
+        }
+
+        /// <summary>Misma geometría EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
+        private void TallarEnCaliente()
+        {
+            var h = Calcular(_plintoX, _baseY);
+
+            for (int y = h.DaisY0; y <= h.DaisY1; y++)
+                for (int x = h.DaisX0; x <= h.DaisX1; x++)
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+
+            for (int x = h.BanX0 - MuroGrosor; x <= h.BanX1 + MuroGrosor; x++)
+                _sim.PaintStable(x, h.BanY0 - 1, 0, MaterialId.Stone);
+            for (int y = h.BanY0 - 1; y <= h.BanY1; y++)
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.PaintStable(h.BanX0 - t, y, 0, MaterialId.Stone);
+                    _sim.PaintStable(h.BanX1 + t, y, 0, MaterialId.Stone);
+                }
+            _sim.PaintRect(h.BanX0, h.BanY0, PlintoAncho, PlintoAltoInterior, MaterialId.Empty);
+
+            for (int y = h.DaisY0 + 1; y <= h.DaisY0 + HogarFilas; y++)
+                _sim.PaintRect(h.BanX0, y, h.BanX1 - h.BanX0 + 1, 1, MaterialId.Empty);
+
+            for (int y = h.OutY0; y <= h.OutY1; y++)
+                for (int k = 0; k < ColumnaAncho; k++)
+                {
+                    _sim.PaintStable(h.OutX0 + k, y, 0, MaterialId.Stone);
+                    _sim.PaintStable(h.OutX1 - k, y, 0, MaterialId.Stone);
+                }
+        }
+
+        /// <summary>
+        /// (playtest 29, encargo B) Borra la mampostería VIEJA de la huella
+        /// `h` -- ver el docblock gemelo en Game/Crisol.cs (`BorrarEnCaliente`)
+        /// para el criterio general. Aquí el DAIS entero se borra completo
+        /// (es un bloque SÓLIDO, no un contenedor -- no hay "interior" que
+        /// preservar, ni siquiera el nicho del hogar, puro teatro sellado
+        /// igual que en el Crisol): si había una muestra puesta a examen en
+        /// la bandeja de encima, al desaparecer el dais que la sostenía cae
+        /// sola por gravedad, tal cual pide el encargo B.
+        /// </summary>
+        private void BorrarEnCaliente(Huella h)
+        {
+            for (int y = h.DaisY0; y <= h.DaisY1; y++)
+                for (int x = h.DaisX0; x <= h.DaisX1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+
+            // La BANDEJA: suelo + dos muros -- NUNCA el hueco (podría tener
+            // una muestra puesta a examen).
+            for (int x = h.BanX0 - MuroGrosor; x <= h.BanX1 + MuroGrosor; x++)
+                _sim.Paint(x, h.BanY0 - 1, 0, MaterialId.Empty);
+            for (int y = h.BanY0 - 1; y <= h.BanY1; y++)
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.Paint(h.BanX0 - t, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.BanX1 + t, y, 0, MaterialId.Empty);
+                }
+
+            // Las dos columnas del dosel, EXCLUYENDO la fila `h.OutY0`
+            // (=baseY, la losa compartida del cuarto -- jamás piedra del mundo).
+            for (int y = h.OutY0 + 1; y <= h.OutY1; y++)
+                for (int k = 0; k < ColumnaAncho; k++)
+                {
+                    _sim.Paint(h.OutX0 + k, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.OutX1 - k, y, 0, MaterialId.Empty);
+                }
+        }
+
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            BorrarEnCaliente(Calcular(_plintoX, _baseY)); // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
+
+            _plintoX += anclaCelda.x - _outX0;
+            _baseY = anclaCelda.y;
+            RecalcularRegion();
+            TallarEnCaliente(); // 2) TALLAR la nueva. regla 36: NUNCA volver a llamar a Init/BuildVisual para mover.
+
+            SimLevelBuilder.ActualizarObra(_handleObra, _outX0, _outY0, _outX1, _outY1); // 3) ACTUALIZAR el registro anticincel.
         }
 
         // =================================================================

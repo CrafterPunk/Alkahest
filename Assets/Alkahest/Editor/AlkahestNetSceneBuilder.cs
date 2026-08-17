@@ -123,6 +123,27 @@ namespace Alkahest.EditorTools
             bool ok = summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded && summary.totalErrors == 0;
             string resumen = $"resultado={summary.result} | errores={summary.totalErrors} | avisos={summary.totalWarnings} | salida={OutputExe}";
 
+            // (fix playtest 29, reporte de Cesar) STEAM_APPID.TXT JUNTO AL EXE:
+            // sin él, SteamAPI.Init() FALLA aunque el cliente de Steam esté
+            // abierto -- Cesar, CON Steam corriendo, veía "no estás conectado".
+            // Mismo gesto que FriendsLoopBuildTools (el build tool de la demo
+            // ya lo hacía y este no lo heredó): App ID 480 de desarrollo;
+            // NUNCA distribuir este archivo en una build de tienda.
+            if (ok)
+            {
+                try
+                {
+                    string appIdPath = System.IO.Path.Combine(
+                        System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(OutputExe)), "steam_appid.txt");
+                    System.IO.File.WriteAllText(appIdPath, "480");
+                    Debug.Log("[ChaosAlchemy] steam_appid.txt (480, desarrollo) escrito junto al ejecutable.");
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning("[ChaosAlchemy] No se pudo escribir steam_appid.txt junto al exe: " + e.Message);
+                }
+            }
+
             if (ok) Debug.Log("[ChaosAlchemy] ✔ BUILD MULTI OK — " + resumen);
             else Debug.LogError("[ChaosAlchemy] ✘ BUILD MULTI FALLIDA — " + resumen);
 

@@ -1,11 +1,14 @@
 // (playtest 17) `using System;` retirado: lo único que lo necesitaba era el
 // `Math.Round` de los degradados de clima, que ya no existen.
 //
-// (playtest 26) `using Alkahest.Game;`: mismo patrón ya establecido por
-// Sim/SimRenderer.cs (que ya depende de Game/UiStyles y Game/JournalHud) --
-// SimLevelBuilder llama a los `TallarEnPlano` estáticos de Crisol/Prensa/
-// BancoChispa/EnsayoMaestro (regla 47 de CLAUDE.md: SimLevelBuilder talla
-// TODA la mampostería del plano, ver el bloque "PLAYTEST 26" más abajo).
+// (playtest 26, ampliado en el 29) `using Alkahest.Game;`: mismo patrón ya
+// establecido por Sim/SimRenderer.cs (que ya depende de Game/UiStyles y
+// Game/JournalHud) -- SimLevelBuilder llama a los `TallarEnPlano` estáticos
+// de Crisol/Prensa/BancoChispa/EnsayoMaestro/ColumnaEnsayo (regla 47 de
+// CLAUDE.md: SimLevelBuilder talla TODA la mampostería del plano, ver el
+// bloque "PLAYTEST 26" más abajo; ColumnaEnsayo se sumó en el playtest 29
+// para que la Columna pudiera implementar IMovible -- ver el bloque "OBRA
+// MOVIBLE" junto a ObraDelTaller).
 using Alkahest.Game;
 
 namespace Alkahest.Sim
@@ -1315,7 +1318,10 @@ namespace Alkahest.Sim
         /// verdad la dan ahora los tres zunchos de latón horizontales de
         /// Game/ColumnaEnsayo.cs.
         /// </summary>
-        private const int ColumnaMarcaPaso = 11;
+        // (playtest 29) private -> public: Game/ColumnaEnsayo.cs necesita
+        // leerla ahora que el tallado (TallarEnPlano/TallarEnCaliente) vive
+        // en esa clase en vez de aquí mismo.
+        public const int ColumnaMarcaPaso = 11;
 
         /// <summary>Primera fila de hueco interior de cualquier estación (justo sobre la losa del cuarto). Todas las estaciones se apoyan aquí -- una sola constante en vez de `CuartoY0+3` repetido.</summary>
         public const int EstacionSueloY = CuartoY0 + WallThickness; // 171
@@ -1439,16 +1445,66 @@ namespace Alkahest.Sim
         // incluidos); Game/Cincel.cs consulta EsObraDelTaller antes de tallar
         // piedra. Estático y reconstruido en cada BuildCuartoIntimo (misma
         // vida que el plano); List fija, cero allocs en consulta.
+        //
+        // OBRA MOVIBLE (playtest 29, doble bug reportado por Cesar: "la
+        // tercera y la última estructura no las puedo mover" + "van dejando
+        // una huella de bedrock... de donde estuvieron antes"). La causa
+        // exacta del segundo bug era que el registro era SOLO DE ALTA: una
+        // estación que se reposicionaba (Game/Mudanza.cs) tallaba su
+        // mampostería nueva pero (a) nunca borraba la vieja y (b) nunca podía
+        // actualizar SU rect aquí, así que el cincel seguía protegiendo el
+        // sitio viejo -- piedra fantasma Y encima indestructible.
+        //
+        // DISEÑO ELEGIDO (el más limpio de los dos que planteaba el encargo):
+        // `RegistrarObra` devuelve un HANDLE (el índice en la lista) y
+        // `ActualizarObra(handle, ...)` sustituye ese rect in-place. El
+        // HANDLE LO GUARDA LA INSTANCIA, NO EL TALLADO ESTÁTICO: los
+        // `TallarEnPlano` estáticos de Crisol/Prensa/BancoChispa/
+        // EnsayoMaestro/ColumnaEnsayo (llamados una vez desde
+        // BuildCuartoIntimo, ANTES de que exista ningún GameObject) ya NO
+        // llaman a RegistrarObra -- solo tallan piedra. Es la INSTANCIA, en
+        // su propio `Init()` (que corre después, cuando AlkahestGameBootstrap
+        // la crea, y que ya volvió a calcular su propia geometría con el
+        // mismo método `Calcular`/`RecalcularRegion*` que usó el tallado
+        // estático), la que llama a `RegistrarObra` y se queda con el
+        // handle. Alternativa descartada: que `TallarEnPlano` devolviera el
+        // handle y BuildCuartoIntimo lo guardara en un campo estático por
+        // estación para que Init lo leyera -- funciona, pero exige un canal
+        // de paso de estado entre dos llamadas separadas en archivos
+        // distintos (SimLevelBuilder y AlkahestGameBootstrap) solo para
+        // sortear algo que la propia instancia ya puede calcular sola. Con
+        // el diseño elegido, cada estación es dueña de su handle desde que
+        // nace hasta que se destruye (mismo ciclo de vida que ya usa con
+        // MachineFocus/Mudanza.RegistrarMovible), y no hay ninguna entrada
+        // huérfana: cada rect de la lista tiene SIEMPRE 0 o 1 dueños vivos.
         // =================================================================
         /// <summary>Rect inclusivo propio (este archivo no usa UnityEngine a propósito: es sim pura; RectInt habría traído el using solo para esto).</summary>
         public struct RectObra { public int X0, Y0, X1, Y1; }
 
         public static readonly System.Collections.Generic.List<RectObra> ObraDelTaller = new System.Collections.Generic.List<RectObra>(16);
 
-        /// <summary>Registra un rect exterior de mampostería protegida (x0..x1, y0..y1 inclusivos).</summary>
-        public static void RegistrarObra(int x0, int y0, int x1, int y1)
+        /// <summary>Registra un rect exterior de mampostería protegida (x0..x1, y0..y1 inclusivos). Devuelve el HANDLE (índice en la lista) para poder actualizarlo luego con <see cref="ActualizarObra"/> cuando la estación se mueva -- ver el bloque "OBRA MOVIBLE" de arriba.</summary>
+        public static int RegistrarObra(int x0, int y0, int x1, int y1)
         {
             ObraDelTaller.Add(new RectObra { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
+            return ObraDelTaller.Count - 1;
+        }
+
+        /// <summary>
+        /// (playtest 29) Sustituye el rect protegido en el HANDLE indicado --
+        /// lo llama `Reposicionar` de cada estación movible, DESPUÉS de
+        /// borrar su mampostería vieja y tallar la nueva, para que el
+        /// registro anticincel SIGA a la piedra en vez de proteger para
+        /// siempre un sitio que ya no tiene nada tallado. Un handle fuera de
+        /// rango (-1, o una lista que se vació y se reconstruyó sin que la
+        /// instancia se enterara) es un error de programación, no algo que
+        /// deba tirar una excepción a mitad de una mudanza -- se ignora en
+        /// silencio, igual que `EsObraDelTaller` no valida sus rects.
+        /// </summary>
+        public static void ActualizarObra(int handle, int x0, int y0, int x1, int y1)
+        {
+            if (handle < 0 || handle >= ObraDelTaller.Count) return;
+            ObraDelTaller[handle] = new RectObra { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 };
         }
 
         /// <summary>¿(x,y) pertenece a la obra protegida del taller? Lo consulta el cincel celda a celda -- bucle plano sobre ~10 rects, sin allocs.</summary>
@@ -1516,7 +1572,16 @@ namespace Alkahest.Sim
             int baseYEstaciones = CuartoY0 + 2; // mismo baseY que todas (contrato §4.5): la última fila maciza de la losa.
             Crisol.TallarEnPlano(grid, CrisolX, baseYEstaciones);
             Prensa.TallarEnPlano(grid, PrensaX, baseYEstaciones);
-            BuildColumnaEnsayo(grid); // (playtest 27) la Columna: muros de PIEDRA (ya no Crystal) + abocinado + marcas de nivel.
+            // (playtest 29, encargo C) EL TALLADO SE MUDÓ a Game/ColumnaEnsayo.cs
+            // (`TallarEnPlano`, mismo patrón que Crisol/Prensa/BancoChispa/
+            // EnsayoMaestro, regla 47): la Columna necesitaba un método
+            // invocable POR INSTANCIA para poder implementar IMovible (borrar
+            // mampostería vieja + tallar la nueva al Reposicionar). Las
+            // constantes de geometría (ColumnaX0/Ancho/Muro/Alto/BocaFilas/
+            // BocaVuelo/MarcaPaso/TanqueAlto) SIGUEN viviendo aquí -- son el
+            // plano, no el tallado -- exactamente igual que Crisol lee
+            // `SimLevelBuilder.CrisolX` pero es dueño de `CamaraAncho`.
+            ColumnaEnsayo.TallarEnPlano(grid, ColumnaX0, baseYEstaciones); // muros de PIEDRA (ya no Crystal) + abocinado + marcas de nivel.
             BancoChispa.TallarEnPlano(grid, BancoChispaX, baseYEstaciones);
             EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, baseYEstaciones);
 
@@ -1600,80 +1665,13 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, CuartoX0, CuartoY0, CuartoX1 - CuartoX0 + 1, WallThickness, MaterialId.Stone);
         }
 
-        /// <summary>
-        /// (contrato §4.5) La Columna de Ensayo: dos muros de pie de
-        /// <see cref="MaterialId.Crystal"/> (StaticSolid, regla 7 de
-        /// CLAUDE.md -- no cae, no compite en densidad; es vidrio de
-        /// laboratorio, no una sustancia que fluya), 1 celda de grosor cada
-        /// uno, separados por 3 celdas de hueco interior
-        /// (`ColumnaAncho`=5 = 1+3+1), de pie sobre el suelo
-        /// (`CuartoY0+WallThickness`=171) hasta `ColumnaAlto`=22 celdas más
-        /// arriba (171+22-1=192) -- ABIERTA POR ARRIBA a propósito (el
-        /// contrato lo pide así: se observa desde fuera cayendo materia
-        /// dentro, no es una cubeta cerrada). Quedan 209-192=17 celdas de
-        /// aire libre de sala por encima del remate, así que nada de lo que
-        /// se vierta desde arriba choca con techo antes de entrar.
-        /// </summary>
-        private static void BuildColumnaEnsayo(CellGrid grid)
-        {
-            int y0 = EstacionSueloY;                         // 171, primera fila de hueco.
-            int yTope = y0 + ColumnaAlto - 1;                // 204, última fila del fuste.
-            int x1 = ColumnaX0 + ColumnaAncho - 1;           // 276.
-            int yBoca = yTope + ColumnaBocaFilas;            // 209, última fila del abocinado.
-
-            // (playtest 27) Registro anticincel de la columna entera, ABOCINADO
-            // INCLUIDO -- ver ObraDelTaller.
-            RegistrarObra(ColumnaX0 - ColumnaBocaVuelo, CuartoY0, x1 + ColumnaBocaVuelo, yBoca);
-
-            // ---- El FUSTE: dos muros de PIEDRA de 3 celdas (mandato 5: la
-            // columna del 26 tenía muros de Crystal, que reacciona con el
-            // Azoth -- error real, corregido). Hueco interior de 13 celdas de
-            // ancho por 34 de alto = 442 celdas de cámara de observación:
-            // cabe una ración entera de líquido y todavía se ve estratificar.
-            for (int y = y0; y <= yTope; y++)
-            {
-                for (int t = 0; t < ColumnaMuro; t++)
-                {
-                    if (CellGrid.InBounds(ColumnaX0 + t, y)) grid.SetCell(ColumnaX0 + t, y, MaterialId.Stone);
-                    if (CellGrid.InBounds(x1 - t, y)) grid.SetCell(x1 - t, y, MaterialId.Stone);
-                }
-                for (int x = ColumnaX0 + ColumnaMuro; x <= x1 - ColumnaMuro; x++)
-                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
-            }
-
-            // ---- LA BOCA SUPERIOR, ABOCINADA (mandato 2: "boca generosa, la
-            // geometría misma embuda la materia"). Cinco filas en las que los
-            // dos muros se abren 2 celdas hacia fuera: desde arriba se ve un
-            // tragante, y una muestra soltada un poco descentrada resbala
-            // igualmente hacia dentro en vez de rebotar en el canto.
-            for (int i = 0; i < ColumnaBocaFilas; i++)
-            {
-                int y = yTope + 1 + i;
-                // Redondeo entero a propósito: este archivo NO usa UnityEngine
-                // (es sim pura, ver la nota de RectObra) -- nada de Mathf aquí.
-                int vuelo = (ColumnaBocaVuelo * (i + 1) + ColumnaBocaFilas / 2) / ColumnaBocaFilas; // 0,1,1,2,2
-                int izqMuroX0 = ColumnaX0 - vuelo;
-                int derMuroX1 = x1 + vuelo;
-                for (int t = 0; t < ColumnaMuro; t++)
-                {
-                    if (CellGrid.InBounds(izqMuroX0 + t, y)) grid.SetCell(izqMuroX0 + t, y, MaterialId.Stone);
-                    if (CellGrid.InBounds(derMuroX1 - t, y)) grid.SetCell(derMuroX1 - t, y, MaterialId.Stone);
-                }
-                for (int x = izqMuroX0 + ColumnaMuro; x <= derMuroX1 - ColumnaMuro; x++)
-                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
-            }
-
-            // ---- MARCAS DE NIVEL: un nudillo de piedra que sobresale a cada
-            // lado del fuste cada `ColumnaMarcaPaso` filas. NUNCA dentro del
-            // hueco de observación (ahí no puede haber nada que estorbe a lo
-            // que se está mirando) -- es la regla del playtest 26 y sigue en
-            // pie, solo que ahora los nudillos salen por FUERA del muro de 3.
-            for (int y = y0 + ColumnaMarcaPaso; y <= yTope; y += ColumnaMarcaPaso)
-            {
-                if (CellGrid.InBounds(ColumnaX0 - 1, y)) grid.SetCell(ColumnaX0 - 1, y, MaterialId.Stone);
-                if (CellGrid.InBounds(x1 + 1, y)) grid.SetCell(x1 + 1, y, MaterialId.Stone);
-            }
-        }
+        // (playtest 29) `BuildColumnaEnsayo` SE MUDÓ ENTERO a
+        // `Game/ColumnaEnsayo.TallarEnPlano` -- ver el comentario junto a su
+        // llamada en `BuildCuartoIntimo`. No es una idea descartada (regla 15
+        // de CLAUDE.md no aplica: es el MISMO tallado, con la MISMA
+        // aritmética, solo que ahora vive donde puede volver a invocarse por
+        // instancia al Reposicionar) -- por eso no se deja un cadáver
+        // comentado aquí, solo esta nota de dónde buscarlo.
 
         /// <summary>
         /// (contrato §4.5) El pasillo PRE-CARVADO del cuarto a la boca de la

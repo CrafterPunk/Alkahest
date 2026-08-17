@@ -122,7 +122,7 @@ namespace Alkahest.Game
     /// forran la rampa. Las estaciones que reciben DEPOSITANDO (prensa,
     /// chispa, ensayo) no llevan embudo ninguno.
     /// </summary>
-    public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovible
+    public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 3;
@@ -217,6 +217,18 @@ namespace Alkahest.Game
         private int _bocaY0, _bocaY1;
         private int _outX0, _outX1, _outY0, _outY1;
 
+        /// <summary>
+        /// (playtest 29) Handle del rect anticincel de ESTA instancia en
+        /// <see cref="SimLevelBuilder.ObraDelTaller"/> -- lo devuelve
+        /// <see cref="SimLevelBuilder.RegistrarObra"/> al registrarse en
+        /// <see cref="Init"/> (no en <see cref="TallarEnPlano"/>, que es
+        /// estático y corre ANTES de que exista esta instancia: ver el
+        /// bloque "OBRA MOVIBLE" en Sim/SimLevelBuilder.cs para el porqué del
+        /// diseño). <see cref="Reposicionar"/> lo usa para actualizar el rect
+        /// en vez de dejar el viejo protegido para siempre.
+        /// </summary>
+        private int _handleObra = -1;
+
         private Vector3 _centro, _centroCamara, _centroBrasero, _centroBoca;
         private float _accumulator;
 
@@ -298,6 +310,10 @@ namespace Alkahest.Game
             _targetRaw = 0; // REPOSO: el crisol no empuja nada hasta que enciendas una hornada.
 
             MachineFocus.Registrar(this);
+            // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
+            // TallarEnPlano -- ver el docblock de _handleObra y el bloque
+            // "OBRA MOVIBLE" en Sim/SimLevelBuilder.cs.
+            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0 - HogarFilas, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -397,9 +413,14 @@ namespace Alkahest.Game
             TallarHogar(grid, h.CamX0, h.CamX1, baseY);
             TallarHogar(grid, h.BraX0, h.BraX1, baseY);
 
-            // Registro anticincel del horno ENTERO (regla del playtest 27:
-            // Cesar se llevó mampostería de una estación con el cincel).
-            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0 - HogarFilas, h.OutX1, h.OutY1);
+            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ: este
+            // método es estático y corre UNA vez desde
+            // SimLevelBuilder.BuildCuartoIntimo, ANTES de que exista ninguna
+            // instancia de Crisol que pueda guardarse el handle para
+            // actualizarlo luego al Reposicionar. Lo registra `Init` (ver
+            // `_handleObra`) -- mismo rect EXACTO (`h.OutX0, h.OutY0 -
+            // HogarFilas, h.OutX1, h.OutY1`), porque `Init` vuelve a llamar a
+            // `Calcular` con el mismo `anchorX`/`baseY` que usó este tallado.
         }
 
         /// <summary>Vacía el nicho de fuego bajo un recinto (ver el comentario de <see cref="TallarEnPlano"/> para por qué queda sellado y no es una trampa para la materia).</summary>
@@ -456,6 +477,56 @@ namespace Alkahest.Game
             _sim.PaintRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1, MaterialId.Empty);
         }
 
+        /// <summary>
+        /// (playtest 29, encargo B) Borra la mampostería VIEJA de la huella
+        /// `h` -- <see cref="Reposicionar"/> la llama con la huella de ANTES
+        /// de mover el ancla, justo antes de tallar la nueva. Espejo de
+        /// <see cref="TallarRecinto"/>/<see cref="TallarEnCaliente"/> con dos
+        /// diferencias a propósito:
+        ///  1. Escribe <see cref="MaterialId.Empty"/> vía <c>_sim.Paint</c>
+        ///     en vez de Stone vía PaintStable -- esto no CREA materia, la
+        ///     QUITA (regla 29 de CLAUDE.md), el mismo camino que usa
+        ///     Game/Cincel.cs al tallar piedra a vacío.
+        ///  2. NUNCA toca la fila `y0-1` de cada recinto (la losa COMPARTIDA
+        ///     de todo el cuarto, <c>SimLevelBuilder.BuildCuartoFloor</c> --
+        ///     "jamás piedra del mundo", encargo B) ni el interior de cámara/
+        ///     brasero (puede tener materia dentro: "el contenido... queda
+        ///     donde está", mismo encargo -- cae solo por gravedad en cuanto
+        ///     el muro que lo contenía desaparece). Solo desaparecen los
+        ///     MUROS propios que esta máquina inventó sobre esa losa.
+        /// </summary>
+        private void BorrarEnCaliente(Huella h)
+        {
+            BorrarRecintoCaliente(h.CamX0, h.CamX1, h.CamY0, h.CamY1);
+            for (int i = 0; i < BocaFilas; i++)
+            {
+                int y = h.BocaY0 + i;
+                int vuelo = VueloEnFila(i);
+                int izq = h.CamX0 - vuelo, der = h.CamX1 + vuelo;
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.Paint(izq - t, y, 0, MaterialId.Empty);
+                    _sim.Paint(der + t, y, 0, MaterialId.Empty);
+                }
+                // La fila interior de la boca (izq..der) ya es Empty por
+                // diseño -- el embudo talla aire, nunca piedra -- así que no
+                // hace falta (ni conviene: podría tener materia cayendo)
+                // tocarla aquí.
+            }
+            BorrarRecintoCaliente(h.BraX0, h.BraX1, h.BraY0, h.BraY1);
+        }
+
+        /// <summary>Muros de un recinto, EXCLUYENDO la fila `y0-1` (la losa compartida del cuarto) y sin tocar el interior -- ver <see cref="BorrarEnCaliente"/>.</summary>
+        private void BorrarRecintoCaliente(int x0, int x1, int y0, int y1)
+        {
+            for (int y = y0; y <= y1; y++)
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.Paint(x0 - t, y, 0, MaterialId.Empty);
+                    _sim.Paint(x1 + t, y, 0, MaterialId.Empty);
+                }
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -464,12 +535,22 @@ namespace Alkahest.Game
 
         public void Reposicionar(Vector2Int anclaCelda)
         {
+            // (playtest 29, encargo B) 1) BORRAR la mampostería vieja, con la
+            // huella de ANTES de tocar el ancla -- si se calculara después de
+            // mover _anchorX/_baseY, `Calcular` devolvería la huella NUEVA y
+            // borraríamos el sitio equivocado.
+            BorrarEnCaliente(Calcular(_anchorX, _baseY));
+
             int dx = anclaCelda.x - _outX0;
             int dy = anclaCelda.y - _baseY;
             _anchorX += dx;
             _baseY += dy;
             RecalcularRegiones();
-            TallarEnCaliente(); // regla 36: NUNCA volver a llamar a Init/BuildVisual para mover.
+            TallarEnCaliente(); // 2) TALLAR la nueva. regla 36: NUNCA volver a llamar a Init/BuildVisual para mover.
+
+            // 3) ACTUALIZAR el registro anticincel -- mismo rect que Init
+            // registró, con la geometría YA recalculada.
+            SimLevelBuilder.ActualizarObra(_handleObra, _outX0, _outY0 - HogarFilas, _outX1, _outY1);
         }
 
         // =================================================================

@@ -61,6 +61,33 @@ namespace Alkahest.Game
     }
 
     /// <summary>
+    /// (playtest 29, encargo D) Marca a los aparatos cuya
+    /// <see cref="IMovible.AnclaCelda"/> es EXACTAMENTE la esquina inferior
+    /// izquierda del rect que mide <see cref="IMovible.TamanoMundo"/> -- las
+    /// CINCO estaciones de la línea del taller (Crisol/Prensa/Columna/
+    /// Chispa/Ensayo): su ancla es la esquina de su propio rect exterior, el
+    /// mismo que tallan (ver `_outX0,_outY0` en cada una). NO es cierto para
+    /// `Dispenser` (el ancla es la celda de la boquilla, no una esquina de su
+    /// footprint) ni para `Criatura`/`Capullo` (el ancla es la celda de cuna/
+    /// repisa) -- esos archivos NO se tocan en este encargo (fuera de
+    /// Game/Crisol.cs, Game/Prensa.cs, Game/BancoChispa.cs,
+    /// Game/ColumnaEnsayo.cs, Game/EnsayoMaestro.cs, Game/Mudanza.cs y
+    /// Sim/SimLevelBuilder.cs fue "el resto de Game/", prohibido).
+    ///
+    /// POR QUÉ EXISTE: sin esta garantía, Mudanza NO tiene forma de saber
+    /// dónde caería la huella real de un aparato genérico -- solo conoce su
+    /// TAMAÑO, no su forma de anclarse -- así que la única opción honesta
+    /// para el caso general es dibujar la silueta centrada en el CURSOR (ver
+    /// <see cref="ActualizarVisuales"/>). Con la garantía de esta interfaz,
+    /// en cambio, Mudanza SÍ puede calcular la esquina/centro exactos donde
+    /// aterrizaría el aparato (`AnclaCelda` convertida a mundo + medio
+    /// `TamanoMundo`) y pegar la sombra ahí -- que es la "sombra alineada a
+    /// su ancla, cubriendo la huella real" que pide el encargo. Interfaz
+    /// vacía (marcador puro, sin miembros nuevos): cero coste, cero allocs.
+    /// </summary>
+    public interface IMovibleAnclaEsquina : IMovible { }
+
+    /// <summary>
     /// EL MODO MUDANZA (playtest 19, "taller movible"): agarrar un aparato del
     /// banco y recolocarlo donde quiera el jugador. Cesar, la noche antes de
     /// probar esto: *"ya tengo ganas de mover las cosas a mi antojo porque
@@ -634,7 +661,37 @@ namespace Alkahest.Game
             bool valido = dentroDelMundo && dentroDeAlcance;
 
             Vector2 tamano = _llevando.TamanoMundo;
-            _previewTr.position = _cursorWorld; // la silueta sigue al cursor -- se puede soltar "en el aire" (ver docblock de la clase).
+
+            // (playtest 29, encargo D) LA SOMBRA ALINEADA: para las cinco
+            // estaciones del taller (que implementan IMovibleAnclaEsquina,
+            // ver ese docblock) la silueta se pega a la huella REAL que
+            // tallaría Reposicionar -- esquina inferior izquierda =
+            // anclaCandidata (en celdas -> mundo), centro = esquina + mitad
+            // del tamaño. Es la MISMA aritmética que cada estación usa para
+            // calcular su propio `_centro` a partir de su rect exterior (ver
+            // Game/Crisol.cs `RecalcularRegiones`), así que a igual
+            // anclaCandidata la sombra cae exactamente donde caerá la
+            // mampostería nueva. Antes de esta ronda la silueta SIEMPRE
+            // seguía al cursor sin tener en cuenta el offset de agarre --
+            // Cesar: "la sombra... debería cubrirlas y servir para
+            // reposicionarlas... pequeña y/o desalineada". Para el resto de
+            // aparatos (Dispenser/Criatura/Capullo, sin esa garantía porque
+            // su AnclaCelda no es una esquina) se conserva el comportamiento
+            // ORIGINAL -- centrada en el cursor, "se puede soltar en el
+            // aire" -- que es todo lo que Mudanza puede hacer sin conocer su
+            // forma real de anclarse.
+            if (_llevando is IMovibleAnclaEsquina && _hasCursorCell)
+            {
+                float c = SimRenderer.CellWorldSize;
+                _previewTr.position = new Vector3(
+                    anclaCandidata.x * c + tamano.x * 0.5f,
+                    anclaCandidata.y * c + tamano.y * 0.5f,
+                    _cursorWorld.z);
+            }
+            else
+            {
+                _previewTr.position = _cursorWorld; // la silueta sigue al cursor -- se puede soltar "en el aire" (ver docblock de la clase).
+            }
             _previewTr.localScale = new Vector3(Mathf.Max(0.02f, tamano.x), Mathf.Max(0.02f, tamano.y), 1f);
 
             Color32 colorBase = valido ? ColorValido : ColorInvalido;

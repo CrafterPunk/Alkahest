@@ -2441,3 +2441,14 @@ el aire ya no queda como calcomanía. También en este lote: fix del arranque mu
 ANFITRIÓN "no hiciera nada") y ANFITRIÓN que cae solo a taller LOCAL con aviso si Steam no está
 abierto. Máquinas como objetos de red (mudanza para invitados): pospuesto a la siguiente ronda
 por decisión de Cesar ("con que el host pueda ahora me basta").
+
+**Playtest 29, segundo lote (bugs del playtest de Cesar)**: mudanza sin huellas (borrar mampostería
+vieja + `ActualizarObra` con handle — antes los muros viejos quedaban REGISTRADOS como obra y el
+cincel se negaba a quitarlos: piedra fantasma indestructible); Columna y Ensayo movibles (las 5
+estaciones); sombra de agarre alineada a la huella real; zoom con rueda (techo compartido con
+Tab, vista actual = máxima cercanía); `steam_appid.txt` junto al exe de la build MULTI (sin él
+SteamAPI fallaba con Steam abierto — el "no estoy conectado" del reporte); aviso de caída a local
+legible, con causas reales, caducidad y botón. Builds: la buena es `ChaosAlchemyMulti`
+(`ChaosAlchemyDemo` es del template, borrable); en el editor manda la ESCENA ABIERTA (menú 2
+abre la MULTI). PENDIENTE al cierre de la ronda: compilación del lote 2 en Unity (desplegado
+completo; Cesar no estaba frente al PC — recompila al enfocar Unity).

@@ -52,11 +52,23 @@ namespace Alkahest.Game
     ///     se dejan caer las muestras). Las dos bocas se distinguen por forma
     ///     y por altura, sin un solo cartel.
     ///
-    /// TODA LA MAMPOSTERÍA LA TALLA `Sim/SimLevelBuilder.BuildColumnaEnsayo`
-    /// (regla 47: una sola fuente de verdad del plano). Esta clase solo lee
-    /// sus constantes y pone encima el vidrio, los zunchos y la voz.
+    /// TODA LA MAMPOSTERÍA LA TALLABA `Sim/SimLevelBuilder.BuildColumnaEnsayo`
+    /// (regla 47: una sola fuente de verdad del plano) HASTA EL PLAYTEST 29:
+    /// Cesar, probando el 27/28, "la tercera... estructura no la puedo
+    /// mover" -- la Columna era la única de las cinco estaciones de la línea
+    /// del taller sin `IMovible`, precisamente porque su tallado vivía en un
+    /// método `private static` de SimLevelBuilder sin ninguna instancia que
+    /// pudiera reinvocarlo al reposicionar. El tallado (misma aritmética,
+    /// letra por letra) se mudó aquí como <see cref="TallarEnPlano"/> --
+    /// mismo patrón que Crisol/Prensa/BancoChispa/EnsayoMaestro -- y ahora
+    /// también existe <see cref="Reposicionar"/> (borra la mampostería vieja,
+    /// talla la nueva, actualiza el registro anticincel). Las CONSTANTES de
+    /// geometría (`ColumnaX0/Ancho/Muro/Alto/BocaFilas/BocaVuelo/MarcaPaso/
+    /// TanqueAlto`) SIGUEN viviendo en SimLevelBuilder -- eso es el plano, no
+    /// el tallado, y regla 47 pide UNA fuente de verdad para las coordenadas,
+    /// no que cada método que las use tenga que vivir en el mismo archivo.
     /// </summary>
-    public sealed class ColumnaEnsayo : MonoBehaviour, IMaquinaInteractiva
+    public sealed class ColumnaEnsayo : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
     {
         /// <summary>Entre el fondo del taller (-10) y el sprite de la simulación (-5): ver el punto 3 del docblock.</summary>
         private const int OrdenVidrio = -7;
@@ -73,9 +85,15 @@ namespace Alkahest.Game
         private Transform _player;
         private SubstanceKnowledge _conocimiento;
 
+        /// <summary>Pared izquierda del fuste (antes constante `SimLevelBuilder.ColumnaX0`) y fila de la losa del cuarto -- ambas mutables desde el playtest 29, la Columna se puede reposicionar.</summary>
+        private int _fusteX0, _baseY;
         private int _intX0, _intX1, _intY0, _intY1; // hueco interior del fuste.
+        private int _outX0, _outX1, _outY0, _outY1; // rect exterior completo (abocinado incluido) -- lo que registra ObraDelTaller y lo que mide TamanoMundo.
         /// <summary>Centro del TANQUE (donde cuelgan los rótulos) y centro del FUSTE (el punto de foco). Son distintos a propósito: ver <see cref="PuntoFoco"/>.</summary>
         private Vector3 _centro, _centroFuste, _centroRotulo, _centroBoca;
+
+        /// <summary>(playtest 29) Handle en <see cref="SimLevelBuilder.ObraDelTaller"/> -- ver el docblock gemelo en Game/Crisol.cs (`_handleObra`).</summary>
+        private int _handleObra = -1;
 
         private string _lectura;
         private float _lecturaHasta;
@@ -101,29 +119,241 @@ namespace Alkahest.Game
         public Vector3 PuntoFoco => _centroFuste;
         public float RangoFoco => ProximityRange;
 
-        /// <summary>Inyección de dependencias desde AlkahestGameBootstrap. La Columna no lleva ancla por parámetro: su sitio son las constantes `SimLevelBuilder.ColumnaX0/Ancho/Muro/Alto` (regla 47).</summary>
+        // ---- IMovible (playtest 29). El ancla es la esquina inferior
+        // izquierda del rect EXTERIOR (abocinado incluido) -- exactamente lo
+        // que mide TamanoMundo -- mismo patrón que Crisol/Prensa/BancoChispa/
+        // EnsayoMaestro, para que la sombra de Game/Mudanza.cs se pueda
+        // alinear a la huella real (ver IMovibleAnclaEsquina en ese archivo).
+        public Vector3 CentroMundo => _centro;
+        public Vector2 TamanoMundo => new Vector2(
+            (_outX1 - _outX0 + 1) * SimRenderer.CellWorldSize,
+            (_outY1 - _outY0 + 1) * SimRenderer.CellWorldSize);
+        public Vector2Int AnclaCelda => new Vector2Int(_outX0, _outY0);
+
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            int span = _outX1 - _outX0 + 1;
+            int alto = _outY1 - _outY0 + 1;
+            return anclaCelda.x >= 1 && anclaCelda.x + span - 1 <= CellGrid.W - 2
+                && anclaCelda.y >= 1 && anclaCelda.y + alto - 1 <= CellGrid.H - 2;
+        }
+
+        /// <summary>Inyección de dependencias desde AlkahestGameBootstrap. FIRMA SIN CAMBIOS: la Columna sigue sin recibir ancla por parámetro, solo arranca en el sitio de fábrica que dan las constantes `SimLevelBuilder.ColumnaX0`/`CuartoY0+2` -- Mudanza es quien la mueve después.</summary>
         public void Init(AlkahestSim sim, Transform player, SubstanceKnowledge conocimiento)
         {
             _sim = sim;
             _player = player;
             _conocimiento = conocimiento;
 
-            _intX0 = SimLevelBuilder.ColumnaX0 + SimLevelBuilder.ColumnaMuro;
-            _intX1 = SimLevelBuilder.ColumnaX0 + SimLevelBuilder.ColumnaAncho - 1 - SimLevelBuilder.ColumnaMuro;
-            _intY0 = SimLevelBuilder.EstacionSueloY;
-            _intY1 = _intY0 + SimLevelBuilder.ColumnaAlto - 1;
+            _fusteX0 = SimLevelBuilder.ColumnaX0;
+            _baseY = SimLevelBuilder.CuartoY0 + 2;
+
+            RecalcularRegion();
+            BuildVisual();
+
+            MachineFocus.Registrar(this);
+            // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
+            // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
+            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
+            Mudanza.RegistrarMovible(this);
+        }
+
+        /// <summary>
+        /// (playtest 29) Extraído de Init para que <see cref="Reposicionar"/>
+        /// también pueda recalcular la geometría tras mover el ancla.
+        /// TAMBIÉN arrastra los sprites hijos: `BuildVisual` los parenta con
+        /// `SetParent(transform, false)` y luego fija su POSICIÓN ABSOLUTA
+        /// (world-space) -- Unity la convierte en un `localPosition` fijo
+        /// relativo al padre EN ESE MOMENTO. Mover `transform.position` aquí
+        /// arrastra a todos los hijos por el mismo delta sin recalcular cada
+        /// sprite a mano (mismo mecanismo que usa Game/Crisol.cs).
+        /// </summary>
+        private void RecalcularRegion()
+        {
+            var h = Calcular(_fusteX0, _baseY);
+            _intX0 = h.IntX0; _intX1 = h.IntX1;
+            _intY0 = h.Y0; _intY1 = h.YTope;
+            _outX0 = h.OutX0; _outX1 = h.OutX1; _outY0 = h.OutY0; _outY1 = h.OutY1;
 
             float c = SimRenderer.CellWorldSize;
             _centro = new Vector3((_intX0 + (_intX1 - _intX0 + 1) * 0.5f) * c, (_intY0 + SimLevelBuilder.ColumnaTanqueAlto * 0.5f) * c, 0f);
             _centroFuste = new Vector3(_centro.x, (_intY0 + (_intY1 - _intY0 + 1) * 0.5f) * c, 0f);
             _centroRotulo = new Vector3(_centro.x, (_intY0 + SimLevelBuilder.ColumnaTanqueAlto + 3f) * c, 0f);
             _centroBoca = new Vector3(_centro.x, (_intY1 + SimLevelBuilder.ColumnaBocaFilas + 2f) * c, 0f);
-
-            BuildVisual();
-            MachineFocus.Registrar(this);
+            transform.position = _centro;
         }
 
-        private void OnDestroy() => MachineFocus.Olvidar(this);
+        // ---- Huella compartida por la instancia y el tallado del plano ----
+        private struct Huella
+        {
+            public int X0, X1;             // muros del fuste (piedra), extremo IZQ/DER.
+            public int IntX0, IntX1;       // hueco interior del fuste (entre los dos muros).
+            public int Y0, YTope;          // primera/última fila del fuste.
+            public int YBoca;              // última fila del abocinado.
+            public int OutX0, OutX1, OutY0, OutY1; // rect exterior completo.
+        }
+
+        private static Huella Calcular(int x0, int baseY)
+        {
+            Huella h;
+            h.X0 = x0;
+            h.X1 = x0 + SimLevelBuilder.ColumnaAncho - 1;
+            h.IntX0 = x0 + SimLevelBuilder.ColumnaMuro;
+            h.IntX1 = h.X1 - SimLevelBuilder.ColumnaMuro;
+            h.Y0 = baseY + 1;
+            h.YTope = h.Y0 + SimLevelBuilder.ColumnaAlto - 1;
+            h.YBoca = h.YTope + SimLevelBuilder.ColumnaBocaFilas;
+            h.OutX0 = h.X0 - SimLevelBuilder.ColumnaBocaVuelo;
+            h.OutX1 = h.X1 + SimLevelBuilder.ColumnaBocaVuelo;
+            h.OutY0 = baseY;
+            h.OutY1 = h.YBoca;
+            return h;
+        }
+
+        /// <summary>Cuánto se ha abierto la boca en la fila `i` (0 = la primera sobre el fuste). Misma fórmula que Game/Crisol.cs (`VueloEnFila`), copiada porque son clases sin relación -- redondeo entero a propósito para que la rampa se vea escalonada, no interpolada.</summary>
+        private static int VueloEnFila(int i) =>
+            (SimLevelBuilder.ColumnaBocaVuelo * (i + 1) + SimLevelBuilder.ColumnaBocaFilas / 2) / SimLevelBuilder.ColumnaBocaFilas;
+
+        /// <summary>Talla el fuste + el abocinado + las marcas de nivel sobre el CellGrid del plano. Construcción de nivel: `SetCell`, no `PaintStable` (regla 29 es para runtime). Mudado aquí desde SimLevelBuilder.BuildColumnaEnsayo en el playtest 29 -- ver el docblock de la clase.</summary>
+        public static void TallarEnPlano(CellGrid grid, int x0, int baseY)
+        {
+            var h = Calcular(x0, baseY);
+
+            // ---- El FUSTE: dos muros de PIEDRA de ColumnaMuro celdas.
+            for (int y = h.Y0; y <= h.YTope; y++)
+            {
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    if (CellGrid.InBounds(h.X0 + t, y)) grid.SetCell(h.X0 + t, y, MaterialId.Stone);
+                    if (CellGrid.InBounds(h.X1 - t, y)) grid.SetCell(h.X1 - t, y, MaterialId.Stone);
+                }
+                for (int x = h.IntX0; x <= h.IntX1; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+
+            // ---- LA BOCA SUPERIOR, ABOCINADA: los dos muros se abren hacia
+            // fuera fila a fila, así que la materia soltada desde arriba
+            // resbala hacia dentro en vez de rebotar en el canto.
+            for (int i = 0; i < SimLevelBuilder.ColumnaBocaFilas; i++)
+            {
+                int y = h.YTope + 1 + i;
+                int vuelo = VueloEnFila(i);
+                int izq = h.X0 - vuelo;
+                int der = h.X1 + vuelo;
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    if (CellGrid.InBounds(izq + t, y)) grid.SetCell(izq + t, y, MaterialId.Stone);
+                    if (CellGrid.InBounds(der - t, y)) grid.SetCell(der - t, y, MaterialId.Stone);
+                }
+                for (int x = izq + SimLevelBuilder.ColumnaMuro; x <= der - SimLevelBuilder.ColumnaMuro; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+
+            // ---- MARCAS DE NIVEL: un nudillo de piedra que sobresale a cada
+            // lado del fuste cada `ColumnaMarcaPaso` filas, NUNCA dentro del
+            // hueco de observación.
+            for (int y = h.Y0 + SimLevelBuilder.ColumnaMarcaPaso; y <= h.YTope; y += SimLevelBuilder.ColumnaMarcaPaso)
+            {
+                if (CellGrid.InBounds(h.X0 - 1, y)) grid.SetCell(h.X0 - 1, y, MaterialId.Stone);
+                if (CellGrid.InBounds(h.X1 + 1, y)) grid.SetCell(h.X1 + 1, y, MaterialId.Stone);
+            }
+
+            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
+            // hace la INSTANCIA en Init (ver `_handleObra`); este método es
+            // estático y corre antes de que exista ninguna instancia.
+        }
+
+        /// <summary>Misma talla que <see cref="TallarEnPlano"/> pero EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
+        private void TallarEnCaliente()
+        {
+            var h = Calcular(_fusteX0, _baseY);
+
+            for (int y = h.Y0; y <= h.YTope; y++)
+            {
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    _sim.PaintStable(h.X0 + t, y, 0, MaterialId.Stone);
+                    _sim.PaintStable(h.X1 - t, y, 0, MaterialId.Stone);
+                }
+                _sim.PaintRect(h.IntX0, y, h.IntX1 - h.IntX0 + 1, 1, MaterialId.Empty);
+            }
+
+            for (int i = 0; i < SimLevelBuilder.ColumnaBocaFilas; i++)
+            {
+                int y = h.YTope + 1 + i;
+                int vuelo = VueloEnFila(i);
+                int izq = h.X0 - vuelo, der = h.X1 + vuelo;
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    _sim.PaintStable(izq + t, y, 0, MaterialId.Stone);
+                    _sim.PaintStable(der - t, y, 0, MaterialId.Stone);
+                }
+                _sim.PaintRect(izq + SimLevelBuilder.ColumnaMuro, y,
+                    (der - SimLevelBuilder.ColumnaMuro) - (izq + SimLevelBuilder.ColumnaMuro) + 1, 1, MaterialId.Empty);
+            }
+
+            for (int y = h.Y0 + SimLevelBuilder.ColumnaMarcaPaso; y <= h.YTope; y += SimLevelBuilder.ColumnaMarcaPaso)
+            {
+                _sim.PaintStable(h.X0 - 1, y, 0, MaterialId.Stone);
+                _sim.PaintStable(h.X1 + 1, y, 0, MaterialId.Stone);
+            }
+        }
+
+        /// <summary>
+        /// (playtest 29, encargo B) Borra la mampostería VIEJA de la huella
+        /// `h` -- ver el docblock gemelo en Game/Crisol.cs (`BorrarEnCaliente`).
+        /// A diferencia de las otras cuatro estaciones, NINGUNA fila del
+        /// fuste toca la losa compartida del cuarto (`h.Y0` ya empieza en
+        /// `baseY+1`, nunca en `baseY`), así que aquí no hace falta excluir
+        /// ninguna fila: todo lo que talló esta máquina es genuinamente suyo.
+        /// El hueco interior del fuste (donde se observa la estratificación)
+        /// NUNCA se toca -- "el contenido... queda donde está", encargo B.
+        /// </summary>
+        private void BorrarEnCaliente(Huella h)
+        {
+            for (int y = h.Y0; y <= h.YTope; y++)
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    _sim.Paint(h.X0 + t, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.X1 - t, y, 0, MaterialId.Empty);
+                }
+
+            for (int i = 0; i < SimLevelBuilder.ColumnaBocaFilas; i++)
+            {
+                int y = h.YTope + 1 + i;
+                int vuelo = VueloEnFila(i);
+                int izq = h.X0 - vuelo, der = h.X1 + vuelo;
+                for (int t = 0; t < SimLevelBuilder.ColumnaMuro; t++)
+                {
+                    _sim.Paint(izq + t, y, 0, MaterialId.Empty);
+                    _sim.Paint(der - t, y, 0, MaterialId.Empty);
+                }
+            }
+
+            for (int y = h.Y0 + SimLevelBuilder.ColumnaMarcaPaso; y <= h.YTope; y += SimLevelBuilder.ColumnaMarcaPaso)
+            {
+                _sim.Paint(h.X0 - 1, y, 0, MaterialId.Empty);
+                _sim.Paint(h.X1 + 1, y, 0, MaterialId.Empty);
+            }
+        }
+
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            BorrarEnCaliente(Calcular(_fusteX0, _baseY)); // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
+
+            _fusteX0 += anclaCelda.x - _outX0;
+            _baseY = anclaCelda.y;
+            RecalcularRegion();
+            TallarEnCaliente(); // 2) TALLAR la nueva. regla 36: NUNCA volver a llamar a Init/BuildVisual para mover.
+
+            SimLevelBuilder.ActualizarObra(_handleObra, _outX0, _outY0, _outX1, _outY1); // 3) ACTUALIZAR el registro anticincel.
+        }
+
+        private void OnDestroy()
+        {
+            MachineFocus.Olvidar(this);
+            Mudanza.OlvidarMovible(this);
+        }
 
         private void BuildVisual()
         {

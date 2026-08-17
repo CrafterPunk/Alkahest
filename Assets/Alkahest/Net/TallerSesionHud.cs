@@ -26,6 +26,7 @@ namespace Alkahest.Net
     {
         /// <summary>(fix del atasco) Aviso persistente de la caída a modo local sin Steam -- se muestra en el panel hasta que la sesión arranca.</summary>
         private string _avisoLocal;
+        private float _avisoLocalHasta; // (fix legibilidad) el aviso caduca solo y desaparece al arrancar la sesión.
         private const int VentanaId = 0x414C4B4E; // "ALKN"
 
         /// <summary>Jugadores máximos del lobby. Cuatro: el mandato de Cesar para este POC.</summary>
@@ -108,10 +109,12 @@ namespace Alkahest.Net
                     break;
             }
 
-            if (!string.IsNullOrEmpty(_avisoLocal))
+            if (!string.IsNullOrEmpty(_avisoLocal) && Time.time < _avisoLocalHasta)
             {
                 GUILayout.Space(4f);
-                GUILayout.Label(_avisoLocal, UiStyles.CuerpoTenue);
+                // Cuerpo (no CuerpoTenue): Cesar reportó que "apenas se lee".
+                GUILayout.Label(_avisoLocal, UiStyles.Cuerpo);
+                if (GUILayout.Button("entendido", UiStyles.Boton)) _avisoLocal = null;
             }
             if (!string.IsNullOrEmpty(sessionCoordinator.LastError))
             {
@@ -151,7 +154,13 @@ namespace Alkahest.Net
                 if (modo == TransportMode.Steam && !steamListo)
                 {
                     modo = TransportMode.LocalLoopback;
-                    _avisoLocal = "Steam no está abierto: taller LOCAL (solo este PC). Para jugar con amigos, abre Steam antes.";
+                    // (fix, reporte de Cesar: "apenas se lee" + "sí estoy
+                    // conectado") El diagnóstico real puede ser DOS cosas:
+                    // cliente cerrado O steam_appid.txt ausente junto al exe
+                    // (el caso de Cesar: Steam abierto y aun así Init falla).
+                    // El texto nombra ambas, se dibuja GRANDE y caduca solo.
+                    _avisoLocal = "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nAbrí tu taller en modo LOCAL: puedes jugar; para amigos, rehaz la build o abre Steam y reinicia.";
+                    _avisoLocalHasta = Time.time + 14f;
                 }
                 sessionCoordinator.StartHost(modo, MaxJugadores);
             }

@@ -39,7 +39,7 @@ namespace Alkahest.Game
     /// NADA. Es el único aparato de análisis puro del laboratorio: no
     /// transforma, revela.
     /// </summary>
-    public sealed class BancoChispa : MonoBehaviour, IMaquinaInteractiva, IMovible
+    public sealed class BancoChispa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
     {
         /// <summary>3.2 -&gt; 3.4: el banco mide 27 celdas y hay que poder atenderlo desde cualquiera de sus dos electrodos.</summary>
         private const float ProximityRange = 3.4f;
@@ -76,6 +76,9 @@ namespace Alkahest.Game
         private int _baseY;
         private int _banX0, _banX1, _banY0, _banY1;
         private int _outX0, _outX1, _outY0, _outY1;
+
+        /// <summary>(playtest 29) Handle en <see cref="SimLevelBuilder.ObraDelTaller"/> -- ver el docblock gemelo en Game/Crisol.cs (`_handleObra`).</summary>
+        private int _handleObra = -1;
 
         private Vector3 _centro, _centroBandeja, _centroRotulo, _centroLampara;
 
@@ -127,6 +130,9 @@ namespace Alkahest.Game
             UpdateLamparaTint();
 
             MachineFocus.Registrar(this);
+            // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
+            // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
+            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -190,7 +196,9 @@ namespace Alkahest.Game
                     if (CellGrid.InBounds(h.OutX1 - k, y)) grid.SetCell(h.OutX1 - k, y, MaterialId.Stone);
                 }
 
-            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
+            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
+            // hace la INSTANCIA en Init (ver `_handleObra`); este método es
+            // estático y corre antes de que exista ninguna instancia.
         }
 
         /// <summary>Misma geometría EN CALIENTE (regla 29). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
@@ -212,6 +220,25 @@ namespace Alkahest.Game
                 }
         }
 
+        /// <summary>(playtest 29, encargo B) Borra la mampostería VIEJA de la huella `h` -- ver el docblock gemelo en Game/Crisol.cs (`BorrarEnCaliente`) para el porqué exacto de cada exclusión.</summary>
+        private void BorrarEnCaliente(Huella h)
+        {
+            for (int y = h.BanY0; y <= h.BanY1; y++)
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.Paint(h.BanX0 - t, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.BanX1 + t, y, 0, MaterialId.Empty);
+                }
+            // Los dos plintos, EXCLUYENDO la fila `h.OutY0` (=baseY, la losa
+            // compartida -- jamás piedra del mundo).
+            for (int y = h.OutY0 + 1; y <= h.OutY1; y++)
+                for (int k = 0; k < PlintoAncho; k++)
+                {
+                    _sim.Paint(h.OutX0 + k, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.OutX1 - k, y, 0, MaterialId.Empty);
+                }
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -220,10 +247,14 @@ namespace Alkahest.Game
 
         public void Reposicionar(Vector2Int anclaCelda)
         {
+            BorrarEnCaliente(Calcular(_anchorX, _baseY)); // 1) BORRAR la mampostería vieja.
+
             _anchorX += anclaCelda.x - _outX0;
             _baseY = anclaCelda.y;
             RecalcularRegion();
-            TallarEnCaliente();
+            TallarEnCaliente(); // 2) TALLAR la nueva.
+
+            SimLevelBuilder.ActualizarObra(_handleObra, _outX0, _outY0, _outX1, _outY1); // 3) ACTUALIZAR el registro anticincel.
         }
 
         private void Update()

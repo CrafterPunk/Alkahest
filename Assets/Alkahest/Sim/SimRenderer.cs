@@ -115,6 +115,19 @@ namespace Alkahest.Sim
         /// </summary>
         private const float WideViewMultiplier = 2.2f;
 
+        // -----------------------------------------------------------------
+        // ZOOM CON LA RUEDA (playtest 29, pedido de Cesar: "zoom out con el
+        // scroll un poco, y tener la posición actual como máxima cercanía").
+        // La posición ACTUAL (factor 1) es el tope de cercanía -- nunca se
+        // acerca más que hoy; la rueda solo ALEJA, hasta el mismo techo que
+        // la vista ampliada de Tab (comparten multiplicador: un solo "lejos"
+        // en todo el juego, no dos). Coste: cero de verdad -- Tab ya probó
+        // que todo el camino de render (refresco viewport-aware, rótulos,
+        // alcance del frasco) se adapta al orthographicSize cambiante.
+        // -----------------------------------------------------------------
+        private const float ZoomRuedaPaso = 0.12f;   // por muesca de rueda: suave, "un poco", como pidió.
+        private float _zoomRueda = 1f;               // 1 = máxima cercanía (la vista de siempre).
+
         /// <summary>Colchón de chunks fuera del rectángulo visible que el barrido de render sigue considerando "cerca de la vista" (ver RenderFrame). En chunks, no celdas: 2 = 32 celdas de margen a cada lado.</summary>
         private const int ViewMarginChunks = 2;
 
@@ -405,7 +418,26 @@ namespace Alkahest.Sim
             var kb = Keyboard.current;
             bool wide = kb != null && kb.tabKey.isPressed
                         && !UiStyles.EscribiendoTexto && !JournalHud.Abierto;
-            float targetSize = wide ? _baseOrthoSize * WideViewMultiplier : _baseOrthoSize;
+
+            // ZOOM CON LA RUEDA (ver el bloque de constantes): mismas guardas
+            // que Tab (escribiendo texto / diario abierto no tocan cámara).
+            // Rueda abajo = alejar, rueda arriba = acercar, clampeado entre
+            // la vista de siempre (1) y el techo compartido con Tab.
+            var raton = UnityEngine.InputSystem.Mouse.current;
+            if (raton != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
+            {
+                float muescas = raton.scroll.ReadValue().y / 120f; // 120 = una muesca estándar en Windows; en ratones lisos llega fraccionado y también funciona.
+                if (muescas != 0f)
+                {
+                    _zoomRueda = Mathf.Clamp(_zoomRueda - muescas * ZoomRuedaPaso * WideViewMultiplier,
+                        1f, WideViewMultiplier);
+                }
+            }
+
+            // Tab manda mientras se mantiene (es el gesto de "ver el plano
+            // entero"); al soltarlo se vuelve al zoom de rueda del jugador.
+            float factorZoom = wide ? WideViewMultiplier : _zoomRueda;
+            float targetSize = _baseOrthoSize * factorZoom;
 
             float dt = Time.deltaTime;
             float t = snapAhora ? 1f : (1f - Mathf.Exp(-CameraFollowSharpness * dt));

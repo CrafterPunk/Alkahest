@@ -63,7 +63,7 @@ namespace Alkahest.Game
     /// E baja la mandíbula en 0.5s y aplica <see cref="Universe.Prensa"/>
     /// celda a celda -- Compactar/Reventar/Escupir/Resistir/Nada.
     /// </summary>
-    public sealed class Prensa : MonoBehaviour, IMaquinaInteractiva, IMovible
+    public sealed class Prensa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
     {
         private enum State { Arriba, Bajando, Cooldown }
 
@@ -109,6 +109,9 @@ namespace Alkahest.Game
         private int _lechoX0, _lechoX1, _lechoY0, _lechoY1;
         private int _outX0, _outX1, _outY0, _outY1;
         private int _jambaTopY, _dintelY0;
+
+        /// <summary>(playtest 29) Handle en <see cref="SimLevelBuilder.ObraDelTaller"/> -- ver el docblock gemelo en Game/Crisol.cs (`_handleObra`).</summary>
+        private int _handleObra = -1;
 
         private Vector3 _centro, _centroLecho, _centroRotulo;
 
@@ -164,6 +167,9 @@ namespace Alkahest.Game
             PosicionarMandibula(1f);
 
             MachineFocus.Registrar(this);
+            // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
+            // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
+            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -238,7 +244,10 @@ namespace Alkahest.Game
                 for (int x = h.OutX0; x <= h.OutX1; x++)
                     if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
 
-            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
+            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
+            // hace la INSTANCIA en Init (ver `_handleObra`), porque este
+            // método es estático y corre ANTES de que exista ninguna
+            // instancia que pueda guardarse el handle. Mismo rect exacto.
         }
 
         /// <summary>Misma geometría EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
@@ -264,6 +273,34 @@ namespace Alkahest.Game
                     _sim.PaintStable(x, y, 0, MaterialId.Stone);
         }
 
+        /// <summary>(playtest 29, encargo B) Borra la mampostería VIEJA de la huella `h` -- ver el docblock gemelo en Game/Crisol.cs (`BorrarEnCaliente`) para el porqué exacto de cada exclusión.</summary>
+        private void BorrarEnCaliente(Huella h)
+        {
+            // Muros del lecho -- EXCLUYENDO `h.LechoY0-1` (la losa
+            // compartida del cuarto) y sin vaciar el interior (puede tener
+            // materia: "el contenido... queda donde está", encargo B).
+            for (int y = h.LechoY0; y <= h.LechoY1; y++)
+                for (int t = 1; t <= MuroGrosor; t++)
+                {
+                    _sim.Paint(h.LechoX0 - t, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.LechoX1 + t, y, 0, MaterialId.Empty);
+                }
+
+            // Las dos jambas, EXCLUYENDO la fila `h.OutY0` (=baseY, la losa
+            // compartida -- jamás piedra del mundo).
+            for (int y = h.OutY0 + 1; y <= h.JambaTopY; y++)
+                for (int k = 0; k < JambaAncho; k++)
+                {
+                    _sim.Paint(h.OutX0 + k, y, 0, MaterialId.Empty);
+                    _sim.Paint(h.OutX1 - k, y, 0, MaterialId.Empty);
+                }
+
+            // El dintel: genuinamente propio (muy por encima del piso), se borra entero.
+            for (int y = h.DintelY0; y < h.DintelY0 + DintelFilas; y++)
+                for (int x = h.OutX0; x <= h.OutX1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -272,12 +309,18 @@ namespace Alkahest.Game
 
         public void Reposicionar(Vector2Int anclaCelda)
         {
+            // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
+            BorrarEnCaliente(Calcular(_anchorX, _baseY));
+
             _anchorX += anclaCelda.x - _outX0;
             _baseY = anclaCelda.y;
             RecalcularRegion();
-            TallarEnCaliente();
+            TallarEnCaliente(); // 2) TALLAR la nueva.
             RecalcularRecorridoMandibula();
             PosicionarMandibula(EstadoFraccion());
+
+            // 3) ACTUALIZAR el registro anticincel.
+            SimLevelBuilder.ActualizarObra(_handleObra, _outX0, _outY0, _outX1, _outY1);
         }
 
         private void Update()
