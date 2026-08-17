@@ -52,7 +52,7 @@ namespace Alkahest.EditorTools
         private const string OutputDir = "Builds/ChaosAlchemyMulti";
         private const string OutputExe = OutputDir + "/ChaosAlchemyMulti.exe";
 
-        [MenuItem("Alkahest/2. Generar escena Lab MULTI")]
+        [MenuItem("Alkahest/2. Generar escena Lab MULTI (taller compartido)", priority = 2)]
         public static void GenerateLabMultiScene()
         {
             EnsureFolders();
@@ -69,7 +69,7 @@ namespace Alkahest.EditorTools
         /// REGLA 14 de CLAUDE.md: regenera la escena antes de compilar — nunca
         /// confiar en el .unity guardado en el repo.
         /// </summary>
-        [MenuItem("Alkahest/4. Build MULTI Windows")]
+        [MenuItem("Alkahest/4. Build MULTI Windows (taller compartido)", priority = 4)]
         public static void BuildMultiWindows()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
@@ -343,6 +343,19 @@ namespace Alkahest.EditorTools
             networkGo.AddComponent<SteamBootstrap>();
             SteamLobbyService steamLobbyService = networkGo.AddComponent<SteamLobbyService>();
             SessionCoordinator sessionCoordinator = networkGo.AddComponent<SessionCoordinator>();
+            // (fix playtest 29, reporte de Cesar: "No hay una referencia a
+            // NetworkManager configurada") El cableado de referencias vivía
+            // AL FINAL del método: cualquier excepción intermedia dejaba el
+            // coordinador creado pero SIN cablear, y la escena guardaba ese
+            // estado a medias -- el error solo aparecía al pulsar ANFITRIÓN.
+            // Ahora las referencias críticas se asignan AQUÍ MISMO, en la
+            // línea siguiente a su creación: no existe ventana de fallo.
+            {
+                var wiringInmediato = new SerializedObject(sessionCoordinator);
+                wiringInmediato.FindProperty("networkManager").objectReferenceValue = networkManager;
+                wiringInmediato.FindProperty("unityTransport").objectReferenceValue = unityTransport;
+                wiringInmediato.ApplyModifiedPropertiesWithoutUndo();
+            }
             networkGo.AddComponent<NetDiagnostics>();
             TallerSesionHud sesionHud = networkGo.AddComponent<TallerSesionHud>();
 

@@ -15,7 +15,7 @@ namespace Alkahest.EditorTools
         private const string OutputDir = "Builds/ChaosAlchemyDemo";
         private const string OutputExe = OutputDir + "/ChaosAlchemy.exe";
 
-        [MenuItem("Alkahest/2. Build demo Windows")]
+        [MenuItem("Alkahest/3. Build demo Windows (un jugador)", priority = 3)]
         public static void BuildDemoWindows()
         {
             // (pre-vuelo build) Antes esto solo comprobaba que el .unity EXISTIERA en
@@ -113,7 +113,7 @@ namespace Alkahest.EditorTools
                 "OK");
         }
 
-        [MenuItem("Alkahest/3. Abrir carpeta de builds")]
+        [MenuItem("Alkahest/5. Abrir carpeta de builds", priority = 5)]
         public static void RevealBuilds()
         {
             Directory.CreateDirectory(OutputDir);

@@ -125,7 +125,7 @@ namespace Alkahest.Sim
         // que todo el camino de render (refresco viewport-aware, rótulos,
         // alcance del frasco) se adapta al orthographicSize cambiante.
         // -----------------------------------------------------------------
-        private const float ZoomRuedaPaso = 0.12f;   // por muesca de rueda: suave, "un poco", como pidió.
+        private const float ZoomRuedaPaso = 0.28f;   // (ajuste playtest 29: "va muy lento") ~2-3 muescas cubren todo el rango.
         private float _zoomRueda = 1f;               // 1 = máxima cercanía (la vista de siempre).
 
         /// <summary>Colchón de chunks fuera del rectángulo visible que el barrido de render sigue considerando "cerca de la vista" (ver RenderFrame). En chunks, no celdas: 2 = 32 celdas de margen a cada lado.</summary>
@@ -426,7 +426,15 @@ namespace Alkahest.Sim
             var raton = UnityEngine.InputSystem.Mouse.current;
             if (raton != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
             {
-                float muescas = raton.scroll.ReadValue().y / 120f; // 120 = una muesca estándar en Windows; en ratones lisos llega fraccionado y también funciona.
+                // (ajuste playtest 29, "tengo que mover mucho la ruedita")
+                // El Input System reporta la rueda en DOS escalas según
+                // dispositivo/plataforma: ±120 por muesca (Windows clásico) o
+                // ±1 (editor y muchos ratones). La normalización fija /120
+                // convertía la escala ±1 en pasos microscópicos -- el "va muy
+                // lento" de Cesar. Adaptativa: si llega grande se divide, si
+                // llega pequeña se usa tal cual.
+                float crudo = raton.scroll.ReadValue().y;
+                float muescas = Mathf.Abs(crudo) >= 100f ? crudo / 120f : crudo;
                 if (muescas != 0f)
                 {
                     _zoomRueda = Mathf.Clamp(_zoomRueda - muescas * ZoomRuedaPaso * WideViewMultiplier,

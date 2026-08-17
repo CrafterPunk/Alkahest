@@ -173,6 +173,31 @@ namespace Alkahest.Net
             // lista interna de NetworkPrefabs puede no existir aún y el
             // registro de AlkahestNetSceneBuilder queda pospuesto a aquí.
             // AddNetworkPrefab lanza si ya está registrado: se ignora.
+            // (fix playtest 29, "No hay una referencia a NetworkManager
+            // configurada en SessionCoordinator") RED DE SEGURIDAD SIMÉTRICA
+            // al cableado del builder: si la escena llegó con el coordinador
+            // sin cablear (generación interrumpida a mitad, escena guardada a
+            // medias), se recablea AQUÍ en runtime por reflexión -- el campo
+            // es [SerializeField] private del template (FriendsLoop, "no
+            // tocar salvo integración": preferimos reflexión desde NUESTRO
+            // archivo a modificar el suyo). Si ya está cableado, no se toca.
+            var coordinador = FindAnyObjectByType<FriendsLoop.Networking.SessionCoordinator>();
+            var nmParaCoordinador = FindAnyObjectByType<Unity.Netcode.NetworkManager>();
+            if (coordinador != null && nmParaCoordinador != null)
+            {
+                var campoNm = typeof(FriendsLoop.Networking.SessionCoordinator)
+                    .GetField("networkManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (campoNm != null && campoNm.GetValue(coordinador) == null)
+                {
+                    campoNm.SetValue(coordinador, nmParaCoordinador);
+                    var campoTransporte = typeof(FriendsLoop.Networking.SessionCoordinator)
+                        .GetField("unityTransport", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (campoTransporte != null && campoTransporte.GetValue(coordinador) == null)
+                        campoTransporte.SetValue(coordinador, nmParaCoordinador.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>());
+                    UnityEngine.Debug.LogWarning("[ChaosAlchemy] SessionCoordinator venía sin cablear (escena generada a medias): recableado en runtime. Regenera la escena MULTI (menú Alkahest) cuando puedas.");
+                }
+            }
+
             var nmPrefab = FindAnyObjectByType<Unity.Netcode.NetworkManager>();
             if (nmPrefab != null && nmPrefab.NetworkConfig != null && nmPrefab.NetworkConfig.PlayerPrefab != null)
             {
