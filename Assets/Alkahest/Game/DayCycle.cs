@@ -139,6 +139,27 @@ namespace Alkahest.Game
         /// </summary>
         public static bool HudSilenciado { get; private set; } = true;
 
+        /// <summary>
+        /// (playtest 28, POC multiplayer) Abre el taller de la escena MULTI,
+        /// que NO tiene ciclo de jornadas: ni Título, ni intro, ni reloj, ni
+        /// pantalla final. Los dos cerrojos de arriba arrancan en `true` a
+        /// propósito ("hasta que este componente corra su primer Update, el
+        /// juego está congelado") y en la escena MULTI ese Update no llega
+        /// nunca, porque no hay DayCycle en escena: sin esto, el frasco
+        /// ignoraría todos los clics y el HUD no se dibujaría jamás.
+        ///
+        /// Es lo ÚNICO que este archivo aporta a la sesión en red. No toca la
+        /// máquina de estados (`_phase` sigue donde estaba) porque en esa
+        /// escena no hay ninguna instancia que la haga girar; en la escena
+        /// clásica nadie llama a este método y el ciclo sigue mandando igual
+        /// que siempre a través de <c>ApplyPause</c>.
+        /// </summary>
+        public static void ForzarDesbloqueoSesion()
+        {
+            InputLocked = false;
+            HudSilenciado = false;
+        }
+
         private AlkahestSim _sim;
         private OrderSystem _orderSystem;
         private SubstanceKnowledge _knowledge;
@@ -846,7 +867,7 @@ namespace Alkahest.Game
             var r = new Rect((Screen.width - w) * 0.5f, UiStyles.S(8f), w, h);
 
             UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.Oro);
-            GUI.Label(r, "El Maestro os ha oído cavar -- primeros encargos disponibles.", UiStyles.CuerpoCentrado);
+            GUI.Label(r, "El Maestro te ha oído cavar -- primeros encargos disponibles.", UiStyles.CuerpoCentrado);
         }
 
         private void DrawDayEnd()
@@ -920,22 +941,22 @@ namespace Alkahest.Game
             {
                 case OrderSystem.Desenlace.Maestro:
                     tituloTexto = "MAESTRO";
-                    subtitulo = "El Maestro se inclina ante vosotros: sois maestros por derecho propio.";
+                    subtitulo = "El Maestro se inclina ante ti: eres maestro por derecho propio.";
                     colorTitulo = UiStyles.Oro;
                     break;
                 case OrderSystem.Desenlace.Oficial:
                     tituloTexto = "OFICIAL";
-                    subtitulo = "El Maestro os asciende a Oficial del taller: dominad el oficio, y volved a por más.";
+                    subtitulo = "El Maestro te asciende a Oficial del taller: domina el oficio, y vuelve a por más.";
                     colorTitulo = UiStyles.Exito;
                     break;
                 case OrderSystem.Desenlace.Aprendiz:
                     tituloTexto = "APRENDIZ";
-                    subtitulo = "El Maestro os concede el título de Aprendiz: un comienzo sólido.";
+                    subtitulo = "El Maestro te concede el título de Aprendiz: un comienzo sólido.";
                     colorTitulo = UiStyles.Exito;
                     break;
                 default:
                     tituloTexto = "DESPEDIDO";
-                    subtitulo = "El Maestro os despide del taller: esperaba más disciplina de vosotros.";
+                    subtitulo = "El Maestro te despide del taller: esperaba más disciplina de ti.";
                     colorTitulo = UiStyles.Peligro;
                     break;
             }
@@ -954,7 +975,7 @@ namespace Alkahest.Game
             {
                 int faltan = siguienteUmbral - favorFinal;
                 GUILayout.Space(UiStyles.S(4f));
-                GUILayout.Label($"Os faltaron {faltan} ★ para el siguiente escalón ({siguienteNombre}).",
+                GUILayout.Label($"Te faltaron {faltan} ★ para el siguiente escalón ({siguienteNombre}).",
                     UiStyles.CuerpoTenue);
             }
 

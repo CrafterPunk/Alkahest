@@ -1,6 +1,7 @@
 using UnityEngine;
 using Alkahest.Sim;
 using Alkahest.Audio;
+using Alkahest.Net;
 
 namespace Alkahest.Game
 {
@@ -106,6 +107,15 @@ namespace Alkahest.Game
 
         private void TrySpawn()
         {
+            // (playtest 28, EL TALLER COMPARTIDO) LA BIFURCACIÓN, en la
+            // PRIMERA línea y con un solo `if`: si la escena tiene un SimSync
+            // (= es la escena MULTI, ver Net/SimSync.cs) el reparto de lo que
+            // se instancia cambia por completo y vive en TrySpawnRed, más
+            // abajo. La escena Lab CLÁSICA no tiene SimSync: `EnEscena` es
+            // false, este `if` no entra nunca, y de aquí para abajo NO CAMBIÓ
+            // NI UNA LÍNEA.
+            if (SimSync.EnEscena) { TrySpawnRed(); return; }
+
             if (_spawned || _sim == null || _sim.Universe == null || _sim.Grid == null) return;
 
             // El árbitro de foco es estático y sobrevive a la recarga de escena
@@ -158,8 +168,13 @@ namespace Alkahest.Game
             // nutriente ya no tiene consumidor -- el limo sí: es el primer
             // gesto del juego entero (diseño §9, "hervir limo en el crisol: el
             // agua se va, sus arenas quedan").
+            // (playtest 27) Cada caño monta en SU columna: el de agua en la
+            // pared del cuarto, el de limo en el machón de piedra de la
+            // estación de fuentes. Es lo que separa los dos chorros SIN
+            // deformar el sprite del caño (mandato 7, Cesar: "no estires el
+            // tamaño del caño de Limo").
             var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
-                SimLevelBuilder.CanoAguaY, orderSystem);
+                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem, SimLevelBuilder.PilaAguaX0);
             // (playtest 26, fix integración) alcanceCano=12: los dos caños
             // comparten pared y con el voladizo default (5) sus chorros caían
             // por la MISMA columna -- el limo desembocaba en la pila del agua.
@@ -167,8 +182,13 @@ namespace Alkahest.Game
             // (SimLevelBuilder.PilaLimoX0..+5) y cada chorro aterriza a la
             // vista en su recipiente: la primera imagen del juego ya enseña
             // "cada boca, su pila".
+            // (playtest 27) alcanceCano vuelve al default 5: Cesar sobre el
+            // caño estirado del 26: "no estires el tamaño del caño de Limo,
+            // vuélvelo a su dimensión normal". La separación de los dos
+            // chorros pasa a resolverse con GEOMETRÍA (la estación de fuentes
+            // de la reconstrucción 6x), no deformando el aparato.
             var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
-                SimLevelBuilder.CanoNutrienteY, orderSystem, alcanceCano: 12);
+                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem, SimLevelBuilder.PilaLimoX0);
             _dispensers = new[] { canoAgua, canoLimo };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
             //   SpawnStorageRack(apprentice.transform, flask, knowledge);
@@ -187,6 +207,11 @@ namespace Alkahest.Game
             SpawnCrisol(apprentice.transform, knowledge);
             SpawnPrensa(apprentice.transform);
             SpawnBancoChispa(apprentice.transform, knowledge);
+            // (playtest 27, mandato 5) La COLUMNA por fin tiene clase propia
+            // (Game/ColumnaEnsayo.cs): su mampostería la sigue tallando el
+            // plano, pero su vidrio, sus zunchos y su VERBO ("observar")
+            // necesitaban un MonoBehaviour que los dibujara.
+            SpawnColumnaEnsayo(apprentice.transform, knowledge);
 
             // Fondo del taller + pistas se crean ANTES que el ciclo de
             // jornadas: DayCycle avisa a HintSystem en cuanto entra en la
@@ -245,6 +270,101 @@ namespace Alkahest.Game
 
             _spawned = true;
             Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (cuarto íntimo, playtest 25 -- LO QUE PERSISTE: crisol/prensa/banco de chispa, criatura aparcada).");
+        }
+
+        /// <summary>
+        /// =================================================================
+        /// EL TALLER COMPARTIDO (playtest 28): la misma lista plana, repartida
+        /// entre el anfitrión y los invitados.
+        /// =================================================================
+        /// Tres diferencias con <see cref="TrySpawn"/>, todas del contrato:
+        ///
+        ///  1) EL APRENDIZ NO SE INSTANCIA AQUÍ. Llega por NGO como
+        ///     PlayerObject (prefab generado por
+        ///     `Editor/AlkahestNetSceneBuilder.cs`), y con él su frasco, su
+        ///     conocimiento y su HUD, que cablea `Net/AprendizNet.cs`. Este
+        ///     método ESPERA a que exista el avatar local (`AprendizNet.Local`)
+        ///     porque casi todo lo de abajo necesita su Transform (el foco de
+        ///     máquinas, el audio) o su SubstanceKnowledge (los encargos).
+        ///
+        ///  2) LAS MÁQUINAS Y LOS ENCARGOS SOLO EXISTEN EN EL ANFITRIÓN. No es
+        ///     una limitación técnica que haya que levantar más adelante: es la
+        ///     división de trabajo del POC. La sim vive en el host, así que
+        ///     todo lo que LEE Y ESCRIBE la sim cada tick (crisol, prensa,
+        ///     banco de chispa, caños, tolva, ensayo) vive donde vive la sim.
+        ///     Los invitados acarrean materia; el anfitrión hornea.
+        ///
+        ///  3) NO HAY CICLO DE JORNADAS. La escena MULTI no tiene Título ni
+        ///     reloj, así que no se instancia `DayCycle`; en su lugar se hace a
+        ///     mano lo único que su arranque silencioso hacía y que aquí sigue
+        ///     haciendo falta: soltar los cerrojos de input/HUD
+        ///     (<see cref="DayCycle.ForzarDesbloqueoSesion"/>), reiniciar las
+        ///     pistas de la jornada 1 y generar los encargos.
+        /// </summary>
+        private void TrySpawnRed()
+        {
+            if (_spawned || _sim == null || _sim.Universe == null || _sim.Grid == null) return;
+
+            // En el invitado, el mundo no existe hasta que llega el snapshot
+            // con la seed del anfitrión; en los dos extremos, el avatar puede
+            // tardar un frame más que el mundo. Se reintenta en Update, igual
+            // que hace TrySpawn con Universe/Grid.
+            var avatarLocal = AprendizNet.Local;
+            if (avatarLocal == null || !avatarLocal.Cableado) return;
+
+            bool anfitrion = SimSync.EsServidor;
+
+            MachineFocus.Limpiar();
+            DayCycle.ForzarDesbloqueoSesion();
+
+            // El fondo del cuarto es puramente visual y se genera por código:
+            // lo tienen los dos lados, o el invitado vería el taller flotando
+            // sobre el vacío.
+            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+
+            if (!anfitrion)
+            {
+                _spawned = true;
+                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar. Las máquinas y los encargos los lleva el anfitrión.");
+                return;
+            }
+
+            var apprentice = avatarLocal.GetComponent<ApprenticeController>();
+            var flask = avatarLocal.GetComponent<Flask>();
+            var knowledge = avatarLocal.GetComponent<SubstanceKnowledge>();
+
+            var orderSystem = SpawnOrderSystem(knowledge);
+
+            var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
+                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem, SimLevelBuilder.PilaAguaX0);
+            var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
+                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem, SimLevelBuilder.PilaLimoX0);
+            _dispensers = new[] { canoAgua, canoLimo };
+
+            SpawnDeliveryChute(orderSystem);
+
+            SpawnNamingUi(flask, knowledge);
+            SpawnJournalHud(knowledge);
+            SpawnOrdersHud(orderSystem);
+
+            SpawnCrisol(apprentice.transform, knowledge);
+            SpawnPrensa(apprentice.transform);
+            SpawnBancoChispa(apprentice.transform, knowledge);
+            SpawnColumnaEnsayo(apprentice.transform, knowledge);
+
+            var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
+            SpawnEnsayoMaestro(orderSystem, apprentice.transform);
+
+            // Lo que hacía DayCycle.EnterCuartoIntimoSilencioso y aquí no
+            // tiene quién lo haga (ver punto 3 del docblock). Sin
+            // MasterSupplies, igual que en la escena de un jugador.
+            hints.ReiniciarParaJornada(1);
+            orderSystem.GenerateOrdersPersiste();
+
+            SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
+
+            _spawned = true;
+            Debug.Log("[ChaosAlchemy][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio.");
         }
 
         private ApprenticeController SpawnApprentice()
@@ -436,8 +556,8 @@ namespace Alkahest.Game
         /// una recompensa. El Favor ni siquiera se gana todavía en este modo
         /// (los encargos no existen hasta que se excave hasta la Tolva).
         /// </summary>
-        private Dispenser SpawnCanoBasico(Transform player, string label, byte matId, int filaY,
-            OrderSystem orderSystem, int alcanceCano = 5)
+        private Dispenser SpawnCanoBasico(Transform player, string label, byte matId, int columnaX, int filaY,
+            OrderSystem orderSystem, int pilaX0, int alcanceCano = 5)
         {
             var go = new GameObject($"CanoBasico_{label}");
             var dispenser = go.AddComponent<Dispenser>();
@@ -447,9 +567,15 @@ namespace Alkahest.Game
             // grifo abierto sobre el suelo corrido de la línea inundaban el
             // laboratorio entero. Solo afecta a los DOS caños del laboratorio
             // (este método); los grifos del taller clásico siguen infinitos.
+            // (playtest 27) El caño enmarca su propia pila -- ver
+            // Dispenser.BuildPilaEnmarcada. Las medidas salen del plano
+            // (SimLevelBuilder), nunca de aquí: la regla de este archivo sigue
+            // siendo que NINGUNA coordenada vive en el bootstrap.
             dispenser.Init(_sim, player,
-                SimLevelBuilder.CanoMontajeX, filaY,
-                matId, orderSystem, 0, false, alcanceCano, racionCeldas: 45);
+                columnaX, filaY,
+                matId, orderSystem, 0, false, alcanceCano, racionCeldas: 45,
+                pilaX0: pilaX0, pilaAncho: SimLevelBuilder.PilaAnchoOuter,
+                pilaAlto: SimLevelBuilder.PilaHondoOuter, pilaBaseY: SimLevelBuilder.CuartoY0 + 2);
             return dispenser;
         }
 
@@ -486,6 +612,14 @@ namespace Alkahest.Game
             var go = new GameObject("BancoChispa");
             var banco = go.AddComponent<BancoChispa>();
             banco.Init(_sim, player, knowledge, SimLevelBuilder.BancoChispaX);
+        }
+
+        /// <summary>(playtest 27, mandato 5) La Columna de Ensayo. No recibe ancla: su sitio son las constantes `SimLevelBuilder.ColumnaX0/Ancho/Muro/Alto`, igual que el Ensayo del Maestro lee `EnsayoPlintoX` por su cuenta.</summary>
+        private void SpawnColumnaEnsayo(Transform player, SubstanceKnowledge knowledge)
+        {
+            var go = new GameObject("ColumnaEnsayo");
+            var columna = go.AddComponent<ColumnaEnsayo>();
+            columna.Init(_sim, player, knowledge);
         }
 
         private Dispenser SpawnOneDispenser(Transform player, string label, byte matId, int fila,

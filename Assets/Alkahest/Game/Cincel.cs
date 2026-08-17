@@ -317,6 +317,15 @@ namespace Alkahest.Game
                         // frasco, con su propio filtro de aspirado.
                         if (_sim.SampleMaterial(x, y) != MaterialId.Stone) continue;
 
+                        // (playtest 27) LA OBRA DEL TALLER NO CEDE AL CINCEL:
+                        // Cesar, probando el 26, se llevó parte de la
+                        // mampostería de una estación creyendo tallar roca
+                        // suelta. Las estaciones registran sus rects en
+                        // SimLevelBuilder.ObraDelTaller y aquí se respetan --
+                        // el mundo entero sigue siendo tallable, los aparatos
+                        // no (para moverlos ya existe la mudanza, tecla V).
+                        if (SimLevelBuilder.EsObraDelTaller(x, y)) continue;
+
                         _sim.Paint(x, y, 0, MaterialId.Empty);
                         budget--;
                     }

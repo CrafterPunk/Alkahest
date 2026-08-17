@@ -2347,3 +2347,76 @@ pantalla. Compilado 0 errores / 0 warnings.
 **Preguntas abiertas**: ¿45 celdas es LA ración correcta? ¿el glow se entiende como "esto le
 sirve" o hace falta que el pulso sea más obvio? ¿la columna de vidrio se lee como vidrio (hoy:
 dos muros de Crystal verde)? ¿el Ensayo se distingue lo bastante del resto como EL examen?
+
+---
+
+## Playtest 27 → EL TALLER GRANDE (OPUS 5 con ojos propios) + español latino + fixes de Cesar
+
+**El veredicto de Cesar sobre el 26** (resumen; literal en docs/CONTRATO_TALLER_GRANDE.md §1):
+máquinas cajita, embudos falsos flotantes, "cargadme combustible" sin sentido al inicio, la
+columna una "escalera sin terminar" SIN verbo y con muros REACTIVOS (Crystal + Azoth: bug real),
+el crisol haciéndolo todo rápido y escupiendo 4 colores por pasada ("si me salen 4 cosas casi de
+golpe no entendí nada"). Y: "quiero que te apoyes en Opus 5, permitiendo que ÉL VEA... su
+capacidad de construir cosas bonitas y útiles es mejor que la tuya".
+
+**Fixes directos de Fable (los "evidentes")**: (1) el pulso de affordance por PROXIMIDAD se
+APAGA (`MaquinariaSprites.AffordanceGlow.ProximidadActiva=false`, clase conservada: su destino
+aprobado es latir cuando la máquina TRABAJA); (2) LA OBRA DEL TALLER NO CEDE AL CINCEL
+(`SimLevelBuilder.ObraDelTaller` + registro en cada Tallar* + guarda en Cincel.TallarTick —
+Cesar se llevó mampostería de una estación creyendo tallar roca); (3) caño de limo SIN estirar
+(la separación de chorros pasó a geometría de la estación de fuentes).
+
+**OPUS 5, tres ciclos de mirada real en el PC de Cesar** (desplegó, compiló, jugó, capturó,
+corrigió — reporte completo en el propio código): cuarto 218x73 (CuartoX0 140, CuartoY1 240);
+huellas 6-20x más grandes (crisol 15x6→37x24 con 117 celdas de cubeta; prensa 31x23; columna
+23x42 con VIDRIO visual y muros de PIEDRA inerte + archivo nuevo Game/ColumnaEnsayo.cs con su
+verbo "deja caer y observa"; chispa con ampolla de filamento; ensayo hecho ALTAR con dosel);
+fuentes con machón de piedra que separa los dos chorros y pilas de 70 celdas; embudo TALLADO en
+piedra solo donde se vierte de verdad, bandejas abiertas donde se deposita. **EL CRISOL POR
+HORNADAS**: en reposo no empuja temperatura (cascada estructuralmente imposible); E enciende UNA
+hornada de ~10s con progreso visible; el resultado REPOSA hasta recogerlo;
+recoger-y-volver-a-pasar es EL gesto. **Extracción por temperatura**: `Universe.ExtraccionRaw`
+(5 bandas por seed), una hornada de limo saca SOLO la base más alta que quepa en la temperatura
+actual — con fuego bajo siempre la primera (garantía del solver, G1-G4 nuevas), mejores
+combustibles = otras arenas (la intuición de Cesar confirmada como diseño). Combustibles
+165..190 raw. `ProcessLimoSeparacion` retirado de SimStepper (regla 15): el limo ya no se separa
+solo en el mundo. Lo que Opus VIO y corrigió: hierro invisible sobre negro, brasas como grava,
+brasero leyéndose como de la prensa, mandíbula "martillo aparcado en el techo", y sus propios
+nudillos de columna reinventando la "escalera" que Cesar odió — tres ciclos hasta pasar su
+propia mirada.
+
+**Español latino (barrido Sonnet)**: 21 archivos revisados, 16 fixes en 5 (vosotros/os/vuestro/
+imperativos -ad → tuteo latino: "Sepárame el limo: tráeme una sola de sus arenas", "El Maestro
+te asciende..."); comentarios de código intactos (documentación interna). Guion de pistas
+REESCRITO por Fable para el modelo de hornadas (12 pasos ejecutables).
+
+**Estado de verificación**: Opus compiló y jugó su parte (0 err/0 warn, 3 ciclos); el delta
+posterior (guarda anticincel, textos, pistas) quedó desplegado con sintaxis verificada pero SIN
+compilar — el puente MCP de Unity cayó con Cesar fuera. PRIMER PASO al volver: foco a Unity,
+Ctrl+R, consola.
+
+## Playtest 28 → EL TALLER COMPARTIDO (POC multiplayer, 4 jugadores)
+
+Mandato de Cesar (saliendo de compras): "prepara una prueba multiplayer; el juego se dijo para
+3, si es posible habilítalo para 4; cada jugador debe distinguirse con un cambio de color; lo no
+especificado decídelo tú". Contrato: docs/CONTRATO_MULTI_POC.md. Construido por Opus (sin ojos:
+sin Unity disponible, disciplina de API calcando el template FriendsLoop).
+
+**Arquitectura**: sim SOLO en el host; clientes en ESPEJO (`AlkahestSim.ModoEspejo`, sin
+stepper) sincronizado por chunks RLE (~5Hz, mensaje "AlkChunks", snapshot con LA SEED en
+cabecera al conectar — el espejo crea el mismo universo y luego recibe deltas; chunk de piedra
+= 6 bytes, snapshot completo 6-15KB); avatares por prefab generado en editor
+(OwnerNetworkTransform + PlayerIdentity del template + `Net/AprendizNet.cs` con color replicado
+— PALETA: dorado anfitrión / azul cielo / verde / magenta); frasco de invitados con PREDICCIÓN
+local + reenvío de pintura al host por lotes (desviación razonada del contrato: sin predicción,
+el frasco duplicaba materia); máquinas/encargos/cincel/mudanza SOLO anfitrión (división de
+trabajo del POC: invitados acarrean, el anfitrión hornea); escena MULTI aparte (menú
+"Alkahest/2. Generar escena Lab MULTI" + "4. Build MULTI Windows") — la escena clásica intacta.
+4 jugadores (lobby maxPlayers=4).
+
+**PENDIENTE DE COMPILAR** (los asmdef cambiaron: reimport probable). Los `// DUDA-API:` están
+concentrados en la capa CustomMessagingManager de SimSync.cs (lo único sin calco del template);
+si algo no compila, empezar ahí. **La prueba**: build MULTI, abrir el .exe DOS VECES con
+`-transport local`, ANFITRIÓN en una y UNIRME local en la otra: dos imps de colores con nombre,
+el agua del host apareciendo en el cliente, el invitado acarreando limo a la boca del crisol.
+Con amigos: sin `-transport`, lobby de Steam (invitación por overlay).

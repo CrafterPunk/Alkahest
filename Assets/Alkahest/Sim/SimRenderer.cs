@@ -371,8 +371,24 @@ namespace Alkahest.Sim
             // cachea para siempre y esta rama deja de ejecutarse (nunca busca
             // por frame en el caso normal, que es el 100% de la partida salvo
             // el primer frame o dos).
+            // (playtest 28, POC multiplayer) Con cuatro aprendices en el
+            // taller, "el primero que encuentre" ya no sirve: la cámara tiene
+            // que seguir al MÍO. `ApprenticeController.AprendizLocal` lo fija
+            // Net/AprendizNet.cs en el avatar del dueño y es null en la escena
+            // Lab clásica -- ahí esta rama no hace nada y la búsqueda perezosa
+            // de siempre (justo debajo) se comporta EXACTAMENTE igual que
+            // antes. La comparación por frame son dos chequeos de nulidad.
             bool aprendizNuevo = false;
-            if (_apprentice == null)
+            var aprendizLocal = ApprenticeController.AprendizLocal;
+            if (aprendizLocal != null)
+            {
+                if (_apprentice != aprendizLocal)
+                {
+                    _apprentice = aprendizLocal;
+                    aprendizNuevo = true;
+                }
+            }
+            else if (_apprentice == null)
             {
                 _apprentice = FindAnyObjectByType<ApprenticeController>();
                 aprendizNuevo = _apprentice != null;

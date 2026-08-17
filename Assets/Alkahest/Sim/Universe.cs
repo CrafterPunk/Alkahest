@@ -314,6 +314,7 @@ namespace Alkahest.Sim
         private readonly byte[] _ceramizaRaw;    // [BasesCount], 0 = esta base no ceramiza
         private readonly byte[] _solidificaRaw;  // [BasesCount]
         private readonly int[] _pesoEnLimo;      // [BasesCount], suman 100
+        private readonly byte[] _extraccionRaw;  // [BasesCount] (playtest 27), bandas ASCENDENTES: ver ExtraccionRaw
 
         /// <summary>matId del persistente garantizado de esta seed (solver de garantía, ver Create -> ResolverGarantiaPersistencia). Alcanzable en ≤50 reintentos de tabla o clampeado en el último.</summary>
         public readonly byte GanadorGarantizado;
@@ -331,6 +332,7 @@ namespace Alkahest.Sim
             byte[] umbralPersistenciaRaw, RespuestaPrensa[] prensaPorMaterial, byte[] conductividadPorMaterial,
             bool[] solubleEnAguaPorMaterial, bool[] esCombustiblePorMaterial, byte[] tempCombustibleRawPorMaterial,
             byte[] fusionRaw, byte[] calcinacionRaw, byte[] ceramizaRaw, byte[] solidificaRaw, int[] pesoEnLimo,
+            byte[] extraccionRaw,
             byte ganadorGarantizado, byte tempEnsayoCalorRaw, int baseCombustibleGarantizada)
         {
             Seed = seed;
@@ -363,6 +365,7 @@ namespace Alkahest.Sim
             _ceramizaRaw = ceramizaRaw;
             _solidificaRaw = solidificaRaw;
             _pesoEnLimo = pesoEnLimo;
+            _extraccionRaw = extraccionRaw;
             GanadorGarantizado = ganadorGarantizado;
             TempEnsayoCalorRaw = tempEnsayoCalorRaw;
             BaseCombustibleGarantizada = baseCombustibleGarantizada;
@@ -384,6 +387,30 @@ namespace Alkahest.Sim
         public byte CeramizaRaw(int baseIdx) => _ceramizaRaw[baseIdx];
         public byte SolidificaRaw(int baseIdx) => _solidificaRaw[baseIdx];
         public int PesoEnLimo(int baseIdx) => _pesoEnLimo[baseIdx];
+
+        /// <summary>
+        /// (playtest 27, CONTRATO_TALLER_GRANDE mandato 4) LA BANDA DE
+        /// EXTRACCIÓN de una base: la temperatura raw a partir de la cual el
+        /// limo suelta ESA base en el crisol. Las cinco bandas son
+        /// ASCENDENTES y disjuntas por seed, y una hornada de limo produce
+        /// SOLO la base más alta cuya banda quepa en la temperatura de esa
+        /// pasada (ver Game/Crisol.DecidirHornada) -- de ahí "una base por
+        /// hornada, ligada al combustible".
+        ///
+        /// GARANTIZADO POR EL SOLVER en toda seed: la banda más baja está por
+        /// debajo de <see cref="CrisolTier0Raw"/> (con el fuego bajo SIEMPRE
+        /// sale una base, la primera, sin necesitar combustible ninguno) y
+        /// TODAS las bandas quedan por debajo del mejor combustible
+        /// alcanzable (ninguna base es contenido muerto). Ver
+        /// EvaluarGarantia, garantías 1 y 4.
+        ///
+        /// POR QUÉ ES ESTO Y NO OTRA COSA: es la intuición que Cesar formuló
+        /// solo jugando el 26 -- *"pensé que estaría en relación al nivel de
+        /// combustible, siendo que algunos llegan a temperaturas más altas"*.
+        /// Cuando el jugador ya ha adivinado tu mecánica, la mecánica correcta
+        /// es la que él adivinó.
+        /// </summary>
+        public byte ExtraccionRaw(int baseIdx) => _extraccionRaw[baseIdx];
 
         /// <summary>Descripción corta y cacheada de la firma visual de un material ("granate, manchas lentas, borde escarchado"). Usada por el diario; nunca se construye por frame.</summary>
         public string DescribirFirma(byte matId)
@@ -992,6 +1019,7 @@ namespace Alkahest.Sim
                 solubleEnAguaPorMaterial, esCombustiblePorMaterial, tempCombustibleRawPorMaterial,
                 tablasPersistencia.FusionRaw, tablasPersistencia.CalcinacionRaw, tablasPersistencia.CeramicoUmbral,
                 tablasPersistencia.SolidificaRaw, tablasPersistencia.PesoEnLimo,
+                tablasPersistencia.ExtraccionRaw,
                 ganadorGarantizado, tempEnsayoCalorRaw, baseCombustibleGarantizada);
         }
 
@@ -2117,7 +2145,36 @@ namespace Alkahest.Sim
             public readonly bool[] CombustibleBase = new bool[MaterialId.BasesCount];
             public readonly byte[] TempCombustibleRawBase = new byte[MaterialId.BasesCount];
             public readonly int[] PesoEnLimo = new int[MaterialId.BasesCount];
+            /// <summary>(playtest 27) Banda de extracción del limo por base -- ver Universe.ExtraccionRaw. ASCENDENTES y disjuntas; la más baja SIEMPRE por debajo de CrisolTier0Raw.</summary>
+            public readonly byte[] ExtraccionRaw = new byte[MaterialId.BasesCount];
         }
+
+        // =================================================================
+        // (playtest 27) LAS BANDAS DE EXTRACCIÓN
+        // =================================================================
+        // Cinco escalones fijos de temperatura, repartidos entre las cinco
+        // bases por SORTEO (Fisher-Yates): así "cuál es la arena del fuego
+        // bajo" cambia con la seed, pero la ESCALERA siempre existe y siempre
+        // se recorre igual, que es lo que el jugador puede formular como una
+        // frase (regla 35).
+        //
+        // NÚMEROS, derivados del código que los consume (regla 50), NO del
+        // nombre:
+        //  · El escalón 0 (106 ±4 -> 102..110) tiene que estar por debajo de
+        //    CrisolTier0Raw=120 SIEMPRE: es la promesa "con el fuego bajo
+        //    siempre sale la primera", y es lo que hace jugable el minuto 1
+        //    (el jugador NO tiene combustible al empezar -- la queja literal
+        //    de Cesar).
+        //  · El escalón 4 (158 ±4 -> 154..162) tiene que estar por debajo del
+        //    peor TempCombustibleRaw posible, o esa base sería contenido
+        //    muerto en esa seed. Por eso el rango de los combustibles sube de
+        //    150..175 a 165..190 en esta misma ronda (ver
+        //    SortearTablaPersistencia): 165 > 162 con margen en el PEOR caso.
+        //  · Los escalones intermedios reparten el hueco a distancias
+        //    parecidas para que cada combustible nuevo abra normalmente UNA
+        //    base más, no tres de golpe.
+        private static readonly byte[] BandasExtraccion = { 106, 124, 136, 148, 158 };
+        private const int BandaExtraccionJitter = 4;
 
         /// <summary>
         /// Sortea UN candidato de tabla (contrato 4.2): vector por base
@@ -2166,7 +2223,26 @@ namespace Alkahest.Sim
             ShuffleFisherYates(solOrden, rng);
             for (int i = 0; i < nSolubles; i++) t.SolubleBase[solOrden[i]] = true;
 
-            // Combustible (Calcinado): 1-2 de las 5 bases, TempCombustibleRaw 150..175.
+            // Bandas de extracción del limo (playtest 27): los cinco
+            // escalones fijos repartidos entre las bases por sorteo. Ver el
+            // bloque BandasExtraccion para de dónde salen los números.
+            int[] bandaOrden = { 0, 1, 2, 3, 4 };
+            ShuffleFisherYates(bandaOrden, rng);
+            for (int i = 0; i < MaterialId.BasesCount; i++)
+            {
+                int jitter = rng.Next(-BandaExtraccionJitter, BandaExtraccionJitter + 1);
+                t.ExtraccionRaw[bandaOrden[i]] = (byte)Mathf.Clamp(BandasExtraccion[i] + jitter, 1, 254);
+            }
+
+            // Combustible (Calcinado): 1-2 de las 5 bases.
+            // (playtest 27) TempCombustibleRaw 150..175 -> **165..190**. El
+            // motivo es la escalera nueva: con el techo viejo (150 en el peor
+            // caso) la banda de extracción más alta (hasta 162) quedaba
+            // inalcanzable y esa base era contenido muerto. De paso arregla
+            // algo que ya cojeaba: FusionRaw llega a 170, así que con un
+            // combustible de 150 había seeds en las que NADA se podía fundir
+            // -- el solver lo tapaba eligiendo otro ganador, pero el eslabón
+            // "fundir" de la escalera del contrato no existía de verdad.
             int nCombustibles = 1 + rng.Next(2);
             int[] combOrden = { 0, 1, 2, 3, 4 };
             ShuffleFisherYates(combOrden, rng);
@@ -2174,7 +2250,7 @@ namespace Alkahest.Sim
             {
                 int b = combOrden[i];
                 t.CombustibleBase[b] = true;
-                t.TempCombustibleRawBase[b] = (byte)(150 + rng.Next(26));
+                t.TempCombustibleRawBase[b] = (byte)(165 + rng.Next(26));
             }
 
             // Pesos de separación del limo: SIEMPRE positivos (las 5 bases
@@ -2272,7 +2348,14 @@ namespace Alkahest.Sim
             outEdges.Clear();
             if (node == MaterialId.Limo)
             {
-                for (int b = 0; b < MaterialId.BasesCount; b++) outEdges.Add(MaterialId.MatDe(b, EstadoMateria.Polvo)); // separar
+                // (playtest 27) SEPARAR PASA A SER UNA OPERACIÓN "@tier". Antes
+                // el limo daba las 5 bases de una tacada y sin condición
+                // térmica; ahora cada base tiene su banda y solo salen las que
+                // el tier alcanza (Game/Crisol saca ADEMÁS solo la más alta por
+                // hornada, pero eso es ritmo de juego -- para la ALCANZABILIDAD
+                // basta con el gate, igual que fundir/calcinar/ceramizar).
+                for (int b = 0; b < MaterialId.BasesCount; b++)
+                    if (t.ExtraccionRaw[b] <= tier) outEdges.Add(MaterialId.MatDe(b, EstadoMateria.Polvo));
                 return;
             }
             if (!MaterialId.EsBaseEstado(node)) return;
@@ -2360,11 +2443,28 @@ namespace Alkahest.Sim
             BfsPersistencia(t, tier1, out bool[] reachedFinal, out int[] distFinal);
 
             // Garantía 1: ≥1 base combustible alcanzable a tier0.
+            // (playtest 27) Ahora exige TRES cosas, no dos, porque separar ya
+            // es "@tier": la base tiene que (a) ser combustible, (b) poder
+            // SALIR DEL LIMO con el fuego bajo -- su banda de extracción por
+            // debajo de tier0, antes trivial y hoy no --, y (c) calcinarse con
+            // el fuego bajo. Sin (b) el jugador no puede llegar a su primer
+            // combustible y el juego no arranca: es exactamente la queja de
+            // Cesar ("yo al inicio NO TENGO combustible") elevada a invariante.
             bool g1 = false; int g1Base = -1;
             for (int b = 0; b < MaterialId.BasesCount; b++)
             {
-                if (t.CombustibleBase[b] && t.CalcinacionRaw[b] <= CrisolTier0Raw) { g1 = true; g1Base = b; break; }
+                if (t.CombustibleBase[b] && t.ExtraccionRaw[b] <= CrisolTier0Raw && t.CalcinacionRaw[b] <= CrisolTier0Raw)
+                { g1 = true; g1Base = b; break; }
             }
+
+            // Garantía 4 (playtest 27): TODA base se puede extraer del limo
+            // con el mejor combustible alcanzable. Sin esto, una seed podría
+            // esconder una o dos bases para siempre -- y con 5 bases x 8
+            // estados, perder una base es perder el 20% del retículo sin que
+            // nada avise.
+            bool g4 = true;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+                if (t.ExtraccionRaw[b] > tier1) { g4 = false; break; }
 
             tempEnsayo = (byte)(165 + rng.Next(16)); // 165..180
 
@@ -2413,7 +2513,7 @@ namespace Alkahest.Sim
             }
 
             baseCombustible = g1Base;
-            ok = g1 && g2 && g3cond && g3sol && g3insol;
+            ok = g1 && g2 && g3cond && g3sol && g3insol && g4;
         }
 
         /// <summary>
@@ -2429,7 +2529,17 @@ namespace Alkahest.Sim
         {
             t.CombustibleBase[0] = true;
             if (t.CalcinacionRaw[0] > CrisolTier0Raw) t.CalcinacionRaw[0] = CrisolTier0Raw;
-            if (t.TempCombustibleRawBase[0] == 0) t.TempCombustibleRawBase[0] = 150;
+
+            // (playtest 27) La escalera de extracción se fuerza a mano en el
+            // orden canónico: la base 0 sale con el fuego bajo (banda por
+            // debajo de CrisolTier0Raw) y las otras cuatro escalonadas por
+            // debajo del combustible que acabamos de garantizar. Sin esto, el
+            // clampeo dejaría un mundo donde no se puede sacar NADA del limo.
+            for (int b = 0; b < MaterialId.BasesCount; b++) t.ExtraccionRaw[b] = BandasExtraccion[b];
+            t.ExtraccionRaw[0] = (byte)(CrisolTier0Raw - 10);
+            byte techoBandas = t.ExtraccionRaw[0];
+            for (int b = 1; b < MaterialId.BasesCount; b++) if (t.ExtraccionRaw[b] > techoBandas) techoBandas = t.ExtraccionRaw[b];
+            if (t.TempCombustibleRawBase[0] < techoBandas + 5) t.TempCombustibleRawBase[0] = (byte)Mathf.Min(255, techoBandas + 5);
 
             // Ganador: Compacto(0), a 2 pasos (Limo -separar-> Polvo(0) -prensar-> Compacto(0)), con margen de sobra sobre tempEnsayo+10.
             t.CompactoUmbral[0] = (byte)Mathf.Min(255, tempEnsayo + 20);
@@ -2488,7 +2598,19 @@ namespace Alkahest.Sim
                 "[ChaosAlchemy] INVARIANTE ROTA: GanadorGarantizado no es una variante base×estado (CONTRATO_PERSISTE.md sección 4.4).");
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            UnityEngine.Debug.Log($"[ChaosAlchemy] Persistencia: ganador={ganador} a {pasos} pasos, combustible=base {baseCombustible} (verificado).");
+            {
+                // (playtest 27) El log de seed AFIRMA también la escalera de
+                // extracción, porque la regla 51 nació precisamente de que un
+                // solver que no imprime su resultado no protege nada: la
+                // garantía nueva ("con el fuego bajo sale la base X; con el
+                // combustible garantizado salen las cinco") tiene que poder
+                // leerse en el PRIMER arranque, no deducirse jugando.
+                var sbEx = new System.Text.StringBuilder();
+                sbEx.Append($"[ChaosAlchemy] Persistencia: ganador={ganador} a {pasos} pasos, combustible=base {baseCombustible}, tier1={t.TempCombustibleRawBase[baseCombustible]} (verificado). Extracción del limo por banda:");
+                for (int b = 0; b < MaterialId.BasesCount; b++)
+                    sbEx.Append($" base{b}={t.ExtraccionRaw[b]}{(t.ExtraccionRaw[b] <= CrisolTier0Raw ? "(fuego bajo)" : string.Empty)}");
+                UnityEngine.Debug.Log(sbEx.ToString());
+            }
 #endif
 
             // ---- Tablas de propiedades por MaterialId completo (contrato §3), vocabulario+Limo primero con defaults sensatos, luego el bloque bases×estado desde `t`. ----

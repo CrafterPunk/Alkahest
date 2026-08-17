@@ -413,6 +413,11 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     la fuente ES). Toda ronda que cambie forma, plano o color se verifica JUGANDO con capturas
     antes de entregar; de ahí salieron la RACIÓN de los caños y el oliva del limo.
 
+53. **TEXTOS DE JUEGO EN ESPAÑOL LATINO NEUTRO (playtest 27, pedido directo de Cesar)**: tuteo
+    singular, jamás vosotros/os/vuestro ni imperativos en -ad/-ed/-id ("carga", no "cargad");
+    cuidado con léxico peninsular ("coger" es malsonante en LATAM: "tomar/agarrar"). Aplica a
+    TODO string visible al jugador; los comentarios del código quedan como estén.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
@@ -549,6 +554,21 @@ diario (hook del playtest 10 por fin consumido) + **LA RACIÓN** de los caños d
 (45 celdas por apertura, "· servido — E para más"; nació de ver la inundación EN VIVO) + limo
 recoloreado a oliva (se camuflaba con la piedra). Regla 52 nació de esta verificación. Detalle y
 preguntas abiertas en HANDOFF sección Playtest 26.
+
+**Playtest 27 — EL TALLER GRANDE**: veredicto duro de Cesar sobre el 26 (máquinas cajita,
+embudos falsos, crisol que escupe 4 colores). Fixes Fable (glow de proximidad APAGADO —
+conservado para "máquina trabajando"; ObraDelTaller anticincel; caño sin estirar) + OPUS 5 CON
+OJOS (3 ciclos desplegando/jugando/capturando en el PC real): cuarto 218x73, estaciones 6-20x,
+CRISOL POR HORNADAS (una transformación por pasada, resultado que REPOSA, extracción del limo
+por temperatura: UNA base por hornada ligada al combustible, solver con garantías G1-G4,
+Universe.ExtraccionRaw), columna con muros de piedra (Crystal era REACTIVO: bug) + vidrio visual
++ Game/ColumnaEnsayo.cs nuevo. Barrido español latino (regla 53). Pistas reescritas al modelo de
+hornadas.
+**Playtest 28 — EL TALLER COMPARTIDO (POC multiplayer)**: 4 jugadores, colores
+dorado/cielo/verde/magenta, sim solo-host + espejo por chunks RLE 5Hz (Net/SimSync.cs), frasco
+de invitados con predicción + reenvío, escena MULTI aparte (menús 2 y 4), template FriendsLoop
+intacto. PENDIENTE COMPILAR (asmdef cambiados; DUDA-API concentradas en CustomMessagingManager).
+Detalle completo de ambos en HANDOFF.
 
 FASE ACORDADA (orden): 1) ✅ cámara que sigue al aprendiz; 2) ✅ taller a 2-3 pantallas;
 3) ✅ química generada por semilla (playtest 18); 4) **comportamiento variable por semilla, no

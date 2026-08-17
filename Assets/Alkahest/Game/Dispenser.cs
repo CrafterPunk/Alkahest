@@ -269,9 +269,14 @@ namespace Alkahest.Game
         }
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
+        /// <param name="pilaX0">(playtest 27, mandato 2) Borde IZQUIERDO de la pila de recogida de este caño, en celdas, o 0 si no tiene. Ver <see cref="BuildPilaEnmarcada"/>.</param>
+        /// <param name="pilaAncho">Ancho EXTERIOR de la pila (muros incluidos), o 0 = sin pila.</param>
+        /// <param name="pilaAlto">Alto EXTERIOR de la pila.</param>
+        /// <param name="pilaBaseY">Fila inferior EXTERIOR de la pila.</param>
         public void Init(AlkahestSim sim, Transform player, int mountCellX, int mountCellY, byte materialId,
             OrderSystem orderSystem = null, int favorCost = 0, bool bloqueado = false, int spoutOffsetCells = SpoutOffsetCellsDefault,
-            int racionCeldas = 0)
+            int racionCeldas = 0,
+            int pilaX0 = 0, int pilaAncho = 0, int pilaAlto = 0, int pilaBaseY = 0)
         {
             _racionCeldas = racionCeldas;
             _emitidasEstaApertura = 0;
@@ -287,6 +292,7 @@ namespace Alkahest.Game
             _knowledge = FindAnyObjectByType<SubstanceKnowledge>(); // ver doc del campo.
 
             BuildVisual(mountCellX, mountCellY);
+            if (pilaAncho > 0 && pilaAlto > 0) BuildPilaEnmarcada(pilaX0, pilaBaseY, pilaAncho, pilaAlto);
             MachineFocus.Registrar(this);
             Mudanza.RegistrarMovible(this); // (playtest 19) ver doc de clase "TALLER MOVIBLE".
         }
@@ -341,6 +347,36 @@ namespace Alkahest.Game
             Bloqueado = false;
             UpdateVisual();
             Debug.Log($"[ChaosAlchemy] El Maestro abre el grifo de {ResolverNombre()}.");
+        }
+
+        /// <summary>
+        /// (playtest 27, CONTRATO_TALLER_GRANDE mandato 2) EL CAÑO ENMARCA SU
+        /// PROPIA PILA. Sim/SimLevelBuilder talla las dos pilas de la estación
+        /// de fuentes como cubetas de piedra de 14x9, pero una cubeta de
+        /// piedra vacía sobre un suelo de piedra ES UN AGUJERO NEGRO: visto
+        /// jugando, las dos pilas nuevas no se leían como recipientes, se
+        /// leían como huecos del terreno. El resto del taller resuelve esto
+        /// con <see cref="MaquinariaSprites.MarcoBandeja"/> (labio de latón
+        /// volado + cartelas), y las fuentes tienen que hablar el mismo
+        /// idioma o la gramática se rompe justo en la primera máquina que ve
+        /// el jugador.
+        ///
+        /// POR QUÉ AQUÍ Y NO EN UNA CLASE NUEVA: la pila no existe sin su
+        /// caño (es "dónde cae ESTE chorro"), así que el dueño natural del
+        /// marco es el caño. Todos los parámetros son OPCIONALES y por
+        /// defecto 0: los cinco grifos del taller clásico
+        /// (<c>SpawnOneDispenser</c>) siguen llamando a Init exactamente
+        /// igual que antes y no dibujan ningún marco.
+        /// </summary>
+        private void BuildPilaEnmarcada(int pilaX0, int pilaBaseY, int pilaAncho, int pilaAlto)
+        {
+            float celda = SimRenderer.CellWorldSize;
+            var go = new GameObject("PilaMarco");
+            go.transform.SetParent(transform, false);
+            go.transform.position = new Vector3((pilaX0 + pilaAncho * 0.5f) * celda, (pilaBaseY + pilaAlto * 0.5f) * celda, 0f);
+            var sr = MaquinariaSprites.CrearCapa(go.transform, "Sprite",
+                MaquinariaSprites.MarcoBandeja(pilaAncho, pilaAlto), 19, pilaAncho * celda, pilaAlto * celda);
+            sr.color = Color.white;
         }
 
         private void BuildVisual(int mountCellX, int mountCellY)

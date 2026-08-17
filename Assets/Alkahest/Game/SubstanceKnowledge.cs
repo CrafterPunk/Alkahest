@@ -318,7 +318,7 @@ namespace Alkahest.Game
                 // pasan por aquí: caen al default (null) a propósito, son
                 // "lo innominado" nuevo -- ver NombreDe/NombreParaHud/
                 // Bautizar para cómo se nombran (por BASE, no por matId).
-                case MaterialId.Limo: return "limo";
+                case MaterialId.Limo: return "limo primordial"; // (playtest 28) "Limo Primordial" a pedido de Cesar, para la prueba con sus amigos de Steam.
                 default: return null; // lo innominado: Slime, Azoth, CrystalSeed, Vivium, Crystal, Acid, y las 40 variantes base×estado.
             }
         }
@@ -587,7 +587,7 @@ namespace Alkahest.Game
                 // reventar la circularidad de "???" con un texto que la
                 // describe igual): el aviso apunta al LIBRO, no al material.
                 EncolarLeyBanner(
-                    "Habéis producido algo que nunca habíais fijado así. Patentadlo en vuestro libro (J), sección PROCEDIMIENTOS.",
+                    "Has producido algo que nunca habías fijado así. Paténtalo en tu libro (J), sección PROCEDIMIENTOS.",
                     MaterialId.Empty,
                     "¡NUEVO PROCEDIMIENTO!");
             }

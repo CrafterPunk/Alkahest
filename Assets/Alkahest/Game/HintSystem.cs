@@ -82,16 +82,23 @@ namespace Alkahest.Game
         // ReiniciarParaJornada(1), nunca a día 2 ni 3 en este modo.
         private static readonly string[] PistasJornada1 =
         {
-            "El caño turbio gotea LIMO: todo lo que existe aquí desciende de él.",
-            "Hierve limo en el crisol: el agua se va, sus arenas quedan.",
-            "El crisol solo, sin alimentar, hierve pero no funde.",
-            "Tostad un polvo sin fundirlo: algunos se vuelven combustible.",
-            "Con combustible en la tolva del crisol, llega el rojo de verdad.",
+            // (playtest 27) Guion reescrito para EL CRISOL POR HORNADAS: el
+            // guion del 26 describía el crisol continuo ("hierve solo", el
+            // recocido por dejarlo morir) que ya no existe. Cada línea sigue
+            // siendo UN paso ejecutable, ahora del modelo real: cargar,
+            // encender (E), esperar la hornada, RECOGER, volver a pasar.
+            "El caño turbio gotea LIMO PRIMORDIAL: todo lo que existe aquí desciende de él.",
+            "Vierte limo en la boca del crisol y enciéndelo con E: una hornada.",
+            "Cada hornada hace UNA sola cosa; recoge el resultado antes de la siguiente.",
+            "Con su fuego bajo, el crisol solo extrae la arena más dócil del limo.",
+            "Tuesta un polvo sin fundirlo: algunos se vuelven combustible.",
+            "Con combustible en el brasero, el fuego sube: el limo suelta OTRAS arenas.",
             "Lo fundido, vertido fuera, se templa: duro pero frágil.",
-            "Dejadlo morir dentro del crisol y saldrá recocido: dócil a la prensa.",
+            "Lo fundido, recocido en otra hornada, sale dócil a la prensa.",
             "La prensa compacta lo dócil y revienta lo frágil.",
             "La lámpara del banco delata lo que el ojo no ve.",
-            "Pulsa T para bautizar; el libro (J) guarda vuestros procedimientos.",
+            "La columna de vidrio no transforma nada: deja caer y OBSERVA.",
+            "Pulsa T para bautizar; el libro (J) guarda tus procedimientos.",
         };
 
         // (fix playtest 9, recortadas playtest 10) El jugador reportó llevar horas sin
@@ -120,7 +127,7 @@ namespace Alkahest.Game
             "Deja el criadero de la cuba derecha trabajando solo.",
             "Riega TODO el frente de piedra de la bandeja fría, no solo un punto.",
             "Bautiza (T) lo que aún no tenga nombre.",
-            "Los encargos usarán el nombre que le pongáis a cada cosa.",
+            "Los encargos usarán el nombre que le pongas a cada cosa.",
         };
 
         private string[] _pistas = PistasJornada1;

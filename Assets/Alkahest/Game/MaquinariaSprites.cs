@@ -58,6 +58,19 @@ namespace Alkahest.Game
         /// </summary>
         public sealed class AffordanceGlow
         {
+            // (playtest 27, VEREDICTO DE CESAR sobre el playtest 26) EL PULSO
+            // POR PROXIMIDAD SE APAGA: "el latido del embudo parece mucho más
+            // una indicación de FUNCIONAMIENTO; podríamos usarlo como
+            // indicación de funcionamiento en una versión más avanzada, de
+            // momento hay que cortar su uso como aviso de proximidad". Tenía
+            // razón: un pulso se lee universalmente como "esto está ENCENDIDO/
+            // trabajando", no como "esto acepta lo que llevas". La clase se
+            // CONSERVA entera (regla 15) porque su destino ya está decidido:
+            // latir mientras la máquina TRABAJA (hornada en curso, prensada,
+            // análisis). Mientras ProximidadActiva sea false, Activo nunca
+            // enciende por cercanía+material.
+            public const bool ProximidadActiva = false;
+
             public const float ProbeIntervalSeconds = 0.25f;
             private const float RangoCeldas = 10f;
             private const float PulsoHz = 1f;
@@ -66,10 +79,10 @@ namespace Alkahest.Game
             private bool _activo;
 
             /// <summary>¿La última pasada del sondeo dice que esta boca sirve para el material que lleva el jugador ahora mismo?</summary>
-            public bool Activo => _activo;
+            public bool Activo => ProximidadActiva && _activo;
 
             /// <summary>Alfa del pulso 0..1 para este frame (seno sobre Time.time) -- 0 si <see cref="Activo"/> es false. Recalculado cada frame pero sin allocs: pura aritmética.</summary>
-            public float Alfa => _activo ? (0.5f + 0.5f * Mathf.Sin(Time.time * PulsoHz * Mathf.PI * 2f)) : 0f;
+            public float Alfa => Activo ? (0.5f + 0.5f * Mathf.Sin(Time.time * PulsoHz * Mathf.PI * 2f)) : 0f; // Activo (no _activo): respeta el interruptor ProximidadActiva de arriba.
 
             /// <summary>
             /// Avanza el acumulador y, si toca sondear (~0.25s), recalcula
@@ -98,6 +111,68 @@ namespace Alkahest.Game
                 if (mat == MaterialId.Empty) { _activo = false; return; }
 
                 _activo = sirve(mat);
+            }
+
+            // =============================================================
+            // (playtest 27) EL DESTINO APROBADO DE ESTA CLASE: "ESTOY
+            // TRABAJANDO". Cesar cerró la discusión del 26 diciendo que un
+            // pulso se lee como funcionamiento, no como affordance -- así
+            // que el mismo mecanismo (seno sobre Time.time, cero allocs)
+            // pasa a significar EXACTAMENTE eso. Lo conduce la máquina:
+            // pone `Trabajando = true` mientras corre una hornada / una
+            // prensada / un análisis, y tinta su capa de trabajo con
+            // <see cref="AlfaTrabajo"/>.
+            //
+            // Es un pulso DISTINTO del de proximidad a propósito: más
+            // rápido (1.6 Hz frente a 1 Hz) y con suelo de alfa 0.35 (nunca
+            // llega a apagarse del todo) -- "esto está encendido y
+            // respirando", no "esto parpadea a ver si me haces caso".
+            // =============================================================
+            private const float PulsoTrabajoHz = 1.6f;
+
+            /// <summary>¿La máquina dueña de esta boca está TRABAJANDO ahora mismo? Lo escribe la máquina, no el sondeo.</summary>
+            public bool Trabajando;
+
+            /// <summary>Alfa 0..1 del latido de trabajo (0 si no trabaja). Suelo 0.35: respira, no parpadea.</summary>
+            public float AlfaTrabajo => Trabajando
+                ? 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin(Time.time * PulsoTrabajoHz * Mathf.PI * 2f))
+                : 0f;
+        }
+
+        /// <summary>
+        /// (playtest 27, mandato 3 del CONTRATO_TALLER_GRANDE) EL ACUSE DE
+        /// RECIBO. "Cuando la materia entra donde debe, la máquina lo ACUSA":
+        /// un DESTELLO corto del marco, no un pulso sostenido (eso es
+        /// <see cref="AffordanceGlow.AlfaTrabajo"/>, y confundir los dos era
+        /// justo el error del playtest 26). Una instancia por boca; la
+        /// máquina llama a <see cref="Disparar"/> cuando detecta que la
+        /// cámara tiene materia que antes no tenía, y tinta el marco con
+        /// <see cref="Alfa"/> cada frame (pura aritmética, cero allocs).
+        /// </summary>
+        public sealed class Destello
+        {
+            private const float DuracionSeg = 0.55f;
+            private float _restante;
+
+            public void Disparar() => _restante = DuracionSeg;
+
+            /// <summary>Avanza el destello. Llamar una vez por Update con Time.deltaTime.</summary>
+            public void Avanzar(float deltaTime)
+            {
+                if (_restante <= 0f) return;
+                _restante -= deltaTime;
+                if (_restante < 0f) _restante = 0f;
+            }
+
+            /// <summary>Alfa 0..1: sube de golpe y cae en rampa cúbica (un destello, no un fundido lineal -- misma lección que la regla 28).</summary>
+            public float Alfa
+            {
+                get
+                {
+                    if (_restante <= 0f) return 0f;
+                    float t = _restante / DuracionSeg;
+                    return t * t * t;
+                }
             }
         }
 
@@ -868,6 +943,804 @@ namespace Alkahest.Game
             s = Crear(px, w, h, "ChaosAlchemyArco");
             _cache[clave] = s;
             return s;
+        }
+
+        // =================================================================
+        // [Playtest 27, CONTRATO_TALLER_GRANDE] EL TALLER GRANDE — la
+        // familia de sprites de las estaciones-EDIFICIO.
+        //
+        // POR QUÉ EXISTE. Veredicto de Cesar sobre el playtest 26: "cajitas
+        // ilegibles", "el embudo diminuto y horrible FLOTANDO", "otro embudo
+        // feo que no es boquilla y sin capacidad". Las estaciones del 26
+        // reutilizaban tres sprites (ChasisPlaca/Embudo/MarcoContenedor)
+        // estirados a cualquier proporción: un chasis de 14 téxeles de alto
+        // escalado a 6 celdas de mundo se ve como una barra, no como un
+        // aparato. Esta familia se dibuja con DOS parámetros (span y alto en
+        // celdas), así que cada pieza nace con la proporción del hueco que
+        // va a ocupar y ninguna se deforma.
+        //
+        // REGLA DE DENSIDAD (heredada del fix de baja resolución del
+        // playtest 6): 2 téxeles de diseño por celda x Escala=3 = 6
+        // téxeles/celda en AMBOS ejes. <see cref="Tex"/> es la única forma
+        // de convertir celdas a téxeles en esta sección -- si alguien
+        // hardcodea un alto fijo, vuelve la barra estirada.
+        //
+        // EL EMBUDO DECORATIVO ESTÁ PROHIBIDO desde esta ronda (mandato 2
+        // del contrato). <see cref="Embudo"/> se CONSERVA (regla 15) porque
+        // el Crisol sigue teniendo una boca de vertido de verdad, pero ahí
+        // el embudo es MAMPOSTERÍA TALLADA (Sim/SimLevelBuilder.cs, paredes
+        // diagonales de piedra que embudan la materia hacia la cámara) y
+        // este sprite solo pone el LABIO de latón que la remata
+        // (<see cref="LabioBoca"/>). Las estaciones que reciben DEPOSITANDO
+        // (prensa, chispa, ensayo) llevan <see cref="MarcoBandeja"/>: una
+        // bandeja abierta enmarcada, jamás un embudo que no embuda.
+        // =================================================================
+
+        /// <summary>Celdas -&gt; téxeles del lienzo, a 2 téxeles de diseño por celda x <see cref="Escala"/> (= 6 téxeles/celda). ÚNICA conversión permitida en la familia del playtest 27: ver el bloque de doc de arriba.</summary>
+        private static int Tex(int celdas) => Mathf.Clamp(celdas * 2 * Escala, S(6), S(400));
+
+        // ---- Paleta compartida de la familia (latón / carboncillo / piedra) ----
+        private static readonly Color32 LatonAlto = new Color32(0xF4, 0xD8, 0x93, 255);
+        private static readonly Color32 Laton = new Color32(0xC1, 0x97, 0x4B, 255);
+        private static readonly Color32 LatonBajo = new Color32(0x6E, 0x53, 0x28, 255);
+        // (playtest 27, SEGUNDA PASADA — visto jugando) EL HIERRO SUBE DE
+        // VALOR. Con 0x302A27 sobre el vacío del cuarto (que se dibuja casi
+        // negro) la panza del Crisol y el cesto del brasero eran INVISIBLES
+        // mientras estaban vacíos: solo se veía el filete de latón, o sea un
+        // alambre. Es la misma clase de fallo que la regla 52 ("el color de
+        // un material se juzga contra sus vecinos EN PANTALLA, no en el hex
+        // del código"), aquí aplicada a la maquinaria. Subido a 0x453D38 con
+        // luz 0x6E6560: sigue siendo carboncillo, pero se ve.
+        private static readonly Color32 HierroAlto = new Color32(0x6E, 0x65, 0x60, 255);
+        private static readonly Color32 Hierro = new Color32(0x45, 0x3D, 0x38, 255);
+        private static readonly Color32 HierroBajo = new Color32(0x21, 0x1D, 0x1A, 255);
+        private static readonly Color32 PiedraAlta = new Color32(0x6C, 0x62, 0x58, 255);
+        private static readonly Color32 Piedra = new Color32(0x45, 0x3E, 0x37, 255);
+        private static readonly Color32 PiedraBaja = new Color32(0x23, 0x1F, 0x1B, 255);
+
+        // -----------------------------------------------------------------
+        // LA LECCIÓN QUE HACE FALTA ANTES DE LEER LAS DOS SIGUIENTES: **UN
+        // SPRITE DE MÁQUINA NO PUEDE TAPAR SU PROPIA CÁMARA.** Los chasis del
+        // playtest 26 (`ChasisPlaca` estirado sobre la cubeta) se dibujan con
+        // sortingOrder 18, o sea DELANTE del sprite del mundo (-5): el
+        // material que el jugador vertía dentro quedaba OCULTO tras la chapa
+        // de su propia máquina. Es la mitad de "no recibo ningún feedback"
+        // del veredicto de Cesar, y no se ve leyendo el código -- solo
+        // jugando (regla 52).
+        //
+        // Desde el playtest 27, toda pieza que envuelva un recinto se dibuja
+        // con el HUECO TRANSPARENTE, recortado con las MISMAS medidas
+        // (muro/suelo en celdas) con las que Sim/SimLevelBuilder talló la
+        // mampostería. Así el sprite viste los muros reales y la cámara real
+        // se ve por dentro.
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// EL CRISOL: panza de hierro remachada con dos zunchos de latón,
+        /// silueta PANZUDA de verdad (ancho máximo al 40% de la altura, como
+        /// un caldero) y la CÁMARA RECORTADA A TRANSPARENTE -- ver la nota de
+        /// arriba. `muroCeldas`/`sueloCeldas` tienen que ser los MISMOS que
+        /// usó la mampostería, o el hueco del dibujo y el hueco de verdad no
+        /// coincidirán.
+        /// </summary>
+        public static Sprite PanzaCrisol(int spanCeldas, int altoCeldas, int muroCeldas, int sueloCeldas)
+        {
+            string clave = "panza" + spanCeldas + "x" + altoCeldas + "m" + muroCeldas + "s" + sueloCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int maxSemi = w / 2 - S(1);
+
+            for (int y = 0; y < h; y++)
+            {
+                float t = y / (float)(h - 1); // 0 abajo, 1 arriba.
+                // Perfil de caldero: base recogida, panza máxima al 40% de la
+                // altura, hombros que se cierran un poco hacia la boca.
+                float perfil = t < 0.4f
+                    ? Mathf.Lerp(0.66f, 1f, t / 0.4f)
+                    : Mathf.Lerp(1f, 0.88f, (t - 0.4f) / 0.6f);
+                int semi = Mathf.RoundToInt(maxSemi * perfil);
+
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    int borde = Mathf.Max(1, Escala);
+                    Color32 c;
+                    if (dx <= -semi + borde) c = HierroAlto;      // luz por la izquierda.
+                    else if (dx >= semi - borde) c = HierroBajo;  // sombra por la derecha.
+                    else c = Hierro;
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Dos zunchos de latón (los aros que ciñen la panza) + remaches.
+            int[] zunchos = { Mathf.RoundToInt(h * 0.26f), Mathf.RoundToInt(h * 0.58f) };
+            for (int zi = 0; zi < zunchos.Length; zi++)
+            {
+                int y0 = zunchos[zi];
+                for (int y = y0; y < y0 + Mathf.Max(1, Escala); y++)
+                {
+                    if (y < 0 || y >= h) continue;
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (px[y * w + x].a == 0) continue;
+                        px[y * w + x] = (x < w / 2) ? LatonAlto : Laton;
+                    }
+                }
+                for (int x = S(3); x < w - S(3); x += S(7))
+                {
+                    if (px[y0 * w + x].a == 0) continue;
+                    MarcarRemache(px, w, h, x, y0 - Escala, LatonAlto);
+                }
+            }
+
+            RecortarCamara(px, w, h, spanCeldas, altoCeldas, muroCeldas, sueloCeldas, LatonAlto);
+
+            s = Crear(px, w, h, "ChaosAlchemyPanzaCrisol");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// EL BRASERO (entrada de COMBUSTIBLE, la ÚNICA otra boca del taller):
+        /// cesto de hierro negro con barrotes verticales y tres patas, CHATO y
+        /// ANCHO -- todo lo contrario del crisol, que es alto y panzudo. Se
+        /// distingue a treinta celdas de distancia por silueta y por color, sin
+        /// leer nada. Cámara recortada como <see cref="PanzaCrisol"/>: dentro
+        /// se ve el combustible que le echas.
+        /// </summary>
+        public static Sprite CestoBrasero(int spanCeldas, int altoCeldas, int muroCeldas, int sueloCeldas)
+        {
+            string clave = "cesto" + spanCeldas + "x" + altoCeldas + "m" + muroCeldas + "s" + sueloCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            // TERCERA PASADA (visto jugando): el perfil anterior se estrechaba
+            // al 62% en la base, y como el recorte de la cámara se lleva el
+            // centro, lo que quedaba a la vista eran DOS TRAPECIOS SUELTOS --
+            // el brasero se leía como dos columnas rotas, no como un cesto.
+            // Ahora las paredes son casi RECTAS (0.90 -> 1.0, solo un ligero
+            // acampanado en el remate), y dos AROS horizontales cruzan de lado
+            // a lado por debajo de la boca: los aros son lo que ata las dos
+            // paredes en un solo objeto para el ojo.
+            int maxSemi = w / 2 - S(1);
+            int barrote = Mathf.Max(Escala, w / 26);
+            int periodo = Mathf.Max(barrote * 3, w / 9);
+
+            for (int y = 0; y < h; y++)
+            {
+                float t = y / (float)Mathf.Max(1, h - 1);
+                int semi = Mathf.RoundToInt(Mathf.Lerp(maxSemi * 0.90f, maxSemi, t * t));
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    bool esBarrote = (x % periodo) < barrote;
+                    Color32 c = esBarrote ? HierroBajo : Hierro;
+                    if (dx <= -semi + Escala) c = HierroAlto;
+                    if (y >= h - Escala) c = HierroAlto; // canto del cesto.
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Los dos AROS: bandas macizas que cruzan el cesto ENTERO. Se
+            // dibujan antes del recorte de la cámara a propósito -- el recorte
+            // se lleva su tramo central, pero dejan un tacón grueso en cada
+            // pared a la misma altura, y eso basta para que el ojo cierre la
+            // figura. (Un aro completo taparía el combustible: lo que hay
+            // dentro tiene que verse.)
+            int aroGrosor = Mathf.Max(Escala, h / 12);
+            int[] arosY = { Mathf.RoundToInt(h * 0.22f), Mathf.RoundToInt(h * 0.52f) };
+            for (int i = 0; i < arosY.Length; i++)
+                for (int y = arosY[i]; y < arosY[i] + aroGrosor; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (y < 0 || y >= h) continue;
+                        if (px[y * w + x].a == 0) continue;
+                        px[y * w + x] = (x < w / 2) ? HierroAlto : Hierro;
+                    }
+
+            RecortarCamara(px, w, h, spanCeldas, altoCeldas, muroCeldas, sueloCeldas, HierroAlto);
+
+            s = Crear(px, w, h, "ChaosAlchemyCestoBrasero");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// Recorta a TRANSPARENTE el rectángulo que ocupa la cámara real
+        /// (inset de `muroCeldas` a cada lado y `sueloCeldas` por abajo,
+        /// abierto por arriba) y le deja un filete de luz de un téxel en los
+        /// tres cantos interiores -- así el hueco se lee como un hueco
+        /// TALLADO y no como un agujero del dibujo. Ver la nota "un sprite de
+        /// máquina no puede tapar su propia cámara".
+        /// </summary>
+        private static void RecortarCamara(Color32[] px, int w, int h, int spanCeldas, int altoCeldas,
+            int muroCeldas, int sueloCeldas, Color32 filete)
+        {
+            if (spanCeldas <= 2 * muroCeldas || altoCeldas <= sueloCeldas) return;
+            int x0 = Mathf.RoundToInt(w * muroCeldas / (float)spanCeldas);
+            int x1 = w - 1 - x0;
+            int y0 = Mathf.RoundToInt(h * sueloCeldas / (float)altoCeldas);
+            if (x1 <= x0 || y0 >= h) return;
+
+            for (int y = y0; y < h; y++)
+                for (int x = x0; x <= x1; x++)
+                    px[y * w + x] = default;
+
+            for (int y = y0; y < h; y++)
+            {
+                for (int k = 0; k < Escala; k++)
+                {
+                    Pintar(px, w, h, x0 - 1 - k, y, k == 0 ? filete : Hierro);
+                    Pintar(px, w, h, x1 + 1 + k, y, k == 0 ? filete : HierroBajo);
+                }
+            }
+            for (int x = x0 - Escala; x <= x1 + Escala; x++)
+                for (int k = 0; k < Escala; k++) Pintar(px, w, h, x, y0 - 1 - k, k == 0 ? filete : Hierro);
+        }
+
+        /// <summary>
+        /// LECHO DE BRASAS: manchas irregulares (deterministas, hash de
+        /// posición -- nunca UnityEngine.Random) en blanco puro, para que el
+        /// llamante lo tinte de ámbar y lo haga respirar. Es lo que se ve
+        /// DENTRO del brasero y en el fondo de la panza: un fuego que se ve
+        /// respirar (contrato §5), no una barra naranja.
+        /// </summary>
+        public static Sprite LechoBrasas(int spanCeldas, int altoCeldas)
+        {
+            string clave = "brasas" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int r = Mathf.Max(2, Mathf.Min(w, h) / 7); // radio del carbón.
+            int paso = Mathf.Max(3, r * 2);
+            for (int cy = r; cy < h; cy += paso)
+            {
+                for (int cx = r; cx < w; cx += paso)
+                {
+                    // Desplazamiento pseudoaleatorio determinista por carbón.
+                    uint hash = (uint)(cx * 73856093 ^ cy * 19349663);
+                    int jx = (int)(hash % 5) - 2;
+                    int jy = (int)((hash >> 8) % 5) - 2;
+                    int rr = r - (int)((hash >> 16) % 2);
+                    byte brillo = (byte)(170 + (hash >> 20) % 86); // 170..255: brasas de distinta vida.
+
+                    for (int y = -rr; y <= rr; y++)
+                    {
+                        for (int x = -rr; x <= rr; x++)
+                        {
+                            if (x * x + y * y > rr * rr) continue;
+                            int xx = cx + jx + x, yy = cy + jy + y;
+                            if (xx < 0 || xx >= w || yy < 0 || yy >= h) continue;
+                            px[yy * w + xx] = new Color32(255, 255, 255, brillo);
+                        }
+                    }
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyLechoBrasas");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// BANDEJA ABIERTA ENMARCADA (mandato 2 del contrato: "si una máquina
+        /// no recibe por vertido a cámara, lleva una BANDEJA ABIERTA amplia y
+        /// enmarcada"). Marco de latón grueso con cartelas en las cuatro
+        /// esquinas y un LABIO volado en el borde superior -- transparente por
+        /// dentro (se dibuja SOBRE el hueco real de la mampostería, así que
+        /// enmarca la materia que hay dentro en vez de taparla). Proporción
+        /// correcta por construcción: recibe span Y alto.
+        /// </summary>
+        public static Sprite MarcoBandeja(int spanCeldas, int altoCeldas)
+        {
+            string clave = "bandeja" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int grosor = Mathf.Max(Escala, Mathf.Min(w, h) / 10);
+            int labio = Mathf.Max(Escala, grosor + Escala);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool lateral = x < grosor || x >= w - grosor;
+                    bool fondo = y < grosor;
+                    bool remateArriba = y >= h - labio;
+                    if (!lateral && !fondo && !remateArriba) continue;
+
+                    Color32 c;
+                    if (remateArriba) c = (y >= h - Escala) ? LatonAlto : Laton; // labio volado: la línea que dice "aquí se deposita".
+                    else if (x < grosor) c = LatonAlto;   // canto izquierdo iluminado.
+                    else if (x >= w - grosor) c = LatonBajo;
+                    else c = Laton;
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Cartelas de esquina (escuadras): un taco macizo + su diagonal.
+            int cart = Mathf.Max(Escala * 2, Mathf.Min(w, h) / 5);
+            MarcarRemateCuadrado(px, w, h, 0, 0, cart, LatonAlto);
+            MarcarRemateCuadrado(px, w, h, w - cart, 0, cart, LatonAlto);
+            MarcarRemateCuadrado(px, w, h, 0, h - cart, cart, LatonAlto);
+            MarcarRemateCuadrado(px, w, h, w - cart, h - cart, cart, LatonAlto);
+            for (int d = 0; d < cart; d++)
+            {
+                int inv = cart - 1 - d;
+                Pintar(px, w, h, cart + d, cart - 1 - d + Escala, LatonBajo);
+                Pintar(px, w, h, w - 1 - cart - d, cart - 1 - d + Escala, LatonBajo);
+                Pintar(px, w, h, cart + d, h - cart + inv - Escala, LatonBajo);
+                Pintar(px, w, h, w - 1 - cart - d, h - cart + inv - Escala, LatonBajo);
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyMarcoBandeja");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// LABIO DE BOCA: el remate de latón que corona la boca de vertido
+        /// TALLADA EN PIEDRA del Crisol (mandato 2: el embudo es geometría,
+        /// no sprite). Una banda ancha con el canto superior enrollado y dos
+        /// cuernos que caen a los lados -- se lee como el borde de un
+        /// tragante, y marca sin ambigüedad la línea por la que se vierte.
+        /// </summary>
+        public static Sprite LabioBoca(int spanCeldas, int altoCeldas)
+        {
+            string clave = "labio" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int rollo = Mathf.Max(Escala, h / 3); // grosor del canto enrollado.
+            for (int y = h - rollo; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float t = (y - (h - rollo)) / (float)Mathf.Max(1, rollo - 1);
+                    px[y * w + x] = t > 0.6f ? LatonAlto : (t > 0.25f ? Laton : LatonBajo);
+                }
+            }
+
+            // Cuernos: los extremos bajan describiendo una caída suave, así
+            // el labio "abraza" la boca de piedra en vez de flotar sobre ella.
+            int cuerno = Mathf.Max(Escala * 2, w / 12);
+            for (int i = 0; i < cuerno; i++)
+            {
+                float t = i / (float)Mathf.Max(1, cuerno - 1);
+                int caida = Mathf.RoundToInt((1f - t) * (h - rollo));
+                for (int y = h - rollo - caida; y < h - rollo; y++)
+                {
+                    Pintar(px, w, h, i, y, Laton);
+                    Pintar(px, w, h, w - 1 - i, y, LatonBajo);
+                }
+            }
+
+            // Remaches a lo largo del labio: le dan escala de pieza forjada.
+            for (int x = cuerno + S(2); x < w - cuerno - S(2); x += S(8))
+                MarcarRemache(px, w, h, x, h - rollo + Escala, LatonAlto);
+
+            s = Crear(px, w, h, "ChaosAlchemyLabioBoca");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// MANDÍBULA DE LA PRENSA: bloque macizo de hierro con DIENTES en su
+        /// cara inferior y dos pernos de latón. Los dientes son lo que hace
+        /// que, quieta, ya se lea como "esto baja y aplasta".
+        /// </summary>
+        public static Sprite MandibulaPrensa(int spanCeldas, int altoCeldas)
+        {
+            string clave = "mandibula" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int dientes = Mathf.Max(Escala * 2, h / 3);
+            for (int y = dientes; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color32 c = Hierro;
+                    if (y >= h - Escala) c = HierroAlto;                 // canto superior con luz.
+                    else if (x < Escala || x >= w - Escala) c = HierroBajo;
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Dientes: onda triangular en la cara de golpeo.
+            int periodo = Mathf.Max(Escala * 2, w / 10);
+            for (int x = 0; x < w; x++)
+            {
+                int fase = x % periodo;
+                int mitad = Mathf.Max(1, periodo / 2);
+                int alto = fase < mitad ? fase : periodo - 1 - fase;
+                int yTope = dientes - Mathf.RoundToInt(alto * dientes / (float)mitad);
+                for (int y = yTope; y < dientes; y++)
+                    Pintar(px, w, h, x, y, (y < yTope + Escala) ? HierroBajo : Hierro);
+            }
+
+            // Pernos de latón: la pieza cuelga del husillo por aquí.
+            int pernoY = h - Mathf.Max(Escala * 2, h / 3);
+            MarcarRemateCuadrado(px, w, h, w / 4, pernoY, Mathf.Max(Escala, h / 6), Laton);
+            MarcarRemateCuadrado(px, w, h, 3 * w / 4, pernoY, Mathf.Max(Escala, h / 6), Laton);
+
+            s = Crear(px, w, h, "ChaosAlchemyMandibulaPrensa");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// VOLANTE (rueda de radios) de latón, cuadrado, PENSADO PARA GIRAR:
+        /// el llamante rota su Transform mientras la prensa baja ("un tornillo
+        /// que gira de verdad al prensar", contrato §5). Aro + cubo + 6 radios:
+        /// con menos radios la rotación no se percibe, con más se emborrona.
+        /// </summary>
+        public static Sprite Volante(int diamCeldas)
+        {
+            string clave = "volante" + diamCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(diamCeldas), h = w;
+            var px = new Color32[w * h];
+            float cx = (w - 1) * 0.5f, cy = (h - 1) * 0.5f;
+            float rExt = w * 0.5f - Escala;
+            float rInt = rExt - Mathf.Max(Escala, w / 12f);
+            float rCubo = w * 0.16f;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = x - cx, dy = y - cy;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d <= rCubo) { px[y * w + x] = Laton; continue; }
+                    if (d >= rInt && d <= rExt)
+                    {
+                        px[y * w + x] = (dy > 0f) ? LatonAlto : LatonBajo; // luz arriba, sombra abajo.
+                        continue;
+                    }
+                    if (d < rInt)
+                    {
+                        // Seis radios: ángulo módulo 60º dentro de un margen.
+                        float ang = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg + 360f;
+                        float m = Mathf.Repeat(ang, 60f);
+                        float grosorGrados = Mathf.Max(6f, 260f / Mathf.Max(1f, d));
+                        if (m < grosorGrados || m > 60f - grosorGrados) px[y * w + x] = Laton;
+                    }
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyVolante");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// VIDRIO de la Columna de Ensayo (mandato 5: muros de PIEDRA con
+        /// VIDRIO VISUAL delante). Panel translúcido verdoso con un BRILLO
+        /// DIAGONAL y dos cantos claros. Va con sortingOrder entre el fondo
+        /// (-10) y el sprite del mundo (-5): la materia que cae dentro se
+        /// dibuja ENCIMA, así que se ve a través del cristal, que es
+        /// justamente lo que hace que se lea como cristal.
+        /// </summary>
+        public static Sprite VidrioPanel(int spanCeldas, int altoCeldas)
+        {
+            string clave = "vidriopanel" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            Color32 cuerpo = new Color32(0xB6, 0xD6, 0xCE, 44);
+            Color32 canto = new Color32(0xE2, 0xF4, 0xF0, 120);
+            Color32 brillo = new Color32(255, 255, 255, 96);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool esCanto = x < Escala || x >= w - Escala;
+                    px[y * w + x] = esCanto ? canto : cuerpo;
+                }
+            }
+
+            // Brillo diagonal: dos bandas paralelas que cruzan el panel.
+            int anchoBanda = Mathf.Max(Escala, w / 9);
+            for (int y = 0; y < h; y++)
+            {
+                int x0 = Mathf.RoundToInt(w * 0.18f + y * 0.35f);
+                for (int k = 0; k < anchoBanda; k++) Pintar(px, w, h, x0 + k, y, brillo);
+                int x1 = x0 + anchoBanda * 2;
+                for (int k = 0; k < Mathf.Max(1, anchoBanda / 2); k++) Pintar(px, w, h, x1 + k, y, new Color32(255, 255, 255, 52));
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyVidrioPanel");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// ELECTRODO del Banco de Chispa: pie de porcelana (aislante claro),
+        /// vástago de latón y punta de cobre. Vertical, para plantarlo a cada
+        /// lado de la bandeja -- entre las dos puntas salta
+        /// <see cref="Arco"/>.
+        /// </summary>
+        public static Sprite Electrodo(int anchoCeldas, int altoCeldas)
+        {
+            string clave = "electrodo" + anchoCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(anchoCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            Color32 porcelana = new Color32(0xCF, 0xC6, 0xB4, 255);
+            Color32 porcelanaSombra = new Color32(0x8E, 0x86, 0x77, 255);
+            Color32 cobre = new Color32(0xD8, 0x7A, 0x44, 255);
+
+            int aislante = Mathf.RoundToInt(h * 0.34f);
+            int punta = Mathf.RoundToInt(h * 0.12f);
+
+            for (int y = 0; y < h; y++)
+            {
+                int semi;
+                Color32 dentro, izq, der;
+                if (y < aislante)
+                {
+                    // Pie acampanado con dos gargantas (perfil de aislador).
+                    float t = y / (float)Mathf.Max(1, aislante - 1);
+                    float onda = 0.78f + 0.22f * Mathf.Cos(t * Mathf.PI * 4f);
+                    semi = Mathf.RoundToInt((w * 0.5f - Escala) * onda);
+                    dentro = porcelana; izq = porcelana; der = porcelanaSombra;
+                }
+                else if (y >= h - punta)
+                {
+                    semi = Mathf.Max(Escala, Mathf.RoundToInt(w * 0.22f));
+                    dentro = cobre; izq = cobre; der = new Color32(0x8C, 0x47, 0x24, 255);
+                }
+                else
+                {
+                    semi = Mathf.Max(Escala, Mathf.RoundToInt(w * 0.28f));
+                    dentro = Laton; izq = LatonAlto; der = LatonBajo;
+                }
+
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = w / 2 + dx;
+                    if (x < 0 || x >= w) continue;
+                    px[y * w + x] = dx <= -semi + Escala ? izq : (dx >= semi - Escala ? der : dentro);
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyElectrodo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// LÁMPARA del Banco: ampolla de vidrio sobre casquillo de latón, con
+        /// el FILAMENTO en blanco puro dentro (el llamante tinta la capa del
+        /// filamento según la conductividad leída). Dos capas separadas para
+        /// que el vidrio no cambie de color al encenderse -- lo que brilla es
+        /// el hilo, no el cristal.
+        /// </summary>
+        public static Sprite AmpollaLampara(int diamCeldas)
+        {
+            string clave = "ampolla" + diamCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(diamCeldas), h = Tex(diamCeldas) * 3 / 2;
+            var px = new Color32[w * h];
+
+            // (segunda pasada) El vidrio de la lámpara subió de alfa 70/150 a
+            // 120/235 y el canto se engordó: a 7 celdas de diámetro sobre
+            // fondo negro, la ampolla anterior se leía como un HUEVO DE PIEDRA
+            // gris. Una lámpara tiene que parecer de vidrio incluso apagada, o
+            // el instrumento de lectura del Banco no se reconoce.
+            Color32 vidrio = new Color32(0xC6, 0xDE, 0xE8, 120);
+            Color32 vidrioCanto = new Color32(0xF2, 0xFB, 0xFF, 235);
+            int casquillo = Mathf.RoundToInt(h * 0.22f);
+            float cx = (w - 1) * 0.5f;
+            float cyAmp = casquillo + (h - casquillo) * 0.5f;
+            float rx = w * 0.5f - Escala, ry = (h - casquillo) * 0.5f - Escala;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    if (y < casquillo)
+                    {
+                        int semi = Mathf.RoundToInt(w * 0.3f);
+                        if (Mathf.Abs(x - cx) <= semi)
+                            px[y * w + x] = ((y / Mathf.Max(1, Escala)) % 2 == 0) ? Laton : LatonBajo; // rosca del casquillo.
+                        continue;
+                    }
+                    float dx = (x - cx) / rx, dy = (y - cyAmp) / ry;
+                    float d = dx * dx + dy * dy;
+                    if (d > 1f) continue;
+                    px[y * w + x] = d > 0.68f ? vidrioCanto : vidrio;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyAmpollaLampara");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>Filamento de la lámpara: espiral blanca centrada en la ampolla (misma huella que <see cref="AmpollaLampara"/> para poder apilarlas sin calcular offsets). Se tinta con SpriteRenderer.color.</summary>
+        public static Sprite FilamentoLampara(int diamCeldas)
+        {
+            string clave = "filamento" + diamCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(diamCeldas), h = Tex(diamCeldas) * 3 / 2;
+            var px = new Color32[w * h];
+
+            int casquillo = Mathf.RoundToInt(h * 0.22f);
+            int y0 = casquillo + Mathf.RoundToInt((h - casquillo) * 0.22f);
+            int y1 = casquillo + Mathf.RoundToInt((h - casquillo) * 0.78f);
+            int semi = Mathf.Max(Escala, w / 5);
+            int periodo = Mathf.Max(Escala * 2, (y1 - y0) / 4);
+
+            for (int y = y0; y <= y1; y++)
+            {
+                int fase = (y - y0) % periodo;
+                int mitad = Mathf.Max(1, periodo / 2);
+                float t = fase < mitad ? fase / (float)mitad : (periodo - fase) / (float)mitad;
+                int x = w / 2 + Mathf.RoundToInt(Mathf.Lerp(-semi, semi, t));
+                for (int k = 0; k < Escala; k++) Pintar(px, w, h, x + k, y, new Color32(255, 255, 255, 255));
+            }
+            // Los dos pies del filamento, hasta el casquillo.
+            for (int y = casquillo; y < y0; y++)
+            {
+                Pintar(px, w, h, w / 2 - semi, y, new Color32(255, 255, 255, 190));
+                Pintar(px, w, h, w / 2 + semi, y, new Color32(255, 255, 255, 190));
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyFilamentoLampara");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// DOSEL del Ensayo del Maestro: arco de latón con clave central y
+        /// una hilera de colgantes. Es lo único de este idioma visual que no
+        /// es maquinaria -- y ésa es la idea: el Ensayo NO es una máquina, es
+        /// un altar donde se dictamina (contrato §5, "un pedestal de examen
+        /// con dosel").
+        /// </summary>
+        public static Sprite Dosel(int spanCeldas, int altoCeldas)
+        {
+            string clave = "dosel" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int colgante = Mathf.Max(Escala * 2, h / 4);
+            float cx = (w - 1) * 0.5f;
+            float rx = w * 0.5f - Escala;
+            float ry = (h - colgante) - Escala;
+            int grosor = Mathf.Max(Escala, h / 8);
+
+            // Arco: elipse hueca desde la base del arco hacia arriba.
+            for (int y = colgante; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = (x - cx) / rx;
+                    float dy = (y - colgante) / Mathf.Max(1f, ry);
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float dIntX = (x - cx) / Mathf.Max(1f, rx - grosor);
+                    float dIntY = (y - colgante) / Mathf.Max(1f, ry - grosor);
+                    float dInt = Mathf.Sqrt(dIntX * dIntX + dIntY * dIntY);
+                    if (d <= 1f && dInt >= 1f)
+                        px[y * w + x] = (x < cx) ? LatonAlto : Laton;
+                }
+            }
+
+            // Clave central: un taco más grueso en el vértice.
+            MarcarRemateCuadrado(px, w, h, w / 2 - grosor, h - grosor * 2, grosor * 2, LatonAlto);
+
+            // Colgantes: flecos cortos que cuelgan del arranque del arco.
+            int paso = Mathf.Max(Escala * 3, w / 12);
+            for (int x = paso / 2; x < w; x += paso)
+            {
+                int largo = colgante - ((x / paso) % 2 == 0 ? 0 : Escala * 2);
+                for (int y = colgante - largo; y < colgante; y++)
+                    for (int k = 0; k < Escala; k++) Pintar(px, w, h, x + k, y, (y < colgante - largo + Escala) ? LatonAlto : LatonBajo);
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyDosel");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// SILLAR: un bloque de piedra labrada con junta, para vestir los
+        /// pilares/jambas/plintos que la mampostería del plano ya talló en la
+        /// grilla. No sustituye a la piedra real (que es la que contiene la
+        /// materia): la SUBRAYA, para que un pilar de una estación no se
+        /// confunda con la roca del fondo.
+        /// </summary>
+        public static Sprite Sillar(int spanCeldas, int altoCeldas)
+        {
+            string clave = "sillar" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int hilada = Mathf.Max(Escala * 2, h / 6);
+            int junta = Mathf.Max(1, Escala / 2);
+            int piezaW = Mathf.Max(Escala * 4, w / 3);
+
+            for (int y = 0; y < h; y++)
+            {
+                int fila = y / hilada;
+                int desfase = (fila % 2 == 0) ? 0 : piezaW / 2; // aparejo a soga: hiladas alternas desplazadas.
+                for (int x = 0; x < w; x++)
+                {
+                    bool juntaH = (y % hilada) < junta;
+                    bool juntaV = ((x + desfase) % piezaW) < junta;
+                    Color32 c = Piedra;
+                    if (juntaH || juntaV) c = PiedraBaja;
+                    else if ((y % hilada) >= hilada - junta) c = PiedraAlta; // luz en el canto alto de cada sillar.
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemySillar");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>Burbuja: anillo claro con centro tenue -- lo que sube por la cámara del Crisol mientras corre una hornada (el progreso VISIBLE que pide el contrato §4).</summary>
+        public static Sprite Burbuja()
+        {
+            const string clave = "burbuja";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(8), h = S(8);
+            var px = new Color32[w * h];
+            float cx = (w - 1) * 0.5f, cy = (h - 1) * 0.5f, r = w * 0.5f - 1f;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = x - cx, dy = y - cy;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy) / r;
+                    if (d > 1f) continue;
+                    byte a = d > 0.66f ? (byte)235 : (byte)70; // anillo marcado, interior casi vacío.
+                    px[y * w + x] = new Color32(255, 255, 255, a);
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyBurbuja");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>Píxel suelto con guarda de límites -- azúcar interno de la familia del playtest 27.</summary>
+        private static void Pintar(Color32[] px, int w, int h, int x, int y, Color32 c)
+        {
+            if (x < 0 || x >= w || y < 0 || y >= h) return;
+            px[y * w + x] = c;
         }
 
         /// <summary>Sprite blanco de 1x1 para barras/rellenos genéricos (se tinta con SpriteRenderer.color).</summary>

@@ -492,7 +492,7 @@ namespace Alkahest.Game
             string nombre = _knowledge != null ? _knowledge.NombreDe(MaterialId.Vivium) : "???";
             if (nombre == "???")
                 return $"El Maestro quiere ver crecer algo vivo -- {minCells} celdas de lo que crece solo, sin que lo alimenten a mano.";
-            return $"El Maestro quiere ver crecer algo vivo -- {minCells} celdas de lo que llamáis \"{nombre}\".";
+            return $"El Maestro quiere ver crecer algo vivo -- {minCells} celdas de lo que llamas \"{nombre}\".";
         }
 
         /// <summary>
@@ -516,7 +516,7 @@ namespace Alkahest.Game
         private string DescribirNamedMaterial(int minCells, byte targetMat)
         {
             string nombre = _knowledge != null ? _knowledge.NombreDe(targetMat) : "???";
-            return $"Trae {minCells} celdas de lo que llamáis \"{nombre}\".";
+            return $"Trae {minCells} celdas de lo que llamas \"{nombre}\".";
         }
 
         /// <summary>
@@ -584,11 +584,11 @@ namespace Alkahest.Game
         // =================================================================
         private static readonly string[] ArcoPersisteTextos =
         {
-            "Separadme el limo: traedme una sola de sus arenas, pura.",
+            "Sepárame el limo primordial: tráeme una sola de sus arenas, pura.",
             "Algo que aguante el rojo del crisol sin ceder.",
             "Algo que encienda mi lámpara.",
             "Algo que flote en el agua sin deshacerse en ella.",
-            "El cómo del nº2, por escrito en vuestro libro.",
+            "El cómo del nº2, por escrito en tu libro.",
         };
 
         private static readonly OrderType[] ArcoPersisteTipos =

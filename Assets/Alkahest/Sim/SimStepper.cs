@@ -644,11 +644,26 @@ namespace Alkahest.Sim
             // vuelve inmediatamente (la celda ya no es la Liquid que era, y
             // el resto de este método asume `def` todavía válido).
             // ---------------------------------------------------------------
-            if (def.id == MaterialId.Limo)
-            {
-                if (ProcessLimoSeparacion(x, y, idx)) return;
-            }
-            else if (def.id == MaterialId.Water)
+            // (playtest 27, CONTRATO_TALLER_GRANDE mandato 4) LA SEPARACIÓN
+            // DEL LIMO YA NO ES FÍSICA DEL MUNDO -- ES UN ACTO DEL CRISOL.
+            // Regla 15: se comenta el porqué, no se borra el mecanismo
+            // (ProcessLimoSeparacion/PickBaseDelLimo siguen abajo, intactos y
+            // sin llamantes).
+            //
+            // POR QUÉ SE RETIRA. Cesar, jugando el 26: *"cada vez que le tiro
+            // limo saco 4 cosas de colores que me aturden... si me salen 4
+            // cosas casi de golpe no entendí nada"*. Y tenía razón por partida
+            // doble: (a) cada celda sorteaba SU base por separado, así que un
+            // charco de limo caliente escupía confeti de cinco colores a la
+            // vez, y (b) al ser física del mundo ocurría en CUALQUIER sitio
+            // caliente, no en el aparato que el jugador estaba mirando.
+            // Desde el playtest 27, una hornada de limo en el crisol produce
+            // UNA sola base -- la más alta cuya banda `Universe.ExtraccionRaw`
+            // quepa en la temperatura de esa pasada (Game/Crisol.cs) -- y el
+            // limo derramado por el suelo, por muy caliente que esté, no se
+            // separa solo. La separación pasa a ser algo que TÚ haces.
+            //   if (def.id == MaterialId.Limo) { if (ProcessLimoSeparacion(x, y, idx)) return; }
+            if (def.id == MaterialId.Water)
             {
                 if (ProcessDisolucionAgua(x, y, idx)) return;
             }
@@ -716,6 +731,7 @@ namespace Alkahest.Sim
         /// los pesos <see cref="Universe.PesoEnLimo"/>. Devuelve true si transformó la
         /// celda (el llamante debe `return` sin seguir procesándola como Liquid este tick).
         /// </summary>
+        /// <remarks>(playtest 27) SIN LLAMANTES a propósito -- ver el bloque comentado en ProcessLiquid: la separación del limo pasó a ser un acto del Crisol (una base por hornada, elegida por temperatura). Se conserva por la regla 15 y porque el gate `LimoSeparaRaw` sigue siendo el umbral que documenta `umbralPersistenciaRaw[Limo]` en Universe.</remarks>
         private bool ProcessLimoSeparacion(int x, int y, int idx)
         {
             if (((x + y + (int)_tick) & 7) != 0) return false; // muestreo 1/8, patrón de MaybeReact.

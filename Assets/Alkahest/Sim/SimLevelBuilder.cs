@@ -880,10 +880,32 @@ namespace Alkahest.Sim
         /// `CuartoX0`) no dependen de este valor, así que ninguno de los dos
         /// se mueve ni un píxel.
         /// </summary>
-        public const int CuartoX0 = 232;
-        public const int CuartoX1 = 357; // ancho 126 (antes 110), sin cambios de valor -- ver el porqué arriba.
+        /// <summary>
+        /// PLAYTEST 27 (CONTRATO_TALLER_GRANDE, mandato 1): 232 -&gt; 140. Las
+        /// seis estaciones dejan de ser cajitas y pasan a ser EDIFICIOS: el
+        /// cuarto crece otra vez hacia la IZQUIERDA (ancho 126 -&gt; 218) y
+        /// hacia ARRIBA (<see cref="CuartoY1"/> 209 -&gt; 240, alto 42 -&gt; 73).
+        /// Los dos límites son EXACTAMENTE los que el contrato autoriza
+        /// ("`CuartoX0` puede bajar hasta 140 y `CuartoY1` subir hasta 240");
+        /// se usan enteros porque la línea de seis estaciones-edificio no cabe
+        /// en menos (ver el reparto medido en "LA LÍNEA DEL TALLER GRANDE"
+        /// más abajo: 218 celdas repartidas al detalle, sobran 15).
+        ///
+        /// <see cref="CuartoX1"/> sigue SIN TOCAR (357) por la misma razón que
+        /// en el 26: todo lo anclado al lado derecho (pasillo, boca de la
+        /// Tolva, contrafuerte) queda donde estaba y no hay que revalidarlo.
+        /// El crecimiento vertical SÍ es nuevo y sí toca revisarlo: el techo
+        /// del cuarto pasa a y=240, y la boca de la Tolva vive en
+        /// <see cref="ChuteMouthY0"/>..<see cref="ChuteMouthY1"/> = 189..238,
+        /// o sea que la franja de solape (por la que va el pasillo) CRECE de
+        /// 21 a 50 filas -- el pasillo (`PasilloTolvaY0`=195) sigue dentro sin
+        /// tocarlo. El contrafuerte empieza en x=380, 23 celdas a la derecha
+        /// de `CuartoX1`: sin solape.
+        /// </summary>
+        public const int CuartoX0 = 140;
+        public const int CuartoX1 = 357; // ancho 218 (playtest 27; antes 126) -- CuartoX1 nunca se ha movido.
         public const int CuartoY0 = 168; // (2ª ronda) antes 154
-        public const int CuartoY1 = 209; // (2ª ronda) antes 223; alto 42, antes 70
+        public const int CuartoY1 = 240; // (playtest 27) antes 209; alto 73, antes 42 -- las estaciones ahora miden 20-35 celdas de alto y necesitan aire encima.
 
         // ---- La cuna --------------------------------------------------------
         // (2ª ronda, "AJUSTE COMPOSICIÓN") Antes a 15 celdas del muro
@@ -1035,13 +1057,47 @@ namespace Alkahest.Sim
         // suelo hacia PilaLimo en vez de perderse (SimStepper, Liquid de
         // verdad) -- el objetivo LITERAL de Cesar ("el chorro deja de
         // perderse por el suelo") se cumple igual.
-        private const int PilaMuroGrosor = 1;
-        public const int PilaAnchoOuter = 6; // contrato §2, valor EXACTO.
-        public const int PilaHondoOuter = 3; // contrato §2, valor EXACTO.
-        /// <summary>Interior 235..238 -- incluye la columna de caída real (237, ver DECISIÓN arriba).</summary>
-        public const int PilaAguaX0 = 234;
-        /// <summary>Contigua a PilaAgua con 1 celda de aire entre las dos (240) -- se leen como DOS pilas, no una partida en dos.</summary>
-        public const int PilaLimoX0 = 241;
+        // =================================================================
+        // PLAYTEST 27 — LA ESTACIÓN DE FUENTES (mandato 1, 2 y 7 del
+        // CONTRATO_TALLER_GRANDE). Las pilas de 6x3 del playtest 26 tenían
+        // interior 4x2 = 8 CELDAS: la ración de un caño son 45, así que
+        // desbordaban SIEMPRE, desde el primer chorro. Ahora cada pila es una
+        // pila de taller de verdad: 14x9 exterior, muro de 2, interior 10x7 =
+        // **70 celdas** -- una ración entera (45) cabe con holgura y aún se ve
+        // el nivel subir dentro.
+        //
+        // LOS DOS CHORROS SE SEPARAN CON GEOMETRÍA, NO ESTIRANDO EL CAÑO
+        // (mandato 7, textual de Cesar: "no estires el tamaño del caño de
+        // Limo, vuélvelo a su dimensión normal"). El playtest 26 los separó
+        // dándole al caño de limo un voladizo de 12 celdas -- el sprite
+        // procedural se estiraba y quedaba deforme. La solución correcta es
+        // MÉNSULA DE PIEDRA: el caño de agua monta en la pared izquierda del
+        // cuarto y el de limo monta, más alto, en un machón de piedra propio
+        // (<see cref="MensulaLimoX0"/>) plantado entre las dos pilas. Los dos
+        // caños conservan el voladizo estándar de 5 celdas (`Dispenser.
+        // SpoutOffsetCellsDefault`, sin tocar) y cada chorro cae dentro de SU
+        // pila porque las BOCAS están a distinta X, que es como se resuelve
+        // esto en un taller de verdad.
+        //
+        // Cuentas (comprobadas contra Game/Dispenser.cs, no a ojo):
+        //  · agua: monta en x=CanoAguaX=140 -> boquilla en 145; interior de
+        //    PilaAgua = 143..152. Cae en la 3ª columna útil. ✔
+        //  · limo: monta en x=CanoLimoX=157 (cara derecha de la ménsula) ->
+        //    boquilla en 162; interior de PilaLimo = 160..169. Cae en la 3ª
+        //    columna útil, simétrico al de agua. ✔
+        private const int PilaMuroGrosor = 2;  // 1 -> 2 (playtest 27): un muro de 1 celda en una pila de 14 de ancho se lee como una raya, no como obra.
+        public const int PilaAnchoOuter = 14;  // 6 -> 14.
+        public const int PilaHondoOuter = 9;   // 3 -> 9. Interior resultante: 10 x 7 = 70 celdas (la ración son 45).
+        /// <summary>Pila del AGUA. Interior 143..152 x 172..178 -- la columna de caída real (145) entra por la tercera columna útil.</summary>
+        public const int PilaAguaX0 = 141;
+        /// <summary>Pila del LIMO. Interior 160..169 x 172..178 -- la boquilla del limo cae en 162.</summary>
+        public const int PilaLimoX0 = 158;
+
+        /// <summary>Machón de piedra ENTRE las dos pilas: es lo que sostiene el caño de limo más alto y a otra X (ver el bloque de arriba). Tres celdas de ancho, del suelo al arranque del caño.</summary>
+        public const int MensulaLimoX0 = 155;
+        public const int MensulaLimoX1 = 157;
+        /// <summary>Remate del machón: dos celdas por encima de la fila del caño de limo, para que el aparato se vea atornillado a piedra y no flotando.</summary>
+        public const int MensulaLimoTopY = CanoLimoY + 2;
 
         // =================================================================
         // LOS DOS CAÑOS BÁSICOS (playtest 22)
@@ -1078,12 +1134,22 @@ namespace Alkahest.Sim
         // reemplaza "criatura -> capullo", aparcados desde el playtest 25):
         // **caños + pilas -> CRISOL -> PRENSA -> COLUMNA -> CHISPA -> ENSAYO
         // -> pasillo -> Tolva** (contrato §2, "la línea del taller").
-        /// <summary>Columna de montaje de los dos caños: la primera columna de aire, pegada al muro izquierdo de la cámara.</summary>
-        public const int CanoMontajeX = CuartoX0;
-        /// <summary>Fila del caño de AGUA. Bastante por encima del labio de la cubeta (que llega a CuartoY0+CharcoHeight-1) para que el chorro se vea caer.</summary>
-        public const int CanoAguaY = CuartoY0 + 13;
-        /// <summary>Fila del caño de NUTRIENTE, encima del de agua. Separación amplia para que las dos chapas de rótulo no se pisen (el problema de "los caños con los títulos apilados" del playtest 15).</summary>
-        public const int CanoNutrienteY = CuartoY0 + 21;
+        /// <summary>
+        /// (playtest 27) LOS DOS CAÑOS DEJAN DE COMPARTIR COLUMNA DE MONTAJE
+        /// -- ver el bloque de LA ESTACIÓN DE FUENTES más arriba. Esta
+        /// constante se conserva con su nombre histórico y pasa a ser el
+        /// ALIAS del caño de agua (el que sí monta en la pared del cuarto),
+        /// para no romper a nadie que la lea por su nombre viejo.
+        /// </summary>
+        public const int CanoMontajeX = CanoAguaX;
+        /// <summary>Columna de montaje del caño de AGUA: la primera columna de aire, pegada al muro izquierdo de la cámara.</summary>
+        public const int CanoAguaX = CuartoX0; // 140
+        /// <summary>Columna de montaje del caño de LIMO: la cara DERECHA del machón de piedra, para que su chorro caiga en la pila del limo y no en la del agua.</summary>
+        public const int CanoLimoX = MensulaLimoX1; // 157
+        /// <summary>Fila del caño de AGUA (190). La boquilla queda 2 celdas más abajo (Dispenser.SpoutDropCells) y el labio de su pila está en 178: **10 celdas de caída visible**. Que el chorro se vea caer entero es media explicación de qué hace el aparato.</summary>
+        public const int CanoAguaY = CuartoY0 + 22; // 190
+        /// <summary>Fila del caño de NUTRIENTE/LIMO (196): 6 celdas MÁS ALTO que el de agua y 17 a su derecha (sobre su ménsula), con 16 celdas de caída visible hasta su pila. Las dos chapas de rótulo no se pisan y los dos chorros se leen como dos fuentes distintas, no como un caño con dos bocas.</summary>
+        public const int CanoNutrienteY = CuartoY0 + 28; // 196
         /// <summary>
         /// LO QUE PERSISTE (playtest 25, contrato §4.5): "el caño de NUTRIENTE
         /// pasa a ser el caño de LIMO: misma boca, otro material". Alias
@@ -1155,23 +1221,104 @@ namespace Alkahest.Sim
         // esto es documentación de intención).
         // =================================================================
 
-        /// <summary>Ancla (centro de la cubeta) del Crisol -- Game/Crisol.cs la lee tal cual (`SimLevelBuilder.CrisolX`). 274 -&gt; 258 (playtest 26, nuevo orden de la línea).</summary>
-        public const int CrisolX = 258;
-        /// <summary>Ancla (centro del lecho) de la Prensa. 294 -&gt; 282 (playtest 26).</summary>
-        public const int PrensaX = 282;
-        /// <summary>Ancla (centro de la ranura) del Banco de Chispa. 306 -&gt; 312 (playtest 26: AHORA VA DESPUÉS de la Columna, ver el bloque de arriba).</summary>
-        public const int BancoChispaX = 312;
-        /// <summary>Ancla (centro del plinto) del Ensayo del Maestro -- junto a la boca del pasillo (357..358), el veredicto final antes de cruzar a la Tolva. 351 -&gt; 330 (playtest 26).</summary>
-        public const int EnsayoPlintoX = 330;
+        // =================================================================
+        // PLAYTEST 27 — LA LÍNEA DEL TALLER **GRANDE** (mandato 1: "TODAS las
+        // máquinas al menos 6 VECES MÁS GRANDES... cada una un EDIFICIO
+        // pequeño, no una cajita")
+        // =================================================================
+        // REPARTO EXACTO de las 218 celdas del cuarto (140..357), medido
+        // sumando huellas reales, no a ojo. Cada tramo es [x0..x1] (ancho):
+        //
+        //   FUENTES   140..171 (32)   dos pilas 14x9 + machón de piedra
+        //   aire      172..179 ( 8)   <- aquí nace el aprendiz (AprendizX=175)
+        //   CRISOL    180..216 (37)   cámara + boca embudada + brasero aparte
+        //   aire      217..224 ( 8)
+        //   PRENSA    225..255 (31)   jambas + dintel + lecho abierto 15x5
+        //   aire      256..259 ( 4)
+        //   COLUMNA   260..282 (23)   fuste 13 de hueco x 34 de alto + boca
+        //   aire      283..285 ( 3)
+        //   CHISPA    286..312 (27)   bandeja 13x5 + dos electrodos + lámpara
+        //   aire      313..316 ( 4)
+        //   ENSAYO    317..345 (29)   dais elevado + bandeja 15x5 + dosel
+        //   aire      346..357 (12)   -> pasillo a la Tolva (358..392)
+        //
+        // Suma exacta: 32+8+37+8+31+4+23+3+27+4+29+12 = 218 = el ancho del
+        // cuarto (140..357). Cada huella se DERIVA de las constantes públicas
+        // de su propia clase (Crisol.CamaraAncho/BocaVuelo/BraseroSeparacion,
+        // Prensa.LechoAncho/JambaAncho, BancoChispa.BandejaAncho/PlintoAncho,
+        // EnsayoMaestro.PlintoAncho/DaisVuelo/ColumnaAncho) y de las de aquí
+        // para la Columna: si alguna cambia, ESTE COMENTARIO puede quedar
+        // desactualizado, pero la geometría real no se descuadra -- cada
+        // TallarEnPlano hace su propia aritmética. Es documentación de
+        // intención, igual que en el playtest 26.
+        //
+        // COMPARATIVA DE HUELLA (playtest 26 -> 27), que es el mandato
+        // literal ("al menos 6 veces más grandes"):
+        //   Crisol   15x6=90    -> 37x24 = 888    (x9.9, hogar incluido)
+        //   Prensa    7x4=28    -> 31x30 = 930    (x33)
+        //   Columna   5x22=110  -> 23x42 = 966    (x8.8)
+        //   Chispa    5x3=15    -> 27x38 = 1026   (x68, lámpara incluida)
+        //   Ensayo    5x4=20    -> 29x44 = 1276   (x64, dosel incluido)
+        //   Pila (una) 6x3=18   -> 14x9  = 126    (x7)
+        // Y lo que de verdad importa, la CAPACIDAD del recinto que recibe
+        // materia (una ración de caño son 45 celdas; el 26 desbordaba con
+        // todas):
+        //   cámara del Crisol   35 -> 117 celdas
+        //   lecho de la Prensa  15 ->  75
+        //   bandeja del Banco    6 ->  65
+        //   bandeja del Ensayo  12 ->  75
+        //   pila de recogida     8 ->  70
+        // =================================================================
 
-        /// <summary>Pared IZQUIERDA de la Columna de Ensayo (contrato §4.5/§2) -- mismo criterio de nombre que CunaX0/CharcoX0/RepisaX0 (el X0 de una estructura es siempre su borde izquierdo, no su centro). 315 -&gt; 296 (playtest 26: AHORA VA ANTES del Banco de Chispa, ver el bloque de arriba).</summary>
-        public const int ColumnaX0 = 296;
-        /// <summary>3 de hueco interior + 2 muros de Crystal (contrato, valor EXACTO).</summary>
-        public const int ColumnaAncho = 5;
-        /// <summary>Alto de los muros de Crystal, de pie sobre el suelo (contrato, valor EXACTO).</summary>
-        public const int ColumnaAlto = 22;
-        /// <summary>Playtest 26 (contrato §1.4, "vidrio alto con marcas de nivel horizontales cada 5 celdas"): cada cuántas filas se talla una marca -- ver <see cref="BuildColumnaEnsayo"/>.</summary>
-        private const int ColumnaMarcaPaso = 5;
+        /// <summary>Ancla (centro de la CÁMARA) del Crisol -- Game/Crisol.cs la lee tal cual. 258 -&gt; 194 (playtest 27).</summary>
+        public const int CrisolX = 194;
+        /// <summary>Ancla (centro del LECHO) de la Prensa. 282 -&gt; 240 (playtest 27).</summary>
+        public const int PrensaX = 240;
+        /// <summary>Ancla (centro de la BANDEJA) del Banco de Chispa. 312 -&gt; 299 (playtest 27).</summary>
+        public const int BancoChispaX = 299;
+        /// <summary>Ancla (centro de la BANDEJA) del Ensayo del Maestro -- el último antes del pasillo a la Tolva. 330 -&gt; 331 (playtest 27).</summary>
+        public const int EnsayoPlintoX = 331;
+
+        /// <summary>
+        /// Pared IZQUIERDA del fuste de la Columna de Ensayo. 296 -&gt; 262
+        /// (playtest 27). Cesar sobre la del 26: *"si se le puede llamar así a
+        /// esa escalera sin terminar, es inentendible"* -- tenía razón dos
+        /// veces: 5 celdas de ancho con 3 de hueco no son una columna, y sus
+        /// muros eran de <see cref="MaterialId.Crystal"/>, que **ES REACTIVO**
+        /// con el Azoth del núcleo de leyes (la columna podía disolverse
+        /// sola). Desde esta ronda los muros son <see cref="MaterialId.Stone"/>
+        /// (inerte a leyes -- R2 del sorteo de química lo excluye del pool de
+        /// reactivos, ver Universe.SortearLeyesGeneradas -- e inerte al cincel
+        /// por <see cref="ObraDelTaller"/>) y el VIDRIO es un sprite
+        /// translúcido delante (Game/ColumnaEnsayo.cs, mandato 5).
+        /// </summary>
+        public const int ColumnaX0 = 262;
+        /// <summary>19 = 3 de muro + 13 de hueco + 3 de muro (antes 5 = 1+3+1).</summary>
+        public const int ColumnaAncho = 19;
+        /// <summary>Grosor del muro de piedra del fuste.</summary>
+        public const int ColumnaMuro = 3;
+        /// <summary>Alto del fuste sobre el suelo: 22 -&gt; 34 celdas (interior y=171..204).</summary>
+        public const int ColumnaAlto = 34;
+        /// <summary>Filas de ABOCINADO sobre el fuste (y=205..209): la boca se abre 2 celdas por lado, así que desde lejos se ve DÓNDE se deja caer la muestra.</summary>
+        public const int ColumnaBocaFilas = 5;
+        public const int ColumnaBocaVuelo = 2;
+        /// <summary>Altura del TANQUE de la base (las N primeras filas del interior): ahí se vierten los líquidos y ahí se lee la estratificación. Solo lo usa el marco visual de Game/ColumnaEnsayo.cs -- físicamente es el mismo hueco.</summary>
+        public const int ColumnaTanqueAlto = 10;
+        /// <summary>
+        /// Cada cuántas filas lleva el fuste una marca de nivel (nudillo de
+        /// piedra que sobresale a los lados, NUNCA dentro del hueco de
+        /// observación). 5 -&gt; **11** (segunda pasada del playtest 27, visto
+        /// jugando): con paso 5 salían siete nudillos por lado y el fuste se
+        /// leía como una ESCALERA -- el mismo veredicto que Cesar dio del
+        /// playtest 26, reinventado sin querer. Con 11 quedan dos por lado, que
+        /// es lo justo para que la piedra tenga textura; la graduación de
+        /// verdad la dan ahora los tres zunchos de latón horizontales de
+        /// Game/ColumnaEnsayo.cs.
+        /// </summary>
+        private const int ColumnaMarcaPaso = 11;
+
+        /// <summary>Primera fila de hueco interior de cualquier estación (justo sobre la losa del cuarto). Todas las estaciones se apoyan aquí -- una sola constante en vez de `CuartoY0+3` repetido.</summary>
+        public const int EstacionSueloY = CuartoY0 + WallThickness; // 171
 
         // ---- El pasillo PRE-CARVADO a la Tolva (contrato §4.5) --------------
         /// <summary>6 de alto (contrato, valor EXACTO).</summary>
@@ -1252,8 +1399,28 @@ namespace Alkahest.Sim
         /// la regla 47 citado arriba): sigue siendo un sitio validado sin
         /// razón para moverlo.
         /// </summary>
-        public const int AprendizX = 290; // (tercera ronda; antes 300)
-        public const int AprendizY = CunaTopY + 1; // 180 (tercera ronda; antes 176): justo sobre el remate de la cuna, mirando dentro.
+        /// <summary>
+        /// (playtest 27) 290 -&gt; 175. Esta vez SÍ había razón para moverlo (el
+        /// corolario de la regla 47 que citaba el párrafo de arriba pide una
+        /// razón, no inmovilidad): con la línea nueva, x=290 cae DENTRO de la
+        /// bandeja del Banco de Chispa. El sitio nuevo es el hueco de aire
+        /// entre las FUENTES y el CRISOL (173..177), que además es el sitio
+        /// narrativamente correcto: el jugador abre los ojos al principio de
+        /// la línea, con los dos caños a su izquierda y la boca del crisol a
+        /// su derecha, que es el primer gesto del juego.
+        ///
+        /// ENCUADRE (misma aritmética que `SimRenderer.FitMainCamera`, aspect
+        /// 16:9, zoom `CuartoIntimoZoomFactor`=5/8): el rectángulo visible
+        /// mide ~160x90 celdas, así que desde aquí entran las dos pilas
+        /// (141..171), el machón, el CRISOL entero con su boca y su brasero
+        /// (180..220) y todavía asoma la Prensa por la derecha -- tres
+        /// estaciones de golpe, y el cuarto entero cabe de alto (73 celdas de
+        /// sala en 90 de encuadre). El taller grande se lee de un vistazo; a
+        /// esta distancia una estación de 41 celdas ocupa el 26% del ancho de
+        /// pantalla, que es la presencia que pedía el mandato 1.
+        /// </summary>
+        public const int AprendizX = 175; // (playtest 27; antes 290)
+        public const int AprendizY = 186; // (playtest 27; antes CunaTopY+1=180): a media altura del hueco, a la altura del caño de agua.
 
         /// <summary>
         /// Construye el mundo del pivot (playtest 21): todo piedra salvo la
@@ -1263,8 +1430,41 @@ namespace Alkahest.Sim
         /// una capa sobre la otra (ver `AlkahestSim.Start`, que elige una de
         /// las dos).
         /// </summary>
+        // =================================================================
+        // OBRA DEL TALLER (playtest 27) -- registro de la mampostería de las
+        // estaciones, para que el CINCEL no pueda llevársela por delante.
+        // Cesar, probando el 26: "me dio la impresión que con la herramienta
+        // para eliminar bedrock me llevé parte de la construcción de los
+        // equipos". Cada Tallar* registra aquí su rect EXTERIOR (muros
+        // incluidos); Game/Cincel.cs consulta EsObraDelTaller antes de tallar
+        // piedra. Estático y reconstruido en cada BuildCuartoIntimo (misma
+        // vida que el plano); List fija, cero allocs en consulta.
+        // =================================================================
+        /// <summary>Rect inclusivo propio (este archivo no usa UnityEngine a propósito: es sim pura; RectInt habría traído el using solo para esto).</summary>
+        public struct RectObra { public int X0, Y0, X1, Y1; }
+
+        public static readonly System.Collections.Generic.List<RectObra> ObraDelTaller = new System.Collections.Generic.List<RectObra>(16);
+
+        /// <summary>Registra un rect exterior de mampostería protegida (x0..x1, y0..y1 inclusivos).</summary>
+        public static void RegistrarObra(int x0, int y0, int x1, int y1)
+        {
+            ObraDelTaller.Add(new RectObra { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
+        }
+
+        /// <summary>¿(x,y) pertenece a la obra protegida del taller? Lo consulta el cincel celda a celda -- bucle plano sobre ~10 rects, sin allocs.</summary>
+        public static bool EsObraDelTaller(int x, int y)
+        {
+            for (int i = 0; i < ObraDelTaller.Count; i++)
+            {
+                var r = ObraDelTaller[i];
+                if (x >= r.X0 && x <= r.X1 && y >= r.Y0 && y <= r.Y1) return true;
+            }
+            return false;
+        }
+
         public static void BuildCuartoIntimo(CellGrid grid)
         {
+            ObraDelTaller.Clear(); // (playtest 27) plano nuevo, registro nuevo -- ver el bloque OBRA DEL TALLER.
             FillWorldStone(grid);
             ExcavateCuarto(grid);
             BuildCuartoFloor(grid); // (contrato §4.5) suelo UNIFORME de la sala entera -- ver el docblock, es lo que hace cierta la frase de EnsayoMaestro.TallarCubeta ("suelo ya es piedra maciza del cuarto").
@@ -1306,17 +1506,17 @@ namespace Alkahest.Sim
             // (PilaAgua 234..239), limo en x244 (PilaLimo 241..246). El método
             // viejo se conserva intacto sin llamantes (regla 15 de CLAUDE.md).
             //   PlaceCharco(grid);
-            BuildPilasFuentes(grid); // (contrato §2) las dos pilas de recogida bajo los caños.
+            BuildPilasFuentes(grid); // (playtest 27) la ESTACIÓN DE FUENTES: dos pilas grandes + el machón del caño de limo.
 
             // (playtest 26, regla 47 de CLAUDE.md) LA LÍNEA DEL TALLER: cada
             // máquina talla su propia geometría vía su TallarEnPlano estático
-            // (mismas medidas que su instancia -- ver el bloque "PLAYTEST 26"
-            // más arriba, junto a CrisolX/PrensaX/etc.), en el orden nuevo del
+            // (mismas medidas que su instancia -- ver el bloque "PLAYTEST 27"
+            // más arriba, junto a CrisolX/PrensaX/etc.), en el orden del
             // contrato: Crisol -> Prensa -> Columna -> Chispa -> Ensayo.
-            int baseYEstaciones = CuartoY0 + 2; // mismo baseY que todas (contrato §4.5).
+            int baseYEstaciones = CuartoY0 + 2; // mismo baseY que todas (contrato §4.5): la última fila maciza de la losa.
             Crisol.TallarEnPlano(grid, CrisolX, baseYEstaciones);
             Prensa.TallarEnPlano(grid, PrensaX, baseYEstaciones);
-            BuildColumnaEnsayo(grid); // (contrato §4.5/§1.4) la Columna de Ensayo, muros de Crystal + marcas de nivel cada 5 celdas.
+            BuildColumnaEnsayo(grid); // (playtest 27) la Columna: muros de PIEDRA (ya no Crystal) + abocinado + marcas de nivel.
             BancoChispa.TallarEnPlano(grid, BancoChispaX, baseYEstaciones);
             EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, baseYEstaciones);
 
@@ -1325,12 +1525,30 @@ namespace Alkahest.Sim
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
         }
 
-        /// <summary>(contrato §2) Las dos pilas de recogida bajo los caños -- ver la DECISIÓN junto a <see cref="PilaAguaX0"/>/<see cref="PilaLimoX0"/> para por qué son dos estructuras FRAMED aunque ambos chorros compartan columna de caída.</summary>
+        /// <summary>
+        /// (playtest 27) LA ESTACIÓN DE FUENTES entera: las dos pilas grandes
+        /// (14x9 exterior, interior 10x7 = 70 celdas cada una) y el MACHÓN DE
+        /// PIEDRA entre ellas que sostiene el caño de limo más alto y a otra
+        /// X. Ver el bloque de doc junto a <see cref="PilaAguaX0"/> para las
+        /// cuentas de en qué columna cae cada chorro.
+        /// </summary>
         private static void BuildPilasFuentes(CellGrid grid)
         {
             int y0 = CuartoY0 + 2; // mismo baseY que Crisol/Prensa/BancoChispa/Ensayo -- una fila ENCIMA del suelo general (BuildCuartoFloor), para que el interior no colisione con la losa.
             DrawUShape(grid, PilaAguaX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
             DrawUShape(grid, PilaLimoX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
+
+            // El machón: de la losa al remate, macizo. Sube por ENTRE las dos
+            // pilas (155..157, con la del agua acabando en 154 y la del limo
+            // empezando en 158): las tres piezas se tocan y se leen como UNA
+            // estación, no como tres objetos sueltos en el suelo.
+            DrawSolidRect(grid, MensulaLimoX0, CuartoY0, MensulaLimoX1 - MensulaLimoX0 + 1,
+                MensulaLimoTopY - CuartoY0 + 1, MaterialId.Stone);
+
+            // (playtest 27) Registro anticincel de la estación completa -- ver ObraDelTaller.
+            RegistrarObra(PilaAguaX0, y0, PilaAguaX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
+            RegistrarObra(PilaLimoX0, y0, PilaLimoX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
+            RegistrarObra(MensulaLimoX0, CuartoY0, MensulaLimoX1, MensulaLimoTopY);
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>
@@ -1398,30 +1616,62 @@ namespace Alkahest.Sim
         /// </summary>
         private static void BuildColumnaEnsayo(CellGrid grid)
         {
-            int y0 = CuartoY0 + WallThickness;
-            int x1 = ColumnaX0 + ColumnaAncho - 1;
-            for (int y = y0; y < y0 + ColumnaAlto; y++)
+            int y0 = EstacionSueloY;                         // 171, primera fila de hueco.
+            int yTope = y0 + ColumnaAlto - 1;                // 204, última fila del fuste.
+            int x1 = ColumnaX0 + ColumnaAncho - 1;           // 276.
+            int yBoca = yTope + ColumnaBocaFilas;            // 209, última fila del abocinado.
+
+            // (playtest 27) Registro anticincel de la columna entera, ABOCINADO
+            // INCLUIDO -- ver ObraDelTaller.
+            RegistrarObra(ColumnaX0 - ColumnaBocaVuelo, CuartoY0, x1 + ColumnaBocaVuelo, yBoca);
+
+            // ---- El FUSTE: dos muros de PIEDRA de 3 celdas (mandato 5: la
+            // columna del 26 tenía muros de Crystal, que reacciona con el
+            // Azoth -- error real, corregido). Hueco interior de 13 celdas de
+            // ancho por 34 de alto = 442 celdas de cámara de observación:
+            // cabe una ración entera de líquido y todavía se ve estratificar.
+            for (int y = y0; y <= yTope; y++)
             {
-                if (CellGrid.InBounds(ColumnaX0, y)) grid.SetCell(ColumnaX0, y, MaterialId.Crystal);
-                if (CellGrid.InBounds(x1, y)) grid.SetCell(x1, y, MaterialId.Crystal);
+                for (int t = 0; t < ColumnaMuro; t++)
+                {
+                    if (CellGrid.InBounds(ColumnaX0 + t, y)) grid.SetCell(ColumnaX0 + t, y, MaterialId.Stone);
+                    if (CellGrid.InBounds(x1 - t, y)) grid.SetCell(x1 - t, y, MaterialId.Stone);
+                }
+                for (int x = ColumnaX0 + ColumnaMuro; x <= x1 - ColumnaMuro; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
             }
 
-            // (playtest 26, contrato §1.4: "vidrio alto con marcas de nivel
-            // horizontales cada 5 celdas") DECISIÓN (fuera del contrato,
-            // documentada): la Columna no tiene un Game/*.cs propio (no está
-            // en la lista de archivos de este encargo, y crear uno nuevo
-            // tampoco lo está) -- las marcas se tallan aquí como MASONRY, un
-            // nudillo de Stone de 1 celda que sobresale a cada lado del
-            // vidrio, NUNCA dentro del hueco de observación (regla: "nada de
-            // materiales del grid para efectos" es sobre humo/arco animados,
-            // esto es una marca ESTÁTICA de nivel, parte del plano, como
-            // cualquier otra pieza de mampostería del archivo).
-            for (int y = y0; y < y0 + ColumnaAlto; y += ColumnaMarcaPaso)
+            // ---- LA BOCA SUPERIOR, ABOCINADA (mandato 2: "boca generosa, la
+            // geometría misma embuda la materia"). Cinco filas en las que los
+            // dos muros se abren 2 celdas hacia fuera: desde arriba se ve un
+            // tragante, y una muestra soltada un poco descentrada resbala
+            // igualmente hacia dentro en vez de rebotar en el canto.
+            for (int i = 0; i < ColumnaBocaFilas; i++)
             {
-                int xIzq = ColumnaX0 - 1;
-                int xDer = x1 + 1;
-                if (CellGrid.InBounds(xIzq, y)) grid.SetCell(xIzq, y, MaterialId.Stone);
-                if (CellGrid.InBounds(xDer, y)) grid.SetCell(xDer, y, MaterialId.Stone);
+                int y = yTope + 1 + i;
+                // Redondeo entero a propósito: este archivo NO usa UnityEngine
+                // (es sim pura, ver la nota de RectObra) -- nada de Mathf aquí.
+                int vuelo = (ColumnaBocaVuelo * (i + 1) + ColumnaBocaFilas / 2) / ColumnaBocaFilas; // 0,1,1,2,2
+                int izqMuroX0 = ColumnaX0 - vuelo;
+                int derMuroX1 = x1 + vuelo;
+                for (int t = 0; t < ColumnaMuro; t++)
+                {
+                    if (CellGrid.InBounds(izqMuroX0 + t, y)) grid.SetCell(izqMuroX0 + t, y, MaterialId.Stone);
+                    if (CellGrid.InBounds(derMuroX1 - t, y)) grid.SetCell(derMuroX1 - t, y, MaterialId.Stone);
+                }
+                for (int x = izqMuroX0 + ColumnaMuro; x <= derMuroX1 - ColumnaMuro; x++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+
+            // ---- MARCAS DE NIVEL: un nudillo de piedra que sobresale a cada
+            // lado del fuste cada `ColumnaMarcaPaso` filas. NUNCA dentro del
+            // hueco de observación (ahí no puede haber nada que estorbe a lo
+            // que se está mirando) -- es la regla del playtest 26 y sigue en
+            // pie, solo que ahora los nudillos salen por FUERA del muro de 3.
+            for (int y = y0 + ColumnaMarcaPaso; y <= yTope; y += ColumnaMarcaPaso)
+            {
+                if (CellGrid.InBounds(ColumnaX0 - 1, y)) grid.SetCell(ColumnaX0 - 1, y, MaterialId.Stone);
+                if (CellGrid.InBounds(x1 + 1, y)) grid.SetCell(x1 + 1, y, MaterialId.Stone);
             }
         }
 

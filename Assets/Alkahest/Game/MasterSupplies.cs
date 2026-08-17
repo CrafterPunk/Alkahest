@@ -92,8 +92,8 @@ namespace Alkahest.Game
         public static string TextoEntrega(int dia)
         {
             if (dia != 2) return null;
-            return "El Maestro os deja tres semillas SIN NOMBRE: ni él sabe qué son, y espera que " +
-                   "vosotros les pongáis uno. No se gastan, se ALIMENTAN -- el líquido del grifo alto " +
+            return "El Maestro te deja tres semillas SIN NOMBRE: ni él sabe qué son, y espera que " +
+                   "tú les pongas uno. No se gastan, se ALIMENTAN -- el líquido del grifo alto " +
                    "es infinito, el retoño de la cuba crece con nutriente y calor templado, y la " +
                    "semilla de la bandeja fría se riega con ese mismo líquido helado. Pocas celdas: " +
                    "se cultivan, no se entregan hechas.";
