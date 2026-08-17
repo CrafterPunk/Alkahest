@@ -3,7 +3,12 @@
     "rootNamespace": "",
     "references": [
         "Unity.InputSystem",
-        "Unity.Collections"
+        "Unity.Collections",
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Components",
+        "Unity.Networking.Transport",
+        "FriendsLoop.Runtime",
+        "com.rlabrecque.steamworks.net"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -12,6 +17,17 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.rlabrecque.steamworks.net",
+            "expression": "",
+            "define": "STEAMWORKSNET"
+        },
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "NETCODEGAMEOBJECTS"
+        }
+    ],
     "noEngineReferences": false
 }

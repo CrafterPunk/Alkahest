@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using Alkahest.Sim;
+using Alkahest.Net;
 
 namespace Alkahest
 {
@@ -55,6 +56,44 @@ namespace Alkahest
         /// </summary>
         public bool Paused { get; set; }
 
+        // =====================================================================
+        // EL ESPEJO (playtest 28, POC multiplayer — CONTRATO_MULTI_POC.md)
+        // =====================================================================
+        // La sim vive SOLO en el anfitrión. El invitado lleva un ESPEJO: el
+        // MISMO CellGrid y el MISMO SimRenderer, pero SIN SimStepper — nadie
+        // simula nada ahí, el contenido de `mat[]` llega por red en bloques RLE
+        // por chunk (ver Net/SimSync.cs) y este componente solo lo aplica y lo
+        // manda a pintar.
+        //
+        // Por qué el espejo es un MODO de esta clase y no una clase aparte:
+        // porque todo lo que el jugador invitado toca (frasco, cámara, HUD del
+        // frasco, muestreo de materiales) habla con AlkahestSim y con nadie
+        // más. Un "AlkahestSimEspejo" separado habría obligado a tocar todos
+        // esos consumidores; así no cambia ni una línea de ninguno de ellos.
+        //
+        // La escena Lab CLÁSICA nunca entra por aquí: `ModoEspejo` se queda en
+        // false y `SimSync.EnEscena` en false, así que Start() construye el
+        // mundo como siempre, en la misma línea de siempre.
+        // =====================================================================
+
+        /// <summary>
+        /// True en un invitado: no hay SimStepper, no se simula nada, y las
+        /// llamadas a Paint* se reenvían al anfitrión además de aplicarse
+        /// localmente (ver <see cref="ReenviarSiEspejo"/>).
+        /// </summary>
+        public bool ModoEspejo { get; private set; }
+
+        /// <summary>
+        /// Reloj del espejo. Sustituye a `SimStepper.Tick` en todo lo que en
+        /// el invitado sigue necesitando un tick (despertar chunks, decidir
+        /// qué redibuja SimRenderer). Avanza a los mismos 30 Hz que la sim
+        /// real para que la cadencia de render sea idéntica.
+        /// </summary>
+        public uint TickEspejo { get; private set; }
+
+        /// <summary>Tick vigente, venga del stepper real o del espejo. Lo usan Paint*/WakeChunk.</summary>
+        private uint TickActual => _stepper != null ? _stepper.Tick : TickEspejo;
+
         private void Awake()
         {
             _renderer = GetComponent<SimRenderer>();
@@ -62,7 +101,81 @@ namespace Alkahest
 
         private void Start()
         {
-            if (NextRunSeed.HasValue)
+            // (playtest 28) EN LA ESCENA MULTI EL MUNDO NO NACE AQUÍ. Cuando
+            // hay un SimSync en escena, quien decide qué mundo se construye —y
+            // con qué seed— es la sesión: el anfitrión sortea una seed nueva al
+            // pulsar ANFITRIÓN, y el invitado NO PUEDE construir nada hasta
+            // saber la seed del anfitrión (los materiales, sus colores y su
+            // química se generan POR SEMILLA: con otra seed, el espejo
+            // enseñaría un mundo de otro universo). Ver Net/SimSync.cs.
+            if (SimSync.EnEscena)
+            {
+                Debug.Log("[ChaosAlchemy] Escena MULTI: la creación del mundo espera a la sesión (ver Net/SimSync.cs).");
+                return;
+            }
+
+            CrearMundo(0, false);
+        }
+
+        /// <summary>
+        /// Construye el mundo del ANFITRIÓN: universo, grid, plano y stepper,
+        /// exactamente igual que la escena de un jugador. `seed` 0 = el
+        /// comportamiento clásico (campo del inspector, o aleatoria).
+        /// </summary>
+        public void CrearMundoAnfitrion(int seedDeLaSesion) => CrearMundo(seedDeLaSesion, false);
+
+        /// <summary>
+        /// Construye el ESPEJO de un invitado con la seed que mandó el
+        /// anfitrión: mismo universo (mismos materiales, mismos colores,
+        /// mismas leyes) y mismo plano de partida, pero sin stepper. El plano
+        /// se construye igual a propósito: así el invitado ya tiene la piedra
+        /// del taller antes incluso de aplicar el snapshot, y lo que llega por
+        /// red solo tiene que corregir lo que ha cambiado desde entonces.
+        /// </summary>
+        public void CrearMundoEspejo(int seedDelAnfitrion) => CrearMundo(seedDelAnfitrion, true);
+
+        /// <summary>
+        /// Marca este sim como espejo ANTES de que llegue la seed. Lo llama
+        /// SimSync en cuanto sabe que es cliente: a partir de aquí, cualquier
+        /// Paint* que llegue (por ejemplo de un frasco cableado antes de
+        /// tiempo) ya sabe que tiene que viajar al anfitrión.
+        /// </summary>
+        public void PrepararEspejo()
+        {
+            ModoEspejo = true;
+        }
+
+        private void CrearMundo(int seedPedida, bool espejo)
+        {
+            if (_grid != null)
+            {
+                Debug.LogWarning("[ChaosAlchemy] CrearMundo llamado dos veces: se ignora la segunda (SimRenderer.Init NO es idempotente, regla 36).");
+                return;
+            }
+
+            ModoEspejo = espejo;
+            if (seedPedida != 0) seed = seedPedida;
+
+            CrearMundoInterno(espejo);
+        }
+
+        private void CrearMundoInterno(bool espejo)
+        {
+            if (espejo)
+            {
+                // EL ESPEJO NO ELIGE SU SEED, LA OBEDECE. `NextRunSeed` (la
+                // que fija DayCycle entre partidas) se ignora aquí a
+                // propósito: si quedara un valor suelto de una partida
+                // anterior de un jugador, el invitado construiría OTRO
+                // universo -- mismos ids de material, colores y química
+                // distintos -- y el espejo enseñaría el mundo del anfitrión
+                // pintado con la paleta equivocada, sin ningún error visible.
+                if (seed == 0)
+                {
+                    Debug.LogError("[ChaosAlchemy] Espejo sin seed del anfitrión: el universo no puede coincidir. Reconéctate.");
+                }
+            }
+            else if (NextRunSeed.HasValue)
             {
                 seed = NextRunSeed.Value;
                 NextRunSeed = null;
@@ -86,7 +199,11 @@ namespace Alkahest
             // clásico vuelva a excavarse de verdad en vez de generarse de
             // fábrica ya abierto.
             SimLevelBuilder.BuildCuartoIntimo(_grid);
-            _stepper = new SimStepper(_universe, _grid);
+
+            // EL ESPEJO NO TIENE STEPPER. No es que esté pausado: NO EXISTE.
+            // Es la garantía estructural de que un invitado no puede simular
+            // por su cuenta y desincronizarse — no hay nada que ejecutar.
+            _stepper = espejo ? null : new SimStepper(_universe, _grid);
 
             if (_renderer == null)
             {
@@ -97,13 +214,22 @@ namespace Alkahest
 
             _renderer.Init(_universe, _grid);
 
-            Debug.Log($"[Alkahest] Universo creado con seed {seed}. Grid {CellGrid.W}x{CellGrid.H}, chunks {CellGrid.ChunksX}x{CellGrid.ChunksY}.");
+            Debug.Log($"[Alkahest] Universo creado con seed {seed}{(espejo ? " (ESPEJO: sin stepper, la sim vive en el anfitrión)" : "")}. " +
+                      $"Grid {CellGrid.W}x{CellGrid.H}, chunks {CellGrid.ChunksX}x{CellGrid.ChunksY}.");
             Debug.Log($"[Alkahest] Edicto de este universo ({_universe.ActiveEdicto}): {_universe.EdictoDescripcion}");
         }
 
         private void Update()
         {
-            if (_stepper == null || Paused) return;
+            if (Paused) return;
+
+            // (playtest 28) EL ESPEJO tiene su propio Update: no simula, pero
+            // sí lleva el reloj y el mismo ciclo de sueño de chunks, porque de
+            // los dos depende que SimRenderer redibuje lo justo (ver
+            // ActualizarEspejo).
+            if (ModoEspejo) { ActualizarEspejo(); return; }
+
+            if (_stepper == null) return;
 
             _accumulator += Time.deltaTime;
             int steps = 0;
@@ -127,6 +253,117 @@ namespace Alkahest
             }
         }
 
+        /// <summary>
+        /// El "tick" del invitado. Hace las DOS tareas de contabilidad que en
+        /// el anfitrión hace <see cref="SimStepper.Step"/> y que
+        /// <see cref="SimRenderer"/> necesita para no redibujar de más:
+        ///
+        ///  1) Avanza <see cref="TickEspejo"/> con el mismo acumulador de
+        ///     30 Hz, así el render se refresca a la misma cadencia que en un
+        ///     jugador (ni más, ni a tirones).
+        ///  2) DUERME LOS CHUNKS QUIETOS, con el mismo criterio literal del
+        ///     stepper (`chunkTouchedTick != tick` -> TickChunkIdle). Sin esto
+        ///     todos los chunks del espejo se quedarían despiertos para
+        ///     siempre —nadie los adormece— y SimRenderer repintaría la
+        ///     pantalla entera cada frame en vez de solo lo que cambió.
+        /// </summary>
+        private void ActualizarEspejo()
+        {
+            if (_grid == null || _renderer == null) return;
+
+            _accumulator += Time.deltaTime;
+            int steps = 0;
+            while (_accumulator >= FixedDt && steps < MaxStepsPerFrame)
+            {
+                TickEspejo++;
+                DormirChunksQuietos();
+                _accumulator -= FixedDt;
+                steps++;
+            }
+
+            if (_accumulator > FixedDt * MaxStepsPerFrame)
+            {
+                _accumulator = FixedDt * MaxStepsPerFrame;
+            }
+
+            if (steps > 0)
+            {
+                _renderer.RenderFrame(TickEspejo);
+            }
+        }
+
+        private void DormirChunksQuietos()
+        {
+            for (int cy = 0; cy < CellGrid.ChunksY; cy++)
+            {
+                for (int cx = 0; cx < CellGrid.ChunksX; cx++)
+                {
+                    int ci = CellGrid.ChunkIndex(cx, cy);
+                    if (_grid.chunkTouchedTick[ci] != TickEspejo)
+                    {
+                        _grid.TickChunkIdle(cx, cy);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Aplica al espejo un chunk recibido del anfitrión, comprimido RLE
+        /// (parejas material+cuenta, recorriendo el chunk por filas). Lo llama
+        /// Net/SimSync.cs y NADIE más.
+        ///
+        /// Solo viaja `mat[]`: `temp[]` y `morph[]` no se sincronizan en el
+        /// POC (ver el docblock de SimSync). Se usa `CellGrid.SetCell` en vez
+        /// de escribir `mat` a pelo a propósito: así la celda nace con su
+        /// semilla morfológica de siempre y el espejo enseña el patrón del
+        /// material (congelado, pero presente) en vez de un tinte plano.
+        /// </summary>
+        public void AplicarChunkRemoto(int indiceChunk, byte[] rle, int parejas)
+        {
+            if (_grid == null || rle == null) return;
+            if (indiceChunk < 0 || indiceChunk >= CellGrid.ChunksX * CellGrid.ChunksY) return;
+
+            int cx = indiceChunk % CellGrid.ChunksX;
+            int cy = indiceChunk / CellGrid.ChunksX;
+            CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+
+            int pareja = 0;
+            int restantesDeLaPareja = 0;
+            byte materialActual = MaterialId.Empty;
+            bool cambio = false;
+
+            for (int y = y0; y < y1; y++)
+            {
+                int fila = y * CellGrid.W;
+                for (int x = x0; x < x1; x++)
+                {
+                    if (restantesDeLaPareja <= 0)
+                    {
+                        if (pareja >= parejas) return; // paquete corto: se deja el resto del chunk como estaba
+                        materialActual = rle[pareja * 2];
+                        restantesDeLaPareja = rle[pareja * 2 + 1];
+                        pareja++;
+                        if (restantesDeLaPareja <= 0) return; // cuenta 0: paquete corrupto
+                    }
+
+                    int idx = fila + x;
+                    if (_grid.mat[idx] != materialActual)
+                    {
+                        _grid.SetCell(idx, materialActual);
+                        cambio = true;
+                    }
+
+                    restantesDeLaPareja--;
+                }
+            }
+
+            // Despertar SOLO este chunk (no el vecindario 3x3 de WakeChunk): en
+            // el espejo despertar sirve únicamente para que SimRenderer lo
+            // repinte, y el anfitrión ya manda por separado todos los chunks
+            // que de verdad cambiaron.
+            if (cambio) _grid.WakeChunkIndex(cx, cy, TickEspejo);
+        }
+
         // ---------------------------------------------------------------------------------
         // API pública para gameplay / dev tools.
         // ---------------------------------------------------------------------------------
@@ -145,10 +382,44 @@ namespace Alkahest
             return _grid.temp[CellGrid.Idx(x, y)];
         }
 
+        // =====================================================================
+        // MUTACIONES EN SESIÓN (playtest 28): EL INVITADO PIDE, EL ANFITRIÓN
+        // MANDA — PERO EL INVITADO TAMBIÉN PINTA EN SU ESPEJO.
+        // =====================================================================
+        // El contrato pedía literalmente que en modo espejo las llamadas a
+        // Paint* "NO tocaran el espejo" y solo se reenviaran al anfitrión. Se
+        // implementó así primero y SE CORRIGIÓ, con esta razón (queda escrita
+        // aquí, estilo regla 15, para que nadie la "arregle" de vuelta):
+        //
+        //   El frasco (Game/Flask.cs) LEE la grilla y ESCRIBE en la misma
+        //   pasada: `_sim.Paint(x, y, 0, Empty)` es lo que hace que la celda
+        //   aspirada desaparezca, y en el tick siguiente vuelve a mirar esas
+        //   mismas celdas. Si el espejo no cambia hasta que el anfitrión
+        //   responde (~200 ms, 6 ticks), el frasco aspira LA MISMA celda una y
+        //   otra vez: un charco de 5 celdas llenaría el frasco con cientos, y
+        //   al verterlas se estaría FABRICANDO MATERIA en el mundo
+        //   autoritativo. No es un problema de latencia percibida, es
+        //   duplicación de materia.
+        //
+        // Así que el espejo hace PREDICCIÓN LOCAL: aplica el cambio ya y lo
+        // manda al anfitrión, que es el único que decide de verdad. Lo que
+        // vuelva por el sync de chunks (5 Hz) sobreescribe la predicción sin
+        // preguntar — el anfitrión siempre gana, que es lo que el contrato
+        // protegía de raíz.
+        // =====================================================================
+
+        /// <summary>Si somos un espejo, manda esta mutación al anfitrión (además de aplicarla localmente como predicción).</summary>
+        private void ReenviarSiEspejo(int x, int y, int radio, byte materialId, byte modo, byte tempRaw)
+        {
+            if (!ModoEspejo) return;
+            SimSync.ReenviarPintura(x, y, radio, materialId, modo, tempRaw);
+        }
+
         /// <summary>Pinta un disco de radio `radius` centrado en (x,y) con el material indicado.</summary>
         public void Paint(int x, int y, int radius, byte materialId)
         {
-            if (_grid == null || _stepper == null) return;
+            if (_grid == null) return;
+            ReenviarSiEspejo(x, y, radius, materialId, SimSync.ModoPaint, 0);
             if (radius < 0) radius = 0;
             int r2 = radius * radius;
 
@@ -163,7 +434,7 @@ namespace Alkahest
                     if (px <= 0 || px >= CellGrid.W - 1) continue;
 
                     _grid.SetCell(px, py, materialId);
-                    _grid.WakeChunk(px, py, _stepper.Tick);
+                    _grid.WakeChunk(px, py, TickActual);
                 }
             }
         }
@@ -186,13 +457,14 @@ namespace Alkahest
         /// </summary>
         public void PaintCell(int x, int y, byte materialId, byte tempRaw)
         {
-            if (_grid == null || _stepper == null) return;
+            if (_grid == null) return;
+            ReenviarSiEspejo(x, y, 0, materialId, SimSync.ModoPaintCell, tempRaw);
             if (x <= 0 || x >= CellGrid.W - 1 || y <= 0 || y >= CellGrid.H - 1) return;
 
             int idx = CellGrid.Idx(x, y);
             _grid.SetCell(idx, materialId);
             _grid.temp[idx] = tempRaw;
-            _grid.WakeChunk(x, y, _stepper.Tick);
+            _grid.WakeChunk(x, y, TickActual);
         }
 
         // =====================================================================
@@ -316,7 +588,8 @@ namespace Alkahest
         /// </summary>
         public void PaintStable(int x, int y, int radius, byte materialId)
         {
-            if (_grid == null || _stepper == null || _universe == null) return;
+            if (_grid == null || _universe == null) return;
+            ReenviarSiEspejo(x, y, radius, materialId, SimSync.ModoPaintStable, 0);
             if (radius < 0) radius = 0;
             int r2 = radius * radius;
             byte tempRaw = StableBirthTempRaw(_universe.Get(materialId));
@@ -334,7 +607,7 @@ namespace Alkahest
                     int idx = CellGrid.Idx(px, py);
                     _grid.SetCell(idx, materialId);
                     _grid.temp[idx] = tempRaw;
-                    _grid.WakeChunk(px, py, _stepper.Tick);
+                    _grid.WakeChunk(px, py, TickActual);
                 }
             }
         }
@@ -348,7 +621,13 @@ namespace Alkahest
         /// </summary>
         public void PaintRect(int x0, int y0, int width, int height, byte materialId)
         {
-            if (_grid == null || _stepper == null) return;
+            if (_grid == null) return;
+            // El reenvío empaqueta ancho y alto en los dos bytes libres del
+            // registro de pintura (ver Net/SimSync.cs): 255 de tope, de sobra
+            // para el único consumidor real (las muestras del Maestro).
+            ReenviarSiEspejo(x0, y0, Mathf.Clamp(width, 0, 255), materialId,
+                SimSync.ModoPaintRect, (byte)Mathf.Clamp(height, 0, 255));
+
             for (int y = y0; y < y0 + height; y++)
             {
                 if (y <= 0 || y >= CellGrid.H - 1) continue;
@@ -356,7 +635,7 @@ namespace Alkahest
                 {
                     if (x <= 0 || x >= CellGrid.W - 1) continue;
                     _grid.SetCell(CellGrid.Idx(x, y), materialId);
-                    _grid.WakeChunk(x, y, _stepper.Tick);
+                    _grid.WakeChunk(x, y, TickActual);
                 }
             }
         }

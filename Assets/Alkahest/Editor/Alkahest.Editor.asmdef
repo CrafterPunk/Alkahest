@@ -2,7 +2,14 @@
     "name": "Alkahest.Editor",
     "rootNamespace": "",
     "references": [
-        "Alkahest.Runtime"
+        "Alkahest.Runtime",
+        "FriendsLoop.Runtime",
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Components",
+        "Unity.Networking.Transport",
+        "Unity.Collections",
+        "com.rlabrecque.steamworks.net",
+        "SteamNetworkingSockets Transport for Netcode for GameObjects"
     ],
     "includePlatforms": [
         "Editor"
@@ -13,6 +20,17 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.rlabrecque.steamworks.net",
+            "expression": "",
+            "define": "STEAMWORKSNET"
+        },
+        {
+            "name": "com.unity.netcode.gameobjects",
+            "expression": "",
+            "define": "NETCODEGAMEOBJECTS"
+        }
+    ],
     "noEngineReferences": false
 }

@@ -61,6 +61,47 @@ namespace Alkahest.Game
     public sealed class ApprenticeController : MonoBehaviour
     {
         // =====================================================================
+        // EL TALLER COMPARTIDO (playtest 28, POC multiplayer)
+        // =====================================================================
+        // Tres añadidos, todos INERTES en la escena de un jugador:
+        //
+        //  · `AprendizLocal`: quién es "mi" aprendiz cuando hay cuatro en el
+        //    taller. Lo fija Net/AprendizNet.cs en el avatar del dueño; en la
+        //    escena Lab clásica NADIE lo fija y se queda en null, así que
+        //    SimRenderer sigue cayendo a su búsqueda de siempre y la cámara se
+        //    comporta exactamente igual que antes.
+        //  · `ControlDelJugador`: los avatares de los OTROS jugadores no leen
+        //    el teclado (su posición llega por el NetworkTransform), pero sí
+        //    siguen animándose — ver HandleMovement.
+        //  · `AplicarTinte`: la librea de color de cada jugador (mandato de
+        //    Cesar). Multiplica el color de las capas del cuerpo; sin llamarla,
+        //    el tinte es blanco y el imp se ve como siempre.
+        // =====================================================================
+
+        /// <summary>El aprendiz que controla ESTE jugador. Null fuera de una sesión de red.</summary>
+        public static ApprenticeController AprendizLocal;
+
+        /// <summary>
+        /// ¿Lee este aprendiz el teclado? False en los avatares de los demás
+        /// jugadores. No se usa `enabled = IsOwner` (el patrón del
+        /// PlayerController del template) porque un componente apagado dejaría
+        /// a los otros aprendices como calcomanías rígidas: sin aleteo, sin
+        /// cabeceo, sin mirar hacia donde van.
+        /// </summary>
+        [System.NonSerialized] public bool ControlDelJugador = true;
+
+        /// <summary>Tinte actual (blanco = sin sesión / sin color asignado).</summary>
+        private Color _tinte = Color.white;
+
+        /// <summary>Capas del cuerpo que se tiñen, con su color de fábrica (el tinte MULTIPLICA sobre él, nunca lo sustituye).</summary>
+        private SpriteRenderer[] _capasConTinte;
+        private Color[] _coloresDeFabrica;
+
+        /// <summary>Posición del frame anterior, para deducir la velocidad de un avatar remoto (que no tiene input propio).</summary>
+        private Vector3 _posicionAnterior;
+        private bool _tienePosicionAnterior;
+
+        // =====================================================================
         // VELOCIDAD DE VUELO CONTRA EL TALLER x6 (playtest 15) -- MEDIDO, NO
         // SUBIDO A CIEGAS
         // =====================================================================
@@ -228,6 +269,17 @@ namespace Alkahest.Game
 
         private void HandleMovement()
         {
+            // (playtest 28) AVATAR DE OTRO JUGADOR: su transform lo mueve el
+            // OwnerNetworkTransform del template, no este método. Se deduce la
+            // velocidad del desplazamiento real para que la animación (aleteo,
+            // bandeo, hacia dónde mira) siga viva y el resto de HandleVisual
+            // funcione sin enterarse de que hay red de por medio.
+            if (!ControlDelJugador)
+            {
+                DeducirVelocidadRemota();
+                return;
+            }
+
             var kb = Keyboard.current;
             Vector2 input = Vector2.zero;
             // (fix playtest 10) WASD/flechas son un atajo de teclado como cualquier otro del
@@ -258,6 +310,74 @@ namespace Alkahest.Game
 
             if (input.x > 0.01f) _facingRight = true;
             else if (input.x < -0.01f) _facingRight = false;
+        }
+
+        /// <summary>
+        /// Velocidad de un avatar remoto a partir de cuánto se ha movido su
+        /// transform desde el frame anterior. Se suaviza con la MISMA
+        /// aceleración que el movimiento local para que el aleteo (que escala
+        /// con `speedFrac`) no dé saltos con cada paquete de red.
+        /// </summary>
+        private void DeducirVelocidadRemota()
+        {
+            Vector3 pos = transform.position;
+
+            if (!_tienePosicionAnterior)
+            {
+                _posicionAnterior = pos;
+                _tienePosicionAnterior = true;
+                return;
+            }
+
+            float dt = Mathf.Max(Time.deltaTime, 0.0001f);
+            Vector2 medida = new Vector2(pos.x - _posicionAnterior.x, pos.y - _posicionAnterior.y) / dt;
+            _posicionAnterior = pos;
+
+            if (medida.sqrMagnitude > moveSpeed * moveSpeed)
+            {
+                medida = medida.normalized * moveSpeed;
+            }
+
+            _velocity = Vector2.MoveTowards(_velocity, medida, acceleration * Time.deltaTime);
+
+            if (medida.x > 0.05f) _facingRight = true;
+            else if (medida.x < -0.05f) _facingRight = false;
+        }
+
+        /// <summary>
+        /// LA LIBREA DEL JUGADOR (playtest 28): tiñe las capas del cuerpo
+        /// (cuerpo, las dos alas y la cola) MULTIPLICANDO sobre su color de
+        /// fábrica — el ala trasera, que nace un punto más apagada que la
+        /// delantera, conserva esa diferencia; el sprite procedural sigue
+        /// siendo el mismo imp, vestido del color de su jugador. El tarro que
+        /// carga se deja SIN teñir a propósito: es vidrio, y el jugador lo usa
+        /// para leer de qué color es lo que lleva dentro.
+        /// </summary>
+        public void AplicarTinte(Color tinte)
+        {
+            _tinte = tinte;
+            if (_capasConTinte == null) return;
+
+            for (int i = 0; i < _capasConTinte.Length; i++)
+            {
+                var sr = _capasConTinte[i];
+                if (sr == null) continue;
+                Color baseC = _coloresDeFabrica[i];
+                sr.color = new Color(baseC.r * tinte.r, baseC.g * tinte.g, baseC.b * tinte.b, baseC.a * tinte.a);
+            }
+        }
+
+        /// <summary>Registra las capas que reciben tinte con su color de fábrica y aplica el tinte que hubiera pendiente (AprendizNet puede llamarlo antes de que exista el rig).</summary>
+        private void RegistrarCapasConTinte(params SpriteRenderer[] capas)
+        {
+            _capasConTinte = capas;
+            _coloresDeFabrica = new Color[capas.Length];
+            for (int i = 0; i < capas.Length; i++)
+            {
+                _coloresDeFabrica[i] = capas[i] != null ? capas[i].color : Color.white;
+            }
+
+            AplicarTinte(_tinte);
         }
 
         private void HandleVisual()
@@ -350,6 +470,7 @@ namespace Alkahest.Game
                 _bodySr = visualGo.AddComponent<SpriteRenderer>();
                 _bodySr.sprite = customSprite;
                 _bodySr.sortingOrder = sortingOrder;
+                RegistrarCapasConTinte(_bodySr);
                 return;
             }
 
@@ -399,6 +520,12 @@ namespace Alkahest.Game
             // se le suma el cabeceo del cuerpo.
             _carriedFlaskSr = CrearCapa(transform, "FrascoCargado", flaskSprite, sortingOrder + 2);
             _carriedFlaskTr = _carriedFlaskSr.transform;
+
+            // (playtest 28) Las cuatro capas del CUERPO que lleva la librea de
+            // color del jugador. Se registran DESPUÉS de que el ala trasera
+            // reciba su color apagado, para que ese matiz sea parte del "color
+            // de fábrica" sobre el que multiplica el tinte.
+            RegistrarCapasConTinte(_bodySr, _wingFrontSr, _wingBackSr, _tailSr);
 
             _rng = new System.Random();
             ScheduleNextBlink();
