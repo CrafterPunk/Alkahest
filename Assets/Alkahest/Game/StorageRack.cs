@@ -285,6 +285,17 @@ namespace Alkahest.Game
                 r.Tapon.transform.position = new Vector3(r.MundoX, baseY + _redomaAlto * 1.0f, 0f);
                 r.Tapon.color = new Color(1f, 1f, 1f, 0.75f);
 
+                // (playtest 31, ILUMINACIÓN DE ÁNIMO) EL DESTELLO DE LA
+                // REDOMA: un halo minúsculo y quieto detrás de cada vidrio.
+                // No es luz propia del contenido (una redoma no alumbra) --
+                // es el brillo especular de un cristal en un cuarto con
+                // fuegos: lo justo para que la estantería tenga vida en la
+                // periferia del ojo en vez de ser cinco siluetas grises.
+                MaquinariaSprites.Luz.Crear(transform, $"Brillo_{i}",
+                    new Vector3(r.MundoX, baseY + _redomaAlto * 0.62f, 0f),
+                    _redomaAncho * 2.6f, new Color(1f, 0.92f, 0.72f))
+                    .Intensidad(0.10f);
+
                 _redomas[i] = r;
                 ActualizarRedoma(r);
             }

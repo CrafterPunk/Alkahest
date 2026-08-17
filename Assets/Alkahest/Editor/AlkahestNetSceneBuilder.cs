@@ -250,6 +250,7 @@ namespace Alkahest.EditorTools
             BuildMainCamera();
             BuildAlkahestObject();
             BuildSimSyncObject();
+            BuildMaquinaSyncObject();
             BuildNetworkObject(avatarPrefab);
 
             bool saved = EditorSceneManager.SaveScene(scene, MultiScenePath);
@@ -327,11 +328,37 @@ namespace Alkahest.EditorTools
             go.AddComponent<SimSync>();
         }
 
+        /// <summary>
+        /// (playtest 30, MÁQUINAS EN RED — Net/MaquinaSync.cs) EL REGISTRO DE
+        /// MÁQUINAS. Mismo patrón EXACTO que <see cref="BuildSimSyncObject"/>
+        /// un párrafo arriba, y por la misma razón: un NetworkBehaviour no
+        /// puede compartir GameObject con el NetworkManager, así que vive en
+        /// su PROPIO objeto de escena, hermano de "AlkahestSimSync" (de ahí
+        /// el encargo: "en el objeto de SimSync o hermano"). NGO lo spawnea
+        /// solo al arrancar la sesión, igual que el de arriba.
+        /// </summary>
+        private static void BuildMaquinaSyncObject()
+        {
+            var go = new GameObject("AlkahestMaquinaSync");
+            go.AddComponent<NetworkObject>();
+            go.AddComponent<MaquinaSync>();
+        }
+
         private static void BuildNetworkObject(GameObject avatarPrefab)
         {
             var networkGo = new GameObject("AlkahestRed");
 
             NetworkManager networkManager = networkGo.AddComponent<NetworkManager>();
+            // (fix DEFINITIVO del NRE intermitente de esta build, línea del
+            // NetworkTransport) Un NetworkManager recién añadido POR CÓDIGO en
+            // modo editor puede nacer con NetworkConfig NULL (NGO lo inicializa
+            // en OnValidate/Awake, que aquí no han corrido aún; depende del
+            // estado del dominio -- por eso el NRE iba y venía entre builds).
+            // Se crea explícito si falta: ni una build más abortada por esto.
+            if (networkManager.NetworkConfig == null)
+            {
+                networkManager.NetworkConfig = new Unity.Netcode.NetworkConfig();
+            }
             UnityTransport unityTransport = networkGo.AddComponent<UnityTransport>();
 
 #if !DISABLESTEAMWORKS && STEAMWORKSNET && NETCODEGAMEOBJECTS

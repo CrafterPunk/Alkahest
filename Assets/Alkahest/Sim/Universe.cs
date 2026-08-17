@@ -2822,8 +2822,22 @@ namespace Alkahest.Sim
                         baseColor = LerpColor32(waterColor, tono, 0.60f), colorJitter = 10,
                         density = waterDensity, fluidity = 4, // DECISIÓN: densidad de la solución = la del agua (es sobre todo agua) -- el contrato no la fija.
                         boilsAt = waterBoilsAtRaw, boilsInto = MaterialId.MatDe(b, EstadoMateria.Polvo),
-                        patron = PatronMorfologico.Liso, borde = BordeMorfologico.Neto,
-                        patronEscala = 3, patronFuerza = 0, ritmoAnim = 0, emision = 0,
+                        // DECISIÓN (LA ALQUIMIA VISIBLE, tarea 4 -- "disolución
+                        // visible"): patron pasa de Liso/patronFuerza=0 a
+                        // Motas/90, LA MISMA firma que Calcinado (calibrada ya
+                        // en el playtest 20). `morph` es el campo que dibuja
+                        // Motas (CLAUDE.md regla 16, "intensidad de chispa"):
+                        // con patronFuerza=0 el campo existía pero
+                        // SimRenderer.ComputeCellColor ni lo miraba (regla del
+                        // gate `patronFuerza > 0`), así que el chispazo que
+                        // Sim/SimStepper.cs va a sembrar en cada celda recién
+                        // disuelta (ver ProcessDisolucionAgua) habría sido
+                        // invisible sin este cambio. patronEscala baja de 3 a 2
+                        // (igual que Calcinado) porque Motas dibuja MANCHAS
+                        // sueltas, no vetas -- 3 las habría espaciado de más en
+                        // el charco de la pila (interior 10x7, regla 24).
+                        patron = PatronMorfologico.Motas, borde = BordeMorfologico.Difuso,
+                        patronEscala = 2, patronFuerza = 90, ritmoAnim = 30, emision = 0,
                         semillaPatron = (byte)rng.Next(256),
                     };
                 }

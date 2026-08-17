@@ -1736,6 +1736,184 @@ namespace Alkahest.Game
             return s;
         }
 
+        // =================================================================
+        // (playtest 31, ILUMINACIÓN DE ÁNIMO) HALOS DE LUZ Y SOMBRAS PROPIAS
+        // =================================================================
+        // Cesar, sobre el taller: "iluminación... que el jugador quiera pasar
+        // horas ahí". El proyecto no tiene (ni quiere) luces reales: la sim
+        // es una textura en Point y el fondo otra, así que una Light2D de URP
+        // ni siquiera las tocaría. Lo que SÍ funciona -- y es lo que hacen
+        // los juegos 2D de esta familia -- es un sprite radial encima:
+        //
+        //  · EL HALO se dibuja DELANTE de la sim (sortingOrder 40 vs. -5) con
+        //    alfa baja y color cálido: al componer sobre un cuadro ya
+        //    oscurecido (SimRenderer.TinteGlobal), la zona iluminada sube de
+        //    brillo Y de temperatura de color, que es exactamente lo que hace
+        //    una hoguera en una cueva. No es aditivo real (haría falta un
+        //    material, y Shader.Find está prohibido desde el playtest 2), pero
+        //    a estas alfas la diferencia perceptual es mínima y el coste es
+        //    CERO: un SpriteRenderer quieto al que solo se le cambia el alfa.
+        //  · LA SOMBRA es el mismo sprite invertido en color (negro) y
+        //    achatado, colocado bajo el cuerpo de cada estación: es lo que
+        //    hace que una máquina se APOYE en el suelo en vez de estar pegada
+        //    con celo sobre la piedra (el "programmer art" del playtest 26).
+        //
+        // REGLA: los halos son GameObjects hijos de la MÁQUINA (así la
+        // mudanza los arrastra sin código extra, ver regla 36) y jamás tocan
+        // el renderer de celdas.
+        // =================================================================
+
+        /// <summary>Orden de dibujo de los halos: delante de la sim (-5) y de toda la maquinaria (14..23), detrás del aprendiz (50) y del haz del frasco (60).</summary>
+        public const int OrdenHalo = 40;
+        /// <summary>Orden de las sombras propias: delante de la sim (para que se vean sobre la piedra) pero detrás del cuerpo de la máquina.</summary>
+        public const int OrdenSombra = 10;
+
+        /// <summary>
+        /// Halo radial blanco con caída suave (se tinta con
+        /// SpriteRenderer.color). El exponente 2.2 de la caída no es
+        /// decorativo: con caída lineal el borde del halo se ve como un
+        /// círculo dibujado, y con caída cuadrática pura el centro se apaga
+        /// demasiado pronto -- 2.2 es el punto en que el halo "no tiene
+        /// borde" pero sigue teniendo un núcleo claro.
+        /// </summary>
+        public static Sprite Halo()
+        {
+            const string clave = "halo";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int lado = S(32); // 96 téxeles: de sobra para que la caída no muestre bandas al escalar a 20-30 celdas de mundo.
+            var px = new Color32[lado * lado];
+            float c = (lado - 1) * 0.5f, r = lado * 0.5f;
+
+            for (int y = 0; y < lado; y++)
+            {
+                for (int x = 0; x < lado; x++)
+                {
+                    float dx = (x - c) / r, dy = (y - c) / r;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d >= 1f) continue;
+                    float a = Mathf.Pow(1f - d, 2.2f);
+                    px[y * lado + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+
+            s = Crear(px, lado, lado, "ChaosAlchemyHalo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// Sombra propia: elipse achatada muy difusa (se tinta de negro con
+        /// alfa por el llamante). Achatada 1:3 porque la luz del taller viene
+        /// de arriba -- una sombra redonda bajo una máquina se lee como un
+        /// agujero, no como un apoyo.
+        /// </summary>
+        public static Sprite SombraSuave()
+        {
+            const string clave = "sombrasuave";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(32), h = S(11);
+            var px = new Color32[w * h];
+            float cx = (w - 1) * 0.5f, cy = (h - 1) * 0.5f;
+            float rx = w * 0.5f, ry = h * 0.5f;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = (x - cx) / rx, dy = (y - cy) / ry;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d >= 1f) continue;
+                    float a = Mathf.Pow(1f - d, 1.6f);
+                    px[y * w + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemySombraSuave");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// UNA fuente de luz del taller. La crea la máquina en su BuildVisual
+        /// (hija de su transform: la mudanza la arrastra sola) y la conduce
+        /// desde su ActualizarVisual con <see cref="Intensidad"/> o
+        /// <see cref="Latir"/>. Cero allocs por frame: solo escribe un Color
+        /// en un SpriteRenderer que ya existe.
+        /// </summary>
+        public sealed class Luz
+        {
+            private readonly SpriteRenderer _sr;
+            private readonly Color _color;
+
+            private Luz(SpriteRenderer sr, Color color) { _sr = sr; _color = color; }
+
+            /// <summary>
+            /// `diametroMundo` es el DIÁMETRO del halo en unidades de mundo
+            /// (multiplicar celdas por SimRenderer.CellWorldSize). Nace
+            /// apagado: que encienda es decisión de la máquina, nunca del
+            /// constructor -- una lámpara que se enciende sola al construirse
+            /// miente sobre el estado del aparato (misma lección que el
+            /// "cargadme combustible" del playtest 26).
+            /// </summary>
+            public static Luz Crear(Transform padre, string nombre, Vector3 posicionMundo, float diametroMundo, Color color)
+            {
+                var go = new GameObject(nombre);
+                go.transform.SetParent(padre, false);
+                go.transform.position = posicionMundo;
+                var sr = CrearCapa(go.transform, "Halo", Halo(), OrdenHalo, diametroMundo, diametroMundo);
+                sr.color = new Color(color.r, color.g, color.b, 0f);
+                return new Luz(sr, color);
+            }
+
+            /// <summary>Igual que <see cref="Crear"/> pero con el halo achatado (fuentes alargadas: una ranura, un lecho de brasas, un fuste de vidrio).</summary>
+            public static Luz CrearOvalada(Transform padre, string nombre, Vector3 posicionMundo, float anchoMundo, float altoMundo, Color color)
+            {
+                var go = new GameObject(nombre);
+                go.transform.SetParent(padre, false);
+                go.transform.position = posicionMundo;
+                var sr = CrearCapa(go.transform, "Halo", Halo(), OrdenHalo, anchoMundo, altoMundo);
+                sr.color = new Color(color.r, color.g, color.b, 0f);
+                return new Luz(sr, color);
+            }
+
+            /// <summary>Alfa fija 0..1 (0 = apagada).</summary>
+            public void Intensidad(float alfa)
+            {
+                if (_sr == null) return;
+                _sr.color = new Color(_color.r, _color.g, _color.b, Mathf.Clamp01(alfa));
+            }
+
+            /// <summary>
+            /// Luz VIVA: `centro` ± `amplitud` a `hz`. El desfase por
+            /// instancia (`desfase`) evita que todas las fuentes del taller
+            /// respiren a la vez, que es lo que delata una animación por
+            /// código -- un fuego y una lámpara no laten sincronizados.
+            /// </summary>
+            public void Latir(float centro, float amplitud, float hz, float desfase = 0f)
+            {
+                if (_sr == null) return;
+                float a = centro + amplitud * Mathf.Sin((Time.time * hz + desfase) * Mathf.PI * 2f);
+                _sr.color = new Color(_color.r, _color.g, _color.b, Mathf.Clamp01(a));
+            }
+        }
+
+        /// <summary>
+        /// Coloca una sombra propia bajo un cuerpo: hija de `padre` (la
+        /// mudanza la arrastra), tintada de negro con la opacidad indicada.
+        /// Devuelve el renderer por si el llamante quiere modularla.
+        /// </summary>
+        public static SpriteRenderer Sombra(Transform padre, Vector3 posicionMundo, float anchoMundo, float altoMundo, float opacidad)
+        {
+            var go = new GameObject("Sombra");
+            go.transform.SetParent(padre, false);
+            go.transform.position = posicionMundo;
+            var sr = CrearCapa(go.transform, "Sprite", SombraSuave(), OrdenSombra, anchoMundo, altoMundo);
+            sr.color = new Color(0f, 0f, 0f, opacidad);
+            return sr;
+        }
+
         /// <summary>Píxel suelto con guarda de límites -- azúcar interno de la familia del playtest 27.</summary>
         private static void Pintar(Color32[] px, int w, int h, int x, int y, Color32 c)
         {
@@ -1752,6 +1930,70 @@ namespace Alkahest.Game
             _cache[clave] = s;
             return s;
         }
+
+        // =================================================================
+        // (playtest 30, MÁQUINAS EN RED — Net/MaquinaSync.cs) RÉPLICA
+        // VISUAL ESTÁTICA
+        // =================================================================
+        /// <summary>
+        /// Convención de <c>tipoMaquina</c> compartida con
+        /// <c>Alkahest.Net.MaquinaSync.TipoMaquina</c> (Net/MaquinaSync.cs).
+        /// Este archivo es SOLO-AÑADIR en este encargo (Game/ no puede
+        /// depender de Net/ sin invertir la dirección natural de referencias
+        /// del proyecto -- Net/ SÍ conoce Game/, nunca al revés, ver
+        /// Net/AprendizNet.cs), así que los valores se repiten aquí como
+        /// constantes de byte EN VEZ de compartir el enum. Si algún día uno
+        /// de los dos lados cambia de orden, este comentario es la costura
+        /// que hay que actualizar a la vez.
+        /// </summary>
+        public const byte TipoCrisol = 0;
+        public const byte TipoPrensa = 1;
+        public const byte TipoBancoChispa = 2;
+        public const byte TipoColumnaEnsayo = 3;
+        public const byte TipoEnsayoMaestro = 4;
+        public const byte TipoDispenser = 5;
+
+        /// <summary>
+        /// UNA sola pieza representativa por tipo de estación, escalada
+        /// EXACTA a <paramref name="tamanoMundo"/> vía <see cref="CrearCapa"/>
+        /// (que reescala cualquier sprite ya generado al hueco de mundo que
+        /// haga falta, sin regenerar texturas). Construye la RÉPLICA
+        /// SOLO-VISUAL de un invitado (ver Net/MaquinaSync.cs y
+        /// Net/MaquinaReplica.cs): NO es la rig completa multicapa de la
+        /// máquina real (el Crisol real junta panza+cesto+labio+embudo en
+        /// piezas separadas con offsets propios, la Prensa mandíbula+volante,
+        /// etc.) -- reproducir esa geometría exacta aquí acoplaría este
+        /// archivo a constantes PRIVADAS de cada Game/*.cs (que además cambian
+        /// de ronda en ronda, ver el historial de Crisol.cs), y el encargo de
+        /// la réplica es "SIN lógica, sin OnGUI de interacción" -- una silueta
+        /// reconocible con la chapa del nombre encima ya cumple ese contrato.
+        /// DECISIÓN: fidelidad reducida a UNA pieza por estación en vez de la
+        /// rig completa; documentado aquí para que quien la eche en falta
+        /// sepa por qué y dónde ampliarla si hace falta más adelante.
+        /// Devuelve el <see cref="SpriteRenderer"/> creado (hijo nuevo de
+        /// `padre`) por si el llamante quiere teñirlo o atenuarlo.
+        /// </summary>
+        public static SpriteRenderer ConstruirVisualEstatico(Transform padre, byte tipoMaquina, Vector2 tamanoMundo)
+        {
+            Sprite pieza;
+            switch (tipoMaquina)
+            {
+                case TipoCrisol: pieza = PanzaCrisol(13, 9, 1, 1); break;
+                case TipoPrensa: pieza = MandibulaPrensa(10, 6); break;
+                case TipoBancoChispa: pieza = Electrodo(6, 10); break;
+                case TipoColumnaEnsayo: pieza = VidrioPanel(4, 14); break;
+                case TipoEnsayoMaestro: pieza = Dosel(10, 6); break;
+                case TipoDispenser: pieza = CanoGrifo(); break;
+                default: pieza = Solido(); break; // red de seguridad: tipo desconocido -> rectángulo genérico, nunca null.
+            }
+
+            float ancho = Mathf.Max(0.02f, tamanoMundo.x);
+            float alto = Mathf.Max(0.02f, tamanoMundo.y);
+            return CrearCapa(padre, "ReplicaVisualEstatica", pieza, ReplicaVisualSortingOrder, ancho, alto);
+        }
+
+        /// <summary>Orden de dibujo de la réplica: por debajo del aprendiz (47-50, ver Net/AprendizNet.cs/ApprenticeController) y de la silueta genérica de Mudanza (44) -- una réplica nunca debe tapar la sombra de arrastre que se dibuja sobre ella.</summary>
+        private const int ReplicaVisualSortingOrder = 20;
 
         // =================================================================
         private static void MarcarRemache(Color32[] px, int w, int h, int cx, int cy, Color32 color)

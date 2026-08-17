@@ -1166,6 +1166,26 @@ namespace Alkahest.Sim
         /// </summary>
         public const int CanoLimoY = CanoNutrienteY;
 
+        // ---- Estante de redomas (playtest 30) ----------------------------
+        // "LA ALQUIMIA VISIBLE" (encargo de Cesar) reactiva Game/StorageRack.cs
+        // en el cuarto íntimo. DECISIÓN: las constantes viejas `RackX0`=320/
+        // `RackX1`=374/`RackTopY`=239 NO SE REUTILIZAN -- son del taller
+        // CLÁSICO (banco de grifos, enterrado desde el playtest 26) y hoy caen
+        // NUMÉRICAMENTE dentro del cuarto íntimo (`CuartoX0..X1`=140..357,
+        // `CuartoY0..Y1`=168..240), pisando el Banco de Chispa
+        // (`BancoChispaX`=299) y el Ensayo del Maestro (`EnsayoPlintoX`=331) --
+        // exactamente el error que la regla 47 de CLAUDE.md pide evitar.
+        // Sitio nuevo: la MISMA huella en X que las dos pilas de las fuentes
+        // (zona tranquila, "cerca de las fuentes" del encargo), a una altura
+        // por ENCIMA de los dos caños básicos (<see cref="CanoNutrienteY"/>=196,
+        // el más alto de los dos) para que ni el chorro de agua ni el de limo
+        // crucen las redomas al caer. Game/StorageRack.cs es pura vista (no
+        // talla mampostería, deriva sus medidas del ancho real -- regla 39),
+        // así que no hace falta registrar obra ni tallar plinto aquí.
+        public const int EstanteX0 = PilaAguaX0; // 141
+        public const int EstanteX1 = PilaLimoX0 + PilaAnchoOuter - 1; // 171
+        public const int EstanteBaseY = CanoNutrienteY + 4; // 200
+
         // =================================================================
         // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.5) --
         // el REAMUEBLADO del cuarto íntimo. PÁRRAFO HISTÓRICO (playtest 26 lo
@@ -1281,6 +1301,31 @@ namespace Alkahest.Sim
         public const int BancoChispaX = 299;
         /// <summary>Ancla (centro de la BANDEJA) del Ensayo del Maestro -- el último antes del pasillo a la Tolva. 330 -&gt; 331 (playtest 27).</summary>
         public const int EnsayoPlintoX = 331;
+
+        /// <summary>
+        /// EL ALAMBIQUE (playtest 30, "LA ALQUIMIA VISIBLE" -- encargo de
+        /// Cesar: "que el vapor se pueda ATRAPAR"). DECISIÓN: misma X que el
+        /// Crisol, directamente encima de su chimenea/boca -- el vapor que
+        /// Game/Crisol.cs emite sobre la cubeta (ver Crisol.EmitirVaporCubeta)
+        /// sube por ese mismo hueco de aire YA EXCAVADO por
+        /// <see cref="BuildCuartoIntimo"/> (ProcessGas sube 1 celda/tick si el
+        /// hueco de encima está vacío -- determinista, no depende de que el
+        /// gas deambule en horizontal). Ver Game/Alambique.cs para la
+        /// geometría completa (domo+matraz).
+        /// </summary>
+        public const int AlambiqueX = CrisolX;
+        /// <summary>
+        /// 210: la boca del Crisol (su "abocinado") remata en
+        /// <c>BocaY1+1</c> = 191 (baseY 170 + CamaraAlto 9 + BocaFilas 11 +
+        /// 1, ver Game/Crisol.cs::Calcular) y su bocanada de humo nace visual
+        /// en y≈201 (Crisol._humoOrigen) -- 210 deja 19 celdas de aire libre
+        /// de margen sobre la boca real y por encima del alcance visual del
+        /// humo, para que el domo frío del alambique nunca se confunda con la
+        /// chimenea del crisol. El matraz+domo+techo resultante llega hasta
+        /// y=225 (ver Game/Alambique.cs::Calcular), 15 celdas por debajo del
+        /// techo de piedra del cuarto (<see cref="CuartoY1"/>=240).
+        /// </summary>
+        public const int AlambiqueBaseY = 210;
 
         /// <summary>
         /// Pared IZQUIERDA del fuste de la Columna de Ensayo. 296 -&gt; 262
@@ -1585,8 +1630,25 @@ namespace Alkahest.Sim
             BancoChispa.TallarEnPlano(grid, BancoChispaX, baseYEstaciones);
             EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, baseYEstaciones);
 
+            // (playtest 30, "LA ALQUIMIA VISIBLE") EL ALAMBIQUE: a diferencia
+            // de las cinco de arriba, NACE COMO OBRA PENDIENTE (ver el
+            // docblock de Game/Alambique.cs) -- aquí solo se talla el PLINTO
+            // (una losa de piedra, ya en el génesis del mundo) y se registra
+            // como obra anticincel; la mampostería real (matraz+domo) la
+            // talla la propia instancia EN CALIENTE (PaintStable, regla 29)
+            // cuando el jugador paga el cerámico y pulsa E.
+            Alambique.TallarEnPlano(grid, AlambiqueX, AlambiqueBaseY);
+            Alambique.PlintoRect(AlambiqueX, AlambiqueBaseY, out int alaX0, out int alaY0, out int alaX1, out int alaY1);
+            RegistrarObra(alaX0, alaY0, alaX1, alaY1);
+
             BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
             CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
+            // (playtest 31) LA ARQUITECTURA: peldaños, pilastras y el arco del
+            // pasillo. VA AL FINAL, después de TODAS las estaciones, porque
+            // decide dónde puede tallar leyendo `ObraDelTaller` -- que solo
+            // está completo cuando cada TallarEnPlano ya ha registrado su
+            // huella. Ver el docblock de AdornarCuarto.
+            AdornarCuarto(grid);
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
         }
 
@@ -1695,6 +1757,234 @@ namespace Alkahest.Sim
             int x0 = CuartoX1 + 1;
             int x1 = ChuteMouthX0;
             DrawSolidRect(grid, x0, PasilloTolvaY0, x1 - x0 + 1, PasilloTolvaAlto, MaterialId.Empty);
+        }
+
+        // ===================================================================
+        // (playtest 31, "AHORA TODO ES LINEAL") LA ARQUITECTURA DEL CUARTO
+        // ===================================================================
+        // Veredicto de Cesar sobre el taller del playtest 27-30: "ahora todo
+        // es lineal". Tenía razón y el motivo es geométrico, no de gusto: el
+        // suelo del cuarto es UNA losa perfectamente recta de 218 celdas
+        // (BuildCuartoFloor) y las seis estaciones se posan encima en fila,
+        // todas a la misma altura. Un plano así solo puede leerse como una
+        // cinta transportadora.
+        //
+        // LO QUE NO SE PUEDE TOCAR (y por qué):
+        //  · Las ANCLAS de las estaciones (CrisolX, PrensaX, ColumnaX0,
+        //    BancoChispaX, EnsayoPlintoX, AlambiqueX): hay réplicas de red
+        //    (Net/MaquinaSync.cs) y registros anticincel que dependen de
+        //    ellas.
+        //  · El SUELO BAJO CADA ESTACIÓN: todos los TallarEnPlano asumen
+        //    `baseY = CuartoY0+2`. Un peldaño debajo de una estación le
+        //    dejaría la cubeta enterrada o flotando.
+        //
+        // LO QUE SÍ: los TRAMOS ENTRE estaciones. Este método los descubre
+        // solo -- recorre el ancho del cuarto preguntando a `ObraDelTaller`
+        // (el registro que cada estación rellena al tallarse) qué columnas
+        // están libres, y en cada hueco suficientemente ancho levanta:
+        //   1) una TERRAZA de 1-3 filas con sus peldaños de entrada y salida
+        //      (el suelo deja de ser una recta y pasa a tener cota);
+        //   2) una PILASTRA colgante desde el techo con su ménsula, dejando
+        //      libre la franja central por la que vuela el aprendiz -- lo que
+        //      a la vista es un ARCO entre zona y zona;
+        //   3) en el hueco más ancho, además, un PLINTO decorativo tallado.
+        // Y aparte, el ARCO DE MEDIO PUNTO sobre la boca del pasillo a la
+        // Tolva: la salida del taller merece un vano, no un agujero
+        // rectangular.
+        //
+        // SEGURIDAD DEL FLUJO (regla 52, "lo que solo se ve jugando): las
+        // dos pilas de las fuentes (PilaAguaX0..PilaLimoX0+13, x 141..171)
+        // están REGISTRADAS como obra, así que este método nunca toca ni su
+        // suelo ni sus muros, y el chorro del caño sigue cayendo en la misma
+        // columna a la misma pila. Las terrazas empiezan a partir de
+        // `AdornoMargen` celdas después del último muro de cualquier
+        // estación, así que tampoco pueden tapar una boca ni una cubeta.
+        // ===================================================================
+
+        /// <summary>
+        /// Celdas de respeto a cada lado de la huella de una estación antes
+        /// de tallar adorno. (SEGUNDA PASADA, VISTO JUGANDO: era 3 y no salió
+        /// NI UNA terraza. Motivo medido sobre el plano real: con el taller
+        /// grande del playtest 27 las seis estaciones se comen prácticamente
+        /// los 218 celdas de ancho de la sala -- los huecos entre ellas son de
+        /// 4-10 celdas, no de 20. Con 3 de respeto a cada lado no quedaba
+        /// nada que tallar. A 1, cada costura entre estaciones recibe su
+        /// escalón, que es justo donde el ojo necesita el corte.)
+        /// </summary>
+        private const int AdornoMargen = 1;
+        /// <summary>Ancho mínimo de hueco LIBRE que justifica un escalón (segunda pasada: 10 -&gt; 4, ver AdornoMargen).</summary>
+        private const int AdornoHuecoMinimo = 4;
+
+        /// <summary>
+        /// Columnas donde CUELGA una pilastra del techo, una por costura
+        /// entre zonas del proceso (fuentes|crisol, crisol|prensa,
+        /// columna|chispa, ensayo|pasillo). Son las MISMAS cuatro columnas
+        /// donde Game/WorkshopBackdrop.cs excava sus hornacinas, a propósito:
+        /// hornacina abajo + pilastra arriba se leen como UN tramo de
+        /// arquitectura (una crujía), no como dos adornos sueltos. Van a
+        /// mano y no derivadas de las anclas porque las anclas se mueven con
+        /// la mudanza y esto es la SALA, que no se muda.
+        /// </summary>
+        private static readonly int[] PilastraColumnas = { 182, 236, 292, 350 };
+
+        private static void AdornarCuarto(CellGrid grid)
+        {
+            int suelo = CuartoY0 + WallThickness - 1; // 170: última fila maciza de la losa = la cota "cero" del taller.
+
+            int x = CuartoX0 + 1;
+            while (x <= CuartoX1)
+            {
+                if (ColumnaOcupada(x)) { x++; continue; }
+
+                int inicio = x;
+                while (x <= CuartoX1 && !ColumnaOcupada(x)) x++;
+                int fin = x - 1;
+
+                int h0 = inicio + AdornoMargen;
+                int h1 = fin - AdornoMargen;
+                if (h1 - h0 + 1 < AdornoHuecoMinimo) continue;
+
+                TallarTerraza(grid, h0, h1, suelo);
+            }
+
+            for (int i = 0; i < PilastraColumnas.Length; i++)
+            {
+                int cx = PilastraColumnas[i];
+                if (cx <= CuartoX0 + 2 || cx >= CuartoX1 - 2) continue;
+                if (RectOcupado(cx - PilastraAncho / 2 - 1, CuartoY1 - PilastraCaida, cx + PilastraAncho / 2 + 1, CuartoY1)) continue;
+                TallarPilastra(grid, cx);
+            }
+
+            TallarArcoPasillo(grid);
+        }
+
+        /// <summary>¿Pasa alguna huella de estación por la columna `x`? (Bucle plano sobre ~10 rects: se ejecuta 218 veces UNA vez, en la construcción del nivel.)</summary>
+        private static bool ColumnaOcupada(int x)
+        {
+            for (int i = 0; i < ObraDelTaller.Count; i++)
+            {
+                var r = ObraDelTaller[i];
+                if (x >= r.X0 - 1 && x <= r.X1 + 1) return true;
+            }
+            return false;
+        }
+
+        /// <summary>¿Solapa el rect dado con alguna obra ya registrada? Para las pilastras, que viven ARRIBA: la comprobación por columna sola las prohibiría en sitios donde a 14 celdas del techo no hay absolutamente nada.</summary>
+        private static bool RectOcupado(int x0, int y0, int x1, int y1)
+        {
+            for (int i = 0; i < ObraDelTaller.Count; i++)
+            {
+                var r = ObraDelTaller[i];
+                if (x1 >= r.X0 && x0 <= r.X1 && y1 >= r.Y0 && y0 <= r.Y1) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Terraza tallada entre dos estaciones: dos peldaños de subida, una
+        /// meseta 2-3 filas por encima de la cota general, y dos de bajada.
+        /// La altura se sortea con un hash del propio hueco (determinista: el
+        /// mismo plano en todas las partidas y en todas las réplicas de red;
+        /// aquí NO puede entrar UnityEngine.Random, regla de oro del
+        /// proyecto).
+        /// </summary>
+        private static void TallarTerraza(CellGrid grid, int x0, int x1, int sueloY)
+        {
+            int ancho = x1 - x0 + 1;
+            uint h = (uint)(x0 * 73856093) ^ 0x9E3779B9u;
+            h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+            int alto = 2 + (int)(h % 3u); // 2, 3 o 4 filas de desnivel: dos costuras seguidas nunca miden lo mismo.
+
+            int peldano = ancho / 6; // ancho de cada peldaño...
+            if (peldano < 1) peldano = 1;
+            else if (peldano > 4) peldano = 4;
+
+            for (int i = 0; i < ancho; i++)
+            {
+                int px = x0 + i;
+                // Perfil: sube en peldaños, meseta, baja en peldaños.
+                int desdeIzq = i / peldano;
+                int desdeDer = (ancho - 1 - i) / peldano;
+                int nivel = desdeIzq < desdeDer ? desdeIzq : desdeDer;
+                if (nivel > alto) nivel = alto;
+                if (nivel <= 0) continue;
+
+                for (int k = 1; k <= nivel; k++)
+                {
+                    int y = sueloY + k;
+                    if (CellGrid.InBounds(px, y)) grid.SetCell(px, y, MaterialId.Stone);
+                }
+            }
+
+            RegistrarObra(x0, sueloY + 1, x1, sueloY + alto); // es obra del taller: el cincel no se la lleva por error (playtest 27).
+        }
+
+        /// <summary>
+        /// Pilastra colgante con ménsula: baja del techo del cuarto
+        /// <see cref="PilastraCaida"/> celdas, así que el vano que deja
+        /// debajo (más de 40 celdas) es de sobra para volar. Es la pieza que
+        /// convierte "un pasillo largo" en "una sala con tramos".
+        /// </summary>
+        private const int PilastraCaida = 14;
+        private const int PilastraAncho = 3;
+
+        private static void TallarPilastra(CellGrid grid, int cx)
+        {
+            int x0 = cx - PilastraAncho / 2;
+            int x1 = x0 + PilastraAncho - 1;
+            int yTop = CuartoY1;
+            int yBot = CuartoY1 - PilastraCaida;
+
+            for (int y = yBot; y <= yTop; y++)
+            {
+                for (int px = x0; px <= x1; px++)
+                {
+                    if (CellGrid.InBounds(px, y)) grid.SetCell(px, y, MaterialId.Stone);
+                }
+            }
+
+            // La MÉNSULA: la última hilada vuela una celda a cada lado (un
+            // capitel invertido). Sin ella la pilastra es un poste; con ella
+            // es piedra tallada.
+            for (int px = x0 - 1; px <= x1 + 1; px++)
+            {
+                if (CellGrid.InBounds(px, yBot)) grid.SetCell(px, yBot, MaterialId.Stone);
+                if (CellGrid.InBounds(px, yBot + 1)) grid.SetCell(px, yBot + 1, MaterialId.Stone);
+            }
+
+            RegistrarObra(x0 - 1, yBot, x1 + 1, yTop);
+        }
+
+        /// <summary>
+        /// ARCO DE MEDIO PUNTO sobre la boca del pasillo a la Tolva: talla
+        /// (a Empty) el perfil curvo por encima del vano recto que dejó
+        /// <see cref="CarvePasilloTolva"/>. Solo QUITA piedra sobre el hueco
+        /// que ya existía, así que no puede sellar el paso ni abrir uno nuevo
+        /// hacia ningún sitio: el arco vive dentro de las 6 celdas de ancho
+        /// que el pasillo ya ocupaba.
+        /// </summary>
+        private static readonly int[] PerfilArco = { 0, 3, 3, 4, 4, 4, 3, 3 };
+
+        private static void TallarArcoPasillo(CellGrid grid)
+        {
+            int yTecho = PasilloTolvaY0 + PasilloTolvaAlto - 1;
+            int x0 = CuartoX1 + 1;
+
+            for (int i = 0; i < PerfilArco.Length; i++)
+            {
+                int px = x0 + i;
+                // Perfil de medio punto TABULADO (radio 4): la tabla es
+                // round(sqrt(r² - (r-i)²)) calculada a mano -- este archivo NO
+                // tiene `using UnityEngine` a propósito (es plano puro, sin
+                // dependencia del motor: ver la cabecera) y no va a ganar uno
+                // por ocho raíces cuadradas que son constantes.
+                int subida = PerfilArco[i];
+                for (int k = 1; k <= subida; k++)
+                {
+                    int y = yTecho + k;
+                    if (CellGrid.InBounds(px, y)) grid.SetCell(px, y, MaterialId.Empty);
+                }
+            }
         }
 
         private static void PlaceNutrienteMound(CellGrid grid)

@@ -41,10 +41,17 @@ namespace Alkahest.Net
     ///     patrón defensivo que ya usan `AlkahestGameBootstrap` y `DevPalette`.
     ///
     /// DIVISIÓN DE TRABAJO DEL POC (contrato): los invitados VUELAN, ASPIRAN y
-    /// VIERTEN. El cincel y la mudanza solo se activan en el avatar del
-    /// ANFITRIÓN: los dos operan sobre cosas que únicamente existen en el host
-    /// (la mampostería registrada del taller, el registro de aparatos
-    /// movibles). No es una limitación de red, es dónde vive la máquina.
+    /// VIERTEN. El Cincel solo se activa en el avatar del ANFITRIÓN: opera
+    /// sobre la mampostería registrada del taller, que únicamente existe en
+    /// el host. No es una limitación de red, es dónde vive la máquina.
+    ///
+    /// (playtest 30, MÁQUINAS EN RED) LA MUDANZA YA NO ES SOLO DEL
+    /// ANFITRIÓN -- Cesar: "lo ideal es poder mudarlas para que cada quien se
+    /// organice como quiera". El invitado la lleva también, pero opera sobre
+    /// RÉPLICAS visuales (Net/MaquinaSync.cs, Net/MaquinaReplica.cs), nunca
+    /// sobre un aparato real: mover una réplica manda una solicitud por RPC
+    /// que el anfitrión valida y ejecuta sobre la máquina de verdad. Ver el
+    /// docblock de <see cref="MaquinaSync"/> para el protocolo completo.
     /// </summary>
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(ApprenticeController))]
@@ -201,7 +208,21 @@ namespace Alkahest.Net
             if (_conocimiento != null && _frasco != null) _conocimiento.Init(sim, _frasco);
             if (_hudFrasco != null && _frasco != null) _hudFrasco.Init(sim, _frasco, _conocimiento);
 
-            // Cincel y mudanza SOLO en el anfitrión (ver docblock de la clase).
+            // El Cincel sigue SOLO en el anfitrión (ver docblock de la
+            // clase): tallar mampostería escribe en la sim autoritativa, que
+            // el invitado no tiene.
+            //
+            // (playtest 30, MÁQUINAS EN RED — Net/MaquinaSync.cs) LA MUDANZA
+            // YA NO: desde esta ronda el invitado también la lleva. No opera
+            // sobre la sim ni sobre un aparato real -- opera sobre las
+            // RÉPLICAS visuales que construye MaquinaSync
+            // (Net/MaquinaReplica.cs), que implementan el mismo contrato
+            // IMovible que HeatPlate/ChillStone/Dispenser/las cinco
+            // estaciones. `Mudanza.Init` es genérico (solo guarda `_sim` y
+            // construye su propia silueta de arrastre, ver Game/Mudanza.cs):
+            // es exactamente seguro llamarlo aquí igual que en el anfitrión,
+            // la diferencia de comportamiento vive entera en
+            // `MaquinaReplica.Reposicionar` (RPC en vez de mutar el aparato).
             if (IsServer)
             {
                 if (_cincel != null) _cincel.Init(sim);
@@ -210,7 +231,7 @@ namespace Alkahest.Net
             else
             {
                 if (_cincel != null) _cincel.enabled = false;
-                if (_mudanza != null) _mudanza.enabled = false;
+                if (_mudanza != null) _mudanza.Init(sim);
             }
 
             _cableado = true;

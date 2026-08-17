@@ -798,6 +798,19 @@ namespace Alkahest.Sim
 
             Transform(idx, MaterialId.MatDe(baseIdx, EstadoMateria.Solucion));
             Transform(nIdx, MaterialId.Empty);
+
+            // LA ALQUIMIA VISIBLE (tarea 4, encargo de Cesar: "ver algo
+            // diluirse en agua"). Un chispazo determinista en la celda recién
+            // nacida: Solucion ya usa la firma Motas (ver Universe.cs, el
+            // Init de este material) y MorphSparkle (más abajo en este mismo
+            // archivo) decae solo un chispazo alto en 3-6 turnos -- justo "un
+            // momento de brillo" y no una mancha que se queda pintada.
+            // `Transform` NO toca `morph` (solo `aux`, CLAUDE.md regla 16),
+            // así que sin esta línea la celda nacería con el hash de siembra
+            // de `SetCell` y el ojo no atraparía el instante exacto de la
+            // disolución.
+            _grid.morph[idx] = 255;
+
             return true;
         }
 

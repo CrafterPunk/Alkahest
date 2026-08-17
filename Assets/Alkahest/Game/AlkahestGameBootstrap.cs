@@ -191,7 +191,16 @@ namespace Alkahest.Game
                 SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem, SimLevelBuilder.PilaLimoX0);
             _dispensers = new[] { canoAgua, canoLimo };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
-            //   SpawnStorageRack(apprentice.transform, flask, knowledge);
+            // (playtest 30, "LA ALQUIMIA VISIBLE", tarea 5) EL ESTANTE DE
+            // REDOMAS VUELVE: comentado desde el playtest 21 (el pivot al
+            // cuarto íntimo lo dejó sin sitio propio). Sitio NUEVO --
+            // `SimLevelBuilder.EstanteX0/X1/BaseY`, NO los viejos
+            // RackX0/RackX1/RackTopY (esos son del taller CLÁSICO y hoy caen
+            // dentro del cuarto íntimo, ver el docblock junto a esas
+            // constantes en Sim/SimLevelBuilder.cs). Game/StorageRack.cs no
+            // necesita ningún cambio: deriva sus medidas del ancho real que
+            // recibe (regla 39 de CLAUDE.md), y no talla mampostería.
+            SpawnStorageRack(apprentice.transform, flask, knowledge);
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
@@ -212,6 +221,13 @@ namespace Alkahest.Game
             // plano, pero su vidrio, sus zunchos y su VERBO ("observar")
             // necesitaban un MonoBehaviour que los dibujara.
             SpawnColumnaEnsayo(apprentice.transform, knowledge);
+            // (playtest 30, "LA ALQUIMIA VISIBLE", tarea 3) EL ALAMBIQUE:
+            // primer instrumento del taller que el jugador FABRICA con
+            // materiales -- ver Game/Alambique.cs. Junto al resto de la línea
+            // del taller, después de que exista `_sim` con su Grid ya
+            // tallado (el plinto lo talló Sim/SimLevelBuilder.BuildCuartoIntimo
+            // antes de que este método corra).
+            SpawnAlambique(apprentice.transform);
 
             // Fondo del taller + pistas se crean ANTES que el ciclo de
             // jornadas: DayCycle avisa a HintSystem en cuanto entra en la
@@ -634,13 +650,38 @@ namespace Alkahest.Game
             return dispenser;
         }
 
-        /// <summary>(playtest 15) SIN CAMBIOS de fondo: RackX0/X1/TopY viven dentro de LabX0..LabX1 -- el estante de redomas sigue en LABORATORIO.</summary>
+        /// <summary>
+        /// (playtest 30, "LA ALQUIMIA VISIBLE", tarea 5) REACTIVADO tras el
+        /// pivot al cuarto íntimo (playtest 21). Sitio nuevo:
+        /// <see cref="SimLevelBuilder.EstanteX0"/>/<see cref="SimLevelBuilder.EstanteX1"/>/
+        /// <see cref="SimLevelBuilder.EstanteBaseY"/> -- ver el docblock junto
+        /// a esas constantes para por qué no son las viejas
+        /// RackX0/RackX1/RackTopY. Game/StorageRack.cs::Init tiene la MISMA
+        /// firma de siempre (`(sim, frasco, saber, jugador, cellX0, cellX1,
+        /// cellYBase)`), verificada contra el archivo actual: no hace falta
+        /// tocarlo, solo darle coordenadas nuevas.
+        /// </summary>
         private void SpawnStorageRack(Transform player, Flask flask, SubstanceKnowledge knowledge)
         {
             var go = new GameObject("StorageRack");
             var rack = go.AddComponent<StorageRack>();
             rack.Init(_sim, flask, knowledge, player,
-                SimLevelBuilder.RackX0, SimLevelBuilder.RackX1, SimLevelBuilder.RackTopY);
+                SimLevelBuilder.EstanteX0, SimLevelBuilder.EstanteX1, SimLevelBuilder.EstanteBaseY);
+        }
+
+        /// <summary>
+        /// (playtest 30, "LA ALQUIMIA VISIBLE", tarea 3) EL ALAMBIQUE: nace
+        /// como obra pendiente (ver el docblock de Game/Alambique.cs) sobre
+        /// el plinto que ya talló Sim/SimLevelBuilder.cs en el génesis del
+        /// mundo. Solo en <see cref="TrySpawn"/> (modo un jugador): la
+        /// integración con el taller COMPARTIDO (Net/, <see cref="TrySpawnRed"/>)
+        /// queda fuera de este encargo a propósito (regla "NO toques Net/").
+        /// </summary>
+        private void SpawnAlambique(Transform player)
+        {
+            var go = new GameObject("Alambique");
+            var alambique = go.AddComponent<Alambique>();
+            alambique.Init(_sim, player, SimLevelBuilder.AlambiqueX);
         }
 
         private OrderSystem SpawnOrderSystem(SubstanceKnowledge knowledge)

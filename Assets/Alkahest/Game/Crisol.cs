@@ -202,6 +202,18 @@ namespace Alkahest.Game
         /// <summary>Margen por debajo del umbral del mundo al que se clampea la rampa durante <see cref="FraccionConTecho"/>.</summary>
         private const int MargenTecho = 2;
 
+        // -----------------------------------------------------------------
+        // LA ALQUIMIA VISIBLE (playtest 30, encargo de Cesar: "el mejor
+        // efecto que teníamos es el de fuego y ahora no tiene lugar" +
+        // "evaporar cosas... que se vea el agua dejar la olla").
+        // -----------------------------------------------------------------
+        /// <summary>Cada cuánto se refresca la llama pintada del brasero -- sondeo con acumulador (nunca por tick, CLAUDE.md regla "probes con acumulador"), mismo orden de magnitud que <see cref="MaquinariaSprites.AffordanceGlow.ProbeIntervalSeconds"/>.</summary>
+        private const float FuegoBraseroRefrescoSeg = 0.2f;
+        /// <summary>Celdas de hornada CONVERTIDAS (ver <see cref="CerrarHornada"/>) por cada celda de Steam que se empuja sobre la cámara -- "que se vea el agua dejar la olla" sin inundar el aire de vapor. Una hornada llena de la cámara (117 celdas) deja como mucho 19 celdas de vapor visibles, un puñado de bocanadas, no una tormenta.</summary>
+        private const int VaporPorCeldas = 6;
+        /// <summary>Salt propia para <see cref="XorShift.FromCell"/> al elegir la columna del vapor -- primera salt que usa este archivo; 241 para no colisionar con ninguna de las CONSTANTES fijas que ya usa Sim/SimStepper.cs (1, 2, 5, 9, 13, 17, 42, 77, 88, 91, 205, 237, 239 -- verificado con grep antes de fijar el número).</summary>
+        private const uint SalVaporCrisol = 241;
+
         private enum Fase { Reposo, Corriendo, Lista }
 
         private AlkahestSim _sim;
@@ -248,11 +260,23 @@ namespace Alkahest.Game
         private bool _camaraTieneAlgo;
         private byte _dominanteCamara;
 
+        /// <summary>Acumulador del sondeo de la llama del brasero (LA ALQUIMIA VISIBLE, tarea 1) -- ver <see cref="RefrescarLlamasBrasero"/>.</summary>
+        private float _llamaAcc;
+
         // ---- Visual ----
         private SpriteRenderer _resalte;
         private SpriteRenderer _latidoTrabajo;
         private SpriteRenderer _brasasHogar, _brasasCesto;
         private SpriteRenderer _destelloCamara, _destelloCesto;
+
+        // (playtest 31, ILUMINACIÓN DE ÁNIMO) EL CRISOL ES LA FUENTE DE LUZ
+        // PRINCIPAL DEL TALLER. Dos halos, no uno: el HOGAR (bajo la panza,
+        // siempre encendido aunque sea un rescoldo -- un horno de alquimista
+        // nunca está del todo frío) y el BRASERO (solo cuando arde
+        // combustible de verdad, y entonces es la luz más viva de la escena).
+        // Que respiren a ritmos y desfases distintos es lo que hace que
+        // parezcan fuego y no una animación: ver MaquinariaSprites.Luz.Latir.
+        private MaquinariaSprites.Luz _luzHogar, _luzBrasero, _luzCamara;
         private float _alfaResalte;
         private const int Burbujas = 6;
         private readonly SpriteRenderer[] _burbujas = new SpriteRenderer[Burbujas];
@@ -563,6 +587,16 @@ namespace Alkahest.Game
 
             SondearCamara();
 
+            // LA ALQUIMIA VISIBLE (tarea 1): mientras el brasero arde de
+            // verdad, refrescar sus llamas pintadas -- sondeo con
+            // acumulador, NUNCA por frame/tick (regla de probes).
+            _llamaAcc += Time.deltaTime;
+            if (_llamaAcc >= FuegoBraseroRefrescoSeg)
+            {
+                _llamaAcc -= FuegoBraseroRefrescoSeg;
+                RefrescarLlamasBrasero();
+            }
+
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
@@ -631,6 +665,13 @@ namespace Alkahest.Game
                 {
                     byte m = grid.GetMat(x, y);
                     if (m == MaterialId.Empty) continue;
+                    // (LA ALQUIMIA VISIBLE, tarea 1) Las llamas que este mismo
+                    // archivo pinta sobre el combustible (ver
+                    // RefrescarLlamasBrasero) NO cuentan como "materia que
+                    // acaba de entrar" -- si no se excluyen, cada llamita
+                    // nueva/parpadeante dispararía el acuse de recibo del cesto
+                    // sin que el jugador haya vertido nada.
+                    if (m == MaterialId.Fire) continue;
                     nCesto++;
                     if (fuel == MaterialId.Empty && universe != null && universe.EsCombustible(m)) fuel = m;
                 }
@@ -659,6 +700,56 @@ namespace Alkahest.Game
             _targetRaw = 0;
             _cestoArdiendo = false;
             _hornadaT = 0f;
+        }
+
+        /// <summary>
+        /// LA ALQUIMIA VISIBLE (tarea 1, encargo de Cesar: "necesitamos VER
+        /// cosas transformándose: el mejor efecto que teníamos es el de
+        /// fuego y ahora no tiene lugar"). Mientras el brasero arde de
+        /// verdad (<see cref="_cestoArdiendo"/> -- solo cierto durante una
+        /// hornada que se encendió CON combustible, ver
+        /// <see cref="IntentarEncender"/>), pinta <see cref="MaterialId.Fire"/>
+        /// justo encima de la celda de combustible más alta de cada columna
+        /// del cesto, DENTRO del recinto ya tallado (<see cref="_braX0"/>..
+        /// <see cref="_braX1"/>, <see cref="_braY0"/>..<see cref="_braY1"/> --
+        /// mampostería de piedra por los cuatro costados, ver
+        /// <see cref="TallarEnPlano"/>: la piedra es inmune al fuego, así que
+        /// nunca "quema el taller"). Usa <see cref="AlkahestSim.PaintStable"/>
+        /// y no <see cref="AlkahestSim.Paint"/> a propósito (regla 29 de
+        /// CLAUDE.md): esto CREA fuego de la nada, no mueve fuego que ya
+        /// existiera, así que tiene que nacer a la temperatura estable del
+        /// propio Fuego (<see cref="MaterialDef.StableBirthTempRaw"/>), no
+        /// heredar la del hueco de aire que tuviera antes.
+        ///
+        /// EN CUANTO <see cref="_cestoArdiendo"/> se apaga (hornada cerrada
+        /// o combustible agotado), este método deja de pintar -- "ni una
+        /// llama más" -- y las que ya existen se comportan como cualquier
+        /// Fuego del mundo (Sim/SimStepper.cs las apaga/consume solas por su
+        /// propio arquetipo): no hace falta borrarlas a mano.
+        /// </summary>
+        private void RefrescarLlamasBrasero()
+        {
+            if (!_cestoArdiendo) return;
+            var grid = _sim.Grid;
+            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+
+            for (int x = _braX0; x <= _braX1; x++)
+            {
+                int topFuelY = -1;
+                for (int y = _braY0; y <= _braY1; y++)
+                    if (grid.GetMat(x, y) == _fuelMat) topFuelY = y; // el bucle sube: el último asignado es el más alto.
+
+                if (topFuelY < 0) continue; // esta columna ya no tiene combustible: nada que encender encima.
+
+                int flameY = topFuelY + 1;
+                if (flameY > _braY1) continue; // el combustible llega hasta el borde del cesto: no hay hueco encima para la llama.
+
+                byte encima = grid.GetMat(x, flameY);
+                if (encima != MaterialId.Empty && encima != MaterialId.Fire) continue; // no desplazar nada que no sea aire o fuego previo.
+
+                _sim.PaintStable(x, flameY, 0, MaterialId.Fire);
+                grid.WakeChunk(x, flameY, tick);
+            }
         }
 
         // =================================================================
@@ -871,11 +962,52 @@ namespace Alkahest.Game
 
             if (convertidas > 0) Hornada.RegistrarOp("crisol", _hornadaEntrada, _hornadaSalida, _hornadaCondicion);
 
+            // LA ALQUIMIA VISIBLE (tarea 2, encargo de Cesar: "evaporar
+            // cosas; ver algo diluirse en agua"). "extrayendo" (Limo ->
+            // arena, hierve para separar) y "evaporando" (Solución -> Polvo,
+            // el agua deja la mezcla) son las DOS hornadas de esta pasada en
+            // las que agua de verdad abandona la cámara -- justo lo que pide
+            // el mandato. Las demás (fundiendo/calcinando/ceramizando/
+            // recociendo) no llevan agua, así que no emiten nada.
+            if (convertidas > 0 && (_hornadaVerbo == "extrayendo" || _hornadaVerbo == "evaporando"))
+                EmitirVaporCubeta(convertidas);
+
             _fase = Fase.Lista;
             _cestoArdiendo = false;
             _reposoRaw = TempReposoPara(_sim.Universe, _hornadaSalida);
             _targetRaw = _reposoRaw;
             Rotular(null, UiStyles.Exito);
+        }
+
+        /// <summary>
+        /// LA ALQUIMIA VISIBLE (tarea 2). Empuja <see cref="VaporPorCeldas"/>-avo
+        /// de las celdas convertidas como <see cref="MaterialId.Steam"/> justo
+        /// sobre la cámara (dentro de la boca embudada, aire ya tallado --
+        /// ver <see cref="TallarEnPlano"/>), para que el ojo del jugador
+        /// atrape "el agua se está yendo" en el mismo instante en que la
+        /// hornada cierra, en vez de tener que esperar a que el Steam que ya
+        /// nace solo (Sim/SimStepper.cs, arquetipo Gas) se abra paso él solo
+        /// por la cámara. <see cref="AlkahestSim.PaintStable"/>, no
+        /// <see cref="AlkahestSim.Paint"/> (regla 29): esto CREA vapor de la
+        /// nada, no mueve uno que ya existiera.
+        /// </summary>
+        private void EmitirVaporCubeta(int convertidas)
+        {
+            int n = Mathf.Min(convertidas / VaporPorCeldas, CamaraAncho);
+            if (n <= 0) return;
+
+            var grid = _sim.Grid;
+            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+            int y = _bocaY0; // primera fila de aire justo sobre la cámara -- ya tallada a Empty por la boca embudada.
+
+            for (int i = 0; i < n; i++)
+            {
+                var rng = XorShift.FromCell(tick, _camX0, _camY1, SalVaporCrisol + (uint)i);
+                int x = _camX0 + rng.Next(CamaraAncho);
+                if (grid.GetMat(x, y) != MaterialId.Empty) continue; // no desplazar nada -- si ya hay algo ahí, esta bocanada se pierde (determinista: la próxima hornada lo intentará de nuevo).
+                _sim.PaintStable(x, y, 0, MaterialId.Steam);
+                grid.WakeChunk(x, y, tick);
+            }
         }
 
         /// <summary>Empuja la temperatura de la cámara hacia <see cref="_targetRaw"/>. Con `_targetRaw` a 0 (REPOSO) no toca NADA: sin ese silencio no habría "una transformación por hornada".</summary>
@@ -1023,6 +1155,30 @@ namespace Alkahest.Game
             _brasasCesto = MaquinariaSprites.CrearCapa(cestoHogarGo.transform, "Brasas",
                 MaquinariaSprites.LechoBrasas(BraseroAncho, HogarFilas), 17, BraseroAncho * c, HogarFilas * c);
             _brasasCesto.color = new Color(0.16f, 0.14f, 0.13f, 1f); // ARRANCA APAGADO (mandato 4): frío y vacío.
+
+            // ---- (playtest 31) SOMBRA PROPIA: la panza y el cesto se APOYAN
+            // en la piedra. Sin esto los sprites flotan sobre el suelo, que es
+            // la mitad del "programmer art" que Cesar señaló.
+            MaquinariaSprites.Sombra(transform,
+                new Vector3(posCuerpo.x, (_baseY - HogarFilas - 0.4f) * c, 0f),
+                anchoCuerpo * 1.25f, 4.5f * c, 0.42f);
+            MaquinariaSprites.Sombra(transform,
+                new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY - HogarFilas - 0.4f) * c, 0f),
+                anchoCestoW * 1.2f, 3.5f * c, 0.38f);
+
+            // ---- (playtest 31) LAS LUCES. Radios en CELDAS (por eso van
+            // multiplicados por `c`): el hogar alumbra bastante más que su
+            // propia boca -- una hoguera ilumina el cuarto, no el hueco donde
+            // está.
+            _luzHogar = MaquinariaSprites.Luz.Crear(transform, "LuzHogar",
+                new Vector3(posCuerpo.x, (_baseY - HogarFilas * 0.5f) * c, 0f),
+                46f * c, new Color(1f, 0.56f, 0.22f));
+            _luzCamara = MaquinariaSprites.Luz.CrearOvalada(transform, "LuzCamara",
+                new Vector3(posCuerpo.x, (_baseY + CamaraAlto * 0.5f) * c, 0f),
+                (CamaraAncho + 8) * c, (CamaraAlto + 6) * c, new Color(1f, 0.72f, 0.36f));
+            _luzBrasero = MaquinariaSprites.Luz.Crear(transform, "LuzBrasero",
+                new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY + BraseroAlto * 0.4f) * c, 0f),
+                30f * c, new Color(1f, 0.48f, 0.16f));
         }
 
         private void ActualizarVisual()
@@ -1064,6 +1220,30 @@ namespace Alkahest.Game
                     _brasasCesto.color = new Color(1f, 0.62f * p, 0.24f * p, 1f);
                 }
                 else _brasasCesto.color = new Color(0.16f, 0.14f, 0.13f, 1f);
+            }
+
+            // (playtest 31) LAS LUCES SIGUEN AL FUEGO, no al revés: la misma
+            // `intensidad` que decide el color de las brasas decide cuánta
+            // luz sale de ellas, así que es IMPOSIBLE que el halo diga
+            // "encendido" mientras el hogar está negro (el error que la
+            // tercera pasada del playtest 27 corrigió en las brasas: no
+            // reintroducirlo por la puerta de la luz).
+            {
+                float intensidadHogar = corriendo ? Mathf.Lerp(0.30f, 1f, t) : (_fase == Fase.Lista ? 0.18f : 0.06f);
+                // (segunda pasada, visto jugando) el rescoldo en reposo daba
+                // 0.068 de alfa: invisible. Un horno apagado del todo tampoco
+                // sería honesto -- SÍ tiene rescoldo (las brasas se dibujan a
+                // 0.06 de intensidad, no a 0) -- así que la luz arranca en
+                // 0.13 y sube a ~0.50 con la hornada al rojo.
+                _luzHogar?.Latir(0.11f + 0.40f * intensidadHogar, 0.03f + 0.06f * intensidadHogar, 0.85f);
+                // La cámara sólo brilla mientras cocina: es la carga la que
+                // está al rojo, y en reposo no hay nada al rojo dentro.
+                _luzCamara?.Intensidad(corriendo ? Mathf.Lerp(0.10f, 0.34f, t) : (_fase == Fase.Lista ? 0.14f : 0f));
+                // El brasero: la luz más viva del taller, y con otro ritmo
+                // (1.7 Hz frente a 0.85) para que las dos llamas nunca
+                // respiren a la vez.
+                if (_cestoArdiendo) _luzBrasero?.Latir(0.42f, 0.11f, 1.7f, 0.37f);
+                else _luzBrasero?.Intensidad(0f);
             }
 
             if (_latidoTrabajo != null)

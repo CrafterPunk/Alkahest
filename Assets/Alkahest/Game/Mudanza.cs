@@ -16,6 +16,23 @@ namespace Alkahest.Game
     /// forma OPACA -- nunca lee sus campos privados, nunca sabe si es una
     /// placa, una piedra o un grifo. Todo lo que necesita para agarrar,
     /// previsualizar, soltar o cancelar sale de estos cinco miembros.
+    ///
+    /// (playtest 29, encargo D) También lo implementan las CINCO estaciones
+    /// del taller -- Crisol/Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro --
+    /// vía <see cref="IMovibleAnclaEsquina"/> (ver ese docblock).
+    ///
+    /// (playtest 30, MÁQUINAS EN RED, Net/MaquinaSync.cs) Y TAMBIÉN lo
+    /// implementa <see cref="Alkahest.Net.MaquinaReplica"/>: la réplica visual que un
+    /// invitado ve en vez de la máquina real. Esta clase (Mudanza) NO
+    /// distingue una réplica de un aparato de verdad -- ni falta que le hace,
+    /// ese es justo el punto del contrato "opaco" de arriba. La diferencia
+    /// entera vive en cómo cada uno implementa <see cref="Reposicionar"/>: el
+    /// aparato real se mueve ahí mismo; la réplica manda una solicitud por
+    /// RPC y solo se mueve de verdad si el anfitrión (dueño de la máquina de
+    /// verdad) la acepta. Por eso Net/AprendizNet.cs ya no desactiva esta
+    /// clase para el avatar de un invitado (sí sigue desactivando el
+    /// Cincel, que talla la sim autoritativa -- eso no tiene equivalente de
+    /// red en este POC).
     /// </summary>
     public interface IMovible
     {
