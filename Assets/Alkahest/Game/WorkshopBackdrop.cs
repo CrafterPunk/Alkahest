@@ -192,7 +192,174 @@ namespace Alkahest.Game
         private IEnumerator Start()
         {
             yield return PintarFondoCuartoIntimo();
+            MontarHerrajesDelTaller(); // (playtest 33) las ménsulas de las baldas y las cadenas -- ver su docblock.
         }
+
+        // =================================================================
+        // (playtest 33) EL HERRAJE DEL TALLER -- las ménsulas de las baldas
+        // =================================================================
+        // Encargo de Cesar: *"créale como BRACITOS INCLINADOS para que pueda
+        // sostener más cosas, y en el techo puedo tener MÁS de estos lugares
+        // para ir acomodando lo que encuentro"*.
+        //
+        // POR QUÉ VIVE AQUÍ Y NO EN UNA MÁQUINA: las baldas no tienen dueño.
+        // Son SALA, igual que las pilastras, la bóveda y las hornacinas, y
+        // esta clase es la que ya se ocupa de vestir la sala. Ninguna es
+        // movible (no implementan IMovible ni se registran en Mudanza): son
+        // arquitectura, y la arquitectura del cuarto no se muda -- por eso
+        // tampoco necesitan ser hijas de nada que se mueva.
+        //
+        // LA PIEDRA MANDA: la posición, el ancho y la altura de cada herraje
+        // se LEEN de Sim/SimLevelBuilder.Repisas (regla 39 de CLAUDE.md: nunca
+        // calibrar contra prosa). Si el plano mueve una balda, su ménsula y su
+        // filo se mueven con ella sin tocar este archivo.
+        // =================================================================
+        private void MontarHerrajesDelTaller()
+        {
+            float c = SimRenderer.CellWorldSize;
+            var raiz = new GameObject("TallerHerrajes").transform;
+            raiz.position = Vector3.zero;
+
+            var repisas = SimLevelBuilder.Repisas;
+            for (int i = 0; i < repisas.Length; i++)
+            {
+                var r = repisas[i];
+                int ancho = r.X1 - r.X0 + 1;
+                float cxMundo = (r.X0 + ancho * 0.5f) * c;
+
+                // 1) LA SOMBRA PROYECTADA, lo primero: sin ella una balda es
+                //    una roca pegada al fondo. Va justo debajo del canto, algo
+                //    más ancha que la piedra.
+                MaquinariaSprites.Sombra(raiz,
+                    new Vector3(cxMundo, (r.Y - 2.6f) * c, 0f),
+                    (ancho + 4) * c, 4.2f * c, 0.38f);
+
+                // 2) (SEGUNDA PASADA, visto jugando) LA LOSA, que antes no se
+                //    veía -- ver MaquinariaSprites.BaldaPiedra. Va justo sobre
+                //    las 2 filas de Stone reales, con su mismo tamaño, así que
+                //    el dibujo y lo que sostiene son la misma cosa.
+                var losa = MaquinariaSprites.CrearCapa(raiz, "BaldaPiedra_" + i,
+                    MaquinariaSprites.BaldaPiedra(ancho, 2), OrdenHerraje, ancho * c, 2f * c);
+                losa.transform.position = new Vector3(cxMundo, (r.Y - 0.5f) * c, 0f);
+
+                // 3) LOS DOS BRACITOS. (SEGUNDA PASADA) Más pequeños y METIDOS
+                //    HACIA DENTRO: pegados al extremo y a tamaño 5-6 celdas
+                //    parecían las patas de un caballete, y una balda con patas
+                //    es una mesa flotando. Un apoyo que arranca dentro del
+                //    vuelo, y más corto que alto el propio canto, se lee como
+                //    ménsula.
+                int mensulaAncho = Mathf.Clamp(ancho / 6, 3, 5);
+                int mensulaAlto = Mathf.Clamp(mensulaAncho, 3, 5);
+                int adentro = ancho >= 16 ? 2 : 1;
+                var mensula = MaquinariaSprites.MensulaInclinada(mensulaAncho, mensulaAlto);
+                float yMensula = (r.Y - 1.5f - mensulaAlto * 0.5f) * c; // colgando de la cara inferior de la piedra.
+
+                var izq = MaquinariaSprites.CrearCapa(raiz, "MensulaIzq_" + i, mensula, OrdenHerraje,
+                    mensulaAncho * c, mensulaAlto * c);
+                izq.transform.position = new Vector3((r.X0 + adentro + mensulaAncho * 0.5f) * c, yMensula, 0f);
+
+                var der = MaquinariaSprites.CrearCapa(raiz, "MensulaDer_" + i, mensula, OrdenHerraje,
+                    mensulaAncho * c, mensulaAlto * c);
+                der.transform.position = new Vector3((r.X1 + 1 - adentro - mensulaAncho * 0.5f) * c, yMensula, 0f);
+                var e = der.transform.localScale; e.x = -e.x; der.transform.localScale = e; // espejo: el bracito de la derecha mira al otro lado.
+
+                // Una balda larga necesita un apoyo INTERMEDIO o el ojo la ve
+                // pandear -- es la misma intuición estructural que hace que
+                // una estantería real lleve un montante cada metro.
+                if (ancho >= 22)
+                {
+                    var med = MaquinariaSprites.CrearCapa(raiz, "MensulaMed_" + i, mensula, OrdenHerraje,
+                        mensulaAncho * c, mensulaAlto * c);
+                    med.transform.position = new Vector3(cxMundo, yMensula, 0f);
+                }
+
+                // 4) EL FILO DE LATÓN sobre el canto: la línea brillante que
+                //    dice "esto es un mueble donde se posan cosas".
+                var filo = MaquinariaSprites.CrearCapa(raiz, "FiloBalda_" + i,
+                    MaquinariaSprites.FiloBalda(ancho), OrdenHerraje + 2, ancho * c, 1.1f * c);
+                filo.transform.position = new Vector3(cxMundo, (r.Y + 0.55f) * c, 0f);
+            }
+
+            // 5) (SEGUNDA PASADA, visto jugando) LAS PILASTRAS, VESTIDAS. La
+            //    piedra colgante que talla el plano existe, pero contra una
+            //    pared que también es sillería oscura no se leía: cinco
+            //    sombras verticales que podían ser textura. Se les pone encima
+            //    el mismo `Sillar` con el que la Columna de Ensayo viste sus
+            //    machones (playtest 27) y una ménsula-capitel al pie -- y
+            //    entonces sí son pilares.
+            var cols = SimLevelBuilder.PilastraColumnas;
+            var caidas = SimLevelBuilder.PilastraCaidas;
+            for (int i = 0; i < cols.Length; i++)
+            {
+                int caida = i < caidas.Length ? caidas[i] : 14;
+                int anchoP = 4;
+                float cxP = (cols[i] - anchoP / 2 + anchoP * 0.5f) * c;
+                float yBot = SimLevelBuilder.CuartoY1 - caida;
+
+                var fuste = MaquinariaSprites.CrearCapa(raiz, "PilastraSillar_" + i,
+                    MaquinariaSprites.Sillar(anchoP, caida), OrdenHerraje, anchoP * c, caida * c);
+                fuste.transform.position = new Vector3(cxP, (yBot + caida * 0.5f) * c, 0f);
+
+                // El capitel invertido del pie: dos ménsulas espejadas bajo el
+                // vuelo que ya talla el plano.
+                var cap = MaquinariaSprites.MensulaInclinada(3, 3);
+                var ci = MaquinariaSprites.CrearCapa(raiz, "PilastraCapIzq_" + i, cap, OrdenHerraje + 1, 3f * c, 3f * c);
+                ci.transform.position = new Vector3(cxP - anchoP * 0.5f - 0.5f, yBot * c + 1.4f * c, 0f);
+                var ei = ci.transform.localScale; ei.x = -ei.x; ci.transform.localScale = ei;
+                var cd = MaquinariaSprites.CrearCapa(raiz, "PilastraCapDer_" + i, cap, OrdenHerraje + 1, 3f * c, 3f * c);
+                cd.transform.position = new Vector3(cxP + anchoP * 0.5f + 0.5f, yBot * c + 1.4f * c, 0f);
+            }
+
+            // 6) (SEGUNDA PASADA) LOS HACES DE LAS CLARABOYAS. El tinte que la
+            //    textura de fondo pinta por debajo del pozo era demasiado
+            //    tímido para verse a escala de juego (subido x3 igualmente) y,
+            //    peor, iba EN EL FONDO: no podía caer sobre las máquinas ni
+            //    sobre la piedra del suelo, que es la mitad de lo que hace
+            //    creíble un tragaluz. Estos sprites se dibujan delante, como
+            //    los halos.
+            for (int i = 0; i < SimLevelBuilder.ClaraboyaColumnas.Length; i++)
+            {
+                int cx = SimLevelBuilder.ClaraboyaColumnas[i];
+                const int hazAlto = 46;
+                int hazAncho = 30;
+                var haz = MaquinariaSprites.CrearCapa(raiz, "HazClaraboya_" + i,
+                    MaquinariaSprites.HazClaraboya(hazAncho, hazAlto), MaquinariaSprites.OrdenHalo - 1,
+                    hazAncho * c, hazAlto * c);
+                haz.transform.position = new Vector3((cx + 0.5f) * c, (SimLevelBuilder.CuartoY1 + 6 - hazAlto * 0.5f) * c, 0f);
+                // Azul lechoso MUY bajo de alfa: la luz de fuera es fría y
+                // entra por un pozo de piedra, no por una ventana.
+                haz.color = new Color(0.62f, 0.74f, 0.95f, 0.17f);
+            }
+
+            // 4) LAS CADENAS. Cuelgan del techo en los vanos que quedaron
+            //    vacíos entre baldas -- son lo que le da ESCALA a una bóveda
+            //    de 95 celdas (sin nada colgando, 95 y 60 se ven igual) y de
+            //    paso ganchos donde el ojo imagina que se cuelgan cosas.
+            //    Columnas elegidas a mano en aire libre comprobado contra el
+            //    plano: 168 (sobre el machón de las fuentes), 230 (paso
+            //    fuego->fuerza), 300 (alcoba, junto a la Columna) y 346
+            //    (atrio). Longitudes distintas por la misma razón que las
+            //    pilastras tienen caídas distintas: un ritmo regular se deja
+            //    de mirar.
+            for (int i = 0; i < _cadenasX.Length; i++)
+            {
+                int largo = _cadenasLargo[i];
+                float yTop = SimLevelBuilder.CuartoY1;
+                var sr = MaquinariaSprites.CrearCapa(raiz, "Cadena_" + i,
+                    MaquinariaSprites.CadenaColgante(largo), OrdenHerraje, 1.6f * c, largo * c);
+                sr.transform.position = new Vector3((_cadenasX[i] + 0.5f) * c, (yTop - largo * 0.5f) * c, 0f);
+                sr.color = new Color(1f, 1f, 1f, 0.9f);
+            }
+        }
+
+        /// <summary>Orden de dibujo del herraje: delante del sprite de la sim (-5) y de la piedra, detrás de los halos (40) y del aprendiz (50).</summary>
+        private const int OrdenHerraje = 16;
+        // 351 y no 346: la pilastra del atrio (x=343) ocupa con su ménsula
+        // hasta 346, y una cadena naciendo DENTRO de una pilastra es el clásico
+        // "sprite pegado" -- comprobado rect a rect contra PilastraColumnas y
+        // PilastraCaidas, igual que las cuatro alturas de abajo contra Repisas.
+        private static readonly int[] _cadenasX = { 168, 230, 300, 351 };
+        private static readonly int[] _cadenasLargo = { 13, 20, 9, 16 };
 
         /// <summary>
         /// (playtest 21, AJUSTE 2) Fondo del cuarto íntimo: plano, oscuro,
@@ -268,43 +435,111 @@ namespace Alkahest.Game
                 int bloqueY = y / (Escala * 8); // veta de ~8 celdas de alto.
 
                 int celdaY = y / Escala;
-                bool filaCuarto = celdaY >= SimLevelBuilder.CuartoY0 - 2 && celdaY <= SimLevelBuilder.CuartoY1 + 2;
-                float tCuarto = filaCuarto
-                    ? Mathf.Clamp01((celdaY - SimLevelBuilder.CuartoY0) / (float)(SimLevelBuilder.CuartoY1 - SimLevelBuilder.CuartoY0))
-                    : 0f;
+                // (playtest 33) El techo ya no es una recta: la bóveda de
+                // Sim/SimLevelBuilder.TallarBoveda sube hasta 12 celdas sobre
+                // `CuartoY1` y las claraboyas ciegas otras 8. La pared del
+                // cuarto tiene que llegar hasta arriba de todo eso o la
+                // bóveda se vería contra la roca profunda -- un agujero negro
+                // justo donde queremos que el ojo suba.
+                bool filaCuarto = celdaY >= SimLevelBuilder.CuartoY0 - 2 && celdaY <= TechoMaximo + 2;
+                // (playtest 33, TERCERA PASADA -- visto jugando) EL VESTÍBULO
+                // DE LA TOLVA. Con el Ensayo del Maestro mudado al fondo del
+                // cuarto, la boca de la Tolva entró en el mismo encuadre por
+                // primera vez... y se veía como un RECTÁNGULO NEGRO PURO
+                // pegado a un taller entero de sillería: leído como textura
+                // que falta, no como un pozo de entrega. La causa: el pozo
+                // (`ChuteMouth*`, celdas vacías) cae FUERA de `CuartoX0..X1`,
+                // así que este método le pintaba detrás "roca profunda", que
+                // es casi negra. Ahora el vestíbulo (pasillo + pozo) recibe la
+                // misma sillería que el cuarto, un punto más oscura: sigue
+                // siendo el AFUERA, pero es un afuera construido.
+                bool filaVestibulo = celdaY >= SimLevelBuilder.ChuteMouthY0 - 6 && celdaY <= SimLevelBuilder.ChuteMouthY1 + 8;
+                float tCuarto = Mathf.Clamp01((celdaY - SimLevelBuilder.CuartoY0) / (float)(SimLevelBuilder.CuartoY1 - SimLevelBuilder.CuartoY0));
                 Color paredFila = Color.Lerp(paredBaja, paredAlta, Mathf.Pow(tCuarto, 0.75f));
 
                 for (int x = 0; x < TexW; x++)
                 {
                     float tx = x / (float)(TexW - 1);
                     int celdaX = x / Escala;
-                    bool enCuarto = filaCuarto
+                    bool enSala = filaCuarto
                         && celdaX >= SimLevelBuilder.CuartoX0 - 2 && celdaX <= SimLevelBuilder.CuartoX1 + 2;
+                    bool enVestibulo = !enSala && filaVestibulo
+                        && celdaX > SimLevelBuilder.CuartoX1 + 2 && celdaX <= SimLevelBuilder.ChuteMouthX1 + 3;
+                    bool enCuarto = enSala || enVestibulo;
 
                     Color c;
                     if (enCuarto)
                     {
-                        c = paredFila;
+                        c = enVestibulo ? paredFila * 0.72f : paredFila;
 
-                        // --- SILLERÍA de la pared: piezas de 9x5 celdas a
-                        // soga corrida (hiladas alternas desplazadas media
-                        // pieza), con junta fina y BISEL -- el mismo lenguaje
-                        // de canto claro arriba / oscuro abajo que usa
-                        // SimRenderer.ComputeCellColor para la piedra de la
-                        // sim, para que fondo y primer plano rimen en vez de
-                        // contradecirse (lección del playtest 7).
-                        const int piezaW = 9 * Escala, piezaH = 5 * Escala;
+                        // --- SILLERÍA de la pared, a soga corrida (hiladas
+                        // alternas desplazadas media pieza), con junta fina y
+                        // BISEL -- el mismo lenguaje de canto claro arriba /
+                        // oscuro abajo que usa SimRenderer.ComputeCellColor
+                        // para la piedra de la sim, para que fondo y primer
+                        // plano rimen en vez de contradecirse (lección del
+                        // playtest 7).
+                        //
+                        // (playtest 33, "aquí puedes ensayar MÁS TEXTURAS en
+                        // vez de solo techo plano") EL APAREJO CAMBIA POR
+                        // ZONA. Antes había UNA pieza de 9x5 en las 218
+                        // celdas del cuarto: correcto cuando el cuarto era un
+                        // pasillo, pero ahora tiene zonas con oficios
+                        // distintos y una pared que no cambia nunca las
+                        // aplana a todas. Tres aparejos (ver AparejoDeZona):
+                        // sillar grande y ahumado en el fuego, hilada baja y
+                        // apretada en la fuerza, sillar noble y frío en la
+                        // observación/atrio. Sigue siendo la MISMA pared --
+                        // el tono base no cambia, solo el despiece y la
+                        // pátina -- porque la pared tiene que RETROCEDER.
+                        AparejoDeZona(celdaX, out int piezaAnchoC, out int piezaAltoC, out float patina, out float frio);
+                        int piezaW = piezaAnchoC * Escala, piezaH = piezaAltoC * Escala;
                         int hilada = y / piezaH;
                         int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
                         int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
                         int ly = y % piezaH;
                         uint hp = HashRoca((x + desfase) / piezaW, hilada, 5171u);
-                        float tono = 1f + ((hp & 63u) / 63f - 0.5f) * 0.18f; // variación de tono por pieza (pátina de la pared).
+                        float tono = 1f + ((hp & 63u) / 63f - 0.5f) * patina; // variación de tono por pieza (pátina de la pared).
                         c *= tono;
+                        // Sesgo de temperatura de color por zona: el fuego
+                        // curte la piedra, la observación la deja fría. ±4%,
+                        // por debajo del umbral en que se nota como "otro
+                        // color" y por encima del que hace falta para que dos
+                        // tramos contiguos NO parezcan el mismo muro.
+                        c.r *= 1f - frio * 0.05f;
+                        c.b *= 1f + frio * 0.07f;
 
                         if (lx == 0 || ly == 0) c *= 0.55f;                       // junta de mortero.
                         else if (ly >= piezaH - 2) c *= 1.16f;                    // canto superior: le da la luz.
                         else if (ly <= 2) c *= 0.80f;                             // canto inferior: en sombra.
+
+                        // --- (playtest 33) LAS DOVELAS DE LA BÓVEDA: por
+                        // encima del arranque, la junta VERTICAL deja de ser
+                        // vertical y se abre en abanico hacia la clave de su
+                        // tramo. Es la diferencia entre "una pared que sigue
+                        // hacia arriba" y "una bóveda": un muro tiene juntas a
+                        // plomo, una bóveda las tiene radiales.
+                        if (celdaY > ArranqueBoveda)
+                        {
+                            int centro = CentroDeTramo(celdaX);
+                            int subida = celdaY - ArranqueBoveda;
+                            // Desplazamiento proporcional a la altura sobre el
+                            // arranque: la junta se inclina hacia la clave.
+                            int sesgo = ((celdaX - centro) * subida) / 26;
+                            int lxDov = (((x - sesgo * Escala) % piezaW) + piezaW) % piezaW;
+                            if (lxDov < Escala) c *= 0.62f;
+                        }
+
+                        // --- (playtest 33) LAS VIGAS DE PIEDRA: dos bandas
+                        // horizontales que cruzan el cuarto entero, una a la
+                        // altura de las baldas medias y otra en el arranque de
+                        // la bóveda. Van en el FONDO a propósito (no son
+                        // celdas de la sim): dan escala y horizontal a una
+                        // sala que creció 22 celdas de golpe, sin poner ni un
+                        // obstáculo en el volumen por donde se vuela. Canto
+                        // claro arriba, sombra proyectada debajo -- sin la
+                        // sombra una viga es una raya.
+                        c *= FactorViga(celdaY);
 
                         // --- NICHOS: hornacinas de sombra excavadas en la
                         // pared, entre estación y estación (posiciones
@@ -320,8 +555,10 @@ namespace Alkahest.Game
                         int sobreSuelo = celdaY - (SimLevelBuilder.CuartoY0 + 3);
                         if (sobreSuelo >= 0 && sobreSuelo < 5) c *= Mathf.Lerp(0.62f, 1f, sobreSuelo / 5f);
 
-                        // --- CORNISA: dos celdas bajo el techo, con luz.
-                        if (celdaY >= SimLevelBuilder.CuartoY1 - 2) c *= 1.25f;
+                        // --- CORNISA: la imposta del arranque de la bóveda
+                        // (playtest 33: antes iba pegada a `CuartoY1`, que ya
+                        // no es el techo sino la línea de arranque).
+                        if (celdaY >= ArranqueBoveda - 1 && celdaY <= ArranqueBoveda + 1) c *= 1.25f;
 
                         // --- EL REBOTE DE LA FRAGUA: la pared detrás del
                         // crisol recibe su luz. Es el mismo principio que el
@@ -334,16 +571,38 @@ namespace Alkahest.Game
                         // (Game/MaquinariaSprites.Luz), que sí saben si el
                         // fuego está encendido; esto solo dice "aquí, en esta
                         // pared, siempre ha habido un fuego delante".
-                        float dfx = (celdaX - (SimLevelBuilder.CrisolX + 18)) / 42f;
-                        float dfy = (celdaY - (SimLevelBuilder.CuartoY0 + 10)) / 30f;
+                        //
+                        // (playtest 33, "que no parezca un STICKER") El rebote
+                        // se RECORTA a la altura del horno. Antes su elipse
+                        // (ry=30 desde CuartoY0+10) llegaba a y=208: 17 celdas
+                        // por encima de la cornisa real del Crisol (y=191), o
+                        // sea que teñía de naranja pared que ese fuego no
+                        // puede alcanzar. Ahora ry=17 y centro en +8: la
+                        // mancha muere justo donde muere el horno. Mismo
+                        // criterio que la luz de muro de Game/Crisol.cs, pero
+                        // en el fondo en vez de en el aparato.
+                        float dfx = (celdaX - (SimLevelBuilder.CrisolX + 6)) / 30f;
+                        float dfy = (celdaY - (SimLevelBuilder.CuartoY0 + 8)) / 17f;
                         float d2 = dfx * dfx + dfy * dfy;
                         if (d2 < 1f)
                         {
                             float k = (1f - d2) * (1f - d2);
-                            c.r *= 1f + 0.42f * k;
-                            c.g *= 1f + 0.26f * k;
-                            c.b *= 1f + 0.10f * k;
+                            c.r *= 1f + 0.40f * k;
+                            c.g *= 1f + 0.24f * k;
+                            c.b *= 1f + 0.09f * k;
                         }
+
+                        // --- (playtest 33) LAS CLARABOYAS FALSAS: luz fría
+                        // que cae por los pozos ciegos de
+                        // Sim/SimLevelBuilder.ClaraboyaColumnas. Es la ÚNICA
+                        // luz del cuarto que no tiene una máquina detrás, y
+                        // por eso es la única que se puede permitir venir de
+                        // arriba -- tiene un dueño físico igual: el pozo está
+                        // tallado de verdad en la piedra, se ve entrar por él.
+                        // Dos de las tres caen sobre la alcoba de observación:
+                        // los instrumentos tienen su propia temperatura de
+                        // color, opuesta a la de la fragua.
+                        AplicarClaraboya(ref c, celdaX, celdaY);
                     }
                     else
                     {
@@ -390,6 +649,152 @@ namespace Alkahest.Game
             go.transform.position = Vector3.zero;
         }
 
+        // =================================================================
+        // (playtest 33) LA SALA CRECIÓ: BÓVEDA, TEXTURAS POR ZONA, VIGAS Y
+        // CLARABOYAS
+        // =================================================================
+
+        /// <summary>
+        /// Fila hasta la que la pared del cuarto tiene que seguir pintándose:
+        /// el techo recto (`CuartoY1`) más la flecha máxima de la bóveda (12)
+        /// más el pozo de la claraboya (8) más holgura. Derivado del plano
+        /// con un margen generoso en vez de exportar dos constantes más desde
+        /// SimLevelBuilder: pintar 8 filas de sillería de más es gratis (la
+        /// roca profunda las taparía igual en el sim) y equivocarse por
+        /// defecto deja un agujero negro visible en la clave.
+        /// </summary>
+        private const int TechoMaximo = SimLevelBuilder.CuartoY1 + 24;
+
+        /// <summary>La línea de ARRANQUE de la bóveda: el techo recto que talla `ExcavateCuarto`. Por debajo, muro; por encima, casquete.</summary>
+        private const int ArranqueBoveda = SimLevelBuilder.CuartoY1;
+
+        /// <summary>
+        /// (playtest 33) Tres aparejos, uno por familia de oficio -- ver el
+        /// comentario en la pasada de sillería. Devuelve el despiece (pieza en
+        /// celdas), la fuerza de la pátina por pieza y un sesgo de temperatura
+        /// de color (-1 cálido .. +1 frío).
+        /// Las fronteras son las MISMAS costuras que usan las pilastras de
+        /// Sim/SimLevelBuilder.PilastraColumnas (224 y 272), para que el
+        /// cambio de textura caiga siempre detrás de un nervio de piedra y
+        /// nunca a mitad de un lienzo liso -- si no, se ve el corte.
+        /// </summary>
+        private static void AparejoDeZona(int celdaX, out int piezaAnchoC, out int piezaAltoC, out float patina, out float frio)
+        {
+            if (celdaX < 224)
+            {
+                // HÚMEDA + FUEGO: sillar GRANDE, muy curtido (hollín, sales
+                // del agua). La zona más vieja del taller.
+                piezaAnchoC = 11; piezaAltoC = 6; patina = 0.26f; frio = -1f;
+            }
+            else if (celdaX < 272)
+            {
+                // FUERZA: hilada BAJA y apretada, casi ladrillo -- muro de
+                // contención, el que aguanta los golpes de la Prensa.
+                piezaAnchoC = 7; piezaAltoC = 3; patina = 0.14f; frio = 0f;
+            }
+            else
+            {
+                // OBSERVACIÓN + ATRIO: sillar NOBLE, ancho y regular, poco
+                // pátina -- la parte cuidada de la casa, la que se enseña.
+                piezaAnchoC = 14; piezaAltoC = 7; patina = 0.10f; frio = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Centro (clave) del tramo de bóveda al que pertenece esta columna --
+        /// lo necesita el abanico de dovelas. Los bordes de tramo son las
+        /// pilastras del plano más las dos paredes: exactamente la misma
+        /// partición que usa `SimLevelBuilder.TallarBoveda`, leída de la misma
+        /// tabla pública (regla 39: la medida se lee, no se copia).
+        /// </summary>
+        private static int CentroDeTramo(int celdaX)
+        {
+            int izq = SimLevelBuilder.CuartoX0;
+            int der = SimLevelBuilder.CuartoX1;
+            var cols = SimLevelBuilder.PilastraColumnas;
+            for (int i = 0; i < cols.Length; i++)
+            {
+                if (cols[i] <= celdaX) izq = cols[i];
+                else { der = cols[i]; break; }
+            }
+            return (izq + der) / 2;
+        }
+
+        /// <summary>
+        /// (playtest 33) LAS VIGAS DE PIEDRA del fondo: dos bandas
+        /// horizontales con canto claro y sombra proyectada debajo. Devuelve
+        /// un multiplicador de brillo.
+        /// </summary>
+        private static float FactorViga(int celdaY)
+        {
+            for (int i = 0; i < _vigasY.Length; i++)
+            {
+                int v = _vigasY[i];
+                int d = celdaY - v;
+                // (2ª pasada) Contraste subido: 1.30/0.80 se perdía contra la
+                // pátina por pieza de la sillería (que ya varía ±13%), así que
+                // las vigas no separaban nada. Una viga tiene que leerse
+                // ENTERA de un extremo al otro del cuarto o no da la escala
+                // que se le pide.
+                if (d == 0 || d == 1) return 1.55f;      // el canto alto de la viga, iluminado.
+                if (d >= -3 && d <= -1) return 0.66f;    // el frente de la viga, en sombra.
+                if (d >= -7 && d <= -4) return Mathf.Lerp(0.58f, 0.95f, (d + 7) / 4f); // la sombra que proyecta.
+            }
+            return 1f;
+        }
+
+        /// <summary>
+        /// Alturas de las dos vigas. La primera pasa por encima de la
+        /// coronación de todas las estaciones (la más alta, la Columna, remata
+        /// en y=209) y por debajo de las baldas medias; la segunda marca el
+        /// arranque de la bóveda. Números del PLANO, no fracciones del lienzo
+        /// -- misma disciplina que las vigas del taller clásico.
+        /// </summary>
+        private static readonly int[] _vigasY = { SimLevelBuilder.CuartoY0 + 46, SimLevelBuilder.CuartoY1 - 8 };
+
+        /// <summary>
+        /// (playtest 33) EL HAZ FRÍO DE LAS CLARABOYAS. ADITIVO y muy tenue:
+        /// un cono que se abre hacia abajo desde el pozo tallado, con la
+        /// intensidad cayendo con la distancia al eje y con la profundidad.
+        /// Azulado (la luz de fuera es fría) para que contraste con todo lo
+        /// demás del cuarto, que es fuego.
+        ///
+        /// Se aplica SOLO sobre la pared del cuarto (el llamante ya está
+        /// dentro de ese `if`), así que un haz nunca se derrama sobre la roca
+        /// profunda ni sobre el pasillo de la Tolva.
+        /// </summary>
+        private static void AplicarClaraboya(ref Color c, int celdaX, int celdaY)
+        {
+            var cols = SimLevelBuilder.ClaraboyaColumnas;
+            for (int i = 0; i < cols.Length; i++)
+            {
+                int dx = celdaX - cols[i];
+                if (dx < 0) dx = -dx;
+
+                // El cono: 3 celdas de media anchura arriba, abriéndose ~1
+                // celda cada 4 de caída, hasta 40 celdas por debajo de la
+                // clave -- más allá, la luz de un tragaluz ya no se distingue.
+                int caida = ArranqueBoveda + 10 - celdaY;
+                if (caida < -12 || caida > 40) continue;
+                float prof = Mathf.Clamp01(caida / 40f);
+                float media = SimLevelBuilder.ClaraboyaAncho * 0.5f + 2f + caida * 0.25f;
+                if (dx > media) continue;
+
+                float lateral = 1f - (dx / media) * (dx / media);
+                // (2ª pasada, visto jugando) x3. Con 0.030/0.042/0.062 el
+                // aporte máximo era ~0.02 sobre una pared de 0.10-0.17: un 15%
+                // que, con la viñeta y el tinte global encima, no llegaba a
+                // pantalla -- las tres claraboyas eran INVISIBLES. La luz de
+                // un tragaluz en una cueva es lo más claro del cuadro después
+                // del fuego, no un matiz.
+                float k = lateral * Mathf.Lerp(0.34f, 0.02f, Mathf.Pow(prof, 0.7f));
+                if (k <= 0f) continue;
+                c.r += 0.090f * k;
+                c.g += 0.126f * k;
+                c.b += 0.185f * k;
+            }
+        }
+
         /// <summary>
         /// (playtest 31) LAS HORNACINAS. Cuatro nichos de sombra excavados en
         /// la pared del cuarto, en los HUECOS entre estaciones (derivados de
@@ -415,8 +820,17 @@ namespace Alkahest.Game
             // la de arriba -- de la coronación de las máquinas al techo --,
             // así que ahí suben. Es también donde funcionan mejor: una
             // hornacina alta se lee como respiradero de la cueva.
-            int y0 = SimLevelBuilder.CuartoY0 + 44;
-            int y1 = SimLevelBuilder.CuartoY0 + 62;
+            // (playtest 33) Con el techo 22 celdas más alto, la banda de
+            // pared LIBRE (de la coronación de las máquinas al arranque de la
+            // bóveda) se movió: antes +44..+62 era "arriba del todo", ahora es
+            // media pared. Sube a +46..+64, que sigue siendo la franja entre
+            // la coronación de la Columna (y=209 = CuartoY0+41) y la primera
+            // viga de piedra (CuartoY0+46)... y por eso las hornacinas van
+            // JUSTO ENCIMA de esa viga: una hornacina apoyada en una imposta
+            // es arquitectura; una hornacina flotando en medio de un lienzo,
+            // un rectángulo.
+            int y0 = SimLevelBuilder.CuartoY0 + 49;
+            int y1 = SimLevelBuilder.CuartoY0 + 67;
 
             if (celdaY < y0 || celdaY > y1) return 1f;
 
@@ -455,7 +869,14 @@ namespace Alkahest.Game
         // hornacina y pilastra en la misma columna se estorbaban. Ahora se
         // alternan -- pilastra, hornacina, pilastra, hornacina -- que es el
         // ritmo de una crujía de verdad.
-        private static readonly int[] _centrosNicho = { 209, 264, 321 };
+        // (playtest 33) Recolocadas a los PUNTOS MEDIOS de las costuras
+        // nuevas (PilastraColumnas = 176/224/272/308/343): 200 entre fuego y
+        // fuerza, 248 sobre la Prensa, 358 en el atrio del Maestro. La del
+        // tramo 272-308 se retira a propósito -- ahí manda la claraboya de la
+        // alcoba (x=290) y dos huecos oscuros compitiendo con un haz de luz en
+        // el mismo lienzo es exactamente el ruido que la tercera pasada del
+        // playtest 31 vino a quitar.
+        private static readonly int[] _centrosNicho = { 200, 248, 358 };
 
         /// <summary>
         /// (playtest 31) Hash entero estable para la veta y el grano de la

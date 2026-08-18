@@ -219,6 +219,47 @@ namespace Alkahest.Game
         private readonly bool[] _avisoBautizoMostrado = new bool[MaterialId.Count];
         private float _avisoBautizoHasta;
 
+        // ---------------------------------------------------------------------------------
+        // (playtest 32, encargo C) "ALGO NUEVO": Cesar, jugando el 32 --
+        // "cuando descubro algo, debe salirme en pantalla la opción de bautizarlo, porque
+        // si no no me entero". El globo de arriba (DrawAvisoBautizo) es discreto A
+        // PROPÓSITO y solo aparece si el jugador vuelve a APUNTAR/CARGAR la sustancia --
+        // si el descubrimiento ocurrió por sondeo pasivo (PollFlask/PollHover) y el
+        // jugador sigue a lo suyo, puede no verlo nunca. Este es el aviso GRANDE, en el
+        // MOMENTO EXACTO del descubrimiento: reutiliza la MISMA cola/panel que "LEY
+        // DESCUBIERTA"/"¡NUEVO PROCEDIMIENTO!" (ver EncolarLeyBanner/_leyBannerCola*),
+        // así que "cola si se descubren varios" sale gratis -- es la misma FIFO. El
+        // gate "un solo aviso por material" es el MISMO `_avisoBautizoMostrado` que ya
+        // usaba el globo -- las dos vías comparten el flag a propósito: si este banner
+        // ya invitó a bautizar un material, el globo no vuelve a insistir (y viceversa).
+        // ---------------------------------------------------------------------------------
+        private const string TituloDescubrimiento = "ALGO NUEVO";
+
+        /// <summary>
+        /// ÚNICO punto de entrada para poner `_discovered[matId]` a true desde fuera de
+        /// <see cref="Bautizar"/> (que ya lo hace como efecto colateral de nombrar, sin
+        /// invitación posible: si lo acabas de bautizar no hace falta invitarte a
+        /// bautizarlo). Detecta la TRANSICIÓN false-&gt;true -- sin ella no hay "momento
+        /// de descubrir" que anunciar -- y si el material es innominado y todavía no se
+        /// le ha ofrecido bautizo por ninguna vía, encola "ALGO NUEVO".
+        /// </summary>
+        private void MarcarDescubierto(byte matId)
+        {
+            if (matId == MaterialId.Empty || matId >= MaterialId.Count) return;
+            if (_discovered[matId]) return; // ya lo sabíamos -- sin transición no hay nada que anunciar.
+            _discovered[matId] = true;
+            if (!NecesitaBautizo(matId)) return; // vocabulario de taller o ya tiene nombre (regla 13/17): nada que anunciar.
+            if (_avisoBautizoMostrado[matId]) return; // ya se le ofreció bautizo por otra vía -- un solo aviso por material.
+            _avisoBautizoMostrado[matId] = true;
+            EncolarLeyBanner(ConstruirTextoDescubrimiento(matId), matId, TituloDescubrimiento);
+        }
+
+        /// <summary>Texto del banner "ALGO NUEVO": describe por ORIGEN/EFECTO (RespaldoLey, regla 13/17 -- nunca la identidad interna de algo que el HUD sigue enseñando como "???"). Construido UNA vez al descubrir, nunca en OnGUI.</summary>
+        private static string ConstruirTextoDescubrimiento(byte matId)
+        {
+            return "Has descubierto " + RespaldoLey(matId) + ". Pulsa T para bautizarlo.";
+        }
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, Flask flask)
         {
@@ -449,7 +490,7 @@ namespace Alkahest.Game
                 _observaciones[matId] = observacion;
             }
 
-            _discovered[matId] = true; // presenciar una propiedad implica conocer el material.
+            MarcarDescubierto(matId); // (playtest 32) presenciar una propiedad implica conocer el material -- y, si es la primera vez, anuncia "ALGO NUEVO".
             // (playtest 25, FIX) Sube SOLO cuando el texto cambió de verdad
             // (los `return` de arriba ya cortaron los no-op) -- ver
             // ObservacionesVersion. Sin este contador, registrar una
@@ -641,7 +682,7 @@ namespace Alkahest.Game
             for (int m = 1; m < MaterialId.Count; m++)
             {
                 if (_discovered[m]) continue;
-                if (_flask.GetCount((byte)m) > 0) _discovered[m] = true;
+                if (_flask.GetCount((byte)m) > 0) MarcarDescubierto((byte)m);
             }
         }
 
@@ -688,7 +729,7 @@ namespace Alkahest.Game
             _hoverTimer += Time.deltaTime;
             if (_hoverTimer >= HoverDiscoverSeconds)
             {
-                _discovered[matId] = true;
+                MarcarDescubierto(matId); // (playtest 32) antes ponía el flag directo cada frame de hover -- MarcarDescubierto ya filtra la transición, así que esto deja de reevaluar NecesitaBautizo en cada frame que sigas mirando.
             }
         }
 
@@ -884,7 +925,16 @@ namespace Alkahest.Game
         {
             if (_leyBannerActual != null)
             {
-                if (Time.time < _leyBannerHasta) return;
+                // (playtest 32, encargo C) "ALGO NUEVO" desaparece EN CUANTO
+                // el jugador bautiza esa sustancia, aunque no hayan pasado
+                // los ~6s de LeyBannerDuracionSeg -- ya cumplió su propósito
+                // ("hasta que bautice" del encargo). Solo aplica a este
+                // título: "LEY DESCUBIERTA"/"¡NUEVO PROCEDIMIENTO!" no
+                // dependen de que nada se nombre, se quedan su duración
+                // completa como siempre.
+                bool yaBautizado = _leyBannerActualTitulo == TituloDescubrimiento
+                    && _leyBannerActualMat != MaterialId.Empty && !NecesitaBautizo(_leyBannerActualMat);
+                if (!yaBautizado && Time.time < _leyBannerHasta) return;
                 // (fix playtest 10) El banner que acaba de terminar YA enseñó la ley:
                 // este es el momento justo para encadenar "¿cómo lo llamáis?" -- ver
                 // doc de DispararAvisoBautizoTrasLey.
@@ -904,7 +954,15 @@ namespace Alkahest.Game
         {
             if (DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
-            bool hayLey = _leyBannerActual != null;
+            // (playtest 32, encargo C) "ALGO NUEVO" respeta EscribiendoTexto
+            // (el resto de banners de esta cola no lo hacía, y no hay motivo
+            // para cambiarles el comportamiento establecido): invita a pulsar
+            // T, así que mostrarlo justo cuando un campo de texto YA se comió
+            // esa tecla es lo único que no tiene sentido. No se pierde -- solo
+            // no se DIBUJA mientras se escribe; reaparece en cuanto el campo
+            // se cierra, hasta que caduque o el jugador bautice.
+            bool ocultarPorTexto = _leyBannerActualTitulo == TituloDescubrimiento && UiStyles.EscribiendoTexto;
+            bool hayLey = _leyBannerActual != null && !ocultarPorTexto;
             // El aviso de bautizo nunca compite por atención con el banner de ley (que
             // ya cubre el mismo centro-superior de pantalla) ni con el campo de texto
             // abierto -- reaparecerá solo (DispararAvisoBautizoTrasLey) en cuanto el
@@ -923,6 +981,26 @@ namespace Alkahest.Game
         /// El texto ya viene cacheado (ConstruirTextoLey): aquí solo se mide/dibuja, igual
         /// que hace Game/HintSystem.cs con su pista activa.
         /// </summary>
+        // (playtest 32, encargo C) "Cinzel para el titular si UiStyles expone las
+        // fuentes": SÍ las expone (UiStyles.FuenteTitulos, público desde el playtest
+        // 31) pero solo para "ALGO NUEVO" -- "LEY DESCUBIERTA"/"¡NUEVO PROCEDIMIENTO!"
+        // ya llevan su Alerta de siempre (Alegreya) y no hay motivo para tocarles el
+        // aspecto establecido. Copia de UiStyles.Alerta con la fuente cambiada,
+        // reconstruida SOLO cuando cambia Screen.height -- mismo criterio de caché que
+        // UiStyles.Preparar (nunca un GUIStyle nuevo por frame).
+        private static GUIStyle _tituloDescubrimientoEstilo;
+        private static int _tituloDescubrimientoAltura = -1;
+
+        private static GUIStyle EstiloTituloDescubrimiento()
+        {
+            if (_tituloDescubrimientoEstilo != null && _tituloDescubrimientoAltura == Screen.height)
+                return _tituloDescubrimientoEstilo;
+            _tituloDescubrimientoAltura = Screen.height;
+            _tituloDescubrimientoEstilo = UiStyles.Alerta != null ? new GUIStyle(UiStyles.Alerta) : new GUIStyle();
+            if (UiStyles.FuenteTitulos != null) _tituloDescubrimientoEstilo.font = UiStyles.FuenteTitulos;
+            return _tituloDescubrimientoEstilo;
+        }
+
         private void DrawLeyBanner()
         {
             // (playtest 25) Antes literal "LEY DESCUBIERTA": ahora la misma
@@ -931,13 +1009,14 @@ namespace Alkahest.Game
             // de la cola en vez de estar fijo.
             string titulo = _leyBannerActualTitulo ?? "LEY DESCUBIERTA";
             string texto = _leyBannerActual;
+            GUIStyle estiloTitulo = titulo == TituloDescubrimiento ? EstiloTituloDescubrimiento() : UiStyles.Alerta;
 
             float pad = UiStyles.S(14f);
             float acento = UiStyles.S(4f);
             float ancho = Mathf.Clamp(Screen.width - UiStyles.S(160f), UiStyles.S(360f), UiStyles.S(640f));
             float interior = ancho - pad * 2f - acento;
 
-            float altoTitulo = UiStyles.Alto(UiStyles.Alerta, titulo, interior);
+            float altoTitulo = UiStyles.Alto(estiloTitulo, titulo, interior);
             float altoCuerpo = UiStyles.Alto(UiStyles.CuerpoCentrado, texto, interior);
             float alto = pad + altoTitulo + UiStyles.S(4f) + altoCuerpo + pad;
 
@@ -948,7 +1027,7 @@ namespace Alkahest.Game
             UiStyles.Panel(panel, UiStyles.TintaFuerte, UiStyles.Oro);
             UiStyles.Rellenar(new Rect(panel.x, panel.y, acento, panel.height), UiStyles.Oro);
 
-            GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTitulo), titulo, UiStyles.Alerta);
+            GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTitulo), titulo, estiloTitulo);
             GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoCuerpo, interior, altoCuerpo), texto, UiStyles.CuerpoCentrado);
         }
 

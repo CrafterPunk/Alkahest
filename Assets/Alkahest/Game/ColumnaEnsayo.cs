@@ -81,6 +81,14 @@ namespace Alkahest.Game
         /// <summary>Cuántas capas distintas nombra la lectura como mucho: tres es lo que cabe en una frase que se lee de un vistazo.</summary>
         private const int MaxCapasLeidas = 3;
 
+        // -----------------------------------------------------------------
+        // SUELO SOBERANO (playtest 32, fix "el suelo bajo la columna tiene
+        // una formita rara, no es plana" -- mismo patrón que Game/Crisol.cs,
+        // ver sus docblocks de AplanarPlataforma/RestaurarSueloBase).
+        // -----------------------------------------------------------------
+        private const int PlataformaMargen = 2;
+        private const int PlataformaProfundidad = 6;
+
         private AlkahestSim _sim;
         private Transform _player;
         private SubstanceKnowledge _conocimiento;
@@ -146,7 +154,7 @@ namespace Alkahest.Game
             _conocimiento = conocimiento;
 
             _fusteX0 = SimLevelBuilder.ColumnaX0;
-            _baseY = SimLevelBuilder.CuartoY0 + 2;
+            _baseY = SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.ColumnaX0); // (playtest 33) cota por zona -- ver BaseYDeEstacion.
 
             RecalcularRegion();
             BuildVisual();
@@ -154,7 +162,12 @@ namespace Alkahest.Game
             MachineFocus.Registrar(this);
             // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
             // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
-            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
+            // (playtest 32, FIX) `TallarEnPlano` YA registró este MISMO rect
+            // (para que AdornarCuarto lo viera al tallar terrazas, ver
+            // SimLevelBuilder.HallarObraExacta) -- aquí se RECLAMA ese handle
+            // en vez de crear uno nuevo huérfano.
+            int handleExistente = SimLevelBuilder.HallarObraExacta(_outX0, _outY0, _outX1, _outY1);
+            _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -214,10 +227,41 @@ namespace Alkahest.Game
         private static int VueloEnFila(int i) =>
             (SimLevelBuilder.ColumnaBocaVuelo * (i + 1) + SimLevelBuilder.ColumnaBocaFilas / 2) / SimLevelBuilder.ColumnaBocaFilas;
 
+        /// <summary>
+        /// (playtest 32, encargo A) Mismo AplanarPlataforma que Game/Crisol.cs
+        /// -- con UNA diferencia de un renglón, a propósito: a diferencia de
+        /// Crisol/Prensa/BancoChispa (que SÍ tallan su propia fila `baseY`
+        /// como "suelo del recinto", y por eso pueden vaciarla aquí sabiendo
+        /// que su tallado la va a re-solidificar dos líneas después), la
+        /// Columna JAMÁS toca la fila `baseY` -- es, literalmente, la losa
+        /// compartida del cuarto (ver el docblock de <see cref="BorrarEnCaliente"/>,
+        /// "NINGUNA fila del fuste toca la losa compartida"). Si esta
+        /// plataforma la vaciara igual que las otras tres, nadie la volvería
+        /// a rellenar y la Columna se quedaría flotando sobre un agujero
+        /// -- exactamente el tipo de "formita rara" que reportó Cesar, solo
+        /// que peor. Por eso aquí el colchón de piedra INCLUYE `baseY` y el
+        /// vaciado empieza en `baseY+1`, donde de verdad arranca el fuste
+        /// (`h.Y0`).
+        /// </summary>
+        private static void AplanarPlataforma(CellGrid grid, int outX0, int outX1, int baseY, int outY1)
+        {
+            int x0 = outX0 - PlataformaMargen;
+            int x1 = outX1 + PlataformaMargen;
+            for (int x = x0; x <= x1; x++)
+            {
+                for (int y = baseY - PlataformaProfundidad; y <= baseY; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
+                for (int y = baseY + 1; y <= outY1; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+        }
+
         /// <summary>Talla el fuste + el abocinado + las marcas de nivel sobre el CellGrid del plano. Construcción de nivel: `SetCell`, no `PaintStable` (regla 29 es para runtime). Mudado aquí desde SimLevelBuilder.BuildColumnaEnsayo en el playtest 29 -- ver el docblock de la clase.</summary>
         public static void TallarEnPlano(CellGrid grid, int x0, int baseY)
         {
             var h = Calcular(x0, baseY);
+
+            AplanarPlataforma(grid, h.OutX0, h.OutX1, baseY, h.OutY1); // (playtest 32) SIEMPRE lo primero.
 
             // ---- El FUSTE: dos muros de PIEDRA de ColumnaMuro celdas.
             for (int y = h.Y0; y <= h.YTope; y++)
@@ -258,15 +302,35 @@ namespace Alkahest.Game
                 if (CellGrid.InBounds(h.X1 + 1, y)) grid.SetCell(h.X1 + 1, y, MaterialId.Stone);
             }
 
-            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
-            // hace la INSTANCIA en Init (ver `_handleObra`); este método es
-            // estático y corre antes de que exista ninguna instancia.
+            // (playtest 29) Este método es estático y corre antes de que
+            // exista ninguna instancia. (playtest 32, FIX) Por eso SÍ hace
+            // falta registrar aquí: SimLevelBuilder.AdornarCuarto corre
+            // dentro del mismo BuildCuartoIntimo, DESPUÉS de este tallado
+            // pero ANTES de que exista ninguna instancia -- si el registro
+            // esperara a `Init` (otro frame), AdornarCuarto tallaría
+            // terrazas como si la Columna no existiera. `Init` RECLAMA este
+            // mismo handle (ver SimLevelBuilder.HallarObraExacta).
+            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
+        }
+
+        /// <summary>Equivalente EN CALIENTE de <see cref="AplanarPlataforma"/> -- ver su docblock para la diferencia con Crisol/Prensa/BancoChispa (la fila `_baseY` va en el colchón de piedra, no en el vaciado).</summary>
+        private void AplanarPlataformaCaliente()
+        {
+            int x0 = _outX0 - PlataformaMargen;
+            int x1 = _outX1 + PlataformaMargen;
+            int ancho = x1 - x0 + 1;
+            for (int y = _baseY - PlataformaProfundidad; y <= _baseY; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+            _sim.PaintRect(x0, _baseY + 1, ancho, _outY1 - (_baseY + 1) + 1, MaterialId.Empty);
         }
 
         /// <summary>Misma talla que <see cref="TallarEnPlano"/> pero EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
         private void TallarEnCaliente()
         {
             var h = Calcular(_fusteX0, _baseY);
+
+            AplanarPlataformaCaliente(); // (playtest 32) SIEMPRE lo primero.
 
             for (int y = h.Y0; y <= h.YTope; y++)
             {
@@ -337,9 +401,22 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>(playtest 32, fix "rastro de bedrock") Ver el docblock gemelo en Game/Crisol.cs (`RestaurarSueloBase`) -- aquí `h.OutY0` (=baseY) entra en el rango a limpiar porque, a diferencia de Crisol/Prensa/BancoChispa, esta estación lo trata como parte del COLCHÓN de piedra (ver AplanarPlataforma), no como su propio suelo de recinto.</summary>
+        private void RestaurarSueloBase(Huella h)
+        {
+            int sueloBase = SimLevelBuilder.CuartoY0 + SimLevelBuilder.WallThickness - 1;
+            int x0 = h.OutX0 - PlataformaMargen;
+            int x1 = h.OutX1 + PlataformaMargen;
+            for (int y = sueloBase + 1; y <= h.OutY0; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+        }
+
         public void Reposicionar(Vector2Int anclaCelda)
         {
-            BorrarEnCaliente(Calcular(_fusteX0, _baseY)); // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
+            var huellaVieja = Calcular(_fusteX0, _baseY);
+            BorrarEnCaliente(huellaVieja); // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
+            RestaurarSueloBase(huellaVieja); // (playtest 32) limpia cualquier pedestal elevado que esta instancia hubiera dejado ahí.
 
             _fusteX0 += anclaCelda.x - _outX0;
             _baseY = anclaCelda.y;

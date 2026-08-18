@@ -98,6 +98,14 @@ namespace Alkahest.Game
         /// <summary>Celdas de aire entre el muro del lecho y la cara interior de cada jamba.</summary>
         public const int LechoAJamba = 1;
 
+        // -----------------------------------------------------------------
+        // SUELO SOBERANO (playtest 32, mismo patrón que Game/Crisol.cs -- ver
+        // sus docblocks de AplanarPlataforma/RestaurarSueloBase para el
+        // porqué completo, "aparece un poco enterrada" / "rastro de bedrock").
+        // -----------------------------------------------------------------
+        private const int PlataformaMargen = 2;
+        private const int PlataformaProfundidad = 6;
+
         private const float PressDuration = 0.5f;
         private const float CooldownDuration = 2f;
 
@@ -160,7 +168,7 @@ namespace Alkahest.Game
             _sim = sim;
             _player = player;
             _anchorX = anchorX;
-            _baseY = SimLevelBuilder.CuartoY0 + 2;
+            _baseY = SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.PrensaX); // (playtest 33) cota por zona -- ver BaseYDeEstacion.
 
             RecalcularRegion();
             BuildVisual();
@@ -169,7 +177,12 @@ namespace Alkahest.Game
             MachineFocus.Registrar(this);
             // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
             // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
-            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
+            // (playtest 32, FIX) `TallarEnPlano` YA registró este MISMO rect
+            // (para que AdornarCuarto lo viera al tallar terrazas, ver
+            // SimLevelBuilder.HallarObraExacta) -- aquí se RECLAMA ese handle
+            // en vez de crear uno nuevo huérfano.
+            int handleExistente = SimLevelBuilder.HallarObraExacta(_outX0, _outY0, _outX1, _outY1);
+            _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -212,10 +225,26 @@ namespace Alkahest.Game
             _centroRotulo = new Vector3(_centroLecho.x, (_lechoY1 + 3f) * c, 0f);
         }
 
+        /// <summary>(playtest 32, encargo A) Mismo AplanarPlataforma que Game/Crisol.cs: SIEMPRE lo primero, `baseY` SIEMPRE en el colchón de piedra (nunca en el vaciado -- aquí concretamente el hueco de <see cref="LechoAJamba"/> entre el lecho y cada jamba no lo re-talla nadie), ver su docblock para el porqué completo.</summary>
+        private static void AplanarPlataforma(CellGrid grid, int outX0, int outX1, int baseY, int outY1)
+        {
+            int x0 = outX0 - PlataformaMargen;
+            int x1 = outX1 + PlataformaMargen;
+            for (int x = x0; x <= x1; x++)
+            {
+                for (int y = baseY - PlataformaProfundidad; y <= baseY; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
+                for (int y = baseY + 1; y <= outY1; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+        }
+
         /// <summary>Talla el pórtico entero (lecho + jambas + dintel) sobre el CellGrid del plano.</summary>
         public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
         {
             var h = Calcular(anchorX, baseY);
+
+            AplanarPlataforma(grid, h.OutX0, h.OutX1, baseY, h.OutY1); // (playtest 32) SIEMPRE lo primero.
 
             // Lecho: suelo + muros + interior vaciado.
             for (int x = h.LechoX0 - MuroGrosor; x <= h.LechoX1 + MuroGrosor; x++)
@@ -244,15 +273,33 @@ namespace Alkahest.Game
                 for (int x = h.OutX0; x <= h.OutX1; x++)
                     if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
 
-            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
-            // hace la INSTANCIA en Init (ver `_handleObra`), porque este
-            // método es estático y corre ANTES de que exista ninguna
-            // instancia que pueda guardarse el handle. Mismo rect exacto.
+            // (playtest 29) Este método es estático y corre ANTES de que
+            // exista ninguna instancia. (playtest 32, FIX) Por eso SÍ hace
+            // falta registrar aquí: SimLevelBuilder.AdornarCuarto corre
+            // dentro del mismo BuildCuartoIntimo, DESPUÉS de este tallado
+            // pero ANTES de que exista ninguna instancia -- si el registro
+            // esperara a `Init` (otro frame, vía Game/AlkahestGameBootstrap.cs),
+            // AdornarCuarto tallaría terrazas como si la Prensa no existiera.
+            // `Init` RECLAMA este mismo handle (ver SimLevelBuilder.HallarObraExacta).
+            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
+        }
+
+        /// <summary>Equivalente EN CALIENTE de <see cref="AplanarPlataforma"/> -- ver el docblock gemelo en Game/Crisol.cs (`AplanarPlataformaCaliente`). Misma convención de límites (`_baseY` en el colchón, vaciado desde `_baseY+1`).</summary>
+        private void AplanarPlataformaCaliente()
+        {
+            int x0 = _outX0 - PlataformaMargen;
+            int x1 = _outX1 + PlataformaMargen;
+            int ancho = x1 - x0 + 1;
+            for (int y = _baseY - PlataformaProfundidad; y <= _baseY; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+            _sim.PaintRect(x0, _baseY + 1, ancho, _outY1 - (_baseY + 1) + 1, MaterialId.Empty);
         }
 
         /// <summary>Misma geometría EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
         private void TallarEnCaliente()
         {
+            AplanarPlataformaCaliente(); // (playtest 32) SIEMPRE lo primero.
             for (int x = _lechoX0 - MuroGrosor; x <= _lechoX1 + MuroGrosor; x++) _sim.PaintStable(x, _lechoY0 - 1, 0, MaterialId.Stone);
             for (int y = _lechoY0 - 1; y <= _lechoY1; y++)
                 for (int t = 1; t <= MuroGrosor; t++)
@@ -301,6 +348,17 @@ namespace Alkahest.Game
                     _sim.Paint(x, y, 0, MaterialId.Empty);
         }
 
+        /// <summary>(playtest 32, fix "rastro de bedrock") Ver el docblock gemelo en Game/Crisol.cs (`RestaurarSueloBase`).</summary>
+        private void RestaurarSueloBase(Huella h)
+        {
+            int sueloBase = SimLevelBuilder.CuartoY0 + SimLevelBuilder.WallThickness - 1;
+            int x0 = h.OutX0 - PlataformaMargen;
+            int x1 = h.OutX1 + PlataformaMargen;
+            for (int y = sueloBase + 1; y <= h.OutY0; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -310,7 +368,9 @@ namespace Alkahest.Game
         public void Reposicionar(Vector2Int anclaCelda)
         {
             // 1) BORRAR la mampostería vieja, con la huella de ANTES de tocar el ancla.
-            BorrarEnCaliente(Calcular(_anchorX, _baseY));
+            var huellaVieja = Calcular(_anchorX, _baseY);
+            BorrarEnCaliente(huellaVieja);
+            RestaurarSueloBase(huellaVieja); // (playtest 32) limpia cualquier pedestal elevado que esta instancia hubiera dejado ahí.
 
             _anchorX += anclaCelda.x - _outX0;
             _baseY = anclaCelda.y;

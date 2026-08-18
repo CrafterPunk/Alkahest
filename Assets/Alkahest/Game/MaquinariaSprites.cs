@@ -1709,6 +1709,243 @@ namespace Alkahest.Game
             return s;
         }
 
+        // =================================================================
+        // (playtest 33) EL HERRAJE DE LAS BALDAS -- "BRACITOS INCLINADOS"
+        // =================================================================
+        // Encargo literal de Cesar: *"Arriba del horno hay una LÍNEA que me
+        // gustó mucho porque puedo APOYAR COSAS: idealmente créale como
+        // BRACITOS INCLINADOS para que pueda sostener más cosas"*.
+        //
+        // REPARTO DE RESPONSABILIDAD (la regla que ordena esta familia): la
+        // PIEDRA de la balda la talla el plano (Sim/SimLevelBuilder.Repisas,
+        // 2 filas macizas: eso es lo que SOSTIENE de verdad, ver regla 7) y
+        // estos sprites son lo que la balda PARECE. Ninguna ménsula existe en
+        // la grilla a propósito: una diagonal de piedra real sería una trampa
+        // para los polvos que resbalan por su cara y, encima, el jugador con
+        // el cincel vería una "escalera" pidiendo que la piquen -- el mismo
+        // veredicto que Cesar dio de la Columna del playtest 26.
+        // =================================================================
+
+        /// <summary>
+        /// MÉNSULA INCLINADA: el bracito que sostiene una balda. Escuadra de
+        /// madera oscura con el canto de latón -- espalda vertical (pegada al
+        /// muro), cabeza horizontal (bajo la balda) e HIPOTENUSA, que es lo
+        /// único que la hace leerse como un apoyo y no como una caja. Nace
+        /// mirando a la DERECHA (espalda a la izquierda); para la del otro
+        /// extremo, el llamante invierte `localScale.x` -- así hay un solo
+        /// sprite en caché para las dos.
+        /// </summary>
+        public static Sprite MensulaInclinada(int anchoCeldas, int altoCeldas)
+        {
+            string clave = "mensula" + anchoCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(anchoCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int grosor = Mathf.Max(2 * Escala, w / 5); // grueso del alma de madera.
+            for (int y = 0; y < h; y++)
+            {
+                // La hipotenusa: la madera solo existe por debajo de la recta
+                // que va de la esquina alta-derecha a la baja-izquierda.
+                // (y=0 es ABAJO en el espacio de estos lienzos.)
+                int limiteDer = (w - 1) * y / Mathf.Max(1, h - 1);
+                for (int x = 0; x < w; x++)
+                {
+                    bool espalda = x < grosor;                      // pegada al muro.
+                    bool cabeza = y >= h - grosor;                  // bajo la balda.
+                    bool cuerpo = x <= limiteDer;
+                    if (!(espalda || cabeza || cuerpo)) continue;
+
+                    Color32 c = Hierro;
+                    // Bisel: el canto de arriba y el de la diagonal reciben luz.
+                    if (cabeza && y >= h - Mathf.Max(1, grosor / 3)) c = LatonAlto;
+                    else if (cuerpo && x >= limiteDer - Escala) c = Laton;
+                    else if (espalda && x < Escala) c = HierroBajo;
+                    else if (((x / Escala) + (y / Escala)) % 7 == 0) c = HierroAlto; // veta de la madera oscura.
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyMensula");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// FILO DE BALDA: el listón de latón que remata el canto de una
+        /// repisa, con sus remaches. Se dibuja DELANTE de la piedra real de
+        /// la balda (que ya la pinta Sim/SimRenderer) y es lo que la separa
+        /// de "una roca que se quedó ahí": una arista brillante horizontal a
+        /// la altura del ojo lee inmediatamente como mueble.
+        /// </summary>
+        public static Sprite FiloBalda(int spanCeldas)
+        {
+            string clave = "filobalda" + spanCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = S(4);
+            var px = new Color32[w * h];
+
+            for (int y = 0; y < h; y++)
+            {
+                Color32 fila = y >= h - 1 ? LatonAlto : (y >= h / 2 ? Laton : LatonBajo);
+                for (int x = 0; x < w; x++) px[y * w + x] = fila;
+            }
+            // Remaches cada ~6 celdas.
+            int paso = Mathf.Max(S(6), w / 8);
+            for (int x = paso / 2; x < w; x += paso)
+                for (int k = 0; k < Mathf.Max(1, Escala / 2); k++)
+                    Pintar(px, w, h, x + k, h / 2, LatonAlto);
+
+            s = Crear(px, w, h, "ChaosAlchemyFiloBalda");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// (playtest 33, SEGUNDA PASADA -- visto jugando) LA PIEDRA DE LA
+        /// BALDA. La primera versión confiaba en que la losa real de la sim
+        /// (`SimLevelBuilder.Repisas`, 2 filas de Stone) se viera sola. NO SE
+        /// VE: a la distancia de juego son ~10 px de piedra oscura contra una
+        /// pared de sillería igual de oscura, así que lo único que llegaba al
+        /// ojo era el filo de latón y sus dos bracitos -- una barra amarilla
+        /// sobre dos patas, o sea UNA MESA. Es la regla 52 otra vez (el color
+        /// de algo se juzga contra sus vecinos EN PANTALLA, no en el hex) y la
+        /// misma lección que subió el hierro de las máquinas en el playtest
+        /// 27.
+        ///
+        /// Este sprite se dibuja ENCIMA de esa losa, con su mismo tamaño: cara
+        /// superior clara (la que recibe la luz y donde se posan las cosas),
+        /// canto frontal medio y una línea de sombra dura debajo. No sustituye
+        /// a la piedra -- la piedra es la que sostiene -- la hace legible.
+        /// </summary>
+        public static Sprite BaldaPiedra(int spanCeldas, int altoCeldas)
+        {
+            string clave = "balda" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Mathf.Max(S(4), altoCeldas * 2 * Escala);
+            var px = new Color32[w * h];
+
+            int caraAlto = Mathf.Max(2, h / 3);
+            int piezaW = Mathf.Max(S(5), w / 6);
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color32 c;
+                    if (y >= h - caraAlto) c = PiedraAlta;              // cara superior: la que se ve iluminada.
+                    else if (y >= caraAlto / 2) c = Piedra;             // canto frontal.
+                    else c = PiedraBaja;                                // el bajo de la losa, en sombra.
+                    if (x % piezaW == 0 && y < h - 1) c = PiedraBaja;   // despiece: la balda está hecha de losas, no de una pieza.
+                    if (y == h - 1) c = new Color32(0x8A, 0x7E, 0x70, 255); // arista alta, el brillo del canto.
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyBaldaPiedra");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// (playtest 33) EL HAZ DE UNA CLARABOYA: un cono de luz fría que se
+        /// abre hacia abajo, con los bordes deshilachados por un ruido estable
+        /// y la intensidad muriendo con la profundidad. Blanco (lo tinta el
+        /// llamante). Se dibuja DELANTE de la sim, como los halos, porque
+        /// tiene que caer SOBRE la piedra y sobre las máquinas -- un haz
+        /// pintado en el fondo se quedaría detrás de todo, que es justo lo que
+        /// pasó en la primera pasada de esta ronda.
+        ///
+        /// Y sí, es luz que viene de arriba, que es lo que esta misma ronda
+        /// prohíbe en el resto del taller: la diferencia es que ESTA tiene
+        /// dueño físico visible -- el pozo está tallado de verdad en la bóveda
+        /// (`SimLevelBuilder.ClaraboyaColumnas`) y se ve de dónde entra.
+        /// </summary>
+        public static Sprite HazClaraboya(int anchoCeldas, int altoCeldas)
+        {
+            string clave = "haz" + anchoCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(anchoCeldas * Escala, S(8), S(300));
+            int h = Mathf.Clamp(altoCeldas * Escala, S(8), S(300));
+            var px = new Color32[w * h];
+            float cx = (w - 1) * 0.5f;
+
+            for (int y = 0; y < h; y++)
+            {
+                // y=0 abajo: el haz es ancho y débil; arriba (y=h-1), estrecho
+                // y fuerte -- es donde está el pozo.
+                float prof = 1f - y / (float)(h - 1);            // 0 arriba, 1 abajo.
+                float medio = Mathf.Lerp(w * 0.16f, w * 0.5f, prof);
+                float fuerza = Mathf.Pow(1f - prof, 1.35f);      // se apaga al caer.
+                for (int x = 0; x < w; x++)
+                {
+                    float d = Mathf.Abs(x - cx) / medio;
+                    if (d >= 1f) continue;
+                    float a = fuerza * Mathf.Pow(1f - d * d, 1.6f);
+                    // Deshilachado: un poco de ruido estable en el borde, para
+                    // que el haz no tenga contorno de cono dibujado.
+                    uint hn = (uint)(x * 374761393) ^ (uint)(y * 668265263);
+                    hn ^= hn >> 13; hn *= 0x5bd1e995u; hn ^= hn >> 15;
+                    a *= 0.86f + ((hn & 31u) / 31f) * 0.14f;
+                    if (a <= 0.01f) continue;
+                    px[y * w + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(a) * 255f));
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyHazClaraboya");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// CADENA COLGANTE con su gancho: eslabones alternos (uno de frente,
+        /// uno de canto) y una U de hierro al final. Cuelga del techo en los
+        /// vanos vacíos -- es lo que da ESCALA a una bóveda alta: sin nada
+        /// colgando, 95 celdas de alto y 60 se ven igual.
+        /// </summary>
+        public static Sprite CadenaColgante(int altoCeldas)
+        {
+            string clave = "cadena" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(4), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            int eslabon = Mathf.Max(S(2), h / Mathf.Max(4, altoCeldas));
+            int cx = w / 2;
+            for (int y = 0; y < h; y++)
+            {
+                bool deFrente = ((y / eslabon) & 1) == 0;
+                int medio = deFrente ? w / 2 : Mathf.Max(1, w / 6);
+                bool borde = (y % eslabon) < Mathf.Max(1, eslabon / 4) || (y % eslabon) >= eslabon - Mathf.Max(1, eslabon / 4);
+                for (int d = -medio; d <= medio; d++)
+                {
+                    int x = cx + d;
+                    if (x < 0 || x >= w) continue;
+                    bool aro = borde || Mathf.Abs(d) >= medio - Mathf.Max(1, Escala / 2);
+                    if (!aro) continue;
+                    px[y * w + x] = (d < 0) ? HierroAlto : Hierro;
+                }
+            }
+
+            // El gancho: una U abierta en las últimas filas.
+            int gh = Mathf.Min(h / 6, S(4));
+            for (int y = 0; y < gh; y++)
+            {
+                int r = gh - y;
+                Pintar(px, w, h, cx - r, y, HierroAlto);
+                Pintar(px, w, h, cx + r, y, Hierro);
+                if (y == 0) for (int d = -r; d <= r; d++) Pintar(px, w, h, cx + d, y, Hierro);
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyCadena");
+            _cache[clave] = s;
+            return s;
+        }
+
         /// <summary>Burbuja: anillo claro con centro tenue -- lo que sube por la cámara del Crisol mientras corre una hornada (el progreso VISIBLE que pide el contrato §4).</summary>
         public static Sprite Burbuja()
         {
@@ -1775,6 +2012,38 @@ namespace Alkahest.Game
         /// círculo dibujado, y con caída cuadrática pura el centro se apaga
         /// demasiado pronto -- 2.2 es el punto en que el halo "no tiene
         /// borde" pero sigue teniendo un núcleo claro.
+        ///
+        /// =============================================================
+        /// (playtest 33) 2.2 -&gt; **3.6**: EL FIN DEL STICKER
+        /// =============================================================
+        /// Veredicto literal de Cesar sobre la luz del 31/32: *"la LUZ sobre
+        /// el horno no es mala pero se ve OMNIPRESENTE, parece PEGADA EN LA
+        /// PANTALLA, no se siente parte del horno... que no parezca un
+        /// STICKER pegado"*. Tenía dos causas y esta es la general (la
+        /// específica del Crisol se arregla en Game/Crisol.cs, bajando los
+        /// diámetros y añadiendo luz de muro recortada).
+        ///
+        /// LA CAUSA: con exponente 2.2, a la mitad del radio el halo todavía
+        /// conserva el 22% de su alfa, y al 75% del radio un 6% -- o sea que
+        /// un halo de 46 celdas de diámetro seguía tiñendo de naranja TODO lo
+        /// que hubiera a 17 celdas del hogar, techo incluido. Un disco tan
+        /// grande y tan uniforme no se lee como "luz que emite algo", se lee
+        /// como una capa encima del cuadro, que es literalmente lo que Cesar
+        /// describió. Con 3.6: 8% a mitad de radio y 1% a tres cuartos -- el
+        /// núcleo sigue igual de claro (el llamante no tiene que resubir
+        /// ningún alfa) pero la luz MUERE cerca de su fuente, que es lo que
+        /// hace una hoguera.
+        ///
+        /// POR QUÉ SE ARREGLA AQUÍ Y NO EN CADA MÁQUINA: este sprite lo
+        /// comparten TODAS las fuentes del taller (hogar y brasero del
+        /// Crisol, lámpara del Banco de Chispa, vidrio de la Columna, hogar
+        /// del Ensayo, destellos de las redomas del estante). El mismo
+        /// defecto lo tenían todas -- Cesar pidió explícitamente aplicar el
+        /// criterio también a la lámpara y a las redomas -- y varios de esos
+        /// archivos no son editables en este encargo. Un cambio en la FÁBRICA
+        /// los alcanza a todos sin tocar una línea suya, que además es lo
+        /// correcto: la forma de la caída de la luz es una decisión del
+        /// taller, no de cada aparato.
         /// </summary>
         public static Sprite Halo()
         {
@@ -1792,12 +2061,68 @@ namespace Alkahest.Game
                     float dx = (x - c) / r, dy = (y - c) / r;
                     float d = Mathf.Sqrt(dx * dx + dy * dy);
                     if (d >= 1f) continue;
-                    float a = Mathf.Pow(1f - d, 2.2f);
+                    float a = Mathf.Pow(1f - d, 3.6f);
                     px[y * lado + x] = new Color32(255, 255, 255, (byte)(a * 255f));
                 }
             }
 
             s = Crear(px, lado, lado, "ChaosAlchemyHalo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// (playtest 33) LUZ DE MURO: el otro lado del fin del sticker.
+        ///
+        /// Criterio nuevo que pidió Cesar: *"la luz del crisol ILUMINA SUS
+        /// PROPIAS PAREDES... quizás el contenedor de paredes brillando SIN
+        /// INCLUIR EL TECHO porque no tiene"*. Un halo redondo no puede hacer
+        /// eso: es isótropo, así que reparte la misma luz hacia la
+        /// mampostería (que sí existe) y hacia el aire de encima (donde no hay
+        /// nada que iluminar). Esto es un RECTÁNGULO con caída lateral suave y
+        /// **corte duro por arriba**: el gradiente sube desde la base, alcanza
+        /// su máximo en el tercio inferior y se apaga del todo justo en el
+        /// borde superior del sprite -- el llamante hace coincidir ese borde
+        /// con la CORNISA REAL de su máquina, así que por encima no queda ni
+        /// un téxel encendido. La luz tiene DUEÑO FÍSICO: baña el cuerpo de
+        /// hierro y la piedra del horno, y deja el techo en penumbra.
+        ///
+        /// `sesgoAbajo` (0..1) decide cuánto se concentra en la base: 1 = casi
+        /// todo en la primera cuarta parte (una boca de fuego), 0.4 = repartido
+        /// por el cuerpo (un cuerpo que irradia).
+        /// </summary>
+        public static Sprite LuzDeMuro(int spanCeldas, int altoCeldas, float sesgoAbajo = 0.62f)
+        {
+            string clave = "luzmuro" + spanCeldas + "x" + altoCeldas + "s" + Mathf.RoundToInt(sesgoAbajo * 100f);
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Mathf.Clamp(spanCeldas * Escala, S(8), S(400));
+            int h = Mathf.Clamp(altoCeldas * Escala, S(6), S(400));
+            var px = new Color32[w * h];
+
+            for (int y = 0; y < h; y++)
+            {
+                // Vertical: sube rápido desde la base, cae a CERO EXACTO en la
+                // fila de arriba (el corte que impide que la luz toque el techo).
+                float ty = y / (float)(h - 1);
+                float pico = Mathf.Lerp(0.45f, 0.12f, sesgoAbajo); // dónde está el máximo.
+                float v = ty <= pico
+                    ? Mathf.Pow(ty / Mathf.Max(0.001f, pico), 0.55f)
+                    : Mathf.Pow(1f - (ty - pico) / Mathf.Max(0.001f, 1f - pico), 1.9f);
+
+                for (int x = 0; x < w; x++)
+                {
+                    // Horizontal: coseno recortado -- llega vivo hasta los muros
+                    // laterales y se apaga fuera, sin dibujar un borde recto.
+                    float tx = (x / (float)(w - 1)) * 2f - 1f;
+                    float lat = Mathf.Pow(Mathf.Clamp01(1f - tx * tx), 0.85f);
+                    float a = v * lat;
+                    if (a <= 0.004f) continue;
+                    px[y * w + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(a) * 255f));
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyLuzDeMuro");
             _cache[clave] = s;
             return s;
         }
@@ -1874,6 +2199,26 @@ namespace Alkahest.Game
                 go.transform.SetParent(padre, false);
                 go.transform.position = posicionMundo;
                 var sr = CrearCapa(go.transform, "Halo", Halo(), OrdenHalo, anchoMundo, altoMundo);
+                sr.color = new Color(color.r, color.g, color.b, 0f);
+                return new Luz(sr, color);
+            }
+
+            /// <summary>
+            /// (playtest 33) LUZ CON DUEÑO FÍSICO: en vez de un disco, un
+            /// rectángulo que cubre EXACTAMENTE la mampostería del propio
+            /// aparato y se apaga a cero en su borde superior -- ver
+            /// <see cref="LuzDeMuro"/>. `posicionMundo` es el CENTRO del rect,
+            /// así que el llamante lo calcula desde su huella real
+            /// (`(outY0+outY1)/2`), nunca a ojo: si el sprite sobresaliera por
+            /// arriba volveríamos a tener luz sobre un techo que no existe.
+            /// </summary>
+            public static Luz CrearMuro(Transform padre, string nombre, Vector3 posicionMundo,
+                int spanCeldas, int altoCeldas, float anchoMundo, float altoMundo, Color color, float sesgoAbajo = 0.62f)
+            {
+                var go = new GameObject(nombre);
+                go.transform.SetParent(padre, false);
+                go.transform.position = posicionMundo;
+                var sr = CrearCapa(go.transform, "Halo", LuzDeMuro(spanCeldas, altoCeldas, sesgoAbajo), OrdenHalo, anchoMundo, altoMundo);
                 sr.color = new Color(color.r, color.g, color.b, 0f);
                 return new Luz(sr, color);
             }

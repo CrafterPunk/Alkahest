@@ -65,6 +65,27 @@ namespace Alkahest.Game
         public const int RanuraAncho = BandejaAncho;
         public const int RanuraAlto = BandejaAlto;
 
+        // -----------------------------------------------------------------
+        // SUELO SOBERANO (playtest 32, mismo patrón que Game/Crisol.cs -- ver
+        // sus docblocks de AplanarPlataforma/RestaurarSueloBase para el
+        // porqué completo, "aparece un poco enterrada" / "rastro de bedrock").
+        // -----------------------------------------------------------------
+        private const int PlataformaMargen = 2;
+        private const int PlataformaProfundidad = 6;
+
+        // -----------------------------------------------------------------
+        // LA LÁMPARA (playtest 32, fix "foco volando en el aire" -- ver el
+        // docblock de <see cref="RecalcularRegion"/> junto a `_centroLampara`).
+        // -----------------------------------------------------------------
+        /// <summary>Diámetro de la ampolla (compartido por Filamento/Ampolla/Halo en BuildVisual y por el cálculo de altura de RecalcularRegion -- una sola fuente de verdad, ver regla 47 de CLAUDE.md: antes esta medida vivía DOS VECES, un `const int lamparaDiam = 7` local a BuildVisual y un "+12f" suelto en RecalcularRegion que no derivaba de nada).</summary>
+        private const int LamparaDiametro = 7;
+        /// <summary>Alto real del sprite de la ampolla/filamento en celdas -- MISMA fórmula que usa BuildVisual (`lamparaDiam * 1.5f`) para plantar los sprites; se repite aquí en vez de compartir un campo porque uno es const-time (BuildVisual) y el otro corre en RecalcularRegion antes de que exista ningún sprite.</summary>
+        private const float LamparaAltoCeldas = LamparaDiametro * 1.5f;
+        /// <summary>Celdas de cordón entre el travesaño y la CIMA de la ampolla -- lo que la ancla FÍSICAMENTE al pórtico en vez de dejarla flotando por encima. Corto a propósito: es un cordón, no una segunda lámpara colgando de otra.</summary>
+        private const float LamparaColganteCeldas = 2f;
+        /// <summary>Celdas sobre `_baseY+PlintoAlto+ElectrodoAlto` (la punta de los electrodos) donde cuelga el travesaño del pórtico -- ÚNICA fuente de verdad para BuildVisual (postes+travesaño) Y RecalcularRegion (_centroLampara): antes cada uno tenía su propio número ("+4f" aquí, "+12f" allá) y no coincidían, que es la causa raíz de "el foco vuela en el aire" (regla 47 de CLAUDE.md, no reutilizar/duplicar una constante de posición).</summary>
+        private const float LamparaTravesanoOffsetCeldas = 4f;
+
         /// <summary>Cuánto se queda la lámpara encendida tras un análisis (teatro; el registro ocurre una vez al pulsar E).</summary>
         private const float BrilloDuracion = 3.5f;
 
@@ -131,7 +152,7 @@ namespace Alkahest.Game
             _player = player;
             _conocimiento = conocimiento;
             _anchorX = anchorX;
-            _baseY = SimLevelBuilder.CuartoY0 + 2;
+            _baseY = SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.BancoChispaX); // (playtest 33) cota por zona -- ver BaseYDeEstacion.
 
             RecalcularRegion();
             BuildVisual();
@@ -140,7 +161,12 @@ namespace Alkahest.Game
             MachineFocus.Registrar(this);
             // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
             // TallarEnPlano -- ver Sim/SimLevelBuilder.cs, bloque "OBRA MOVIBLE".
-            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
+            // (playtest 32, FIX) `TallarEnPlano` YA registró este MISMO rect
+            // (para que AdornarCuarto lo viera al tallar terrazas, ver
+            // SimLevelBuilder.HallarObraExacta) -- aquí se RECLAMA ese handle
+            // en vez de crear uno nuevo huérfano.
+            int handleExistente = SimLevelBuilder.HallarObraExacta(_outX0, _outY0, _outX1, _outY1);
+            _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(_outX0, _outY0, _outX1, _outY1);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -175,13 +201,43 @@ namespace Alkahest.Game
             transform.position = _centro;
             _centroBandeja = new Vector3((_banX0 + BandejaAncho * 0.5f) * c, (_banY0 + BandejaAlto * 0.5f) * c, 0f);
             _centroRotulo = new Vector3(_centroBandeja.x, (_banY1 + 3f) * c, 0f);
-            _centroLampara = new Vector3(_centroBandeja.x, (_baseY + PlintoAlto + ElectrodoAlto + 12f) * c, 0f);
+            // (playtest 32, FIX "el foco vuela en el aire") ANTES: "+12f",
+            // un número que no derivaba de nada (regla 47 de CLAUDE.md) --
+            // el travesaño del pórtico (ver BuildVisual, `yTravesano`) cuelga
+            // a SOLO +LamparaTravesanoOffsetCeldas(4), así que +12f dejaba la
+            // ampolla 8 celdas POR ENCIMA del travesaño del que se supone que
+            // cuelga: flotando sin nada que la sostenga. AHORA la ampolla
+            // cuelga JUSTO DEBAJO del travesaño (mismo punto que usa
+            // BuildVisual para plantarlo), separada solo por el cordón corto
+            // que dibuja BuildVisual (ColganteLampara) -- ninguna de las dos
+            // constantes puede volver a divergir porque las dos leen
+            // LamparaTravesanoOffsetCeldas/LamparaColganteCeldas/
+            // LamparaAltoCeldas, no un número suelto cada una.
+            float yTravesano = _baseY + PlintoAlto + ElectrodoAlto + LamparaTravesanoOffsetCeldas;
+            float yCentroLampara = yTravesano - LamparaColganteCeldas - LamparaAltoCeldas * 0.5f;
+            _centroLampara = new Vector3(_centroBandeja.x, yCentroLampara * c, 0f);
+        }
+
+        /// <summary>(playtest 32, encargo A) Mismo AplanarPlataforma que Game/Crisol.cs: SIEMPRE lo primero, `baseY` SIEMPRE en el colchón de piedra (nunca en el vaciado -- el margen de <see cref="PlataformaMargen"/> más allá de los plintos no lo re-talla nadie), ver su docblock para el porqué completo.</summary>
+        private static void AplanarPlataforma(CellGrid grid, int outX0, int outX1, int baseY, int outY1)
+        {
+            int x0 = outX0 - PlataformaMargen;
+            int x1 = outX1 + PlataformaMargen;
+            for (int x = x0; x <= x1; x++)
+            {
+                for (int y = baseY - PlataformaProfundidad; y <= baseY; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
+                for (int y = baseY + 1; y <= outY1; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
         }
 
         /// <summary>Talla la bandeja y los dos plintos sobre el CellGrid del plano.</summary>
         public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
         {
             var h = Calcular(anchorX, baseY);
+
+            AplanarPlataforma(grid, h.OutX0, h.OutX1, baseY, h.OutY1); // (playtest 32) SIEMPRE lo primero.
 
             for (int x = h.BanX0 - MuroGrosor; x <= h.BanX1 + MuroGrosor; x++)
                 if (CellGrid.InBounds(x, h.BanY0 - 1)) grid.SetCell(x, h.BanY0 - 1, MaterialId.Stone);
@@ -204,14 +260,33 @@ namespace Alkahest.Game
                     if (CellGrid.InBounds(h.OutX1 - k, y)) grid.SetCell(h.OutX1 - k, y, MaterialId.Stone);
                 }
 
-            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ -- lo
-            // hace la INSTANCIA en Init (ver `_handleObra`); este método es
-            // estático y corre antes de que exista ninguna instancia.
+            // (playtest 29) Este método es estático y corre antes de que
+            // exista ninguna instancia. (playtest 32, FIX) Por eso SÍ hace
+            // falta registrar aquí: SimLevelBuilder.AdornarCuarto corre
+            // dentro del mismo BuildCuartoIntimo, DESPUÉS de este tallado
+            // pero ANTES de que exista ninguna instancia -- si el registro
+            // esperara a `Init` (otro frame), AdornarCuarto tallaría
+            // terrazas como si el Banco no existiera. `Init` RECLAMA este
+            // mismo handle (ver SimLevelBuilder.HallarObraExacta).
+            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
+        }
+
+        /// <summary>Equivalente EN CALIENTE de <see cref="AplanarPlataforma"/> -- ver el docblock gemelo en Game/Crisol.cs (`AplanarPlataformaCaliente`). Misma convención de límites (`_baseY` en el colchón, vaciado desde `_baseY+1`).</summary>
+        private void AplanarPlataformaCaliente()
+        {
+            int x0 = _outX0 - PlataformaMargen;
+            int x1 = _outX1 + PlataformaMargen;
+            int ancho = x1 - x0 + 1;
+            for (int y = _baseY - PlataformaProfundidad; y <= _baseY; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+            _sim.PaintRect(x0, _baseY + 1, ancho, _outY1 - (_baseY + 1) + 1, MaterialId.Empty);
         }
 
         /// <summary>Misma geometría EN CALIENTE (regla 29). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
         private void TallarEnCaliente()
         {
+            AplanarPlataformaCaliente(); // (playtest 32) SIEMPRE lo primero.
             for (int x = _banX0 - MuroGrosor; x <= _banX1 + MuroGrosor; x++) _sim.PaintStable(x, _banY0 - 1, 0, MaterialId.Stone);
             for (int y = _banY0 - 1; y <= _banY1; y++)
                 for (int t = 1; t <= MuroGrosor; t++)
@@ -247,6 +322,17 @@ namespace Alkahest.Game
                 }
         }
 
+        /// <summary>(playtest 32, fix "rastro de bedrock") Ver el docblock gemelo en Game/Crisol.cs (`RestaurarSueloBase`).</summary>
+        private void RestaurarSueloBase(Huella h)
+        {
+            int sueloBase = SimLevelBuilder.CuartoY0 + SimLevelBuilder.WallThickness - 1;
+            int x0 = h.OutX0 - PlataformaMargen;
+            int x1 = h.OutX1 + PlataformaMargen;
+            for (int y = sueloBase + 1; y <= h.OutY0; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -255,7 +341,9 @@ namespace Alkahest.Game
 
         public void Reposicionar(Vector2Int anclaCelda)
         {
-            BorrarEnCaliente(Calcular(_anchorX, _baseY)); // 1) BORRAR la mampostería vieja.
+            var huellaVieja = Calcular(_anchorX, _baseY);
+            BorrarEnCaliente(huellaVieja); // 1) BORRAR la mampostería vieja.
+            RestaurarSueloBase(huellaVieja); // (playtest 32) limpia cualquier pedestal elevado que esta instancia hubiera dejado ahí.
 
             _anchorX += anclaCelda.x - _outX0;
             _baseY = anclaCelda.y;
@@ -419,7 +507,8 @@ namespace Alkahest.Game
             // plintos y un travesaño del que cuelga la ampolla. La lectura del
             // aparato tiene que verse desde lejos.
             var teja = MaquinariaSprites.Solido();
-            float yTravesano = (_baseY + PlintoAlto + ElectrodoAlto + 4f) * c;
+            float yTravesanoCeldas = _baseY + PlintoAlto + ElectrodoAlto + LamparaTravesanoOffsetCeldas;
+            float yTravesano = yTravesanoCeldas * c;
             for (int lado = 0; lado < 2; lado++)
             {
                 float x = lado == 0 ? (_outX0 + 1.5f) * c : (_outX1 - 0.5f) * c;
@@ -432,7 +521,19 @@ namespace Alkahest.Game
             travesano.transform.position = new Vector3(_centro.x, yTravesano, 0f);
             travesano.color = new Color(0.72f, 0.56f, 0.28f, 1f);
 
-            const int lamparaDiam = 7;
+            // ---- EL CORDÓN: la pieza que faltaba (playtest 32, fix "el foco
+            // vuela en el aire"). Un tramo de latón, MISMO sprite que los
+            // postes, del travesaño a la cima de la ampolla -- sin él la
+            // ampolla quedaba a 8 celdas por encima de este travesaño, sin
+            // NADA que la sostuviera visualmente. Nace del travesaño (sprite
+            // continuo con él, mismo ancho de 1 celda que los postes) y
+            // termina justo donde arranca la ampolla: ni un hueco.
+            float yCimaAmpolla = (_centroLampara.y / c) + LamparaAltoCeldas * 0.5f;
+            var cordon = MaquinariaSprites.CrearCapa(transform, "ColganteLampara", teja, 17,
+                1f * c, (yTravesanoCeldas - yCimaAmpolla) * c);
+            cordon.transform.position = new Vector3(_centroLampara.x, (yTravesanoCeldas + yCimaAmpolla) * 0.5f * c, 0f);
+            cordon.color = new Color(0.62f, 0.48f, 0.24f, 1f);
+
             var lamparaGo = new GameObject("ChispaLampara");
             lamparaGo.transform.SetParent(transform, false);
             lamparaGo.transform.position = _centroLampara;
@@ -441,12 +542,12 @@ namespace Alkahest.Game
             // todo (orden 16) y solo se enciende con el resultado, así que
             // sigue siendo la AUSENCIA de luz lo que informa cuando no conduce.
             _haloLampara = MaquinariaSprites.CrearCapa(lamparaGo.transform, "Halo",
-                MaquinariaSprites.Humo(), 16, lamparaDiam * 3.4f * c, lamparaDiam * 3.4f * c);
+                MaquinariaSprites.Humo(), 16, LamparaDiametro * 3.4f * c, LamparaDiametro * 3.4f * c);
             _haloLampara.color = new Color(0.75f, 0.88f, 1f, 0f);
             _filamento = MaquinariaSprites.CrearCapa(lamparaGo.transform, "Filamento",
-                MaquinariaSprites.FilamentoLampara(lamparaDiam), 20, lamparaDiam * c, lamparaDiam * 1.5f * c);
+                MaquinariaSprites.FilamentoLampara(LamparaDiametro), 20, LamparaDiametro * c, LamparaAltoCeldas * c);
             MaquinariaSprites.CrearCapa(lamparaGo.transform, "Ampolla",
-                MaquinariaSprites.AmpollaLampara(lamparaDiam), 21, lamparaDiam * c, lamparaDiam * 1.5f * c);
+                MaquinariaSprites.AmpollaLampara(LamparaDiametro), 21, LamparaDiametro * c, LamparaAltoCeldas * c);
 
             // ---- (playtest 31) SOMBRA PROPIA bajo los dos plintos + LA LUZ
             // de la lámpara sobre el cuarto.

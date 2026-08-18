@@ -176,6 +176,16 @@ namespace Alkahest.Game
         /// </summary>
         public const int BraseroSeparacion = 6;
 
+        // -----------------------------------------------------------------
+        // SUELO SOBERANO (playtest 32, fix "aparece un poco enterrada" /
+        // "rastro de bedrock" -- ver AplanarPlataforma/RestaurarSueloBase
+        // más abajo para el porqué completo).
+        // -----------------------------------------------------------------
+        /// <summary>Holgura a cada lado del rect exterior que la plataforma propia aplana. Coincide con el margen que Sim/SimLevelBuilder.AdornarCuarto respeta alrededor de cada obra registrada -- una terraza nunca puede empezar dentro de lo que esta estación ya se garantiza a sí misma llano.</summary>
+        private const int PlataformaMargen = 2;
+        /// <summary>Filas de piedra maciza garantizadas DEBAJO del suelo propio (baseY-1 hacia abajo). De sobra para tapar el escalón más alto que talla una terraza (2-4 filas, ver SimLevelBuilder.TallarTerraza) si la máquina se muda encima de una.</summary>
+        private const int PlataformaProfundidad = 6;
+
         // ---- Compatibilidad de nombres (regla 15: se documenta lo que se
         // retira, no se borra en silencio). Sim/SimLevelBuilder.cs del
         // playtest 26 documentaba las huelgas citando CubetaAncho/TolvaAncho/
@@ -277,6 +287,8 @@ namespace Alkahest.Game
         // Que respiren a ritmos y desfases distintos es lo que hace que
         // parezcan fuego y no una animación: ver MaquinariaSprites.Luz.Latir.
         private MaquinariaSprites.Luz _luzHogar, _luzBrasero, _luzCamara;
+        /// <summary>(playtest 33) Las dos luces RECTANGULARES recortadas a la propia mampostería -- ver el bloque "LA LUZ DEJA DE SER UN STICKER" en BuildVisual.</summary>
+        private MaquinariaSprites.Luz _luzMuro, _luzMuroCesto;
         private float _alfaResalte;
         private const int Burbujas = 6;
         private readonly SpriteRenderer[] _burbujas = new SpriteRenderer[Burbujas];
@@ -327,7 +339,7 @@ namespace Alkahest.Game
             _conocimiento = conocimiento;
 
             _anchorX = anchorX;
-            _baseY = SimLevelBuilder.CuartoY0 + 2;
+            _baseY = SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.CrisolX); // (playtest 33) cota por zona -- ver BaseYDeEstacion.
 
             RecalcularRegiones();
             BuildVisual();
@@ -336,8 +348,14 @@ namespace Alkahest.Game
             MachineFocus.Registrar(this);
             // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
             // TallarEnPlano -- ver el docblock de _handleObra y el bloque
-            // "OBRA MOVIBLE" en Sim/SimLevelBuilder.cs.
-            _handleObra = SimLevelBuilder.RegistrarObra(_outX0, _outY0 - HogarFilas, _outX1, _outY1);
+            // "OBRA MOVIBLE" en Sim/SimLevelBuilder.cs. (playtest 32, FIX)
+            // `TallarEnPlano` (estático, corre en BuildCuartoIntimo) YA
+            // registró este MISMO rect para que AdornarCuarto pudiera verlo
+            // al tallar terrazas (ver SimLevelBuilder.HallarObraExacta) --
+            // aquí se RECLAMA ese handle en vez de crear uno nuevo huérfano.
+            int hOut0 = _outX0, hOut1 = _outX1, hOut0y = _outY0 - HogarFilas, hOut1y = _outY1;
+            int handleExistente = SimLevelBuilder.HallarObraExacta(hOut0, hOut0y, hOut1, hOut1y);
+            _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(hOut0, hOut0y, hOut1, hOut1y);
             Mudanza.RegistrarMovible(this);
         }
 
@@ -397,10 +415,49 @@ namespace Alkahest.Game
             _humoOrigen = new Vector3((_camX1 + BocaVuelo - 0.5f) * c, (_bocaY1 + 11f) * c, 0f);
         }
 
+        /// <summary>
+        /// (playtest 32, encargo A: "SUELO SOBERANO BAJO CADA ESTACIÓN")
+        /// Aplana un colchón propio ANTES de tallar nada más: piedra maciza
+        /// de <see cref="PlataformaProfundidad"/> filas justo debajo del
+        /// suelo, INCLUYENDO la fila `baseY`, y vacío desde `baseY+1` hasta
+        /// la cornisa de la huella (outY1), con <see cref="PlataformaMargen"/>
+        /// celdas de holgura a cada lado del rect exterior. Así la estación
+        /// nace SIEMPRE sobre una losa propia y plana -- esté el terreno real
+        /// debajo donde esté (una terraza tallada por
+        /// SimLevelBuilder.AdornarCuarto, un desnivel futuro, lo que sea) --
+        /// nunca "un poco enterrada" ni con el canto de una terraza asomando
+        /// por un lado.
+        ///
+        /// `baseY` se queda SIEMPRE en el colchón de piedra, nunca en el
+        /// vaciado -- no es un capricho: el suelo del recinto (`TallarRecinto`,
+        /// fila `y0-1` = `baseY`) solo repinta piedra bajo su PROPIO ancho
+        /// (cámara o brasero), no bajo el margen ni bajo el hueco de
+        /// `BraseroSeparacion` entre ambos -- si esta plataforma vaciara
+        /// `baseY` ahí, ese hueco se quedaría con un agujero en el suelo que
+        /// nada vuelve a tapar. Construcción de nivel: `SetCell`, no
+        /// `PaintStable` (regla 29 es para runtime; ver
+        /// <see cref="AplanarPlataformaCaliente"/> para el equivalente que usa
+        /// Reposicionar).
+        /// </summary>
+        private static void AplanarPlataforma(CellGrid grid, int outX0, int outX1, int baseY, int outY1)
+        {
+            int x0 = outX0 - PlataformaMargen;
+            int x1 = outX1 + PlataformaMargen;
+            for (int x = x0; x <= x1; x++)
+            {
+                for (int y = baseY - PlataformaProfundidad; y <= baseY; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
+                for (int y = baseY + 1; y <= outY1; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
+            }
+        }
+
         /// <summary>Talla el horno completo (cámara + boca embudada + cesto del brasero) sobre el CellGrid del plano. Construcción de nivel: `SetCell`, no `PaintStable` (regla 29 es para runtime).</summary>
         public static void TallarEnPlano(CellGrid grid, int anchorX, int baseY)
         {
             var h = Calcular(anchorX, baseY);
+
+            AplanarPlataforma(grid, h.OutX0, h.OutX1, baseY, h.OutY1); // (playtest 32) SIEMPRE lo primero -- ver el docblock del método.
 
             // Cámara: suelo + dos muros + interior vaciado.
             TallarRecinto(grid, h.CamX0, h.CamX1, h.CamY0, h.CamY1);
@@ -437,14 +494,17 @@ namespace Alkahest.Game
             TallarHogar(grid, h.CamX0, h.CamX1, baseY);
             TallarHogar(grid, h.BraX0, h.BraX1, baseY);
 
-            // (playtest 29) El registro anticincel YA NO SE HACE AQUÍ: este
-            // método es estático y corre UNA vez desde
+            // (playtest 29) Este método es estático y corre UNA vez desde
             // SimLevelBuilder.BuildCuartoIntimo, ANTES de que exista ninguna
-            // instancia de Crisol que pueda guardarse el handle para
-            // actualizarlo luego al Reposicionar. Lo registra `Init` (ver
-            // `_handleObra`) -- mismo rect EXACTO (`h.OutX0, h.OutY0 -
-            // HogarFilas, h.OutX1, h.OutY1`), porque `Init` vuelve a llamar a
-            // `Calcular` con el mismo `anchorX`/`baseY` que usó este tallado.
+            // instancia de Crisol. (playtest 32, FIX) Por eso mismo SÍ hace
+            // falta registrar aquí: SimLevelBuilder.AdornarCuarto también
+            // corre dentro de BuildCuartoIntimo, DESPUÉS de este tallado pero
+            // ANTES de que exista ninguna instancia -- si el registro
+            // esperara a `Init` (que corre en otro frame, desde
+            // Game/AlkahestGameBootstrap.cs), AdornarCuarto tallaría terrazas
+            // como si el Crisol no existiera. `Init` RECLAMA este mismo
+            // handle en vez de duplicarlo (ver SimLevelBuilder.HallarObraExacta).
+            SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0 - HogarFilas, h.OutX1, h.OutY1);
         }
 
         /// <summary>Vacía el nicho de fuego bajo un recinto (ver el comentario de <see cref="TallarEnPlano"/> para por qué queda sellado y no es una trampa para la materia).</summary>
@@ -470,9 +530,22 @@ namespace Alkahest.Game
                     if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Empty);
         }
 
+        /// <summary>Equivalente EN CALIENTE de <see cref="AplanarPlataforma"/> -- las celdas de Stone que CREA usan PaintStable (regla 29), la franja que vacía usa PaintRect (Empty no tiene temperatura de estabilidad que respetar). Misma convención de límites (`_baseY` en el colchón, vaciado desde `_baseY+1`) -- ver el docblock de la versión fría.</summary>
+        private void AplanarPlataformaCaliente()
+        {
+            int x0 = _outX0 - PlataformaMargen;
+            int x1 = _outX1 + PlataformaMargen;
+            int ancho = x1 - x0 + 1;
+            for (int y = _baseY - PlataformaProfundidad; y <= _baseY; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+            _sim.PaintRect(x0, _baseY + 1, ancho, _outY1 - (_baseY + 1) + 1, MaterialId.Empty);
+        }
+
         /// <summary>Misma talla que <see cref="TallarEnPlano"/> pero EN CALIENTE (regla 29: PaintStable). Solo la usa <see cref="Reposicionar"/> (Mudanza).</summary>
         private void TallarEnCaliente()
         {
+            AplanarPlataformaCaliente(); // (playtest 32) SIEMPRE lo primero -- ver AplanarPlataforma.
             TallarRecintoCaliente(_camX0, _camX1, _camY0, _camY1);
             for (int i = 0; i < BocaFilas; i++)
             {
@@ -551,6 +624,33 @@ namespace Alkahest.Game
                 }
         }
 
+        /// <summary>
+        /// (playtest 32, encargo A: fix "rastro de bedrock") Tras borrar la
+        /// mampostería propia de la huella VIEJA, restaura el suelo de esa
+        /// huella (+margen) al NIVEL BASE del cuarto -- la losa general de
+        /// SimLevelBuilder.BuildCuartoFloor, constante, sin importar dónde
+        /// estuviera <see cref="_baseY"/>. Sin esto, una máquina que se había
+        /// mudado a un sitio NO estándar (baseY distinto del nivel base --
+        /// p. ej. encima de una terraza) dejaba, al volver a mudarse, un
+        /// escalón de piedra huérfano ahí: <see cref="BorrarEnCaliente"/>
+        /// solo quita los MUROS propios y a propósito nunca toca la fila
+        /// `h.OutY0-1`/`h.OutY0` (podría ser la losa compartida real, ver su
+        /// docblock), así que la plataforma elevada que
+        /// <see cref="AplanarPlataformaCaliente"/> había levantado ahí
+        /// sobrevivía a la mudanza. Si `h.OutY0` (=baseY viejo) ya estaba al
+        /// nivel base -- el caso normal, nunca se ha movido a otra altura --
+        /// el bucle no itera nada: gratis.
+        /// </summary>
+        private void RestaurarSueloBase(Huella h)
+        {
+            int sueloBase = SimLevelBuilder.CuartoY0 + SimLevelBuilder.WallThickness - 1;
+            int x0 = h.OutX0 - PlataformaMargen;
+            int x1 = h.OutX1 + PlataformaMargen;
+            for (int y = sueloBase + 1; y <= h.OutY0; y++)
+                for (int x = x0; x <= x1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+        }
+
         private void OnDestroy()
         {
             MachineFocus.Olvidar(this);
@@ -563,7 +663,9 @@ namespace Alkahest.Game
             // huella de ANTES de tocar el ancla -- si se calculara después de
             // mover _anchorX/_baseY, `Calcular` devolvería la huella NUEVA y
             // borraríamos el sitio equivocado.
-            BorrarEnCaliente(Calcular(_anchorX, _baseY));
+            var huellaVieja = Calcular(_anchorX, _baseY);
+            BorrarEnCaliente(huellaVieja);
+            RestaurarSueloBase(huellaVieja); // (playtest 32) ver el docblock -- limpia cualquier pedestal elevado que esta instancia hubiera dejado ahí.
 
             int dx = anclaCelda.x - _outX0;
             int dy = anclaCelda.y - _baseY;
@@ -1166,19 +1268,80 @@ namespace Alkahest.Game
                 new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY - HogarFilas - 0.4f) * c, 0f),
                 anchoCestoW * 1.2f, 3.5f * c, 0.38f);
 
-            // ---- (playtest 31) LAS LUCES. Radios en CELDAS (por eso van
-            // multiplicados por `c`): el hogar alumbra bastante más que su
-            // propia boca -- una hoguera ilumina el cuarto, no el hueco donde
-            // está.
+            // =============================================================
+            // (playtest 33) LA LUZ DEJA DE SER UN STICKER
+            // =============================================================
+            // Cesar, sobre la luz del 31/32: *"la LUZ sobre el horno no es
+            // mala pero se ve OMNIPRESENTE, parece PEGADA EN LA PANTALLA, no
+            // se siente parte del horno: ajusta qué puede alumbrar y qué no
+            // con criterio -- quizás el contenedor de paredes brillando sin
+            // incluir el techo porque no tiene -- que no parezca un STICKER
+            // pegado"*.
+            //
+            // EL DIAGNÓSTICO EXACTO (medido sobre los valores viejos, no a
+            // ojo): `_luzHogar` era un disco de **46 celdas de diámetro**
+            // centrado a media altura del hogar. La huella COMPLETA del
+            // Crisol mide 37x24. O sea que el halo desbordaba la máquina por
+            // los cuatro lados -- 11 celdas de naranja a cada lado sobre la
+            // piedra desnuda del suelo, y 11 por encima de la boca, sobre
+            // AIRE. Con la caída 2.2 de aquel `Halo()` eso todavía llevaba un
+            // 6% de alfa a 17 celdas del centro. Un disco así, quieto, que
+            // cubre más que su propio objeto, es exactamente lo que el ojo
+            // clasifica como "capa pegada al cuadro".
+            //
+            // EL CRITERIO NUEVO, en tres piezas y una regla:
+            //   REGLA: nada se ilumina si no hay una superficie física ahí
+            //   que pudiera recibir esa luz.
+            //   1) LUZ DE MURO (`_luzMuro`, la pieza nueva): un rectángulo
+            //      que cubre EXACTAMENTE la mampostería del horno
+            //      (`_outX0.._outX1` x `hogar..bocaY1`) y se apaga a cero en
+            //      su borde de arriba -- ver MaquinariaSprites.LuzDeMuro.
+            //      Es lo que Cesar describió con sus palabras ("el contenedor
+            //      de paredes brillando sin incluir el techo"): el cuerpo del
+            //      horno se pone al rojo desde dentro y el aire de encima
+            //      queda oscuro.
+            //   2) BOCA DE FUEGO (`_luzHogar`): 46 -> **15** celdas. Deja de
+            //      ser "la luz de la sala" y pasa a ser el rescoldo que se ve
+            //      por la boca del hogar: no llega ni al borde de la panza.
+            //   3) CÁMARA (`_luzCamara`): de (CamaraAncho+8) x (CamaraAlto+6)
+            //      = 21x15 a **(CamaraAncho-2) x (CamaraAlto-1)** = 11x8, o
+            //      sea DENTRO de la cámara. Lo que está al rojo es la carga,
+            //      y la carga está ahí dentro; que se derramara luz por
+            //      encima del labio era el mismo error en pequeño.
+            //   4) BRASERO (`_luzBrasero`): 30 -> **11**, más su propia luz
+            //      de muro sobre el cesto (`_luzMuroCesto`).
+            // Y, transversal a todo, la caída del sprite radial compartido
+            // pasó de 2.2 a 3.6 (MaquinariaSprites.Halo, ver su docblock):
+            // eso arregla de paso la lámpara del Banco de Chispa y los
+            // destellos de las redomas, que Cesar citó por su nombre.
+            // =============================================================
+            int muroSpan = _outX1 - _outX0 + 1;                 // 37 celdas: la huella real, no un número a ojo.
+            int muroY0 = _baseY - HogarFilas;                   // la primera fila del hogar, bajo la panza.
+            int muroY1 = _bocaY1;                               // LA CORNISA: por encima de aquí no hay horno que alumbrar.
+            int muroAlto = muroY1 - muroY0 + 1;
+            _luzMuro = MaquinariaSprites.Luz.CrearMuro(transform, "LuzMuroCrisol",
+                new Vector3(posCuerpo.x, (muroY0 + muroAlto * 0.5f) * c, 0f),
+                muroSpan, muroAlto, muroSpan * c, muroAlto * c,
+                new Color(1f, 0.50f, 0.19f), sesgoAbajo: 0.70f);
+
             _luzHogar = MaquinariaSprites.Luz.Crear(transform, "LuzHogar",
                 new Vector3(posCuerpo.x, (_baseY - HogarFilas * 0.5f) * c, 0f),
-                46f * c, new Color(1f, 0.56f, 0.22f));
+                15f * c, new Color(1f, 0.56f, 0.22f));
             _luzCamara = MaquinariaSprites.Luz.CrearOvalada(transform, "LuzCamara",
-                new Vector3(posCuerpo.x, (_baseY + CamaraAlto * 0.5f) * c, 0f),
-                (CamaraAncho + 8) * c, (CamaraAlto + 6) * c, new Color(1f, 0.72f, 0.36f));
+                new Vector3(posCuerpo.x, (_baseY + CamaraAlto * 0.45f) * c, 0f),
+                (CamaraAncho - 2) * c, (CamaraAlto - 1) * c, new Color(1f, 0.72f, 0.36f));
             _luzBrasero = MaquinariaSprites.Luz.Crear(transform, "LuzBrasero",
-                new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY + BraseroAlto * 0.4f) * c, 0f),
-                30f * c, new Color(1f, 0.48f, 0.16f));
+                new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY + BraseroAlto * 0.35f) * c, 0f),
+                11f * c, new Color(1f, 0.48f, 0.16f));
+
+            int cestoSpan = BraseroAncho + 2 * muroCesto;       // 13, el mismo que ya usa el sprite del cesto arriba.
+            int cestoY0 = _baseY - HogarFilas;
+            int cestoY1 = _baseY + BraseroAlto + 1;             // el labio del cesto: su cornisa.
+            int cestoAlto = cestoY1 - cestoY0 + 1;
+            _luzMuroCesto = MaquinariaSprites.Luz.CrearMuro(transform, "LuzMuroBrasero",
+                new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (cestoY0 + cestoAlto * 0.5f) * c, 0f),
+                cestoSpan, cestoAlto, cestoSpan * c, cestoAlto * c,
+                new Color(1f, 0.44f, 0.14f), sesgoAbajo: 0.78f);
         }
 
         private void ActualizarVisual()
@@ -1235,15 +1398,34 @@ namespace Alkahest.Game
                 // sería honesto -- SÍ tiene rescoldo (las brasas se dibujan a
                 // 0.06 de intensidad, no a 0) -- así que la luz arranca en
                 // 0.13 y sube a ~0.50 con la hornada al rojo.
-                _luzHogar?.Latir(0.11f + 0.40f * intensidadHogar, 0.03f + 0.06f * intensidadHogar, 0.85f);
+                _luzHogar?.Latir(0.13f + 0.46f * intensidadHogar, 0.03f + 0.07f * intensidadHogar, 0.85f);
                 // La cámara sólo brilla mientras cocina: es la carga la que
                 // está al rojo, y en reposo no hay nada al rojo dentro.
-                _luzCamara?.Intensidad(corriendo ? Mathf.Lerp(0.10f, 0.34f, t) : (_fase == Fase.Lista ? 0.14f : 0f));
+                _luzCamara?.Intensidad(corriendo ? Mathf.Lerp(0.12f, 0.40f, t) : (_fase == Fase.Lista ? 0.16f : 0f));
                 // El brasero: la luz más viva del taller, y con otro ritmo
                 // (1.7 Hz frente a 0.85) para que las dos llamas nunca
                 // respiren a la vez.
-                if (_cestoArdiendo) _luzBrasero?.Latir(0.42f, 0.11f, 1.7f, 0.37f);
+                if (_cestoArdiendo) _luzBrasero?.Latir(0.46f, 0.12f, 1.7f, 0.37f);
                 else _luzBrasero?.Intensidad(0f);
+
+                // (playtest 33) LA MAMPOSTERÍA DEL PROPIO HORNO. Es la luz que
+                // sustituye al disco gigante, y la que de verdad cuenta el
+                // estado: se alimenta de la MISMA `intensidadHogar` que las
+                // brasas (imposible que la piedra diga "al rojo" con el hogar
+                // negro -- la lección del playtest 27 que el 31 ya respetaba,
+                // aquí extendida al muro), y suma un plus cuando el brasero
+                // arde de verdad, porque entonces hay DOS fuegos calentando la
+                // misma piedra.
+                //   · rescoldo tenue (fase Vacio, intensidad 0.06) -> 0.10
+                //   · resultado listo reposando (0.18)             -> 0.15
+                //   · hornada plena (1.0)                          -> 0.44
+                //   · + brasero ardiendo                           -> +0.16
+                // Latido MUY lento (0.55 Hz) y de poca amplitud: la piedra
+                // tiene inercia térmica, no parpadea como una llama.
+                float muro = 0.06f + 0.38f * intensidadHogar + (_cestoArdiendo ? 0.16f : 0f);
+                _luzMuro?.Latir(muro, 0.018f + 0.03f * intensidadHogar, 0.55f, 0.13f);
+                if (_cestoArdiendo) _luzMuroCesto?.Latir(0.34f, 0.06f, 1.25f, 0.61f);
+                else _luzMuroCesto?.Intensidad(0.05f); // el cesto frío guarda un rescoldo mínimo: apagarlo del todo lo desprende visualmente del horno.
             }
 
             if (_latidoTrabajo != null)

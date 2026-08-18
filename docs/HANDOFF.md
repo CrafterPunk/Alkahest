@@ -2562,3 +2562,46 @@ ChaosAlchemyMulti (final) + Respaldo_TramoA_Multi. Fix definitivo: NetworkConfig
 Deuda elegida a consciencia (3am, estabilidad > features): PARTÍCULAS (chispas del banco, motas
 del crisol, polvillo de la prensa) — primera tarea de la próxima ronda. Los commits 31/32
 comparten archivos: compilable garantizado solo tras subir ambos en orden.
+
+---
+
+## Playtest 33 → CIMIENTOS Y ARQUITECTURA (los "ajustes finales" de Cesar tras la demo)
+
+**Los bugs de cimientos (Sonnet, causa raíz confirmada)**: las terrazas del 32 se tallaban ANTES
+de que las estaciones se registraran en ObraDelTaller (AdornarCuarto corre en AlkahestSim.Start;
+las máquinas se registraban recién en su Init, del bootstrap) → el sistema de protección miraba
+un registro VACÍO: terrazas coladas bajo las huellas (máquinas "enterradas", suelo con "formita
+rara"). Fix: registro desde TallarEnPlano/génesis + Init RECLAMA el handle (HallarObraExacta).
+El "rastro de bedrock EN EL SUELO" al mudar: sin snapping vertical, al soltar en otra cota la
+fila de suelo propio vieja quedaba huérfana → PLATAFORMA SOBERANA (cada estación aplana
+huella+2 antes de tallar; al mudarse RestaurarSueloBase devuelve el sitio al nivel de la losa).
+El foco flotante del banco: +12f mágico sin relación con el travesaño (+4f) — regla 47 otra vez;
+ahora una sola fuente de verdad geométrica + cordón visual. Y el AVISO DE BAUTIZO: descubrir un
+innominado dispara el banner "ALGO NUEVO — pulsa T para bautizarlo" por la misma cola FIFO de
+"LEY DESCUBIERTA" (un aviso por material, Cinzel, respeta EscribiendoTexto).
+
+**La arquitectura (Opus con ojos, 3 ciclos jugando)**: el cuarto crece (140..378 × 168..262,
+bóveda hasta 274): SEIS casquetes parabólicos con nervios sobre pilastras (arcos fajones), TRES
+claraboyas ciegas con haz frío (la única temperatura opuesta al fuego), tres aparejos de
+sillería por zona, dovelas, vigas cruzadas, cadenas. NUEVE BALDAS físicas de piedra con ménsulas
+inclinadas de latón (los polvos/sólidos se APOYAN de verdad — cohesión regla 7): la "línea sobre
+el horno" que amaba Cesar ahora es una galería continua de 33 celdas, más repisas en las alturas
+para EXHIBIR hallazgos. ZONIFICACIÓN del interiorista: húmeda (140..171) → fuego (crisol 194 +
+alambique) → fuerza (prensa 246) → ESCALINATA-umbral → alcoba de observación (columna 284 +
+chispa 324, juntos bajo la bóveda alta y sus claraboyas) → atrio → ENSAYO (362) casado con la
+Tolva en el vestíbulo de entrega — el recorrido crudo→transformar→observar→examinar→entregar SE
+SIENTE. LA LUZ DEJÓ DE SER STICKER: diagnóstico medido (disco de 46 celdas sobre máquina de
+37×24); ahora LuzDeMuro recortada a la mampostería real con corte duro arriba ("el contenedor
+brillando sin incluir el techo", literal de Cesar), halos 46→15/11, caída 2.2→3.6 (arregla de
+paso lámpara y redomas), latido atado a la intensidad real del hogar. El vestíbulo de la Tolva
+ganó sillería (28% más oscura) al entrar en cuadro por primera vez.
+
+**La cota por zona (Fable, cierre de la deuda del arquitecto)**: `BaseYDeEstacion(anclaX)` — la
+alcoba de observación vive a +6 (sobre la escalinata), el atrio del Ensayo a +3; resuelta POR
+ANCLA, no por tipo (regla 47); las plataformas soberanas hacen el resto, y al mudar, la estación
+aplana a la cota donde cae.
+
+**Deuda declarada y viva**: PARTÍCULAS (motas del crisol, chispas del banco, polvo en los haces
+de claraboya — "el haz de luz PIDE partículas"), segundo registro de objetos pequeños en la
+pared izquierda (herramientas colgadas, hornacinas con cosas), ménsulas de las baldas cortas
+aún un punto "a caballete".
