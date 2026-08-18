@@ -435,6 +435,12 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     Ojo: no sustituye el arranque en Unity (ILPP de NGO, escenas, runtime) — sustituye el ciclo
     ciego de "a ver si compila en el PC de Cesar".
 
+54. **LOS FRACASOS DEJAN EVIDENCIA FORENSE (playtest 38, ley de diseño global)**: nada
+    desaparece sin dejar rastro — un fracaso produce ceniza, residuo, gas, tizne, y una
+    anotación automática en el diario ("a esta temperatura se destruye"). Fracasar es un
+    experimento que salió con datos; la ceniza es combustible malo. Toda mecánica destructiva
+    nueva se diseña respondiendo: ¿qué evidencia queda y qué enseña?
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa

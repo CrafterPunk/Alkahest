@@ -2678,3 +2678,22 @@ encontró al primer intento el único error real: CS0030 en SaberSync:340, un ca
 `Equals` sin alloc + `RecortarDescripcion` como único punto de verdad del recorte a 120 chars
 (si el volcado y la comparación recortaran distinto, un encargo largo se re-difundiría cada
 sondeo para siempre). Verificado: 0 errores contra las DLLs reales.
+
+---
+
+## Playtest 38 → EL INFORME DEL MOTOR + SEMILLA CERO v2 (ronda de diagnóstico, sin código de juego)
+
+Cesar pidió diagnóstico frío del motor ("¿en qué % del máximo estamos? ¿qué tan espectacular
+puede ser y a qué costo?") antes de congelar Semilla 0. Se construyó EL BANCO HEADLESS
+(`Tools~/BenchSim/Harness.cs`, corre el SimStepper real compilado contra las DLLs de la build —
+regla 53): peor caso medido = medio mundo de agua (74.000 celdas activas) a 5,5 ms/tick de media
+y 11,6 de pico contra 33,3 de presupuesto. En juego real usamos el 2-5%. Conclusión: el cuello
+de botella del espectáculo no es el algoritmo — es que no le hemos pedido espectáculo. Informe
+completo con menú de mejoras y costes en docs/INFORME_MOTOR.md; paquete recomendado: partículas
+desprendidas + pátina/manchas + gases con corrientes (+~2 ms peor caso) ANTES de Semilla 0;
+cuerpos rígidos estilo Noita: veredicto NO (caro, rompe supuestos del sync, no es nuestro juego).
+SEMILLA CERO v2 en docs/DISENO_SEMILLA_CERO.md: las cinco sugerencias externas aceptadas y
+curadas (bautizo ganado con el Maestro exigiéndolo, fracaso forense ASCENDIDO A LEY regla 54,
+desbloqueos como preguntas literales, currículo de 4+1 ideas, final abierto con el anzuelo del
+vasito del alambique + contador de autonomía como métrica reina). Orden acordado a validar por
+Cesar: motor → semilla → playtest.
