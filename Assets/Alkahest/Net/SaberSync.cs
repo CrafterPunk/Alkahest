@@ -336,8 +336,14 @@ namespace Alkahest.Net
                 {
                     var o = activos[i];
                     var e = _ordenes[i];
+                    // (fix compilación, único error del playtest 36: CS0030)
+                    // FixedString128Bytes no tiene cast a string -- la
+                    // comparación correcta y SIN alloc es al revés: comparar
+                    // contra el string con el propio Equals de FixedString
+                    // (que compara bytes UTF-8 contra el string sin crear
+                    // basura), nunca ToString() por fila por sondeo.
                     if (e.id != o.Id || e.progreso != o.Progreso || e.completado != o.Completado ||
-                        (string)e.descripcion != o.Descripcion)
+                        !e.descripcion.Equals(RecortarDescripcion(o.Descripcion)))
                     {
                         distinto = true;
                         break;
@@ -351,7 +357,7 @@ namespace Alkahest.Net
             {
                 var o = activos[i];
                 string desc = o.Descripcion ?? "";
-                if (desc.Length > 120) desc = desc.Substring(0, 120); // límite de tamaño (FixedString128Bytes, margen UTF-8 -- ver EntradaOrden).
+                desc = RecortarDescripcion(desc); // límite de tamaño (FixedString128Bytes, margen UTF-8) -- MISMO recorte que usa la comparación de cambios de arriba: si difirieran, un encargo con descripción larga se re-difundiría cada sondeo para siempre.
                 _ordenes.Add(new EntradaOrden
                 {
                     id = o.Id,
@@ -448,6 +454,12 @@ namespace Alkahest.Net
         {
             if (_conocimientoLocal == null) return;
             _conocimientoLocal.AplicarNombreRemoto(e.matId, e.nombre.ToString());
+        }
+
+        /// <summary>El recorte canónico de una descripción de encargo para caber en FixedString128Bytes (120 chars, margen UTF-8). ÚNICO punto de verdad: lo usan el volcado y la comparación de cambios -- ver el comentario del fix CS0030.</summary>
+        private static string RecortarDescripcion(string desc)
+        {
+            return (desc != null && desc.Length > 120) ? desc.Substring(0, 120) : desc;
         }
 
         private void AlCambiarDescubiertos(NetworkListEvent<byte> ev)

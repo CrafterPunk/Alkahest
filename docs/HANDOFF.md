@@ -2669,3 +2669,12 @@ bug real era inanición en DifundirChunksSucios (barrido circular ciego con pres
 ahora dos pasadas: prioridad a chunks a ≤60 celdas de CUALQUIER avatar conectado, resto con el
 cursor de siempre. PENDIENTE DE VERIFICAR por Cesar: prueba real de dos ventanas (la build no es
 una app registrable para el control remoto — el editor solo puede ser un lado).
+
+**Playtest 37 (hotfix del 36)**: el 36 no compilaba en el PC de Cesar. Los menús de editor SÍ
+corrían (Unity mantiene los ensamblados del último compile bueno), lo que despistaba. Se montó
+EL COMPILADOR UNITY-FIEL EN EL SANDBOX (regla 53 nueva): DLLs de la build real + dotnet csc —
+encontró al primer intento el único error real: CS0030 en SaberSync:340, un cast inválido
+`(string)FixedString128Bytes` en la comparación de cambios de encargos. Fix: comparación por
+`Equals` sin alloc + `RecortarDescripcion` como único punto de verdad del recorte a 120 chars
+(si el volcado y la comparación recortaran distinto, un encargo largo se re-difundiría cada
+sondeo para siempre). Verificado: 0 errores contra las DLLs reales.

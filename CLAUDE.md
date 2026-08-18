@@ -423,6 +423,18 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     cuidado con léxico peninsular ("coger" es malsonante en LATAM: "tomar/agarrar"). Aplica a
     TODO string visible al jugador; los comentarios del código quedan como estén.
 
+53. **COMPILAR EN EL SANDBOX ANTES DE DESPLEGAR (playtest 37 — el fin del "despliega y reza")**:
+    el sandbox tiene un compilador Unity-FIEL: las DLLs de la build real del jugador
+    (`Builds/ChaosAlchemyMulti/..._Data/Managed/*.dll`, staged a `/home/claude/unityrefs/`) +
+    `dotnet csc` (`/usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll`) con
+    `-nostdlib+ -noconfig -t:library -langversion:9.0 -define:UNITY_64,UNITY_2023_1_OR_NEWER,NETCODEGAMEOBJECTS,STEAMWORKSNET`,
+    todas las fuentes no-Editor de Assets/Alkahest+FriendsLoop, y todos los refs menos
+    `Alkahest.Runtime.dll`. Detectó al primer intento el ÚNICO error real del playtest 36
+    (CS0030 en SaberSync) que tres auditorías de símbolos a mano no vieron. OBLIGATORIO
+    correrlo antes de todo despliegue; si el sandbox se reinicia, re-stagear las DLLs (5 min).
+    Ojo: no sustituye el arranque en Unity (ILPP de NGO, escenas, runtime) — sustituye el ciclo
+    ciego de "a ver si compila en el PC de Cesar".
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
