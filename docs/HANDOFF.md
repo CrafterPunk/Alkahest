@@ -2605,3 +2605,34 @@ aplana a la cota donde cae.
 de claraboya — "el haz de luz PIDE partículas"), segundo registro de objetos pequeños en la
 pared izquierda (herramientas colgadas, hornacinas con cosas), ménsulas de las baldas cortas
 aún un punto "a caballete".
+
+---
+
+## Playtest 34 → LIMO PRIMORDIAL: el rebautizo, los anclajes y el taller que respira
+
+**El juego se llama LIMO PRIMORDIAL** (decisión de Cesar; título + "Todo lo que existe
+desciende del limo."). **EL SISTEMA DE ANCLAJES** (la joya — Cesar diseñó sin querer la
+CONSTRUCCIÓN del juego): cuadraditos de latón 2x2 IMovibles que SON piedra tallada (los sólidos
+con gravedad se apoyan gratis), sustituyen bedrock al colocarse (esquinas perfectas) y no dejan
+hueco al quitarse de piedra original; las baldas adelgazan a 1 fila (≤12 celdas, objetos Balda
+IMovibles con el cuadrito dibujado en los extremos), y hay un DEPÓSITO de 6 anclajes de sobra
+junto al estante. Multi: CERROJO de mudanza (quien agarra bloquea; otros ven "lo está moviendo
+otro alquimista" y la posición final — decisión de costo de Cesar). Redomas y Alambique ahora
+móviles (el alambique solo se registraba en Mudanza al completar la construcción — nunca en obra
+pendiente; + un handle huérfano de RegistrarObra en vez de ActualizarObra). **MUERTE DEL
+AUTO-PATENTE DE 1 PASO**: cadenas de 1 paso jamás ofrecen patente; el BAUTIZO sale al frente si
+el resultado es innominado; patentar exige ≥2 pasos Y todos los ingredientes bautizados
+("bautiza sus ingredientes para poder patentarlo"); el aviso de procedimiento abre el diario EN
+la pestaña PROCEDIMIENTOS. **EL ESPACIO (Opus, 4 ciclos)**: cuarto 80..378 × 136..262 (+25% ancho,
++34% alto — crece hacia ABAJO para ganar aire de cabeza), bóveda FUERA del encuadre inicial (se
+descubre volando, verificado); plano central de Cesar: transformar-izquierda (crisol 102, prensa
+158) / FUENTES AL CENTRO (isla con doble machón, agua 205 + limo 222) / observar-derecha
+(columna 260, chispa 302) / ensayo 362 con la Tolva; FONDO ÚNICO (el aparejo de la prensa,
+contraste a la mitad) cubriendo TODO el mundo con penumbra por profundidad (romper bedrock ya no
+muestra negro), ventanas con marco que el trabado no cruza, cadenas colgando de vigas DEL FONDO,
+capiteles que flotaban 25 celdas (bug del 33) aterrizados, HazClaraboya retirado (regla 15, no
+estaba listo — palabra de Cesar). Deuda: atrio desnudo, hornacinas del piso alto bajo pilastras,
+réplicas de red de Balda/Anclaje dicen "aparato" (MaquinaReplica fuera de alcance del encargo),
+depósito de anclajes sin verificar contra mampostería en el editor. RUMBO STEAM NEXT FEST
+OCTUBRE 2026 (registro cierra fin de agosto): avance estimado 60% — falta Steamworks propio
+(appid real, página, cápsulas — trámite de Cesar), pase de audio, y 30 min jugables sin tutor.

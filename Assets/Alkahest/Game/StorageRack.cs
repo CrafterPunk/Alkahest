@@ -65,7 +65,7 @@ namespace Alkahest.Game
     /// alfa (ver <see cref="FirmaVisualFabrica.ApplyBorde"/>), exactamente el
     /// mismo criterio que ya sigue <c>SimRenderer.ComputeCellColor</c>.
     /// </summary>
-    public sealed class StorageRack : MonoBehaviour
+    public sealed class StorageRack : MonoBehaviour, IMovibleAnclaEsquina
     {
         public const int CapacidadRedoma = 300;
         public const int NumRedomas = 5;
@@ -128,6 +128,16 @@ namespace Alkahest.Game
         private float _redomaAlto;
         private float _redomaSeparacion;
         private float _radioRatonX;
+
+        // -----------------------------------------------------------------
+        // (fix Cesar playtest 33, "REDOMAS MOVIBLES") Ancla actual del mueble
+        // -- antes solo existían como PARÁMETROS locales de BuildVisual,
+        // descartados en cuanto terminaba de construirse; ahora se guardan
+        // como campos porque Reposicionar los necesita para calcular el
+        // delta de la mudanza. `_cellYBase` es un `int` a propósito (mismo
+        // tipo que el parámetro `cellYBase` de BuildVisual/AlkahestGameBootstrap).
+        // -----------------------------------------------------------------
+        private int _cellX0, _cellX1, _cellYBase;
 
         private sealed class Redoma
         {
@@ -193,6 +203,12 @@ namespace Alkahest.Game
             _instancia = this;
 
             BuildVisual(cellX0, cellX1, cellYBase);
+
+            // (fix Cesar playtest 33, "REDOMAS MOVIBLES") Sin mampostería que
+            // tallar (el docblock de la clase ya lo advertía: "no talla
+            // mampostería"), así que registrarse como IMovible es más simple
+            // que en cualquier otra estación -- ver Reposicionar más abajo.
+            Mudanza.RegistrarMovible(this);
         }
 
         /// <summary>
@@ -203,9 +219,68 @@ namespace Alkahest.Game
         /// nuevo -- sin este bucle se acumularían huérfanas, hasta
         /// MaterialId.Count * AnimFrames texturas más por partida.
         /// </summary>
+        // -----------------------------------------------------------------
+        // (fix Cesar playtest 33, "REDOMAS MOVIBLES") IMovibleAnclaEsquina:
+        // el ancla es la esquina inferior izquierda del mueble (_cellX0,
+        // _cellYBase) -- exactamente el `cellX0`/`cellYBase` que
+        // AlkahestGameBootstrap ya pasaba a BuildVisual, así que la sombra
+        // alineada de Game/Mudanza.cs cae justo donde aterrizaría el mueble
+        // (mismo patrón que las cinco estaciones/Alambique/Balda).
+        // -----------------------------------------------------------------
+        public Vector3 CentroMundo => transform.position;
+        public Vector2 TamanoMundo => new Vector2((_cellX1 - _cellX0 + 1) * SimRenderer.CellWorldSize, _redomaAlto);
+        public Vector2Int AnclaCelda => new Vector2Int(_cellX0, _cellYBase);
+
+        public bool CabeEnAncla(Vector2Int anclaCelda)
+        {
+            int span = _cellX1 - _cellX0 + 1;
+            return anclaCelda.x >= 1 && anclaCelda.x + span - 1 <= CellGrid.W - 2
+                && anclaCelda.y >= 1 && anclaCelda.y <= CellGrid.H - 2;
+        }
+
+        /// <summary>
+        /// Sin mampostería que tallar (el estante es puro sprite, ver el
+        /// docblock de la clase): mover el mueble es solo trasladar
+        /// `transform.position` -- eso arrastra TODOS los hijos (Liston/
+        /// Contenido_i/Vidrio_i/Tapon_i/Brillo_i), mismo mecanismo que
+        /// Game/ColumnaEnsayo.cs/Game/Crisol.cs documentan para su propia
+        /// mampostería (regla 36 de CLAUDE.md: nunca volver a llamar a
+        /// Init/BuildVisual para mover). La ÚNICA cuenta pendiente es que
+        /// cada <see cref="Redoma"/> guarda `MundoX`/`BaseY` en coordenadas
+        /// de MUNDO ABSOLUTAS (las usan ActualizarRedoma/RedomaBajoCursor/
+        /// JugadorCerca/OnGUI, ninguna las deriva de `transform` cada
+        /// frame) -- así que esos dos campos SÍ hay que desplazarlos a mano
+        /// por el mismo delta.
+        /// </summary>
+        public void Reposicionar(Vector2Int anclaCelda)
+        {
+            int dxCeldas = anclaCelda.x - _cellX0;
+            int dyCeldas = anclaCelda.y - _cellYBase;
+            if (dxCeldas == 0 && dyCeldas == 0) return;
+
+            float celda = SimRenderer.CellWorldSize;
+            float dxMundo = dxCeldas * celda;
+            float dyMundo = dyCeldas * celda;
+
+            transform.position += new Vector3(dxMundo, dyMundo, 0f);
+
+            for (int i = 0; i < NumRedomas; i++)
+            {
+                var r = _redomas[i];
+                if (r == null) continue;
+                r.MundoX += dxMundo;
+                r.BaseY += dyMundo;
+            }
+
+            _cellX0 += dxCeldas;
+            _cellX1 += dxCeldas;
+            _cellYBase += dyCeldas;
+        }
+
         private void OnDestroy()
         {
             if (_instancia == this) _instancia = null;
+            Mudanza.OlvidarMovible(this);
 
             for (int m = 0; m < _firmaTexturas.Length; m++)
             {
@@ -232,6 +307,10 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void BuildVisual(int cellX0, int cellX1, int cellYBase)
         {
+            _cellX0 = cellX0;
+            _cellX1 = cellX1;
+            _cellYBase = cellYBase;
+
             float celda = SimRenderer.CellWorldSize;
             float izq = cellX0 * celda;
             float der = (cellX1 + 1) * celda;

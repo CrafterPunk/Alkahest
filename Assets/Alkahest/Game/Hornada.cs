@@ -50,6 +50,19 @@ namespace Alkahest.Game
         /// <summary>"Hasta 4 hacia atrás" (contrato §6.4): la cadena congelada de una patente nunca es más larga que esto.</summary>
         private const int PasosPorPatente = 4;
 
+        /// <summary>
+        /// (fix Cesar playtest 33, "LA MUERTE DEL AUTO-PATENTE DE 1 PASO")
+        /// Cesar, literal: *"caliento la primera arena y me sale 'has
+        /// descubierto un procedimiento'... patentar solo debería valer la
+        /// pena para procesos de AL MENOS 2 pasos"*. Antes de este fix,
+        /// <see cref="CongelarPatente"/> congelaba con
+        /// <c>Mathf.Min(PasosPorPatente, _ringCount)</c>, que en el PRIMER
+        /// descubrimiento de la partida vale 1 (el ring buffer solo lleva un
+        /// paso escrito) -- un procedimiento de una sola línea no es un
+        /// "procedimiento", es literalmente lo que se acaba de hacer una vez.
+        /// </summary>
+        private const int MinPasosParaPatente = 2;
+
         /// <summary>Tope de patentes registrables en una partida -- ~40 variantes base×estado posibles (MaterialId.BasesCount*8), 16 es margen amplio sin reservar de más. PÚBLICA a propósito: JournalHud.cs dimensiona su array de entradas de PROCEDIMIENTOS contra este mismo número, para no duplicar el "16" como magia en dos archivos.</summary>
         public const int MaxPatentes = 16;
 
@@ -127,6 +140,14 @@ namespace Alkahest.Game
             if (_patentesCount >= MaxPatentes) return; // defensivo: no debería agotarse en una partida real.
 
             int pasos = Mathf.Min(PasosPorPatente, _ringCount);
+            // (fix Cesar playtest 33) Ver el docblock de MinPasosParaPatente:
+            // una cadena de un solo paso nunca patenta. `_producido[matResultado]`
+            // ya se marcó true en RegistrarOp ANTES de llamar aquí, así que
+            // este material no vuelve a intentarlo -- correcto: si la PRIMERA
+            // vez que se ve fue una cadena de 1 paso, patentarlo más tarde
+            // (cuando el ring buffer ya tenga más historia) describiría una
+            // cadena que no fue la que realmente lo produjo la primera vez.
+            if (pasos < MinPasosParaPatente) return;
             var arr = new PasoPatente[pasos];
             // _ring es circular; el índice recién escrito es (_ringHead - 1 + RingSize) % RingSize,
             // y de ahí hacia atrás están los pasos anteriores, del más antiguo al más nuevo.
@@ -156,6 +177,33 @@ namespace Alkahest.Game
 
         /// <summary>¿Hay al menos una patente registrada (bautizada o no)? Contrato §6.1: es el criterio de <see cref="OrderType.Procedimiento"/>.</summary>
         public static bool TieneAlMenosUnaPatente() => _patentesCount > 0;
+
+        /// <summary>
+        /// (fix Cesar playtest 33, "LA MUERTE DEL AUTO-PATENTE DE 1 PASO",
+        /// puntos c/d) ¿Ya tienen TODOS nombre -- el resultado Y cada
+        /// entrada/salida de cada paso de la cadena -- los materiales de la
+        /// patente `index`? Cesar, literal: *"la patente dice 'material
+        /// ????'... mejor que el BAUTIZO venga al frente en vez de las
+        /// patentes"*. Esta es la señal que <see cref="SubstanceKnowledge"/>
+        /// usa para RETRASAR el anuncio "¡NUEVO PROCEDIMIENTO!" (y que
+        /// Game/JournalHud.cs usa para decidir si ofrece el botón "Bautizar"
+        /// de la patente o el aviso "bautiza sus ingredientes para
+        /// patentarlo") hasta que la ficha se pueda leer sin ningún "???".
+        /// </summary>
+        public static bool IngredientesBautizados(int index, SubstanceKnowledge saber)
+        {
+            if (index < 0 || index >= _patentesCount || saber == null) return false;
+            var patente = _patentes[index];
+            if (!saber.EstaBautizado(patente.MatResultado)) return false;
+
+            var pasos = patente.Pasos;
+            for (int i = 0; i < pasos.Length; i++)
+            {
+                if (!saber.EstaBautizado(pasos[i].MatEntrada)) return false;
+                if (!saber.EstaBautizado(pasos[i].MatSalida)) return false;
+            }
+            return true;
+        }
 
         // (playtest 25) DESCARTADO A PROPÓSITO (regla 15 de CLAUDE.md): hubo
         // aquí un `PatenteSinBautizarMasReciente()` pensado para abrir la

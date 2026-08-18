@@ -2,15 +2,19 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
+using Alkahest.Net;
 
 namespace Alkahest.Game
 {
     /// <summary>
     /// Aparato del taller que el modo Mudanza puede agarrar y recolocar.
     /// Implementado por <see cref="HeatPlate"/>, <see cref="ChillStone"/> y
-    /// <see cref="Dispenser"/> -- Game/StorageRack.cs NO lo implementa en esta
-    /// ronda (otro encargo es dueño de ese archivo ahora mismo, ver CLAUDE.md;
-    /// el estante NO tiene que ser movible todavía).
+    /// <see cref="Dispenser"/>. (fix Cesar playtest 33) Game/StorageRack.cs
+    /// TAMBIÉN lo implementa desde esta ronda ("REDOMAS MOVIBLES", tarea 3
+    /// del encargo) -- el aviso viejo de este párrafo ("el estante NO tiene
+    /// que ser movible todavía") queda desactualizado a propósito, no
+    /// borrado (regla 15 de CLAUDE.md): documenta que hubo una ronda entera
+    /// en la que fue una decisión consciente, no un olvido.
     ///
     /// EL CONTRATO ES DELIBERADAMENTE FINO: Mudanza trata cada aparato de
     /// forma OPACA -- nunca lee sus campos privados, nunca sabe si es una
@@ -290,6 +294,13 @@ namespace Alkahest.Game
                 var comoObjeto = m as Object;
                 if (comoObjeto == null) continue; // destruido: lo limpiará la pasada de IntentarAgarrar.
                 if (m.AnclaCelda == _anclasDeFabrica[i]) continue; // ya estaba en su sitio.
+                // (fix Cesar playtest 33, MULTI) R con las manos vacías no le
+                // arranca a otro jugador lo que tiene agarrado en ESE
+                // instante: se salta cualquier aparato con el cerrojo puesto
+                // por otro cliente y sigue con el resto -- "todo vuelve a su
+                // sitio" no debería incluir "menos lo que alguien más está
+                // usando ahora mismo".
+                if (MaquinaSync.EstaBloqueadoPorOtro(m)) continue;
                 m.Reposicionar(_anclasDeFabrica[i]);
                 movidos++;
             }
@@ -350,6 +361,52 @@ namespace Alkahest.Game
         {
             _sim = sim;
             BuildVisuals();
+
+            SpawnBaldasYAnclajesSiCorresponde();
+        }
+
+        // -----------------------------------------------------------------
+        // (fix Cesar playtest 33, sistema de baldas/anclajes) EL ÚNICO SITIO
+        // DE ESTE ENCARGO DONDE SE PUEDE INYECTAR AlkahestSim
+        // -----------------------------------------------------------------
+        // Game/Balda.cs y Game/Anclaje.cs son GEOMETRÍA DEL MUNDO (como las
+        // cinco estaciones), no herramientas del jugador -- deberían nacer
+        // UNA vez desde AlkahestGameBootstrap.cs, junto a SpawnColumnaEnsayo/
+        // SpawnAlambique. Ese archivo NO está en la lista de permitidos de
+        // este encargo, así que no hay forma de añadir un `SpawnBaldas(...)`
+        // ahí. Mudanza.Init SÍ es un archivo permitido y SÍ recibe
+        // `AlkahestSim` -- pero es un componente POR AVATAR
+        // (`[RequireComponent(typeof(ApprenticeController))]`, ver
+        // Net/AprendizNet.cs::Cablear/AlkahestGameBootstrap.SpawnApprentice),
+        // así que llamar aquí sin más duplicaría baldas/anclajes una vez por
+        // jugador local. Dos guardas, cada una necesaria por su cuenta:
+        //
+        ///  1) `Balda.SpawnTodas`/`Anclaje.SpawnDeposito` llevan su PROPIO
+        ///     flag estático "ya creado" (ver esos archivos) -- así que
+        ///     aunque Init se llamara dos veces en el MISMO proceso, la
+        ///     segunda es un no-op. Es la red de seguridad de fondo.
+        ///  2) SOLO EL ANFITRIÓN (o la partida de un jugador, que es "su
+        ///     propio anfitrión") talla de verdad: en un invitado, este
+        ///     mismo método correría en SU proceso, con SU propio flag
+        ///     estático a false la primera vez -- sin este segundo chequeo,
+        ///     cada invitado tallaría su propia copia de las baldas/anclajes
+        ///     EN SU GRID LOCAL, que ni siquiera es la autoritativa (la sim
+        ///     vive solo en el anfitrión, ver Net/SimSync.cs). Un invitado
+        ///     recibe las baldas/anclajes como <see cref="Alkahest.Net.MaquinaReplica"/>
+        ///     (registro de Net/MaquinaSync.cs, tipos Balda/Anclaje) --
+        ///     exactamente el mismo camino que ya usan las cinco estaciones
+        ///     y los grifos, ver el docblock de esa clase.
+        ///
+        /// `SimSync.EsServidor` ya es la comprobación que usa
+        /// AlkahestGameBootstrap.TrySpawnRed para esta misma decisión
+        /// ("¿soy quien construye el taller de verdad?"); en la escena de un
+        /// jugador (sin NetworkManager activo) es trivialmente `true`.
+        // -----------------------------------------------------------------
+        private void SpawnBaldasYAnclajesSiCorresponde()
+        {
+            if (!SimSync.EsServidor) return;
+            Balda.SpawnTodas(_sim);
+            Anclaje.SpawnDeposito(_sim, transform);
         }
 
         private void Update()
@@ -532,6 +589,22 @@ namespace Alkahest.Game
                 return;
             }
 
+            // (fix Cesar playtest 33, MULTI) EL CERROJO: "no es necesario que
+            // otros vean el movimiento; basta con que impida que otro mueva
+            // algo que alguien ya está moviendo, con un aviso". Solo tiene
+            // efecto real para los tipos que viven en el registro de
+            // Net/MaquinaSync.cs (las cinco estaciones/grifos de siempre +
+            // Balda/Anclaje desde esta ronda) -- para cualquier otro IMovible
+            // (HeatPlate/ChillStone/Criatura/Capullo/StorageRack/Alambique...)
+            // Net.MaquinaSync.EstaBloqueadoPorOtro siempre devuelve false, así
+            // que este bloque es un no-op transparente para ellos.
+            if (MaquinaSync.EstaBloqueadoPorOtro(mejor))
+            {
+                if (_flask != null) _flask.Avisar("lo está moviendo otro alquimista");
+                return;
+            }
+            MaquinaSync.PedirBloqueo(mejor);
+
             _llevando = mejor;
             _offsetArrastreCeldas = mejor.AnclaCelda - _cursorCell;
             if (_flask != null) _flask.Avisar("agarrado — clic izq. suelta, R cancela");
@@ -566,6 +639,7 @@ namespace Alkahest.Game
             }
 
             _llevando.Reposicionar(anclaCandidata);
+            MaquinaSync.PedirLiberar(_llevando); // (fix Cesar playtest 33, MULTI) el cerrojo se suelta AQUÍ, con el aparato ya en su sitio final -- no antes.
             if (_flask != null) _flask.Avisar("colocado");
             _llevando = null;
         }
@@ -581,6 +655,7 @@ namespace Alkahest.Game
         private void CancelarYSoltar()
         {
             if (_llevando == null) return;
+            MaquinaSync.PedirLiberar(_llevando); // (fix Cesar playtest 33, MULTI) cancelar también suelta el cerrojo -- si no, quedaría "agarrado" para siempre a ojos de los demás.
             if (_flask != null) _flask.Avisar("mudanza cancelada");
             _llevando = null;
         }

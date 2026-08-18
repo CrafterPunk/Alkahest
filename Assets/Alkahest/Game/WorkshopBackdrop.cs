@@ -302,49 +302,89 @@ namespace Alkahest.Game
 
                 // El capitel invertido del pie: dos ménsulas espejadas bajo el
                 // vuelo que ya talla el plano.
+                //
+                // (playtest 34, BUG VISTO JUGANDO -- regla 52) Estas dos
+                // líneas MEZCLABAN UNIDADES: `cxP` ya viene multiplicado por
+                // `c` (unidades de mundo) y se le sumaba `anchoP*0.5f+0.5f`
+                // SIN multiplicar, o sea 2.5 unidades de mundo = **25
+                // CELDAS**. Resultado en pantalla: diez ménsulas de latón
+                // flotando en mitad del aire, repartidas por toda la bóveda,
+                // cada una a 25 celdas de la pilastra a la que pertenecía --
+                // se veían como calcomanías sueltas y no había forma de
+                // adivinar de dónde salían leyendo el código a ojo, porque
+                // la fórmula "parece" correcta. Sobrevivió a la ronda
+                // anterior porque el 33 tenía la sala llena de herrajes y dos
+                // chevrones más no llamaban la atención; con la sala 32
+                // celdas más alta y medio vacía, saltan a la vista.
                 var cap = MaquinariaSprites.MensulaInclinada(3, 3);
+                float vueloCap = (anchoP * 0.5f + 0.5f) * c;
                 var ci = MaquinariaSprites.CrearCapa(raiz, "PilastraCapIzq_" + i, cap, OrdenHerraje + 1, 3f * c, 3f * c);
-                ci.transform.position = new Vector3(cxP - anchoP * 0.5f - 0.5f, yBot * c + 1.4f * c, 0f);
+                ci.transform.position = new Vector3(cxP - vueloCap, (yBot + 1.4f) * c, 0f);
                 var ei = ci.transform.localScale; ei.x = -ei.x; ci.transform.localScale = ei;
                 var cd = MaquinariaSprites.CrearCapa(raiz, "PilastraCapDer_" + i, cap, OrdenHerraje + 1, 3f * c, 3f * c);
-                cd.transform.position = new Vector3(cxP + anchoP * 0.5f + 0.5f, yBot * c + 1.4f * c, 0f);
+                cd.transform.position = new Vector3(cxP + vueloCap, (yBot + 1.4f) * c, 0f);
             }
 
-            // 6) (SEGUNDA PASADA) LOS HACES DE LAS CLARABOYAS. El tinte que la
-            //    textura de fondo pinta por debajo del pozo era demasiado
-            //    tímido para verse a escala de juego (subido x3 igualmente) y,
-            //    peor, iba EN EL FONDO: no podía caer sobre las máquinas ni
-            //    sobre la piedra del suelo, que es la mitad de lo que hace
-            //    creíble un tragaluz. Estos sprites se dibujan delante, como
-            //    los halos.
-            for (int i = 0; i < SimLevelBuilder.ClaraboyaColumnas.Length; i++)
-            {
-                int cx = SimLevelBuilder.ClaraboyaColumnas[i];
-                const int hazAlto = 46;
-                int hazAncho = 30;
-                var haz = MaquinariaSprites.CrearCapa(raiz, "HazClaraboya_" + i,
-                    MaquinariaSprites.HazClaraboya(hazAncho, hazAlto), MaquinariaSprites.OrdenHalo - 1,
-                    hazAncho * c, hazAlto * c);
-                haz.transform.position = new Vector3((cx + 0.5f) * c, (SimLevelBuilder.CuartoY1 + 6 - hazAlto * 0.5f) * c, 0f);
-                // Azul lechoso MUY bajo de alfa: la luz de fuera es fría y
-                // entra por un pozo de piedra, no por una ventana.
-                haz.color = new Color(0.62f, 0.74f, 0.95f, 0.17f);
-            }
+            // 6) LOS HACES DE LAS CLARABOYAS -- **RETIRADOS** (playtest 34,
+            //    regla 15 de CLAUDE.md: se documenta lo que se quita, no se
+            //    borra en silencio). Cesar, jugando el 33: *"la LUZ de las
+            //    claraboyas no está lista: rompo bedrock y queda EN EL AIRE
+            //    -- QUÍTALA por ahora, luego volvemos"*. Tenía razón y el
+            //    motivo es estructural, no de calibración: estos sprites se
+            //    dibujaban DELANTE de la sim (OrdenHalo-1) en una posición
+            //    fija derivada de `CuartoY1`, sin ninguna relación con la
+            //    piedra que tenían debajo -- en cuanto el jugador cincelaba
+            //    la bóveda, el cono seguía ahí, colgado del aire, señalando
+            //    un pozo que ya no existía. Un haz de luz volumétrico honesto
+            //    necesita saber por dónde pasa la piedra (y, como el propio
+            //    Cesar apuntó en el 33, PARTÍCULAS que lo habiten); las dos
+            //    cosas son la ronda siguiente. El pozo ciego SIGUE tallado en
+            //    Sim/SimLevelBuilder.TallarBoveda y la claraboya sigue
+            //    DIBUJADA como ventana ciega en el propio fondo (ver
+            //    `ClasificarVano`), que es lo que Cesar sí pidió conservar:
+            //    lo que se va es la luz, no la ventana.
+            //    El código, para cuando se retome:
+            //      var haz = MaquinariaSprites.CrearCapa(raiz, "HazClaraboya_" + i,
+            //          MaquinariaSprites.HazClaraboya(hazAncho, hazAlto), ...);
+            //      haz.color = new Color(0.62f, 0.74f, 0.95f, 0.17f);
 
-            // 4) LAS CADENAS. Cuelgan del techo en los vanos que quedaron
-            //    vacíos entre baldas -- son lo que le da ESCALA a una bóveda
-            //    de 95 celdas (sin nada colgando, 95 y 60 se ven igual) y de
-            //    paso ganchos donde el ojo imagina que se cuelgan cosas.
-            //    Columnas elegidas a mano en aire libre comprobado contra el
-            //    plano: 168 (sobre el machón de las fuentes), 230 (paso
-            //    fuego->fuerza), 300 (alcoba, junto a la Columna) y 346
-            //    (atrio). Longitudes distintas por la misma razón que las
-            //    pilastras tienen caídas distintas: un ritmo regular se deja
-            //    de mirar.
+            // 7) LAS CADENAS, COLGADAS DE LAS VIGAS DEL PROPIO FONDO
+            //    (playtest 34, obra C). Cesar: *"las cadenas están bien pero
+            //    deben COLGAR DE ALGO del DIBUJO DE FONDO (vigas del fondo en
+            //    el tercio superior), porque si agrando el taller quedan
+            //    cubiertas por bedrock o flotando"*.
+            //
+            //    EL DIAGNÓSTICO, QUE ES EL QUE MANDA: hasta el 33 las cadenas
+            //    nacían en `yTop = CuartoY1`, o sea colgando del TECHO DE
+            //    PIEDRA DE LA SIM. Eso tiene dos fallos que Cesar vio a la
+            //    primera: (a) esa piedra es excavable -- el jugador pica la
+            //    bóveda y la cadena se queda flotando de nada; (b) el techo
+            //    de piedra se dibuja DELANTE del fondo, así que la primera
+            //    celda de la cadena quedaba tapada y la cadena parecía
+            //    empezar en el aire de todos modos.
+            //
+            //    LA CORRECCIÓN: nacen de las VIGAS que pinta la textura de
+            //    fondo (<see cref="_vigasY"/>), en el tercio superior de la
+            //    sala. Esas vigas son PINTURA, no celdas: no se pueden picar,
+            //    no se pueden tapar por bedrock roto, y siguen ahí aunque el
+            //    jugador excave la sala entera -- que es literalmente lo que
+            //    pedía el encargo. La cadena arranca en `vigaY - 3`, el canto
+            //    inferior de la viga (ver `FactorViga`: el cuerpo de la viga
+            //    ocupa `v-3..v+1`), así que se ve nacer DE la madera.
             for (int i = 0; i < _cadenasX.Length; i++)
             {
                 int largo = _cadenasLargo[i];
-                float yTop = SimLevelBuilder.CuartoY1;
+                int viga = _vigasY[_cadenasViga[i]];
+                float yTop = viga - 3f; // el canto inferior de la viga: de ahí cuelga.
+
+                // El GANCHO: una ménsula diminuta entre la viga y el primer
+                // eslabón. Sin ella la cadena "toca" la viga; con ella se
+                // AGARRA, que es la diferencia entre un sprite superpuesto y
+                // una pieza montada.
+                var gancho = MaquinariaSprites.CrearCapa(raiz, "CadenaGancho_" + i,
+                    MaquinariaSprites.MensulaInclinada(2, 2), OrdenHerraje + 1, 2f * c, 2f * c);
+                gancho.transform.position = new Vector3((_cadenasX[i] + 0.5f) * c, (yTop + 0.6f) * c, 0f);
+
                 var sr = MaquinariaSprites.CrearCapa(raiz, "Cadena_" + i,
                     MaquinariaSprites.CadenaColgante(largo), OrdenHerraje, 1.6f * c, largo * c);
                 sr.transform.position = new Vector3((_cadenasX[i] + 0.5f) * c, (yTop - largo * 0.5f) * c, 0f);
@@ -354,12 +394,17 @@ namespace Alkahest.Game
 
         /// <summary>Orden de dibujo del herraje: delante del sprite de la sim (-5) y de la piedra, detrás de los halos (40) y del aprendiz (50).</summary>
         private const int OrdenHerraje = 16;
-        // 351 y no 346: la pilastra del atrio (x=343) ocupa con su ménsula
-        // hasta 346, y una cadena naciendo DENTRO de una pilastra es el clásico
-        // "sprite pegado" -- comprobado rect a rect contra PilastraColumnas y
-        // PilastraCaidas, igual que las cuatro alturas de abajo contra Repisas.
-        private static readonly int[] _cadenasX = { 168, 230, 300, 351 };
-        private static readonly int[] _cadenasLargo = { 13, 20, 9, 16 };
+        // (playtest 34) COLUMNAS NUEVAS, para el plano central. Comprobadas
+        // una a una contra `SimLevelBuilder.PilastraColumnas`
+        // (133/185/244/284/331, con ménsula ocupan cx-3..cx+3) para que
+        // ninguna cadena nazca DENTRO de una pilastra -- el clásico "sprite
+        // pegado" que ya costó una iteración en el 33. La separación mínima
+        // real de esta tabla a cualquier pilastra es de 5 columnas.
+        private static readonly int[] _cadenasX = { 162, 208, 252, 296, 338 };
+        /// <summary>Índice en <see cref="_vigasY"/> del que cuelga cada cadena. Solo las DOS vigas altas (1 y 2) sostienen cadenas: el encargo pide el TERCIO SUPERIOR y la viga 0 es la imposta baja, a la altura de las baldas.</summary>
+        private static readonly int[] _cadenasViga = { 2, 1, 2, 1, 2 };
+        /// <summary>Longitudes distintas por la misma razón que las pilastras tienen caídas distintas: un ritmo regular se deja de mirar.</summary>
+        private static readonly int[] _cadenasLargo = { 16, 24, 12, 28, 18 };
 
         /// <summary>
         /// (playtest 21, AJUSTE 2) Fondo del cuarto íntimo: plano, oscuro,
@@ -407,222 +452,290 @@ namespace Alkahest.Game
             // El conjunto queda ~15% MÁS OSCURO que el fondo anterior: la
             // penumbra es lo que permite que un halo cálido se lea como luz.
             // =============================================================
-            // ROCA PROFUNDA (fuera del cuarto): casi negra. Es lo que se ve
-            // por el pasillo de la Tolva y por los bordes del encuadre.
-            var techo = new Color(0.030f, 0.027f, 0.037f);
-            var suelo = new Color(0.052f, 0.041f, 0.037f);
+            // =============================================================
+            // (playtest 34) EL FONDO ÚNICO, DE COBERTURA TOTAL
+            // =============================================================
+            // Tres frases de Cesar jugando el 33, y las tres apuntan al mismo
+            // sitio:
+            //  (3.2) *"el fondo tiene 3 diseños: quiero UNO SOLO -- el que
+            //        está detrás de la PRENSA es el que más me gusta; el
+            //        trabado de ladrillos NO debe atravesar las ventanas;
+            //        menos definido, que se sienta FONDO y no sature"*.
+            //  (3.3) *"el fondo no abarca todo el mapa: cuando rompo en otras
+            //        partes se ve negro"*.
+            //  (5)   *"hay unas LÍNEAS NEGRAS raras en la parte superior del
+            //        fondo: quítalas"*.
+            //
+            // LO QUE CAMBIA, PUNTO POR PUNTO:
+            //
+            // 1) UN SOLO APAREJO. Los tres aparejos por zona del 33 (sillar
+            //    grande ahumado / hilada baja apretada / sillar noble frío)
+            //    se retiran a favor del que Cesar eligió por su nombre: el de
+            //    la zona de la PRENSA, hilada baja y apretada (7x3 celdas).
+            //    Ver <see cref="AparejoDelTaller"/>, que conserva el porqué
+            //    de los otros dos por la regla 15 de CLAUDE.md.
+            //
+            // 2) COBERTURA TOTAL. Antes había un `if (enCuarto)` con un
+            //    `else` de "roca profunda" casi negra: en cuanto el jugador
+            //    cincelaba fuera del rect del cuarto, el agujero enseñaba
+            //    NEGRO. Ahora la sillería se pinta en las 768x288 celdas del
+            //    mundo, sin excepción -- no hay un solo téxel del lienzo que
+            //    no sea muro. Lo que distingue el taller de la roca lejana ya
+            //    no es "haber o no haber dibujo", sino la PROFUNDIDAD:
+            //    `profundidad` (0 dentro del taller, 1 a 110 celdas de él)
+            //    oscurece la pared Y, a la vez, DESVANECE el propio aparejo
+            //    (ver `defin`), así que la piedra se pierde en la penumbra en
+            //    vez de cortarse de golpe. Es la variación tenue por
+            //    profundidad que pedía el encargo, y de paso el borde duro
+            //    que separaba cuarto de roca desaparece solo.
+            //
+            // 3) MENOS DEFINIDO. Todos los contrastes del aparejo bajan a la
+            //    mitad larga: junta 0.55 -> 0.82, canto alto 1.16 -> 1.07,
+            //    canto bajo 0.80 -> 0.92, pátina por pieza +-13% -> +-7%,
+            //    grano +-3% -> +-1.6%. La pared tiene que RETROCEDER; la
+            //    materia de la sim es lo único que puede saturar el cuadro.
+            //
+            // 4) LAS LÍNEAS NEGRAS DE ARRIBA. Eran dos, las dos de aquí:
+            //    (a) la SOMBRA de las vigas de piedra, que multiplicaba por
+            //    0.58-0.66 en cuatro filas seguidas y a esa altura, sobre una
+            //    pared ya oscura, se leía como una raya negra de punta a
+            //    punta del taller; y (b) las DOVELAS, cuya junta radial
+            //    multiplicaba por 0.62 dibujando un abanico de rayas negras
+            //    justo por encima del arranque de la bóveda -- que es
+            //    exactamente "la parte superior del fondo". Las dos se
+            //    conservan como FORMA (dan la bóveda y la escala) pero con
+            //    contraste de fondo: 0.86 y 0.90.
+            //
+            // 5) LAS VENTANAS TIENEN MARCO PROPIO Y EL TRABADO NO LAS CRUZA.
+            //    Ver <see cref="ClasificarVano"/>: hornacinas y claraboyas
+            //    ciegas dejan de ser un multiplicador de brillo aplicado
+            //    ENCIMA de la sillería (que es lo que hacía que las hiladas
+            //    las atravesaran de lado a lado, el defecto que Cesar
+            //    describe) y pasan a ser un hueco de verdad -- jamba, dintel,
+            //    alféizar y un plano ciego liso dentro, SIN una sola junta.
+            // =============================================================
+            // ROCA PROFUNDA: el tono al que tiende la pared cuando se aleja
+            // del taller. Ya NO es "lo que se pinta fuera del cuarto" (no hay
+            // fuera: ver el punto 2 de arriba), sino el extremo lejano de un
+            // degradado.
+            //
+            // (playtest 34, TERCERA PASADA -- MEDIDO JUGANDO, regla 52) LA
+            // PRUEBA DEL CINCEL. Se pintó `Empty` con F3 en un paño de roca a
+            // ~200 celdas del taller, que es literalmente el gesto de Cesar
+            // -- *"cuando rompo en otras partes se ve negro"* --, y el agujero
+            // SEGUÍA saliendo negro pese a que la cobertura total ya estaba
+            // hecha: la culpa no era de que faltara pared, sino de que a
+            // `prof`=1 esta pareja de colores (0.030/0.052) por la viñeta
+            // (0.72) daba 0.02-0.04, o sea negro a efectos prácticos. Se
+            // suben a ~55% del tono de la pared del taller: sigue siendo
+            // "más oscuro cuanto más lejos" -- que es lo que pedía el encargo
+            // -- pero lo que aparece al romper es PIEDRA en penumbra, no un
+            // agujero. Estos dos números son el resultado de la prueba, no
+            // una estimación: es la diferencia entre pintar el fondo y que el
+            // fondo se VEA.
+            // (CUARTA PASADA, segunda prueba del cincel) 0.086/0.120 ->
+            // 0.118/0.158: con la primera corrección el agujero ya no era
+            // negro, pero seguía a ~25% del brillo de la piedra de la sim que
+            // lo rodea -- se leía "oscuro", no "de piedra". A ~45% se lee lo
+            // que tiene que leerse: la MISMA pared del taller, en penumbra,
+            // 200 celdas más lejos.
+            var rocaLejosAlta = new Color(0.118f, 0.107f, 0.118f);
+            var rocaLejosBaja = new Color(0.158f, 0.130f, 0.109f);
 
-            // LA PARED DEL CUARTO (dentro de CuartoX0..X1 / Y0..Y1). Mucho
-            // más clara que la roca profunda -- no por realismo, sino porque
-            // ANTES DE ESTA RONDA el taller entero flotaba sobre un vacío
-            // negro (visto jugando, captura de la iteración 1): las máquinas
-            // no tenían pared detrás, así que ninguna parecía estar DENTRO de
-            // un sitio. Una habitación se lee cuando tiene fondo.
-            // (tercera pasada, visto jugando) +15% en las dos: con el tinte
-            // global cálido de Sim/SimRenderer.TinteGlobal encima, la pared
-            // quedaba por debajo del umbral en que se distingue la sillería a
-            // escala de juego -- se veía "oscuro" pero no "de piedra".
-            var paredAlta = new Color(0.101f, 0.090f, 0.099f);  // arriba: la bóveda se apaga.
-            var paredBaja = new Color(0.173f, 0.136f, 0.110f);  // abajo: pardo cálido, la luz de los fuegos rebota en el zócalo.
+            // LA PARED DEL TALLER. Mucho más clara que la roca lejana -- no
+            // por realismo, sino porque ANTES DEL PLAYTEST 31 el taller
+            // entero flotaba sobre un vacío negro (visto jugando): las
+            // máquinas no tenían pared detrás, así que ninguna parecía estar
+            // DENTRO de un sitio. Una habitación se lee cuando tiene fondo.
+            // (playtest 34, SEGUNDA PASADA -- VISTO JUGANDO, regla 52) +50% y
+            // +30%. Con la sala 32 celdas más alta, los dos tercios de arriba
+            // son PARED, y a 0.101 (por 0.72 de viñeta = 0.073 real) esa pared
+            // no se leía como piedra: se leía como el agujero negro que Cesar
+            // describía en el 33 -- solo que ahora ocupando media pantalla. El
+            // contraste contra la roca de la sim (que SimRenderer dibuja
+            // mucho más clara, en primer plano) era tan brutal que el taller
+            // parecía recortado sobre un vacío. La pared sigue estando MUY
+            // por debajo de la piedra del primer plano -- retrocede, que es su
+            // trabajo -- pero ahora se ve que es piedra.
+            var paredAlta = new Color(0.152f, 0.136f, 0.148f);  // arriba: la bóveda se apaga.
+            var paredBaja = new Color(0.225f, 0.178f, 0.144f);  // abajo: pardo cálido, la luz de los fuegos rebota en el zócalo.
+
+            // El aparejo ÚNICO, leído una sola vez fuera de los dos bucles
+            // (antes se resolvía por columna con tres ramas: ahora es
+            // constante en todo el lienzo, que es justo lo que pidió Cesar).
+            AparejoDelTaller(out int piezaAnchoC, out int piezaAltoC, out float patina);
+            int piezaW = piezaAnchoC * Escala, piezaH = piezaAltoC * Escala;
 
             int rowsSinCeder = 0;
 
             for (int y = 0; y < TexH; y++)
             {
                 float ty = y / (float)(TexH - 1);
-                // Base vertical: en coordenadas de textura y=0 es ABAJO.
-                Color baseFila = Color.Lerp(suelo, techo, Mathf.Pow(ty, 0.85f));
-                int bloqueY = y / (Escala * 8); // veta de ~8 celdas de alto.
-
                 int celdaY = y / Escala;
-                // (playtest 33) El techo ya no es una recta: la bóveda de
-                // Sim/SimLevelBuilder.TallarBoveda sube hasta 12 celdas sobre
-                // `CuartoY1` y las claraboyas ciegas otras 8. La pared del
-                // cuarto tiene que llegar hasta arriba de todo eso o la
-                // bóveda se vería contra la roca profunda -- un agujero negro
-                // justo donde queremos que el ojo suba.
-                bool filaCuarto = celdaY >= SimLevelBuilder.CuartoY0 - 2 && celdaY <= TechoMaximo + 2;
-                // (playtest 33, TERCERA PASADA -- visto jugando) EL VESTÍBULO
-                // DE LA TOLVA. Con el Ensayo del Maestro mudado al fondo del
-                // cuarto, la boca de la Tolva entró en el mismo encuadre por
-                // primera vez... y se veía como un RECTÁNGULO NEGRO PURO
-                // pegado a un taller entero de sillería: leído como textura
-                // que falta, no como un pozo de entrega. La causa: el pozo
-                // (`ChuteMouth*`, celdas vacías) cae FUERA de `CuartoX0..X1`,
-                // así que este método le pintaba detrás "roca profunda", que
-                // es casi negra. Ahora el vestíbulo (pasillo + pozo) recibe la
-                // misma sillería que el cuarto, un punto más oscura: sigue
-                // siendo el AFUERA, pero es un afuera construido.
-                bool filaVestibulo = celdaY >= SimLevelBuilder.ChuteMouthY0 - 6 && celdaY <= SimLevelBuilder.ChuteMouthY1 + 8;
-                float tCuarto = Mathf.Clamp01((celdaY - SimLevelBuilder.CuartoY0) / (float)(SimLevelBuilder.CuartoY1 - SimLevelBuilder.CuartoY0));
+
+                // Degradado vertical del taller (se usa a todas las alturas:
+                // fuera del rango del cuarto simplemente satura en sus
+                // extremos, que es lo que hace que el techo y el subsuelo
+                // lejanos sigan teniendo una dirección de luz coherente).
+                float tCuarto = Mathf.Clamp01((celdaY - SimLevelBuilder.CuartoY0)
+                    / (float)(SimLevelBuilder.CuartoY1 - SimLevelBuilder.CuartoY0));
                 Color paredFila = Color.Lerp(paredBaja, paredAlta, Mathf.Pow(tCuarto, 0.75f));
+                Color rocaFila = Color.Lerp(rocaLejosBaja, rocaLejosAlta, Mathf.Pow(ty, 0.85f));
+
+                // Distancia vertical FUERA del volumen del taller (0 dentro).
+                int dyCuarto = celdaY < SimLevelBuilder.CuartoY0 ? SimLevelBuilder.CuartoY0 - celdaY
+                             : celdaY > TechoMaximo ? celdaY - TechoMaximo : 0;
+                // Lo mismo para el vestíbulo de la Tolva (pasillo + pozo), que
+                // es un volumen construido aparte, a otra cota.
+                int dyVest = celdaY < SimLevelBuilder.ChuteMouthY0 - 6 ? SimLevelBuilder.ChuteMouthY0 - 6 - celdaY
+                           : celdaY > SimLevelBuilder.ChuteMouthY1 + 8 ? celdaY - (SimLevelBuilder.ChuteMouthY1 + 8) : 0;
+
+                int hilada = y / piezaH;
+                int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
+                int ly = y % piezaH;
 
                 for (int x = 0; x < TexW; x++)
                 {
                     float tx = x / (float)(TexW - 1);
                     int celdaX = x / Escala;
-                    bool enSala = filaCuarto
-                        && celdaX >= SimLevelBuilder.CuartoX0 - 2 && celdaX <= SimLevelBuilder.CuartoX1 + 2;
-                    bool enVestibulo = !enSala && filaVestibulo
-                        && celdaX > SimLevelBuilder.CuartoX1 + 2 && celdaX <= SimLevelBuilder.ChuteMouthX1 + 3;
-                    bool enCuarto = enSala || enVestibulo;
 
-                    Color c;
-                    if (enCuarto)
+                    // ---- PROFUNDIDAD: a qué distancia del taller estamos.
+                    int dxCuarto = celdaX < SimLevelBuilder.CuartoX0 ? SimLevelBuilder.CuartoX0 - celdaX
+                                 : celdaX > SimLevelBuilder.CuartoX1 ? celdaX - SimLevelBuilder.CuartoX1 : 0;
+                    int distCuarto = dxCuarto > dyCuarto ? dxCuarto : dyCuarto;
+
+                    int dxVest = celdaX < SimLevelBuilder.CuartoX1 ? SimLevelBuilder.CuartoX1 - celdaX
+                               : celdaX > SimLevelBuilder.ChuteMouthX1 + 3 ? celdaX - (SimLevelBuilder.ChuteMouthX1 + 3) : 0;
+                    int distVest = dxVest > dyVest ? dxVest : dyVest;
+
+                    int dist = distCuarto < distVest ? distCuarto : distVest;
+                    float prof = Mathf.Clamp01(dist / 110f);
+                    // La pared se aleja: se oscurece hacia la roca profunda...
+                    Color c = Color.Lerp(paredFila, rocaFila, Mathf.SmoothStep(0f, 1f, prof));
+                    // ...y el DIBUJO se desvanece con ella. `defin` escala
+                    // TODA desviación respecto a 1 de las capas de aparejo:
+                    // cerca del taller la sillería se lee, a 110 celdas es
+                    // casi un tono liso. Es lo que hace que la cobertura total
+                    // no convierta el mundo entero en una pared de ladrillo
+                    // gritona.
+                    float defin = Mathf.Lerp(1f, 0.55f, prof); // (3ª/4ª pasada) 0.30 -> 0.45 -> 0.55: con 0.30 el aparejo lejano desaparecía y el agujero del cincel se leía liso, no de piedra.
+
+                    // ---- ¿ESTAMOS EN UNA VENTANA? Se resuelve ANTES del
+                    // aparejo, y por eso el trabado no puede atravesarla: si
+                    // esto devuelve marco o vano, la sillería no llega a
+                    // dibujarse en ese téxel (punto 5 del bloque de arriba).
+                    int vano = ClasificarVano(celdaX, celdaY, out float vanoK);
+
+                    if (vano == 0)
                     {
-                        c = enVestibulo ? paredFila * 0.72f : paredFila;
-
-                        // --- SILLERÍA de la pared, a soga corrida (hiladas
-                        // alternas desplazadas media pieza), con junta fina y
-                        // BISEL -- el mismo lenguaje de canto claro arriba /
-                        // oscuro abajo que usa SimRenderer.ComputeCellColor
-                        // para la piedra de la sim, para que fondo y primer
-                        // plano rimen en vez de contradecirse (lección del
-                        // playtest 7).
-                        //
-                        // (playtest 33, "aquí puedes ensayar MÁS TEXTURAS en
-                        // vez de solo techo plano") EL APAREJO CAMBIA POR
-                        // ZONA. Antes había UNA pieza de 9x5 en las 218
-                        // celdas del cuarto: correcto cuando el cuarto era un
-                        // pasillo, pero ahora tiene zonas con oficios
-                        // distintos y una pared que no cambia nunca las
-                        // aplana a todas. Tres aparejos (ver AparejoDeZona):
-                        // sillar grande y ahumado en el fuego, hilada baja y
-                        // apretada en la fuerza, sillar noble y frío en la
-                        // observación/atrio. Sigue siendo la MISMA pared --
-                        // el tono base no cambia, solo el despiece y la
-                        // pátina -- porque la pared tiene que RETROCEDER.
-                        AparejoDeZona(celdaX, out int piezaAnchoC, out int piezaAltoC, out float patina, out float frio);
-                        int piezaW = piezaAnchoC * Escala, piezaH = piezaAltoC * Escala;
-                        int hilada = y / piezaH;
-                        int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
+                        // --- SILLERÍA a soga corrida (hiladas alternas
+                        // desplazadas media pieza), con junta fina y bisel --
+                        // el mismo lenguaje de canto claro arriba / oscuro
+                        // abajo que usa SimRenderer.ComputeCellColor para la
+                        // piedra de la sim, para que fondo y primer plano
+                        // rimen en vez de contradecirse (lección del playtest
+                        // 7), pero con la MITAD de contraste que en el 33.
                         int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
-                        int ly = y % piezaH;
                         uint hp = HashRoca((x + desfase) / piezaW, hilada, 5171u);
-                        float tono = 1f + ((hp & 63u) / 63f - 0.5f) * patina; // variación de tono por pieza (pátina de la pared).
+                        float tono = 1f + ((hp & 63u) / 63f - 0.5f) * patina * defin;
                         c *= tono;
-                        // Sesgo de temperatura de color por zona: el fuego
-                        // curte la piedra, la observación la deja fría. ±4%,
-                        // por debajo del umbral en que se nota como "otro
-                        // color" y por encima del que hace falta para que dos
-                        // tramos contiguos NO parezcan el mismo muro.
-                        c.r *= 1f - frio * 0.05f;
-                        c.b *= 1f + frio * 0.07f;
 
-                        if (lx == 0 || ly == 0) c *= 0.55f;                       // junta de mortero.
-                        else if (ly >= piezaH - 2) c *= 1.16f;                    // canto superior: le da la luz.
-                        else if (ly <= 2) c *= 0.80f;                             // canto inferior: en sombra.
+                        if (lx == 0 || ly == 0) c *= 1f - 0.18f * defin;          // junta de mortero (era 0.55: una rejilla dura).
+                        else if (ly >= piezaH - 1) c *= 1f + 0.07f * defin;       // canto superior: le da la luz.
+                        else if (ly <= 1) c *= 1f - 0.08f * defin;                // canto inferior: en sombra.
 
-                        // --- (playtest 33) LAS DOVELAS DE LA BÓVEDA: por
-                        // encima del arranque, la junta VERTICAL deja de ser
-                        // vertical y se abre en abanico hacia la clave de su
-                        // tramo. Es la diferencia entre "una pared que sigue
-                        // hacia arriba" y "una bóveda": un muro tiene juntas a
-                        // plomo, una bóveda las tiene radiales.
+                        // --- LAS DOVELAS DE LA BÓVEDA: por encima del
+                        // arranque, la junta VERTICAL deja de ser vertical y
+                        // se abre en abanico hacia la clave de su tramo. Es la
+                        // diferencia entre "una pared que sigue hacia arriba"
+                        // y "una bóveda": un muro tiene juntas a plomo, una
+                        // bóveda las tiene radiales. (playtest 34) 0.62 ->
+                        // 0.90: era la mitad de "las líneas negras raras de la
+                        // parte superior" que Cesar mandó quitar.
                         if (celdaY > ArranqueBoveda)
                         {
                             int centro = CentroDeTramo(celdaX);
                             int subida = celdaY - ArranqueBoveda;
-                            // Desplazamiento proporcional a la altura sobre el
-                            // arranque: la junta se inclina hacia la clave.
                             int sesgo = ((celdaX - centro) * subida) / 26;
                             int lxDov = (((x - sesgo * Escala) % piezaW) + piezaW) % piezaW;
-                            if (lxDov < Escala) c *= 0.62f;
+                            if (lxDov < Escala) c *= 1f - 0.10f * defin;
                         }
 
-                        // --- (playtest 33) LAS VIGAS DE PIEDRA: dos bandas
-                        // horizontales que cruzan el cuarto entero, una a la
-                        // altura de las baldas medias y otra en el arranque de
-                        // la bóveda. Van en el FONDO a propósito (no son
-                        // celdas de la sim): dan escala y horizontal a una
-                        // sala que creció 22 celdas de golpe, sin poner ni un
-                        // obstáculo en el volumen por donde se vuela. Canto
-                        // claro arriba, sombra proyectada debajo -- sin la
-                        // sombra una viga es una raya.
-                        c *= FactorViga(celdaY);
-
-                        // --- NICHOS: hornacinas de sombra excavadas en la
-                        // pared, entre estación y estación (posiciones
-                        // derivadas del PLANO real, no fracciones del lienzo
-                        // -- misma disciplina que la viga/zócalo del taller
-                        // clásico, ver el docblock de la clase).
-                        c *= FactorNicho(celdaX, celdaY);
+                        // --- LAS VIGAS DE PIEDRA: tres bandas horizontales
+                        // que cruzan el taller entero. Van en el FONDO a
+                        // propósito (no son celdas de la sim): dan escala y
+                        // horizontal a una sala de 127 celdas de alto sin
+                        // poner ni un obstáculo en el volumen por donde se
+                        // vuela -- y son de lo que cuelgan las cadenas (obra C
+                        // del playtest 34, ver MontarHerrajesDelTaller).
+                        c *= FactorViga(celdaY, defin);
 
                         // --- ZÓCALO: las 5 primeras celdas sobre el suelo,
                         // más oscuras y sin sillería fina: el arranque del
                         // muro, que es lo que hace que el suelo "nazca de
                         // algo".
                         int sobreSuelo = celdaY - (SimLevelBuilder.CuartoY0 + 3);
-                        if (sobreSuelo >= 0 && sobreSuelo < 5) c *= Mathf.Lerp(0.62f, 1f, sobreSuelo / 5f);
+                        if (sobreSuelo >= 0 && sobreSuelo < 5)
+                            c *= Mathf.Lerp(1f - 0.30f * defin, 1f, sobreSuelo / 5f);
 
-                        // --- CORNISA: la imposta del arranque de la bóveda
-                        // (playtest 33: antes iba pegada a `CuartoY1`, que ya
-                        // no es el techo sino la línea de arranque).
-                        if (celdaY >= ArranqueBoveda - 1 && celdaY <= ArranqueBoveda + 1) c *= 1.25f;
-
-                        // --- EL REBOTE DE LA FRAGUA: la pared detrás del
-                        // crisol recibe su luz. Es el mismo principio que el
-                        // halo de fragua del taller clásico (ver el docblock
-                        // de la clase) y, como aquel, va anclado a una
-                        // coordenada REAL del plano -- la del horno
-                        // (SimLevelBuilder.CrisolX), no a una fracción del
-                        // lienzo. Es un rebote ESTÁTICO y flojo: la luz que
-                        // late la ponen los halos de la máquina
-                        // (Game/MaquinariaSprites.Luz), que sí saben si el
-                        // fuego está encendido; esto solo dice "aquí, en esta
-                        // pared, siempre ha habido un fuego delante".
-                        //
-                        // (playtest 33, "que no parezca un STICKER") El rebote
-                        // se RECORTA a la altura del horno. Antes su elipse
-                        // (ry=30 desde CuartoY0+10) llegaba a y=208: 17 celdas
-                        // por encima de la cornisa real del Crisol (y=191), o
-                        // sea que teñía de naranja pared que ese fuego no
-                        // puede alcanzar. Ahora ry=17 y centro en +8: la
-                        // mancha muere justo donde muere el horno. Mismo
-                        // criterio que la luz de muro de Game/Crisol.cs, pero
-                        // en el fondo en vez de en el aparato.
-                        float dfx = (celdaX - (SimLevelBuilder.CrisolX + 6)) / 30f;
-                        float dfy = (celdaY - (SimLevelBuilder.CuartoY0 + 8)) / 17f;
-                        float d2 = dfx * dfx + dfy * dfy;
-                        if (d2 < 1f)
-                        {
-                            float k = (1f - d2) * (1f - d2);
-                            c.r *= 1f + 0.40f * k;
-                            c.g *= 1f + 0.24f * k;
-                            c.b *= 1f + 0.09f * k;
-                        }
-
-                        // --- (playtest 33) LAS CLARABOYAS FALSAS: luz fría
-                        // que cae por los pozos ciegos de
-                        // Sim/SimLevelBuilder.ClaraboyaColumnas. Es la ÚNICA
-                        // luz del cuarto que no tiene una máquina detrás, y
-                        // por eso es la única que se puede permitir venir de
-                        // arriba -- tiene un dueño físico igual: el pozo está
-                        // tallado de verdad en la piedra, se ve entrar por él.
-                        // Dos de las tres caen sobre la alcoba de observación:
-                        // los instrumentos tienen su propia temperatura de
-                        // color, opuesta a la de la fragua.
-                        AplicarClaraboya(ref c, celdaX, celdaY);
+                        // --- CORNISA: la imposta del arranque de la bóveda.
+                        if (celdaY >= ArranqueBoveda - 1 && celdaY <= ArranqueBoveda + 1)
+                            c *= 1f + 0.14f * defin;
+                    }
+                    else if (vano == 1)
+                    {
+                        // MARCO de la ventana: piedra labrada, lisa, un punto
+                        // más clara que el paño -- el canto que recibe la luz.
+                        // Sin junta ni hiladas: una jamba es UNA pieza.
+                        c *= 1f + 0.20f * defin;
                     }
                     else
                     {
-                        c = baseFila;
-                        // Veta de roca profunda: bloques irregulares de ~10x8 celdas, ±6%.
-                        uint hv = HashRoca(x / (Escala * 10), bloqueY, 7411u);
-                        c *= 1f + ((hv & 63u) / 63f - 0.5f) * 0.12f;
+                        // EL VANO CIEGO: un plano liso que se HUNDE (nunca
+                        // negro -- la lección de las hornacinas del playtest
+                        // 31: un hueco se lee por el contraste de su canto, no
+                        // por ser un agujero), con su propio degradado interno
+                        // para que no sea una mancha plana.
+                        c *= Mathf.Lerp(1f, 0.70f, vanoK * defin); // (3ª pasada) 0.62 -> 0.70: mismo criterio que la tercera pasada del playtest 31 -- un hueco se hunde, no desaparece.
+                        c.b *= 1f + 0.06f * vanoK; // la luz que se cuela por un vano es fría.
                     }
 
-                    // Viñeta de encuadre: mismo lenguaje que la del taller
-                    // clásico (fracción fija del lienzo entero, efecto de
-                    // encuadre genérico, no ligado a ninguna estructura real
-                    // del plano) pero sin el halo de fragua que la acompañaba.
+                    // --- EL REBOTE DE LA FRAGUA: la pared detrás del crisol
+                    // recibe su luz. Anclado a una coordenada REAL del plano
+                    // (SimLevelBuilder.CrisolX), no a una fracción del lienzo,
+                    // así que se mudó SOLO con el crisol cuando el playtest 34
+                    // se lo llevó a la izquierda. Es un rebote ESTÁTICO y
+                    // flojo: la luz que late la ponen los halos de la máquina
+                    // (Game/MaquinariaSprites.Luz), que sí saben si el fuego
+                    // está encendido; esto solo dice "aquí, en esta pared,
+                    // siempre ha habido un fuego delante".
+                    float dfx = (celdaX - (SimLevelBuilder.CrisolX + 6)) / 30f;
+                    float dfy = (celdaY - (SimLevelBuilder.CuartoY0 + 8)) / 17f;
+                    float d2 = dfx * dfx + dfy * dfy;
+                    if (d2 < 1f)
+                    {
+                        float k = (1f - d2) * (1f - d2);
+                        c.r *= 1f + 0.40f * k;
+                        c.g *= 1f + 0.24f * k;
+                        c.b *= 1f + 0.09f * k;
+                    }
+
+                    // Viñeta de encuadre: efecto genérico en fracciones fijas
+                    // del lienzo, no ligado a ninguna estructura del plano.
                     float nx = tx - 0.5f, ny = ty - 0.52f;
                     float vig = Mathf.Clamp01(1f - (nx * nx * 2.3f + ny * ny * 2.0f));
-                    c *= 0.72f + 0.28f * vig;
+                    // (4ª pasada) Suelo de la viñeta 0.72 -> 0.80. Era el
+                    // último 28% que hundía las esquinas del lienzo, y con la
+                    // cámara siguiendo al aprendiz por un mundo de 768x288 las
+                    // "esquinas del lienzo" no son las esquinas de la
+                    // pantalla: son sitios donde de verdad se juega. Un
+                    // encuadre se cierra con un 20%; con un 28% se apaga.
+                    c *= 0.80f + 0.20f * vig;
 
-                    // Grano fino: ±3%, rompe cualquier banda plana.
+                    // Grano fino: +-1.6% (era +-3%), rompe cualquier banda
+                    // plana sin añadir ruido visible.
                     uint hg = HashRoca(x, y, 991u);
-                    c *= 1f + ((hg & 31u) / 31f - 0.5f) * 0.06f;
+                    c *= 1f + ((hg & 31u) / 31f - 0.5f) * 0.032f;
 
                     px[y * TexW + x] = new Color(
                         Mathf.Clamp01(c.r),
@@ -669,35 +782,39 @@ namespace Alkahest.Game
         private const int ArranqueBoveda = SimLevelBuilder.CuartoY1;
 
         /// <summary>
-        /// (playtest 33) Tres aparejos, uno por familia de oficio -- ver el
-        /// comentario en la pasada de sillería. Devuelve el despiece (pieza en
-        /// celdas), la fuerza de la pátina por pieza y un sesgo de temperatura
-        /// de color (-1 cálido .. +1 frío).
-        /// Las fronteras son las MISMAS costuras que usan las pilastras de
-        /// Sim/SimLevelBuilder.PilastraColumnas (224 y 272), para que el
-        /// cambio de textura caiga siempre detrás de un nervio de piedra y
-        /// nunca a mitad de un lienzo liso -- si no, se ve el corte.
+        /// (playtest 34) EL APAREJO ÚNICO DEL TALLER. Cesar, jugando el 33:
+        /// *"el fondo tiene 3 diseños: quiero UNO SOLO -- el que está detrás
+        /// de la PRENSA es el que más me gusta"*.
+        ///
+        /// Es ese, literalmente: la hilada BAJA y APRETADA, casi ladrillo
+        /// (7x3 celdas), que el 33 reservaba para el muro de contención de la
+        /// zona de fuerza. Funciona mejor que los otros dos por una razón que
+        /// se ve mejor jugando que razonando: una pieza pequeña repetida
+        /// muchas veces da TEXTURA (el ojo la promedia y la lee como
+        /// superficie), mientras que un sillar grande da OBJETOS -- y un
+        /// fondo lleno de objetos compite con las máquinas, que es justo el
+        /// "satura" del veredicto.
+        ///
+        /// LO QUE SE RETIRA (regla 15 de CLAUDE.md, documentar lo descartado):
+        ///  · sillar GRANDE y curtido (11x6, pátina 0.26, sesgo cálido) para
+        ///    la zona húmeda + fuego;
+        ///  · sillar NOBLE ancho y regular (14x7, pátina 0.10, sesgo frío)
+        ///    para la observación y el atrio;
+        ///  · y con ellos el sesgo de TEMPERATURA DE COLOR por zona (+-4% en
+        ///    R/B), que era la otra mitad de "tres diseños".
+        /// La idea no era mala en sí (un taller viejo se remienda por zonas)
+        /// pero pedía tres transiciones limpias detrás de tres nervios, y
+        /// cualquier estación que se mude -- y en el 34 se mudaron TODAS --
+        /// deja las costuras contando una zonificación que ya no existe.
+        /// Un fondo no puede depender de dónde estén hoy las máquinas.
+        ///
+        /// La pátina baja además de 0.14 a **0.07**: es la variación de tono
+        /// por pieza, y a 0.14 se veía el despiece desde el otro lado de la
+        /// sala ("menos definido, que se sienta FONDO").
         /// </summary>
-        private static void AparejoDeZona(int celdaX, out int piezaAnchoC, out int piezaAltoC, out float patina, out float frio)
+        private static void AparejoDelTaller(out int piezaAnchoC, out int piezaAltoC, out float patina)
         {
-            if (celdaX < 224)
-            {
-                // HÚMEDA + FUEGO: sillar GRANDE, muy curtido (hollín, sales
-                // del agua). La zona más vieja del taller.
-                piezaAnchoC = 11; piezaAltoC = 6; patina = 0.26f; frio = -1f;
-            }
-            else if (celdaX < 272)
-            {
-                // FUERZA: hilada BAJA y apretada, casi ladrillo -- muro de
-                // contención, el que aguanta los golpes de la Prensa.
-                piezaAnchoC = 7; piezaAltoC = 3; patina = 0.14f; frio = 0f;
-            }
-            else
-            {
-                // OBSERVACIÓN + ATRIO: sillar NOBLE, ancho y regular, poco
-                // pátina -- la parte cuidada de la casa, la que se enseña.
-                piezaAnchoC = 14; piezaAltoC = 7; patina = 0.10f; frio = 1f;
-            }
+            piezaAnchoC = 7; piezaAltoC = 3; patina = 0.07f;
         }
 
         /// <summary>
@@ -721,162 +838,259 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (playtest 33) LAS VIGAS DE PIEDRA del fondo: dos bandas
-        /// horizontales con canto claro y sombra proyectada debajo. Devuelve
-        /// un multiplicador de brillo.
+        /// LAS VIGAS DE PIEDRA del fondo: bandas horizontales con canto claro
+        /// y sombra proyectada debajo. Devuelve un multiplicador de brillo.
+        ///
+        /// (playtest 34) DOS CAMBIOS, los dos por feedback directo:
+        ///  · CONTRASTE A LA MITAD LARGA (1.55/0.66/0.58 -> 1.13/0.90/0.86).
+        ///    Cesar: *"hay unas LÍNEAS NEGRAS raras en la parte superior del
+        ///    fondo: quítalas"*. Eran estas -- la banda de sombra de 4 filas
+        ///    al 0.58 sobre una pared que ya es oscura no se lee como "una
+        ///    viga proyecta sombra", se lee como una raya negra de punta a
+        ///    punta del taller. La viga sigue estando (se necesita: es de
+        ///    donde cuelgan las cadenas) pero ahora es FONDO.
+        ///  · El parámetro `defin` la desvanece con la profundidad, igual que
+        ///    el resto del aparejo: a 110 celdas del taller la viga se
+        ///    disuelve en la roca en vez de seguir cruzando el mundo entero.
         /// </summary>
-        private static float FactorViga(int celdaY)
+        private static float FactorViga(int celdaY, float defin)
         {
+            // (playtest 34, SEGUNDA PASADA -- VISTO JUGANDO) LA VIGA PASA DE
+            // SER SOMBRA A SER PIEDRA CLARA. La primera pasada bajó el
+            // contraste de 1.55/0.66/0.58 a 1.13/0.90/0.86 para quitar "las
+            // líneas negras raras" -- y funcionó demasiado bien: sobre una
+            // pared de brillo 0.10 un +-10% es invisible, así que las tres
+            // vigas desaparecieron... y con ellas se fue el requisito de
+            // Cesar de que las CADENAS CUELGUEN DE ALGO DIBUJADO (obra C): en
+            // la captura de la iteración 1 las cadenas colgaban del aire.
+            // La corrección no es volver a subir el contraste hacia abajo
+            // (eso reintroduce la raya negra) sino hacia ARRIBA: una viga es
+            // un dintel de piedra LABRADA, más clara que el paño que
+            // atraviesa. Se ve entera de punta a punta del taller y no hay
+            // una sola banda oscura nueva en el cuadro.
+            // `defin` al cuadrado: la viga se disuelve en la roca más deprisa
+            // que la sillería, para no cruzar el mundo entero como tres
+            // rayas.
+            float k = defin * defin;
             for (int i = 0; i < _vigasY.Length; i++)
             {
                 int v = _vigasY[i];
                 int d = celdaY - v;
-                // (2ª pasada) Contraste subido: 1.30/0.80 se perdía contra la
-                // pátina por pieza de la sillería (que ya varía ±13%), así que
-                // las vigas no separaban nada. Una viga tiene que leerse
-                // ENTERA de un extremo al otro del cuarto o no da la escala
-                // que se le pide.
-                if (d == 0 || d == 1) return 1.55f;      // el canto alto de la viga, iluminado.
-                if (d >= -3 && d <= -1) return 0.66f;    // el frente de la viga, en sombra.
-                if (d >= -7 && d <= -4) return Mathf.Lerp(0.58f, 0.95f, (d + 7) / 4f); // la sombra que proyecta.
+                if (d == 0 || d == 1) return 1f + 0.90f * k;   // el canto alto, iluminado: la línea que se ve desde lejos.
+                if (d >= -3 && d <= -1) return 1f + 0.48f * k; // el frente de la viga, en penumbra pero todavía más claro que el muro.
+                if (d >= -6 && d <= -4) return 1f - Mathf.Lerp(0.16f, 0.03f, (d + 6) / 3f) * k; // la sombra que proyecta: suave, nunca negra.
             }
             return 1f;
         }
 
         /// <summary>
-        /// Alturas de las dos vigas. La primera pasa por encima de la
-        /// coronación de todas las estaciones (la más alta, la Columna, remata
-        /// en y=209) y por debajo de las baldas medias; la segunda marca el
-        /// arranque de la bóveda. Números del PLANO, no fracciones del lienzo
-        /// -- misma disciplina que las vigas del taller clásico.
+        /// Alturas de las TRES vigas del fondo (el 33 tenía dos). Números del
+        /// PLANO, no fracciones del lienzo -- misma disciplina que las vigas
+        /// del taller clásico.
+        ///  · [0] +50: la imposta baja, justo sobre la coronación de las
+        ///    estaciones (la más alta, la Columna, remata en `CuartoY0`+47).
+        ///  · [1] +88 y [2] `CuartoY1`-8: LAS DOS DEL TERCIO SUPERIOR. La
+        ///    sala mide 127 celdas, así que su tercio alto arranca en
+        ///    `CuartoY0`+85 -- las dos caen dentro, que es lo que pidió Cesar
+        ///    (obra C del playtest 34): las cadenas cuelgan de estas dos y de
+        ///    ninguna otra, ver <see cref="_cadenasViga"/>.
+        /// La viga [1] es NUEVA: sin ella, entre la imposta baja y el
+        /// arranque de la bóveda quedaban 76 celdas de paño liso -- el "muy
+        /// apiñado abajo, vacío arriba" que el crecimiento de la sala habría
+        /// empeorado en vez de arreglar.
         /// </summary>
-        private static readonly int[] _vigasY = { SimLevelBuilder.CuartoY0 + 46, SimLevelBuilder.CuartoY1 - 8 };
+        private static readonly int[] _vigasY =
+        {
+            SimLevelBuilder.CuartoY0 + 50,
+            SimLevelBuilder.CuartoY0 + 88,
+            SimLevelBuilder.CuartoY1 - 8,
+        };
 
         /// <summary>
-        /// (playtest 33) EL HAZ FRÍO DE LAS CLARABOYAS. ADITIVO y muy tenue:
-        /// un cono que se abre hacia abajo desde el pozo tallado, con la
-        /// intensidad cayendo con la distancia al eje y con la profundidad.
-        /// Azulado (la luz de fuera es fría) para que contraste con todo lo
-        /// demás del cuarto, que es fuego.
+        /// EL HAZ FRÍO DE LAS CLARABOYAS -- **RETIRADO** (playtest 34, regla
+        /// 15 de CLAUDE.md). Cesar: *"la LUZ de las claraboyas no está lista:
+        /// rompo bedrock y queda EN EL AIRE -- QUÍTALA por ahora, luego
+        /// volvemos"*. Este método pintaba el cono aditivo AZULADO sobre la
+        /// pared del cuarto (el sprite que caía sobre las máquinas lo montaba
+        /// `MontarHerrajesDelTaller`, también retirado). Se va por lo mismo
+        /// que su gemelo: era luz sin dueño físico -- un degradado en
+        /// coordenadas fijas que no sabe nada de la piedra que tiene delante,
+        /// así que picar la bóveda dejaba el haz colgando de nada. La
+        /// claraboya SIGUE dibujada, como VENTANA CIEGA con su marco (ver
+        /// <see cref="ClasificarVano"/>): se retira la luz, no el hueco.
+        /// Lo que había, para cuando se retome (necesitará además partículas,
+        /// que el propio Cesar identificó como la pieza que falta):
+        ///   cono de media anchura `ClaraboyaAncho*0.5+2+caida*0.25`, caída
+        ///   0..40 celdas bajo la clave, aporte aditivo
+        ///   (0.090, 0.126, 0.185) * lateral * Lerp(0.34, 0.02, prof^0.7).
+        /// </summary>
+        // private static void AplicarClaraboya(ref Color c, int celdaX, int celdaY) { ... }
+
+        /// <summary>
+        /// (playtest 34) LAS VENTANAS DEL FONDO, CON MARCO PROPIO.
         ///
-        /// Se aplica SOLO sobre la pared del cuarto (el llamante ya está
-        /// dentro de ese `if`), así que un haz nunca se derrama sobre la roca
-        /// profunda ni sobre el pasillo de la Tolva.
+        /// Cesar, jugando el 33: *"el trabado de ladrillos NO debe atravesar
+        /// las ventanas"*. Tenía razón y el defecto era estructural: hasta
+        /// ahora las hornacinas (`FactorNicho`, retirado y absorbido aquí)
+        /// eran un MULTIPLICADOR DE BRILLO aplicado ENCIMA de la sillería ya
+        /// dibujada -- o sea que las hiladas, las juntas y el bisel seguían
+        /// corriendo por dentro del hueco de lado a lado, como si el muro no
+        /// se hubiera interrumpido. Un vano en el que se ve el aparejo del
+        /// muro no es un vano: es una mancha.
+        ///
+        /// La corrección es de ORDEN, no de color: el llamante pregunta AQUÍ
+        /// primero y solo dibuja sillería si la respuesta es 0. Un vano tiene
+        /// entonces tres capas propias, como en obra real:
+        ///   · 1 = MARCO -- jamba, dintel y alféizar: piedra labrada LISA, sin
+        ///     una sola junta, un punto más clara que el paño.
+        ///   · 2 = VANO -- el plano ciego del fondo, liso, que se hunde con un
+        ///     degradado propio (`k`: 0 en el borde, 1 en el centro-alto del
+        ///     hueco). Nunca negro: la lección de la tercera pasada del
+        ///     playtest 31 es que un hueco se lee por el CONTRASTE DE SU
+        ///     CANTO, no por ser un agujero.
+        ///
+        /// DOS FAMILIAS DE VENTANA, las dos con el mismo tratamiento:
+        ///  a) HORNACINAS (<see cref="_centrosNicho"/>): en el paño libre
+        ///     entre estaciones, con arco de medio punto arriba. Suben a
+        ///     `CuartoY0`+58..+76 -- con la sala 32 celdas más alta y las
+        ///     máquinas rematando en +47, la franja del 33 (+49..+67) volvía a
+        ///     caer sobre las coronaciones, que es el error que la segunda
+        ///     pasada del 31 ya corrigió una vez.
+        ///  b) CLARABOYAS CIEGAS (`SimLevelBuilder.ClaraboyaColumnas`): el
+        ///     pozo que `TallarBoveda` talla de verdad en la clave. Se dibuja
+        ///     como un lucernario alto y estrecho por encima del arranque, y
+        ///     es lo ÚNICO que queda de ellas ahora que su luz se retiró.
         /// </summary>
-        private static void AplicarClaraboya(ref Color c, int celdaX, int celdaY)
+        /// <param name="k">Solo con retorno 2: 0 en el canto del vano, 1 en su fondo.</param>
+        private static int ClasificarVano(int celdaX, int celdaY, out float k)
         {
-            var cols = SimLevelBuilder.ClaraboyaColumnas;
-            for (int i = 0; i < cols.Length; i++)
+            k = 0f;
+
+            // ---- a) HORNACINAS, EN DOS PISOS -----------------------------
+            // (playtest 34, SEGUNDA PASADA -- VISTO JUGANDO) La sala mide
+            // ahora 127 celdas y las máquinas rematan en `CuartoY0`+47: entre
+            // ellas y el arranque de la bóveda quedaban SETENTA celdas de paño
+            // liso. Una sola fila de hornacinas ahí es una cornisa perdida en
+            // mitad de un descampado. Van dos, una entre cada par de vigas
+            // (`_vigasY` = +50 / +88 / `CuartoY1`-8), que es como se ordena de
+            // verdad una fachada: entrepaños entre impostas, no huecos
+            // sueltos flotando.
+            int piso = ClasificarPisoNicho(celdaX, celdaY, out int ny0, out int ny1, out int centro);
+            if (piso != 0)
             {
-                int dx = celdaX - cols[i];
-                if (dx < 0) dx = -dx;
+                int d = celdaX - centro;
+                if (d < 0) d = -d;
 
-                // El cono: 3 celdas de media anchura arriba, abriéndose ~1
-                // celda cada 4 de caída, hasta 40 celdas por debajo de la
-                // clave -- más allá, la luz de un tragaluz ya no se distingue.
-                int caida = ArranqueBoveda + 10 - celdaY;
-                if (caida < -12 || caida > 40) continue;
-                float prof = Mathf.Clamp01(caida / 40f);
-                float media = SimLevelBuilder.ClaraboyaAncho * 0.5f + 2f + caida * 0.25f;
-                if (dx > media) continue;
+                // El arco: en las 4 filas de arriba el vano se estrecha,
+                // así que la hornacina termina en curva y no en un
+                // rectángulo de cartón.
+                int desdeArriba = ny1 - celdaY;
+                int anchoAqui = desdeArriba >= 4 ? NichoMediaAncho
+                              : NichoMediaAncho - (4 - desdeArriba) * 2;
 
-                float lateral = 1f - (dx / media) * (dx / media);
-                // (2ª pasada, visto jugando) x3. Con 0.030/0.042/0.062 el
-                // aporte máximo era ~0.02 sobre una pared de 0.10-0.17: un 15%
-                // que, con la viñeta y el tinte global encima, no llegaba a
-                // pantalla -- las tres claraboyas eran INVISIBLES. La luz de
-                // un tragaluz en una cueva es lo más claro del cuadro después
-                // del fuego, no un matiz.
-                float k = lateral * Mathf.Lerp(0.34f, 0.02f, Mathf.Pow(prof, 0.7f));
-                if (k <= 0f) continue;
-                c.r += 0.090f * k;
-                c.g += 0.126f * k;
-                c.b += 0.185f * k;
+                if (celdaY < ny0 || celdaY > ny1 || anchoAqui < 0 || d > anchoAqui)
+                    return 1; // fuera del hueco pero dentro de la orla: es el MARCO.
+
+                // Dentro del hueco: profundidad del plano ciego.
+                float lateral = 1f - (d / (float)(anchoAqui + 1));
+                float vertical = Mathf.Clamp01((celdaY - ny0) / (float)(ny1 - ny0 + 1));
+                k = Mathf.Clamp01(lateral * (0.45f + 0.55f * vertical));
+                return 2;
             }
+
+            // ---- b) CLARABOYAS CIEGAS ------------------------------------
+            int cy0 = ArranqueBoveda + 3;
+            int cy1 = ArranqueBoveda + 21;
+            if (celdaY >= cy0 - 2 && celdaY <= cy1 + 2)
+            {
+                var cols = SimLevelBuilder.ClaraboyaColumnas;
+                int media = SimLevelBuilder.ClaraboyaAncho / 2 + 1;
+                for (int i = 0; i < cols.Length; i++)
+                {
+                    int d = celdaX - cols[i];
+                    if (d < 0) d = -d;
+                    if (d > media + 2) continue;
+
+                    if (celdaY < cy0 || celdaY > cy1 || d > media) return 1; // jamba/dintel/alféizar.
+
+                    float lateral = 1f - (d / (float)(media + 1));
+                    // (3ª pasada) La claraboya invierte el degradado respecto
+                    // a una hornacina, y por una razón física: una hornacina
+                    // es un nicho ciego (cuanto más adentro, más sombra),
+                    // pero un lucernario es un POZO que mira hacia fuera --
+                    // el fondo está ARRIBA y es de donde vendría la luz. Con
+                    // el degradado de hornacina, el pozo se leía como un
+                    // agujero negro clavado en la clave (comprobado en la
+                    // captura de la iteración 2).
+                    float vertical = Mathf.Clamp01((cy1 - celdaY) / (float)(cy1 - cy0 + 1));
+                    k = Mathf.Clamp01(lateral * (0.25f + 0.55f * vertical));
+                    return 2;
+                }
+            }
+
+            return 0;
         }
 
         /// <summary>
-        /// (playtest 31) LAS HORNACINAS. Cuatro nichos de sombra excavados en
-        /// la pared del cuarto, en los HUECOS entre estaciones (derivados de
-        /// las anclas reales del plano: entre las fuentes y el crisol, entre
-        /// el crisol y la prensa, entre la columna y la chispa, y sobre el
-        /// ensayo). No son decoración gratuita: son lo que convierte una
-        /// pared corrida -- "todo es lineal", dijo Cesar -- en una pared con
-        /// tramos, que es como se lee la profundidad en un decorado 2D.
-        /// Devuelve un multiplicador de brillo: 1 fuera del nicho, ~0.45 en
-        /// su fondo, con un canto CLARO en el borde superior (la piedra que
-        /// sobresale recibe luz) para que se lea hueco y no mancha.
+        /// (playtest 34) ¿Cae (x,y) en la orla de alguna hornacina, y de cuál?
+        /// Devuelve 0 si no, o el número de piso (1 = el bajo, 2 = el alto) y
+        /// por `out` la banda vertical y el centro de la hornacina concreta.
+        /// Separado de <see cref="ClasificarVano"/> para que ese método no
+        /// tenga dos bucles anidados idénticos: la geometría del hueco (arco,
+        /// marco, fondo) es la MISMA en los dos pisos, solo cambia dónde.
         /// </summary>
-        private static float FactorNicho(int celdaX, int celdaY)
+        private static int ClasificarPisoNicho(int celdaX, int celdaY, out int ny0, out int ny1, out int centro)
         {
-            // Centros en X (celdas del plano) y media anchura.
-            // 182: hueco fuentes->crisol · 236: crisol->prensa ·
-            // 292: columna->chispa · 350: tras el ensayo, junto al pasillo.
-            // (segunda pasada, VISTO JUGANDO) Las hornacinas estaban a
-            // CuartoY0+12..+30 y NO SE VEÍAN NINGUNA: esa banda es
-            // exactamente la altura de las estaciones (20-35 celdas desde el
-            // suelo), así que las cuatro quedaban tapadas por el crisol, la
-            // prensa, la columna y el altar. La pared LIBRE de este cuarto es
-            // la de arriba -- de la coronación de las máquinas al techo --,
-            // así que ahí suben. Es también donde funcionan mejor: una
-            // hornacina alta se lee como respiradero de la cueva.
-            // (playtest 33) Con el techo 22 celdas más alto, la banda de
-            // pared LIBRE (de la coronación de las máquinas al arranque de la
-            // bóveda) se movió: antes +44..+62 era "arriba del todo", ahora es
-            // media pared. Sube a +46..+64, que sigue siendo la franja entre
-            // la coronación de la Columna (y=209 = CuartoY0+41) y la primera
-            // viga de piedra (CuartoY0+46)... y por eso las hornacinas van
-            // JUSTO ENCIMA de esa viga: una hornacina apoyada en una imposta
-            // es arquitectura; una hornacina flotando en medio de un lienzo,
-            // un rectángulo.
-            int y0 = SimLevelBuilder.CuartoY0 + 49;
-            int y1 = SimLevelBuilder.CuartoY0 + 67;
-
-            if (celdaY < y0 || celdaY > y1) return 1f;
-
-            int mejorDist = int.MaxValue;
-            int[] centros = _centrosNicho;
-            for (int i = 0; i < centros.Length; i++)
+            for (int piso = 0; piso < 2; piso++)
             {
-                int d = celdaX - centros[i];
-                if (d < 0) d = -d;
-                if (d < mejorDist) mejorDist = d;
+                ny0 = SimLevelBuilder.CuartoY0 + (piso == 0 ? 58 : 94);
+                ny1 = ny0 + 18;
+                if (celdaY < ny0 - 2 || celdaY > ny1 + 2) continue;
+
+                int[] centros = piso == 0 ? _centrosNicho : _centrosNichoAlto;
+                for (int i = 0; i < centros.Length; i++)
+                {
+                    int d = celdaX - centros[i];
+                    if (d < 0) d = -d;
+                    if (d > NichoMediaAncho + 2) continue;
+                    centro = centros[i];
+                    return piso + 1;
+                }
             }
-
-            const int mediaAncho = 7;
-            if (mejorDist > mediaAncho + 1) return 1f;
-
-            // El arco: en las 4 filas de arriba el nicho se estrecha, así que
-            // la hornacina termina en curva y no en un rectángulo de cartón.
-            int desdeArriba = y1 - celdaY;
-            int anchoAqui = desdeArriba >= 4 ? mediaAncho : mediaAncho - (4 - desdeArriba);
-            if (anchoAqui < 0) return 1f;
-
-            if (mejorDist > anchoAqui) return 1f;
-            // (TERCERA PASADA, VISTO JUGANDO) 0.34 de fondo sobre una pared
-            // que ya es oscura daba un RECTÁNGULO NEGRO: no se leía como
-            // hueco excavado sino como textura que falta -- y encima caía
-            // justo debajo de una pilastra, así que el conjunto parecía una
-            // bandera colgada del techo. Un hueco en penumbra se lee por el
-            // CONTRASTE DE SU CANTO, no por ser negro: se sube el fondo a
-            // 0.72 (se hunde, no desaparece) y se baja el canto a 1.25.
-            if (mejorDist == anchoAqui || celdaY == y0) return 1.25f; // canto iluminado del vano.
-            return 0.72f; // fondo de la hornacina: se hunde, no es un agujero.
+            ny0 = 0; ny1 = 0; centro = 0;
+            return 0;
         }
 
-        // (tercera pasada) Desplazados a los PUNTOS MEDIOS entre las
-        // pilastras de Sim/SimLevelBuilder.PilastraColumnas (182/236/292/350):
-        // hornacina y pilastra en la misma columna se estorbaban. Ahora se
-        // alternan -- pilastra, hornacina, pilastra, hornacina -- que es el
-        // ritmo de una crujía de verdad.
-        // (playtest 33) Recolocadas a los PUNTOS MEDIOS de las costuras
-        // nuevas (PilastraColumnas = 176/224/272/308/343): 200 entre fuego y
-        // fuerza, 248 sobre la Prensa, 358 en el atrio del Maestro. La del
-        // tramo 272-308 se retira a propósito -- ahí manda la claraboya de la
-        // alcoba (x=290) y dos huecos oscuros compitiendo con un haz de luz en
-        // el mismo lienzo es exactamente el ruido que la tercera pasada del
-        // playtest 31 vino a quitar.
-        private static readonly int[] _centrosNicho = { 200, 248, 358 };
+        /// <summary>Media anchura del hueco de una hornacina, en celdas.</summary>
+        private const int NichoMediaAncho = 7;
+
+        /// <summary>
+        /// Centros de las hornacinas, en los PUNTOS MEDIOS entre las
+        /// pilastras del plano (`SimLevelBuilder.PilastraColumnas` =
+        /// 133/185/244/284/331 desde el playtest 34): pilastra, hornacina,
+        /// pilastra, hornacina = el ritmo de una crujía de verdad -- una
+        /// hornacina en la misma columna que una pilastra se estorban, algo
+        /// que ya costó una iteración en el 31.
+        /// Sitios elegidos: 108 (crujía del crisol), 159 (crisol|prensa), 308
+        /// (alcoba, entre columna y chispa) y 355 (atrio del Maestro). El
+        /// punto medio 214 se cede a la CLARABOYA de la isla de fuentes y el
+        /// 264 a la de la alcoba: dos huecos oscuros compitiendo con un
+        /// lucernario en el mismo lienzo es el ruido que la tercera pasada del
+        /// 31 vino a quitar.
+        /// </summary>
+        private static readonly int[] _centrosNicho = { 108, 159, 308, 355 };
+
+        /// <summary>
+        /// (playtest 34) EL PISO ALTO de hornacinas, a `CuartoY0`+94..+112 --
+        /// entre la viga media y la alta. Va DESPLAZADO respecto al piso bajo
+        /// (cae sobre las pilastras, no entre ellas) a propósito: dos filas de
+        /// huecos alineados en vertical se leen como una rejilla; alternadas,
+        /// como una fachada. Sitios: 133 y 185 (las dos pilastras de la banda
+        /// que transforma), 244 (la de la escalinata) y 331 (la del atrio) --
+        /// las columnas 284 y las tres claraboyas se dejan libres para no
+        /// amontonar huecos en la alcoba de observación.
+        /// </summary>
+        private static readonly int[] _centrosNichoAlto = { 133, 185, 244, 331 };
 
         /// <summary>
         /// (playtest 31) Hash entero estable para la veta y el grano de la

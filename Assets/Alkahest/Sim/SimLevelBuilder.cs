@@ -659,8 +659,24 @@ namespace Alkahest.Sim
         public const int ChuteWallX0 = EntregaX1 - 90; // 380 (playtest 16: 517; antes: 661)
         public const int ChuteMouthX0 = ChuteWallX0 + 12; // 392 (playtest 16: 529; antes: 673)
         public const int ChuteMouthX1 = ChuteMouthX0 + 21; // 413 (playtest 16: 550; antes: 694; 22 celdas de boca, igual que el playtest 4)
-        public const int ChuteMouthY0 = SurfaceFloorTop + 1 + ChuteBaseHeight + 3; // 189 (altura, sin cambios desde el playtest 4)
-        public const int ChuteMouthY1 = ChuteMouthY0 + 49; // 238 (altura, sin cambios desde el playtest 4)
+        /// <summary>
+        /// (playtest 34) LA TOLVA VIAJA CON EL CUARTO. Era
+        /// `SurfaceFloorTop + 1 + ChuteBaseHeight + 3` = 189, una cota
+        /// heredada del taller CLÁSICO (la losa de superficie), que en la
+        /// construcción del cuarto íntimo ni siquiera existe -- funcionaba
+        /// por coincidencia numérica con `CuartoY0`=168. Con el cuarto
+        /// bajando 32 filas (ver el bloque PLAYTEST 34) esa coincidencia se
+        /// rompía y la boca habría quedado 32 celdas por encima del atrio del
+        /// Ensayo, con el pasillo entrando por su tercio bajo en vez de por
+        /// arriba. Pasa a derivarse de `CuartoY0` con EXACTAMENTE el mismo
+        /// desfase de siempre (189-168 = 21): el pozo no se rediseña ni se
+        /// redimensiona -- 50 filas, las mismas del playtest 4 -- solo se
+        /// traslada con la sala. Todos sus consumidores
+        /// (Game/DeliveryChute.cs, Game/DayCycle.cs, Audio/DirectorDeAudio.cs,
+        /// Game/WorkshopBackdrop.cs) lo leen POR NOMBRE.
+        /// </summary>
+        public const int ChuteMouthY0 = CuartoY0 + 21; // 157 (era 189 con CuartoY0=168: mismo desfase)
+        public const int ChuteMouthY1 = ChuteMouthY0 + 49; // 206 (altura, 50 filas, sin cambios desde el playtest 4)
 
         /// <summary>
         /// Cuántas filas del FONDO del pozo son la "boca que traga" (ver
@@ -957,11 +973,79 @@ namespace Alkahest.Sim
         //   ENSAYO DEL MAESTRO 348..376  pegado al pasillo de entrega
         //   pared       377..378 -> pasillo 379..392 -> boca de la Tolva
         // Suma: 32+8+37+14+31+20+23+6+27+10+29+2 = 239 = el ancho nuevo.
+        //
         // =================================================================
-        public const int CuartoX0 = 140;
-        public const int CuartoX1 = 378; // (playtest 33) 357 -> 378: ancho 218 -> 239. Ver el bloque de arriba.
-        public const int CuartoY0 = 168; // (2ª ronda) antes 154
-        public const int CuartoY1 = 262; // (playtest 33) 240 -> 262; alto 73 -> 95. "Que el techo respire" -- ver el bloque de arriba y TallarBoveda.
+        // PLAYTEST 34 -- "EL MAPA NOS QUEDA CHICO" + EL PLANO CENTRAL
+        // =================================================================
+        // Cesar, jugando el 33, punto por punto:
+        //  (2) *"todo muy apiñado; el tamaño de los objetos es correcto, el
+        //      mapa nos queda chico: +1/3 de ALTURA para que respire, y que
+        //      el TECHO LO DESCUBRAN AL VOLAR HACIA ARRIBA"*.
+        //  (7) *"a lo largo también: al menos +1/4"*.
+        //  (9) *"los grifos de agua y limo a una POSICIÓN CENTRAL para que el
+        //      tránsito fluya, sugiriendo organización primigenia: máquinas
+        //      que TRANSFORMAN a la IZQUIERDA, las de OBSERVACIÓN a la
+        //      DERECHA"*.
+        //
+        // ALTO: 95 -> **127** filas (95 x 4/3 = 126.7). EL CRECIMIENTO VA
+        // HACIA ABAJO, NO HACIA ARRIBA, y no por gusto: la bóveda de
+        // `TallarBoveda` sube hasta 13 filas sobre `CuartoY1` y el pozo de
+        // claraboya otras 6, así que con `CuartoY1`=262 el techo ya remataba
+        // en y=281 sobre un mundo de 288 -- por arriba quedaban 4 celdas de
+        // margen, no 32. `CuartoY0` baja de 168 a **136** y TODO lo que se
+        // deriva de él (el suelo, el `baseY` de las cinco estaciones vía
+        // `BaseYDeEstacion`, los caños, el estante, el depósito de anclajes)
+        // baja con él SOLO: la maquinaria conserva su cota relativa y lo que
+        // gana son 32 celdas de AIRE sobre la cabeza (de ~55 a ~87 celdas
+        // libres entre la coronación de las máquinas y el arranque de la
+        // bóveda). Eso es literalmente "que respire".
+        //   · EL TECHO FUERA DEL ENCUADRE INICIAL (comprobación aritmética,
+        //     misma fórmula que `SimRenderer.FitMainCamera`): el encuadre
+        //     mide 45 celdas de alto y la cámara ancla al aprendiz con la
+        //     zona muerta del 30%, así que desde `AprendizY`=154 se ve hasta
+        //     y≈176. El arranque de la bóveda está en 262 y la clave en 275:
+        //     **86 celdas por encima del borde superior del encuadre**. Hay
+        //     que VOLAR para descubrirlo, que es lo que pidió Cesar.
+        //   · La Tolva viaja CON el cuarto (`ChuteMouthY0/Y1` y
+        //     `PasilloTolvaY0` bajan las mismas 32 filas): el pasillo y el
+        //     pozo quedan INTACTOS en forma y en su relación con el atrio del
+        //     Ensayo -- solo se trasladan, no se rediseñan. Todos sus
+        //     consumidores (Game/DeliveryChute.cs, Game/DayCycle.cs,
+        //     Audio/DirectorDeAudio.cs, Game/WorkshopBackdrop.cs) los leen POR
+        //     NOMBRE, así que no hay ni una firma que tocar.
+        //
+        // ANCHO: 239 -> **299** columnas (239 x 5/4 = 298.75). EL CRECIMIENTO
+        // VA HACIA LA IZQUIERDA (`CuartoX0` 140 -> **80**) por la razón
+        // simétrica: `CuartoX1`=378 se para 1 celda antes del contrafuerte de
+        // la Tolva (`ChuteWallX0`=380) y crecer por ahí se comería la entrega.
+        //
+        // EL PLANO CENTRAL (punto 9 de Cesar). El recorrido deja de ser una
+        // cinta transportadora de izquierda a derecha y pasa a ser una PLANTA
+        // con centro: las fuentes -- lo único de lo que sale TODO -- van al
+        // medio, y desde ahí se sale a mano izquierda a transformar y a mano
+        // derecha a observar. "Organización primigenia": el pozo del pueblo
+        // en la plaza y los oficios alrededor.
+        //   aire        80..87   ( 8)  muro izquierdo
+        //   CRISOL      88..124  (37)  + ALAMBIQUE encima (transformar)
+        //   paso       125..142  (18)  terraza tallada
+        //   PRENSA     143..173  (31)  (transformar)
+        //   UMBRAL     174..197  (24)  <- aquí nace el aprendiz (AprendizX=186)
+        //   FUENTES    198..231  (34)  machón+pila del agua, machón+pila del
+        //                              limo, el ESTANTE de redomas encima y el
+        //                              DEPÓSITO DE ANCLAJES al lado: EL CENTRO
+        //   ESCALINATA 232..257  (26)  el corte transformar | observar
+        //   COLUMNA    258..280  (23)  (observar, cota +6)
+        //   aire       281..288  ( 8)
+        //   CHISPA     289..315  (27)  (observar, cota +6)
+        //   ATRIO      316..347  (32)  terraza ceremonial
+        //   ENSAYO     348..376  (29)  casado con la Tolva (cota +3)
+        //   pared      377..378 ( 2) -> pasillo 379..392 -> boca de la Tolva
+        // Suma: 8+37+18+31+24+34+26+23+8+27+32+29+2 = 299 = el ancho nuevo.
+        // =================================================================
+        public const int CuartoX0 = 80;  // (playtest 34) 140 -> 80: ancho 239 -> 299 (+1/4). Ver el bloque de arriba.
+        public const int CuartoX1 = 378; // (playtest 33) 357 -> 378. NO SE MUEVE en el 34: besa el contrafuerte de la Tolva.
+        public const int CuartoY0 = 136; // (playtest 34) 168 -> 136: alto 95 -> 127 (+1/3), creciendo HACIA ABAJO. Ver el bloque de arriba.
+        public const int CuartoY1 = 262; // (playtest 33) 240 -> 262. NO SE MUEVE en el 34: por arriba ya no cabe la bóveda.
 
         /// <summary>
         /// (playtest 33) LA COTA POR ZONA: la planta del taller dejó de ser
@@ -969,16 +1053,26 @@ namespace Alkahest.Sim
         /// máquina (regla 47: si algún día una estación se muda de zona por
         /// diseño, su cota la decide DÓNDE está el plano, no su nombre).
         /// Zona de fuego y fuerza: planta baja (CuartoY0+2, la de siempre).
-        /// Alcoba de observación (x >= 282, tras la escalinata de 6): +6.
-        /// Atrio del Ensayo (x >= 348): +3, un peldaño ceremonial.
+        /// Alcoba de observación (x >= 250, tras la escalinata de 6): +6.
+        /// Atrio del Ensayo (x >= 340): +3, un peldaño ceremonial.
         /// Mudanza: al soltar en cualquier sitio, la plataforma soberana de
         /// cada estación aplana a la cota del ancla donde cae -- esta función
         /// solo fija las cotas DE FÁBRICA.
+        ///
+        /// (playtest 34) LAS FRANJAS SE MUDAN A LAS X NUEVAS del plano
+        /// central: con las fuentes en el medio (198..231) y la escalinata en
+        /// 232..257, la alcoba de observación arranca en la Columna (258) --
+        /// el umbral se comprueba a 250, dentro de la escalinata, para que
+        /// una estación soltada a media escalera ya se considere "arriba".
+        /// El atrio baja de 348 a 340 por lo mismo: la terraza ceremonial
+        /// empieza en 316 y el Ensayo en 348; 340 cae dentro del atrio, no en
+        /// el aire de la alcoba. Las X son las ÚNICAS que cambian aquí --
+        /// las cotas (+3/+6) las validó Cesar en el 33.
         /// </summary>
         public static int BaseYDeEstacion(int anclaX)
         {
-            if (anclaX >= 348) return CuartoY0 + 5; // atrio del Ensayo (+3 sobre la planta baja).
-            if (anclaX >= 282) return CuartoY0 + 8; // alcoba de observación (+6, sobre la escalinata).
+            if (anclaX >= 340) return CuartoY0 + 5; // atrio del Ensayo (+3 sobre la planta baja).
+            if (anclaX >= 250) return CuartoY0 + 8; // alcoba de observación (+6, sobre la escalinata).
             return CuartoY0 + 2;                    // planta baja de oficios.
         }
 
@@ -1160,17 +1254,57 @@ namespace Alkahest.Sim
         //  · limo: monta en x=CanoLimoX=157 (cara derecha de la ménsula) ->
         //    boquilla en 162; interior de PilaLimo = 160..169. Cae en la 3ª
         //    columna útil, simétrico al de agua. ✔
+        //
+        // =================================================================
+        // (playtest 34) LA ESTACIÓN DE FUENTES SE VA AL CENTRO -- y por eso
+        // gana un SEGUNDO machón, el del agua
+        // =================================================================
+        // Cesar: *"los grifos de agua y limo a una POSICIÓN CENTRAL para que
+        // el tránsito fluya, sugiriendo organización primigenia"*.
+        //
+        // EL PROBLEMA QUE ESO CREA, Y SU SOLUCIÓN: hasta el 33 el caño de
+        // agua montaba en `CanoAguaX = CuartoX0` -- o sea, atornillado a la
+        // PARED IZQUIERDA de la sala. Una fuente en el centro no tiene pared
+        // donde atornillarse: con la constante vieja, el caño del agua se
+        // habría quedado a 118 celdas de su pila, escupiendo al suelo desde
+        // el muro (exactamente el fallo que la regla 47 de CLAUDE.md describe
+        // -- reutilizar una constante de posición porque el nombre encaja).
+        // La respuesta es la MISMA que el playtest 27 dio para el limo, y por
+        // simetría: un MACHÓN DE PIEDRA propio. La estación pasa a leerse
+        // como una isla de cuatro piezas, machón-pila-machón-pila, que es lo
+        // que la vuelve un objeto exento en medio de la sala y no un mueble
+        // arrimado a un muro:
+        //   machón agua 198..200 | PILA AGUA 201..214 | machón limo 215..217 |
+        //   PILA LIMO 218..231
+        // Cuentas comprobadas contra Game/Dispenser.cs (voladizo estándar de
+        // 5 celdas, `SpoutOffsetCellsDefault`, sin tocar):
+        //  · agua: monta en x=`CanoAguaX`=200 (cara derecha de su machón) ->
+        //    boquilla en 205; interior de PilaAgua = 203..212. ✔
+        //  · limo: monta en x=`CanoLimoX`=217 -> boquilla en 222; interior de
+        //    PilaLimo = 220..229. ✔
+        // El ESTANTE de redomas y el DEPÓSITO DE ANCLAJES viajan solos: los
+        // dos derivan de `PilaAguaX0`/`PilaLimoX0` (ver `EstanteX0`/`EstanteX1`
+        // y Game/Anclaje.cs::SpawnDeposito), así que el centro del taller
+        // queda además siendo el sitio donde se guardan las cosas -- que es
+        // justo la "organización primigenia" que pedía el encargo.
+        // =================================================================
         private const int PilaMuroGrosor = 2;  // 1 -> 2 (playtest 27): un muro de 1 celda en una pila de 14 de ancho se lee como una raya, no como obra.
         public const int PilaAnchoOuter = 14;  // 6 -> 14.
         public const int PilaHondoOuter = 9;   // 3 -> 9. Interior resultante: 10 x 7 = 70 celdas (la ración son 45).
-        /// <summary>Pila del AGUA. Interior 143..152 x 172..178 -- la columna de caída real (145) entra por la tercera columna útil.</summary>
-        public const int PilaAguaX0 = 141;
-        /// <summary>Pila del LIMO. Interior 160..169 x 172..178 -- la boquilla del limo cae en 162.</summary>
-        public const int PilaLimoX0 = 158;
+        /// <summary>Pila del AGUA. (playtest 34) 141 -&gt; 201: interior 203..212 -- la columna de caída real (205) entra por la tercera columna útil.</summary>
+        public const int PilaAguaX0 = 201;
+        /// <summary>Pila del LIMO. (playtest 34) 158 -&gt; 218: interior 220..229 -- la boquilla del limo cae en 222.</summary>
+        public const int PilaLimoX0 = 218;
 
         /// <summary>Machón de piedra ENTRE las dos pilas: es lo que sostiene el caño de limo más alto y a otra X (ver el bloque de arriba). Tres celdas de ancho, del suelo al arranque del caño.</summary>
-        public const int MensulaLimoX0 = 155;
-        public const int MensulaLimoX1 = 157;
+        public const int MensulaLimoX0 = 215;
+        public const int MensulaLimoX1 = 217;
+
+        /// <summary>(playtest 34) Machón GEMELO del agua, a la izquierda de su pila -- lo que sustituye a la pared del cuarto ahora que la estación de fuentes vive exenta en el centro. Ver el bloque de arriba.</summary>
+        public const int MensulaAguaX0 = 198;
+        public const int MensulaAguaX1 = 200;
+        /// <summary>Remate del machón del agua: dos celdas sobre la fila de su caño, mismo criterio que <see cref="MensulaLimoTopY"/>.</summary>
+        public const int MensulaAguaTopY = CanoAguaY + 2;
         /// <summary>Remate del machón: dos celdas por encima de la fila del caño de limo, para que el aparato se vea atornillado a piedra y no flotando.</summary>
         public const int MensulaLimoTopY = CanoLimoY + 2;
 
@@ -1217,8 +1351,8 @@ namespace Alkahest.Sim
         /// para no romper a nadie que la lea por su nombre viejo.
         /// </summary>
         public const int CanoMontajeX = CanoAguaX;
-        /// <summary>Columna de montaje del caño de AGUA: la primera columna de aire, pegada al muro izquierdo de la cámara.</summary>
-        public const int CanoAguaX = CuartoX0; // 140
+        /// <summary>(playtest 34) Columna de montaje del caño de AGUA: la cara DERECHA de su machón (antes `CuartoX0`, la pared del cuarto -- ver el bloque "LA ESTACIÓN DE FUENTES SE VA AL CENTRO").</summary>
+        public const int CanoAguaX = MensulaAguaX1; // 200
         /// <summary>Columna de montaje del caño de LIMO: la cara DERECHA del machón de piedra, para que su chorro caiga en la pila del limo y no en la del agua.</summary>
         public const int CanoLimoX = MensulaLimoX1; // 157
         /// <summary>Fila del caño de AGUA (190). La boquilla queda 2 celdas más abajo (Dispenser.SpoutDropCells) y el labio de su pila está en 178: **10 celdas de caída visible**. Que el chorro se vea caer entero es media explicación de qué hace el aparato.</summary>
@@ -1375,7 +1509,7 @@ namespace Alkahest.Sim
         /// rebote de fragua de Game/WorkshopBackdrop.cs sin ganar nada.
         /// Huella real: x 180..216, y 168..191 (hogar incluido).
         /// </summary>
-        public const int CrisolX = 194;
+        public const int CrisolX = 102; // (playtest 34) 194 -> 102: la ZONA DE FUEGO se va a la IZQUIERDA ("las que TRANSFORMAN a la izquierda"). Huella real 88..124.
         /// <summary>
         /// Ancla (centro del LECHO) de la Prensa. 282 -&gt; 240 (playtest 27)
         /// -&gt; **246** (playtest 33). Huella 231..261. La ZONA DE FUERZA gana
@@ -1384,7 +1518,7 @@ namespace Alkahest.Sim
         /// máquina más ruidosa del taller (jambas de 20 celdas + dintel) y era
         /// la que menos respiraba.
         /// </summary>
-        public const int PrensaX = 246;
+        public const int PrensaX = 158; // (playtest 34) 246 -> 158: segunda estación de la banda de TRANSFORMAR, a la izquierda de las fuentes. Huella 143..173.
         /// <summary>
         /// Ancla (centro de la BANDEJA) del Banco de Chispa. 312 -&gt; 299
         /// (playtest 27) -&gt; **324** (playtest 33). Huella 311..337. Se va
@@ -1394,7 +1528,7 @@ namespace Alkahest.Sim
         /// alta, y no como dos eslabones más de la cinta transportadora.
         /// Cesar: *"asociar... las OBSERVACIONALES... romper la línea"*.
         /// </summary>
-        public const int BancoChispaX = 324;
+        public const int BancoChispaX = 302; // (playtest 34) 324 -> 302: sigue casado con la Columna en la ALCOBA DE OBSERVACIÓN, ahora a la derecha de las fuentes. Huella 289..315.
         /// <summary>
         /// Ancla (centro de la BANDEJA) del Ensayo del Maestro. 330 -&gt; 331
         /// (playtest 27) -&gt; **362** (playtest 33). Huella 348..376.
@@ -1407,7 +1541,7 @@ namespace Alkahest.Sim
         /// (terraza de 338..347 + arco del pasillo) haciendo de antesala
         /// ceremonial compartida.
         /// </summary>
-        public const int EnsayoPlintoX = 362;
+        public const int EnsayoPlintoX = 362; // (playtest 34) NO SE MUEVE: sigue casado con la Tolva en el extremo derecho, tal y como pidió Cesar.
 
         /// <summary>
         /// EL ALAMBIQUE (playtest 30, "LA ALQUIMIA VISIBLE" -- encargo de
@@ -1432,7 +1566,7 @@ namespace Alkahest.Sim
         /// y=225 (ver Game/Alambique.cs::Calcular), 15 celdas por debajo del
         /// techo de piedra del cuarto (<see cref="CuartoY1"/>=240).
         /// </summary>
-        public const int AlambiqueBaseY = 210;
+        public const int AlambiqueBaseY = CuartoY0 + 42; // 178. (playtest 34) ERA UN LITERAL (210) atado al `CuartoY0` viejo: con el suelo 32 filas más abajo habría dejado el alambique flotando a 74 celdas de su crisol. Pasa a DERIVARSE (regla 39/47), conservando exactamente las 42 celdas sobre la losa que validó el playtest 30.
 
         /// <summary>
         /// Pared IZQUIERDA del fuste de la Columna de Ensayo. 296 -&gt; 262
@@ -1450,7 +1584,7 @@ namespace Alkahest.Sim
         /// (playtest 33) 262 -&gt; **284**: la Columna encabeza la ALCOBA DE
         /// OBSERVACIÓN (ver el bloque PLAYTEST 33 junto a `CuartoX1`). Huella
         /// exterior 282..304.
-        public const int ColumnaX0 = 284;
+        public const int ColumnaX0 = 260; // (playtest 34) 284 -> 260: encabeza la alcoba de observación tras la escalinata nueva (232..257). Huella exterior 258..280.
         /// <summary>19 = 3 de muro + 13 de hueco + 3 de muro (antes 5 = 1+3+1).</summary>
         public const int ColumnaAncho = 19;
         /// <summary>Grosor del muro de piedra del fuste.</summary>
@@ -1500,7 +1634,7 @@ namespace Alkahest.Sim
         /// margen a ambos lados (6 filas por debajo hasta 189, 9 por encima
         /// hasta 209): ni pegada al suelo del cuarto ni al techo.
         /// </summary>
-        private const int PasilloTolvaY0 = 195;
+        private const int PasilloTolvaY0 = CuartoY0 + 27; // 163. (playtest 34) ERA UN LITERAL (195). Baja las MISMAS 32 filas que el cuarto: el pasillo no se rediseña, se traslada, conservando su relación exacta con el atrio del Ensayo y con la boca de la Tolva.
 
         /// <summary>
         /// Dónde nace el aprendiz (contrato). TERCERA RONDA: el aprendiz
@@ -1588,8 +1722,8 @@ namespace Alkahest.Sim
         /// esta distancia una estación de 41 celdas ocupa el 26% del ancho de
         /// pantalla, que es la presencia que pedía el mandato 1.
         /// </summary>
-        public const int AprendizX = 175; // (playtest 27; antes 290)
-        public const int AprendizY = 186; // (playtest 27; antes CunaTopY+1=180): a media altura del hueco, a la altura del caño de agua.
+        public const int AprendizX = 186; // (playtest 34) 175 -> 186: EL UMBRAL, justo a la izquierda de la isla de fuentes -- el jugador nace mirando el centro del taller, con transformar a su izquierda y observar a su derecha.
+        public const int AprendizY = CuartoY0 + 18; // 154. (playtest 34) ERA UN LITERAL (186) y con el suelo 32 filas más abajo habría hecho nacer al aprendiz a 50 celdas del piso. Derivado: misma altura relativa de siempre (a la altura del caño de agua).
 
         /// <summary>
         /// Construye el mundo del pivot (playtest 21): todo piedra salvo la
@@ -1843,17 +1977,22 @@ namespace Alkahest.Sim
             DrawUShape(grid, PilaAguaX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
             DrawUShape(grid, PilaLimoX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
 
-            // El machón: de la losa al remate, macizo. Sube por ENTRE las dos
-            // pilas (155..157, con la del agua acabando en 154 y la del limo
-            // empezando en 158): las tres piezas se tocan y se leen como UNA
-            // estación, no como tres objetos sueltos en el suelo.
+            // Los machones: de la losa al remate, macizos. El del limo sube
+            // por ENTRE las dos pilas (215..217, con la del agua acabando en
+            // 214 y la del limo empezando en 218) y el del agua (playtest 34)
+            // cierra la isla por la izquierda (198..200): las CUATRO piezas se
+            // tocan y se leen como UNA estación exenta en el centro de la
+            // sala, no como cuatro objetos sueltos en el suelo.
             DrawSolidRect(grid, MensulaLimoX0, CuartoY0, MensulaLimoX1 - MensulaLimoX0 + 1,
                 MensulaLimoTopY - CuartoY0 + 1, MaterialId.Stone);
+            DrawSolidRect(grid, MensulaAguaX0, CuartoY0, MensulaAguaX1 - MensulaAguaX0 + 1,
+                MensulaAguaTopY - CuartoY0 + 1, MaterialId.Stone);
 
             // (playtest 27) Registro anticincel de la estación completa -- ver ObraDelTaller.
             RegistrarObra(PilaAguaX0, y0, PilaAguaX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
             RegistrarObra(PilaLimoX0, y0, PilaLimoX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
             RegistrarObra(MensulaLimoX0, CuartoY0, MensulaLimoX1, MensulaLimoTopY);
+            RegistrarObra(MensulaAguaX0, CuartoY0, MensulaAguaX1, MensulaAguaTopY);
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>
@@ -2020,6 +2159,8 @@ namespace Alkahest.Sim
         private const int AdornoHuecoMinimo = 4;
         /// <summary>(playtest 33) A partir de este ancho, el hueco deja de recibir un escalón decorativo y recibe una ESCALINATA -- ver <see cref="TallarTerraza"/>.</summary>
         private const int AdornoHuecoEscalinata = 12;
+        /// <summary>(playtest 34) La columna del UMBRAL entre la banda que transforma y la alcoba que observa: el hueco que la contiene es el único que se gana la escalinata (ver <see cref="TallarTerraza"/>), y es la misma frontera que usa <see cref="BaseYDeEstacion"/> para dar la cota +6.</summary>
+        private const int UmbralAlcobaX = 250;
 
         /// <summary>
         /// Columnas donde CUELGA una pilastra del techo, una por costura
@@ -2041,7 +2182,7 @@ namespace Alkahest.Sim
         /// tramo, que es lo que orienta el abanico de dovelas del fondo) y
         /// dónde cambiar el aparejo de la sillería. Antes que duplicar cinco
         /// números en otro archivo -- regla 39 y regla 47 de CLAUDE.md.
-        public static readonly int[] PilastraColumnas = { 176, 224, 272, 308, 343 };
+        public static readonly int[] PilastraColumnas = { 133, 185, 244, 284, 331 }; // (playtest 34) recolocadas a las costuras del PLANO CENTRAL: crisol|prensa (133), prensa|fuentes (185), fuentes|escalinata (244), columna|chispa (284), chispa|atrio (331). Todas caen en aire libre, ninguna sobre una huella.
 
         /// <summary>
         /// (playtest 33, "algunos pilares están bien pero puede haber MÁS
@@ -2059,7 +2200,7 @@ namespace Alkahest.Sim
         /// (playtest 33, 2ª pasada) PÚBLICA por lo mismo que PilastraColumnas:
         /// Game/WorkshopBackdrop.cs viste cada pilastra con su sillar y necesita
         /// saber cuánto mide.
-        public static readonly int[] PilastraCaidas = { 18, 12, 22, 14, 20 };
+        public static readonly int[] PilastraCaidas = { 24, 17, 28, 19, 26 }; // (playtest 34) alargadas ~35%: con el cuarto 32 celdas más alto, las caídas del 33 se quedaban en muñones pegados al techo.
 
         // ===================================================================
         // (playtest 33) LAS REPISAS -- "un taller donde EXHIBIR lo que
@@ -2110,39 +2251,124 @@ namespace Alkahest.Sim
         public struct RepisaPlan { public int X0, X1, Y; }
 
         /// <summary>
-        /// El catálogo de baldas del taller, en orden de izquierda a derecha.
-        /// PÚBLICO a propósito: Game/WorkshopBackdrop.cs lo lee para vestir
-        /// cada una con sus ménsulas y su filo de latón, y así la piedra y el
-        /// herraje no pueden desalinearse nunca (misma disciplina que
-        /// `Alambique.PlintoRect`, regla 39: la medida se lee, no se copia).
-        /// Alturas escalonadas a propósito -- 210/216/226/230/232/234/238/242
-        /// --: si todas estuvieran a la misma cota volveríamos a tener una
-        /// línea, que es justo lo que esta ronda vino a romper.
+        /// (fix Cesar playtest 33: SISTEMA DE BALDAS COMO CONSTRUCCIÓN) RETIRADO
+        /// a propósito -- se queda declarado y VACÍO (regla 15 de CLAUDE.md,
+        /// documentar en el código lo que se retira) porque
+        /// Game/WorkshopBackdrop.cs (prohibido en este encargo) itera este
+        /// array para vestir cada balda con ménsulas triangulares y filo de
+        /// latón: un array vacío convierte ese bucle en un no-op seguro sin
+        /// tocar ese archivo. El catálogo REAL de posiciones/alturas vive
+        /// ahora en <see cref="_galeriasOriginales"/> (privado, la misma
+        /// tabla de coordenadas de siempre) y se trocea en segmentos más
+        /// cortos y de UNA sola fila -- ver <see cref="BaldaPlanes"/> y
+        /// Game/Balda.cs, el reemplazo completo de este sistema: Cesar,
+        /// literal, *"las baldas deberían ser más angostas... las ménsulas
+        /// triangulares deberían ser unos cuadraditos pequeños... que sea el
+        /// nuevo sistema de construcción"*.
         /// </summary>
-        /// (SEGUNDA PASADA, VISTO JUGANDO -- regla 52) La primera versión eran
-        /// nueve baldas de 10-18 celdas y el resultado no era "un taller con
-        /// repisas": eran NUEVE MESITAS FLOTANDO en un paño de pared vacío de
-        /// 60 celdas de alto. Un objeto pequeño repetido en un lienzo grande
-        /// no amuebla el lienzo, lo subraya. Corregido con el criterio de
-        /// siempre en interiores: **menos piezas, más largas, alineadas con la
-        /// crujía**. Las galerías de zona pasan a 23-27 celdas (media crujía),
-        /// y solo las dos alas del horno siguen siendo cortas, porque esas dos
-        /// tienen que caber a los lados del plinto del Alambique.
-        public static readonly RepisaPlan[] Repisas =
+        public static readonly RepisaPlan[] Repisas = new RepisaPlan[0];
+
+        /// <summary>
+        /// (fix Cesar playtest 33) El mismo catálogo de galerías de siempre
+        /// (posiciones/alturas sin cambiar, "SEGUNDA PASADA, VISTO JUGANDO"
+        /// de la ronda anterior: menos piezas, más largas, alineadas con la
+        /// crujía) -- ahora PRIVADO, es la materia prima que
+        /// <see cref="ComputeBaldaPlanes"/> trocea en baldas de UNA fila y de
+        /// hasta <see cref="BaldaLargoMax"/> celdas. Ya NO se talla
+        /// directamente: cada entrada es la "media crujía" original que se
+        /// reparte entre 1-2 baldas más cortas con un hueco entre medias.
+        /// </summary>
+        private static readonly RepisaPlan[] _galeriasOriginales =
         {
-            new RepisaPlan { X0 = 144, X1 = 168, Y = 228 }, // galería de la zona húmeda, sobre el estante de redomas.
-            new RepisaPlan { X0 = 178, X1 = 187, Y = 210 }, // ALA IZQUIERDA de "la línea" del horno.
-            new RepisaPlan { X0 = 201, X1 = 210, Y = 210 }, // ALA DERECHA  de "la línea" del horno.
-            new RepisaPlan { X0 = 220, X1 = 229, Y = 222 }, // paso fuego -> fuerza (corta: el hueco solo da para eso).
-            new RepisaPlan { X0 = 232, X1 = 258, Y = 240 }, // galería alta sobre la Prensa.
-            new RepisaPlan { X0 = 264, X1 = 280, Y = 214 }, // el umbral largo: una balda BAJA, a mano.
-            new RepisaPlan { X0 = 284, X1 = 306, Y = 230 }, // galería de la alcoba, sobre la Columna.
-            new RepisaPlan { X0 = 312, X1 = 338, Y = 244 }, // galería alta de la alcoba, sobre el Banco de Chispa.
-            new RepisaPlan { X0 = 348, X1 = 372, Y = 228 }, // galería del atrio del Maestro.
+            // (playtest 34) REMAPEADAS AL PLANO CENTRAL. Dos cosas cambian a
+            // la vez y las dos son obligatorias: (a) las X, porque las zonas
+            // se reordenaron (transformar a la izquierda, fuentes al centro,
+            // observar a la derecha) y una galería sobre el sitio viejo caería
+            // hoy sobre otra máquina; (b) las Y, que ERAN LITERALES atados al
+            // `CuartoY0` viejo (168) y ahora se escriben como `CuartoY0 + N`
+            // con EXACTAMENTE el mismo desfase que tenían -- 228 era
+            // CuartoY0+60, 210 era +42, etc. Así las baldas conservan su
+            // altura relativa sobre la maquinaria (que es lo que las hace
+            // alcanzables y útiles) en vez de quedarse clavadas a una cota
+            // absoluta que el cuarto ya no usa (regla 47 de CLAUDE.md).
+            new RepisaPlan { X0 =  84, X1 =  93, Y = CuartoY0 + 42 }, // ALA IZQUIERDA de "la línea" del horno (flanquea el plinto del Alambique).
+            new RepisaPlan { X0 = 111, X1 = 120, Y = CuartoY0 + 42 }, // ALA DERECHA  de "la línea" del horno.
+            new RepisaPlan { X0 = 128, X1 = 139, Y = CuartoY0 + 54 }, // paso crisol -> prensa (corta: el hueco solo da para eso).
+            new RepisaPlan { X0 = 144, X1 = 170, Y = CuartoY0 + 72 }, // galería alta sobre la Prensa.
+            new RepisaPlan { X0 = 176, X1 = 192, Y = CuartoY0 + 46 }, // el umbral donde nace el aprendiz: una balda BAJA, a mano.
+            new RepisaPlan { X0 = 200, X1 = 228, Y = CuartoY0 + 60 }, // galería del CENTRO, sobre el estante de redomas y el depósito de anclajes.
+            new RepisaPlan { X0 = 234, X1 = 254, Y = CuartoY0 + 52 }, // sobre la escalinata: el descansillo entre transformar y observar.
+            new RepisaPlan { X0 = 258, X1 = 280, Y = CuartoY0 + 62 }, // galería de la alcoba, sobre la Columna.
+            new RepisaPlan { X0 = 290, X1 = 314, Y = CuartoY0 + 76 }, // galería alta de la alcoba, sobre el Banco de Chispa.
+            new RepisaPlan { X0 = 318, X1 = 344, Y = CuartoY0 + 60 }, // galería del atrio del Maestro.
         };
 
-        /// <summary>Filas macizas de cada balda (ver el bloque de arriba para por qué no es 1).</summary>
-        private const int RepisaFilas = 2;
+        /// <summary>Una balda ya troceada: UNA fila maciza (Y), de X0 a X1 inclusive -- ver <see cref="BaldaPlanes"/>.</summary>
+        public struct BaldaPlan { public int X0, X1, Y; }
+
+        /// <summary>Longitud máxima de una balda, en celdas (pedido literal del encargo: "más angostas").</summary>
+        public const int BaldaLargoMax = 12;
+        /// <summary>Hueco entre dos baldas que salen de la misma galería original.</summary>
+        public const int BaldaHueco = 3;
+
+        /// <summary>
+        /// (fix Cesar playtest 33) El catálogo REAL que Game/Balda.cs talla:
+        /// cada entrada de <see cref="_galeriasOriginales"/> se divide en 1-2
+        /// segmentos de como mucho <see cref="BaldaLargoMax"/> celdas, con
+        /// <see cref="BaldaHueco"/> celdas de aire entre segmentos de la
+        /// misma galería -- calculado UNA vez, aritmética entera pura (este
+        /// archivo no usa UnityEngine, ver la cabecera: nada de Mathf).
+        /// PÚBLICO: Sim/SimLevelBuilder.BuildCuartoIntimo llama a
+        /// Game/Balda.cs::TallarEnPlano por cada entrada (ver
+        /// <see cref="BuildCuartoIntimo"/>), y el mismo array alimenta el
+        /// spawn de las instancias reales (ver Game/Mudanza.cs).
+        /// </summary>
+        public static readonly BaldaPlan[] BaldaPlanes = ComputeBaldaPlanes();
+
+        private static BaldaPlan[] ComputeBaldaPlanes()
+        {
+            int total = 0;
+            for (int i = 0; i < _galeriasOriginales.Length; i++)
+                total += SegmentosParaAncho(_galeriasOriginales[i].X1 - _galeriasOriginales[i].X0 + 1);
+
+            var result = new BaldaPlan[total];
+            int idx = 0;
+            for (int i = 0; i < _galeriasOriginales.Length; i++)
+            {
+                var g = _galeriasOriginales[i];
+                int ancho = g.X1 - g.X0 + 1;
+                int n = SegmentosParaAncho(ancho);
+
+                // Espacio útil para las N baldas una vez descontados los
+                // (n-1) huecos entre ellas; el resto (si `ancho` no es
+                // múltiplo exacto) se reparte UNA celda extra a los primeros
+                // segmentos, para que ninguna balda quede más de una celda
+                // más corta que otra de la misma galería.
+                int anchoUtil = ancho - (n - 1) * BaldaHueco;
+                if (anchoUtil < n) anchoUtil = n; // salvaguarda: nunca menos de 1 celda por segmento.
+                int largoBase = anchoUtil / n;
+                int resto = anchoUtil % n;
+
+                int cursor = g.X0;
+                for (int s = 0; s < n; s++)
+                {
+                    int largo = largoBase + (s < resto ? 1 : 0);
+                    int x0 = cursor;
+                    int x1 = x0 + largo - 1;
+                    result[idx++] = new BaldaPlan { X0 = x0, X1 = x1, Y = g.Y };
+                    cursor = x1 + 1 + BaldaHueco;
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Cuántos segmentos de como mucho <see cref="BaldaLargoMax"/> celdas hacen falta para trocear una galería de `ancho` celdas (contando ya el hueco entre segmentos) -- división entera hacia arriba, sin Mathf.</summary>
+        private static int SegmentosParaAncho(int ancho)
+        {
+            int paso = BaldaLargoMax + BaldaHueco;
+            int n = (ancho + paso - 1) / paso;
+            return n < 1 ? 1 : n;
+        }
 
         // ===================================================================
         // (playtest 33) LA BÓVEDA POR TRAMOS
@@ -2170,7 +2396,7 @@ namespace Alkahest.Sim
         // baja: es un vestíbulo, no la nave). Máximo absoluto: y=262+12=274,
         // con 13 filas de roca hasta el borde del mundo (287).
         // ===================================================================
-        private static readonly int[] BovedaFlechas = { 6, 8, 9, 12, 12, 9 };
+        private static readonly int[] BovedaFlechas = { 7, 9, 10, 13, 13, 10 }; // (playtest 34) +1 en todas: la sala es más ancha y más alta, y una bóveda que se descubre volando merece un punto más de flecha. Máximo absoluto: 262+13=275, más el pozo de claraboya (6) = 281, con 6 filas de roca hasta el borde del mundo (287).
         /// <summary>Media anchura del NERVIO (arco fajón) que se deja sin vaciar sobre cada pilastra.</summary>
         private const int BovedaNervio = 3; // 5 columnas de nervio (cx-2..cx+2): tan ancho como la pilastra con su ménsula, para que el arco fajón y la pilastra sean la MISMA pieza vista arriba y abajo.
 
@@ -2188,9 +2414,9 @@ namespace Alkahest.Sim
         /// los instrumentos: la observación tiene su propia temperatura de
         /// color, opuesta a la fragua).
         /// </summary>
-        public static readonly int[] ClaraboyaColumnas = { 158, 290, 325 };
+        public static readonly int[] ClaraboyaColumnas = { 214, 268, 302 }; // (playtest 34) una sobre la ISLA DE FUENTES (el agua devuelve el reflejo) y dos sobre la alcoba de observación. Comprobadas contra PilastraColumnas: ninguna cae sobre un nervio.
         public const int ClaraboyaAncho = 5;
-        private const int ClaraboyaAlto = 8;
+        private const int ClaraboyaAlto = 6; // (playtest 34) 8 -> 6: con las flechas de bóveda subidas a 13, el pozo tenía que ceder dos filas para no besar el borde del mundo.
 
         private static void AdornarCuarto(CellGrid grid)
         {
@@ -2290,16 +2516,21 @@ namespace Alkahest.Sim
         /// sin que nada avisara. Registrarlas después mantiene las dos cosas:
         /// terrazas donde tocan y baldas protegidas del cincel.
         /// </summary>
+        /// <summary>
+        /// (fix Cesar playtest 33) Ya NO talla directamente: cada
+        /// <see cref="BaldaPlanes"/> pasa por Game/Balda.cs::TallarEnPlano
+        /// (misma disciplina que ColumnaEnsayo/BancoChispa/EnsayoMaestro,
+        /// regla 47 -- el tallado vive en la clase que también sabe
+        /// reponerlo al mover), que ya registra su propia obra anticincel.
+        /// El nombre del método se conserva (llamado desde
+        /// <see cref="BuildCuartoIntimo"/>) para no tocar ese call site.
+        /// </summary>
         private static void TallarRepisas(CellGrid grid)
         {
-            for (int i = 0; i < Repisas.Length; i++)
+            for (int i = 0; i < BaldaPlanes.Length; i++)
             {
-                var r = Repisas[i];
-                int y0 = r.Y - (RepisaFilas - 1);
-                for (int y = y0; y <= r.Y; y++)
-                    for (int px = r.X0; px <= r.X1; px++)
-                        if (CellGrid.InBounds(px, y)) grid.SetCell(px, y, MaterialId.Stone);
-                RegistrarObra(r.X0, y0, r.X1, r.Y);
+                var b = BaldaPlanes[i];
+                Balda.TallarEnPlano(grid, b.X0, b.X1, b.Y);
             }
         }
 
@@ -2346,7 +2577,20 @@ namespace Alkahest.Sim
             // máquinas que TRANSFORMAN y las que OBSERVAN. Un escalón de 3 se
             // cruza sin enterarse; uno de 6, con la cota de la alcoba a media
             // altura de la Prensa, obliga a SUBIR para ir a mirar.
-            bool escalinata = ancho >= AdornoHuecoEscalinata;
+            //
+            // (playtest 34) LA ESCALINATA DEJA DE SER "CUALQUIER HUECO ANCHO"
+            // Y PASA A SER UN SITIO. Con el plano central, el cuarto tiene
+            // CUATRO huecos de 18-32 celdas (crisol|prensa, el umbral donde
+            // nace el aprendiz, transformar|observar y el atrio) -- con la
+            // condición vieja los cuatro se habrían levantado 6 filas y el
+            // suelo del taller habría quedado como una sierra, que es
+            // exactamente lo contrario de "que respire". Solo se gana la
+            // escalinata el hueco que CONTIENE <see cref="UmbralAlcobaX"/>: el
+            // corte entre las máquinas que transforman y las que observan,
+            // que es el único desnivel que la cota por zona
+            // (<see cref="BaseYDeEstacion"/>) necesita de verdad. Los otros
+            // tres se quedan con su terraza de 2-4 filas de siempre.
+            bool escalinata = ancho >= AdornoHuecoEscalinata && x0 <= UmbralAlcobaX && x1 >= UmbralAlcobaX;
 
             int peldano = ancho / 6; // ancho de cada peldaño...
             if (peldano < 1) peldano = 1;
@@ -2376,7 +2620,18 @@ namespace Alkahest.Sim
                 // Perfil: sube en peldaños, meseta, baja en peldaños.
                 int desdeIzq = i / peldano;
                 int desdeDer = (ancho - 1 - i) / peldano;
-                int nivel = desdeIzq < desdeDer ? desdeIzq : desdeDer;
+                // (playtest 34) LA ESCALINATA NO BAJA. El perfil simétrico de
+                // las terrazas (sube por los dos lados y vuelve a bajar) es lo
+                // correcto para una costura decorativa entre dos máquinas que
+                // están A LA MISMA COTA -- pero la escalinata del umbral
+                // separa dos plantas distintas: la de oficios (`CuartoY0+2`) y
+                // la alcoba de observación (`CuartoY0+8`). Con el perfil
+                // simétrico, el jugador subía seis peldaños y volvía a bajar
+                // seis justo antes de llegar a la Columna, con un pozo entre
+                // el último escalón y la plataforma soberana de la estación:
+                // una loma, no una escalera. Monótona creciente, la meseta
+                // ENTREGA la cota a la alcoba y el suelo queda continuo.
+                int nivel = escalinata ? desdeIzq : (desdeIzq < desdeDer ? desdeIzq : desdeDer);
                 if (nivel > alto) nivel = alto;
                 if (nivel <= 0) continue;
 
@@ -2564,7 +2819,14 @@ namespace Alkahest.Sim
         /// </summary>
         public static void BuildDeliveryNiche(CellGrid grid)
         {
-            int baseY = SurfaceFloorTop + 1;
+            // (playtest 34) Era `SurfaceFloorTop + 1` (156), la losa del
+            // taller CLÁSICO. Ahora se deriva de la propia boca -- la misma
+            // aritmética invertida (189-3-30 = 156 daba el valor viejo), así
+            // que el contrafuerte sigue naciendo EXACTAMENTE 33 filas por
+            // debajo del labio del pozo y viaja con él cuando el cuarto se
+            // mueve, en vez de quedarse anclado a una losa que esta
+            // construcción no talla.
+            int baseY = ChuteMouthY0 - 3 - ChuteBaseHeight;
 
             // Zócalo: de la losa de superficie hasta la altura de las cubas/banco.
             DrawSolidRect(grid, ChuteWallX0, baseY, CellGrid.W - ChuteWallX0, ChuteBaseHeight, MaterialId.Stone);

@@ -198,8 +198,25 @@ namespace Alkahest.Game
         private byte _leyBannerActualMat;
         private float _leyBannerHasta;
 
-        /// <summary>(playtest 25) Último Hornada.PatenteCount visto -- sube solo al CONGELAR una patente nueva (a diferencia de PatentesVersion, que también sube al bautizar), así que es la señal correcta de "hay un descubrimiento nuevo que anunciar", nunca un re-bautizo.</summary>
-        private int _ultimoPatenteCountVisto;
+        // ---------------------------------------------------------------------------------
+        // (fix Cesar playtest 33, "LA MUERTE DEL AUTO-PATENTE DE 1 PASO")
+        // ANTES: `_ultimoPatenteCountVisto` disparaba el banner "¡NUEVO
+        // PROCEDIMIENTO!" en el MISMO frame en que Hornada congelaba la
+        // patente -- con una cadena de un solo paso (ya cerrado en
+        // Hornada.CongelarPatente, ver MinPasosParaPatente) y/o con
+        // ingredientes todavía innominados, el aviso apuntaba a una ficha que
+        // decía "material ????" y confundía más de lo que ayudaba (reporte
+        // literal de Cesar). AHORA: `_patenteAnunciada[i]` se sondea con
+        // acumulador (nunca cada frame) y el banner solo se encola la
+        // primera vez que <see cref="Hornada.IngredientesBautizados"/> es
+        // true para esa patente -- puede tardar de un frame a varias
+        // jornadas, según cuándo el jugador bautice el último ingrediente
+        // que le faltaba. Array dimensionado a Hornada.MaxPatentes: mismo
+        // tope que ya usa Game/JournalHud.cs para su propio array paralelo.
+        // ---------------------------------------------------------------------------------
+        private const float PatentesSondeoSeg = 1f;
+        private float _patentesSondeoAcc;
+        private readonly bool[] _patenteAnunciada = new bool[Hornada.MaxPatentes];
 
         // ---------------------------------------------------------------------------------
         // (fix playtest 10) INVITACIÓN A BAUTIZAR: "esto no tiene nombre — T para
@@ -417,6 +434,17 @@ namespace Alkahest.Game
         /// del taller (nunca hace falta bautizar el agua) y falso en cuanto
         /// ya tiene nombre propio.
         /// </summary>
+        /// <summary>
+        /// (fix Cesar playtest 33) Complemento PÚBLICO de <see cref="NecesitaBautizo"/>
+        /// (privado) -- lo necesita <see cref="Hornada.IngredientesBautizados"/>
+        /// para preguntar "¿esto ya tiene nombre?" material a material sin
+        /// duplicar la lógica de las dos clases de material (vocabulario del
+        /// taller vs. lo innominado, ver el doc-comment de la clase). Forma
+        /// POSITIVA a propósito: un "¿está bautizado?" se lee mejor desde
+        /// fuera que un doble negativo "¿no necesita bautizo?".
+        /// </summary>
+        public bool EstaBautizado(byte matId) => !NecesitaBautizo(matId);
+
         private bool NecesitaBautizo(byte matId)
         {
             if (matId == MaterialId.Empty || matId >= MaterialId.Count) return false;
@@ -606,24 +634,37 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (playtest 25, CONTRATO_PERSISTE.md §6.4) "Se ofrece PATENTAR
-        /// (aviso en pantalla estilo 'LEY DESCUBIERTA')": encola un banner
-        /// por cada patente CONGELADA nueva desde el último frame (barato:
-        /// una comparación de enteros casi siempre). Solo el ANUNCIO vive
-        /// aquí -- el bautizo de verdad (elegir nombre) pasa por el libro,
-        /// sección PROCEDIMIENTOS (ver JournalHud.cs): NamingUi.cs no se
-        /// toca en este encargo y su API está atada a un MaterialId real de
-        /// la sim, no a un índice de patente, así que no puede reutilizarse
-        /// tal cual para esto (DECISIÓN documentada en el resumen del
-        /// encargo).
+        /// (playtest 25, CONTRATO_PERSISTE.md §6.4; reescrito en el fix de
+        /// Cesar playtest 33) "Se ofrece PATENTAR (aviso en pantalla estilo
+        /// 'LEY DESCUBIERTA')": encola un banner por cada patente que se
+        /// vuelve ANUNCIABLE desde el último sondeo -- ya NO en cuanto
+        /// Hornada la congela, sino cuando <see cref="Hornada.IngredientesBautizados"/>
+        /// confirma que su ficha se puede leer sin ningún "???" (ver el
+        /// docblock largo de <see cref="_patenteAnunciada"/> para el porqué
+        /// completo). Sondeo con acumulador, nunca por frame: MaxPatentes
+        /// (16) x hasta 4 pasos cada una es barato, pero es la disciplina del
+        /// proyecto (regla del "why", CLAUDE.md).
+        ///
+        /// (punto d del encargo) También abre el libro EN PROCEDIMIENTOS la
+        /// próxima vez que se abra (<see cref="JournalHud.SolicitarAperturaEnProcedimientos"/>):
+        /// Cesar, literal, "voy al libro y caigo en LEYES, no en
+        /// PROCEDIMIENTOS" -- el único atajo que ofrece el propio texto del
+        /// banner es J, así que sesgar dónde aterriza J es la forma mínima de
+        /// resolverlo sin inventar un botón nuevo.
         /// </summary>
         private void ActualizarPatentes()
         {
-            int actual = Hornada.PatenteCount;
-            if (actual <= _ultimoPatenteCountVisto) return;
+            _patentesSondeoAcc += Time.deltaTime;
+            if (_patentesSondeoAcc < PatentesSondeoSeg) return;
+            _patentesSondeoAcc -= PatentesSondeoSeg;
 
-            for (int i = _ultimoPatenteCountVisto; i < actual; i++)
+            int actual = Hornada.PatenteCount;
+            for (int i = 0; i < actual && i < _patenteAnunciada.Length; i++)
             {
+                if (_patenteAnunciada[i]) continue;
+                if (!Hornada.IngredientesBautizados(i, this)) continue;
+
+                _patenteAnunciada[i] = true;
                 // Nunca se nombra la sustancia (regla 13/17 de CLAUDE.md: no
                 // reventar la circularidad de "???" con un texto que la
                 // describe igual): el aviso apunta al LIBRO, no al material.
@@ -631,8 +672,8 @@ namespace Alkahest.Game
                     "Has producido algo que nunca habías fijado así. Paténtalo en tu libro (J), sección PROCEDIMIENTOS.",
                     MaterialId.Empty,
                     "¡NUEVO PROCEDIMIENTO!");
+                JournalHud.SolicitarAperturaEnProcedimientos();
             }
-            _ultimoPatenteCountVisto = actual;
         }
 
         /// <summary>

@@ -203,6 +203,35 @@ namespace Alkahest.Game
             RecalcularRegiones();
             BuildVisualGhost();
             MachineFocus.Registrar(this); // el prompt "E -- construir" mientras es obra pendiente; se olvida en CompletarConstruccion (ya no hay nada que pulsar).
+
+            // (fix Cesar playtest 33: "el alambique no se puede mover") RAÍZ
+            // DEL BUG: antes de este fix, `Mudanza.RegistrarMovible` SOLO se
+            // llamaba en CompletarConstruccion -- mientras el alambique era
+            // obra pendiente (el estado en el que Cesar lo probó, plinto
+            // recién tallado, cerámico sin pagar todavía) Mudanza ni siquiera
+            // SABÍA que este objeto existía: V no encontraba nada que
+            // agarrar ahí, sin ningún aviso que lo explicara. El fix lo
+            // registra AQUÍ, en Init, así que es movible en las DOS fases
+            // (ver Reposicionar, que ahora bifurca por `_fase`).
+            //
+            // BUG SECUNDARIO (mismo síntoma que Game/ColumnaEnsayo.cs corrigió
+            // en el playtest 32): Sim/SimLevelBuilder.BuildCuartoIntimo YA
+            // registra el rect del plinto en ObraDelTaller (necesita
+            // protegerlo del cincel desde el génesis, antes de que exista
+            // ninguna instancia) pero descartaba el handle devuelto. Antes de
+            // este fix, CompletarConstruccion llamaba a un SEGUNDO
+            // `RegistrarObra` con el rect completo (matraz+domo) -- eso deja
+            // el handle del plinto HUÉRFANO en ObraDelTaller para siempre (un
+            // rect fantasma, nunca actualizado, nunca limpiado) mientras el
+            // aparato real queda protegido por un handle distinto. El fix
+            // aquí RECLAMA el mismo handle del plinto (mismo patrón que
+            // ColumnaEnsayo.Init con HallarObraExacta) y CompletarConstruccion
+            // ahora lo hace CRECER con ActualizarObra en vez de crear uno
+            // nuevo -- un único handle vivo durante toda la vida del aparato.
+            Alambique.PlintoRect(_anchorX, _baseY, out int plintoX0, out int plintoY0, out int plintoX1, out int plintoY1);
+            int handleExistente = SimLevelBuilder.HallarObraExacta(plintoX0, plintoY0, plintoX1, plintoY1);
+            _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(plintoX0, plintoY0, plintoX1, plintoY1);
+            Mudanza.RegistrarMovible(this);
         }
 
         private void OnDestroy()
@@ -344,8 +373,50 @@ namespace Alkahest.Game
                 }
         }
 
+        /// <summary>Talla SOLO el plinto EN CALIENTE (regla 29: PaintStable) -- equivalente en caliente de <see cref="TallarEnPlano"/>, usado por <see cref="Reposicionar"/> mientras el alambique sigue en <see cref="Fase.ObraPendiente"/> (mover un instrumento a medio construir NO debe tallar de golpe el matraz/domo que el jugador todavía no ha pagado).</summary>
+        private void TallarPlintoCaliente()
+        {
+            Alambique.PlintoRect(_anchorX, _baseY, out int x0, out int y0, out int x1, out int y1);
+            for (int x = x0; x <= x1; x++)
+                _sim.PaintStable(x, y0, 0, MaterialId.Stone);
+        }
+
+        /// <summary>Equivalente en caliente inverso de <see cref="TallarPlintoCaliente"/> -- borra el plinto en la posición VIEJA antes de moverlo.</summary>
+        private static void BorrarPlintoCalienteEn(AlkahestSim sim, int x0, int y0, int x1, int y1)
+        {
+            for (int x = x0; x <= x1; x++)
+                sim.Paint(x, y0, 0, MaterialId.Empty);
+        }
+
+        /// <summary>
+        /// (fix Cesar playtest 33) Bifurca por <see cref="_fase"/>: en
+        /// <see cref="Fase.ObraPendiente"/> solo el PLINTO viaja (borra el
+        /// viejo, talla el nuevo, hace crecer el MISMO handle reclamado en
+        /// Init) -- el matraz/domo/vent siguen sin existir hasta que el
+        /// jugador complete la construcción, exactamente igual que si nunca
+        /// se hubiera movido. En <see cref="Fase.Construido"/> se comporta
+        /// como cualquier otra estación (borra TODA la mampostería real,
+        /// talla la nueva, vent incluido -- ver <see cref="TallarEnCaliente"/>).
+        /// </summary>
         public void Reposicionar(Vector2Int anclaCelda)
         {
+            if (_fase == Fase.ObraPendiente)
+            {
+                Alambique.PlintoRect(_anchorX, _baseY, out int viejoX0, out int viejoY0, out int viejoX1, out int viejoY1);
+                BorrarPlintoCalienteEn(_sim, viejoX0, viejoY0, viejoX1, viejoY1); // 1) borrar el plinto VIEJO.
+
+                int dxP = anclaCelda.x - _outX0;
+                int dyP = anclaCelda.y - _baseY;
+                _anchorX += dxP;
+                _baseY += dyP;
+                RecalcularRegiones(); // mueve `transform.position` -- el fantasma (hijo con SetParent(transform,false) a offset local cero, ver BuildVisualGhost) viaja SOLO, sin recrear nada (regla 36: nunca Init/BuildVisual* para mover).
+                TallarPlintoCaliente(); // 2) tallar el plinto nuevo.
+
+                Alambique.PlintoRect(_anchorX, _baseY, out int nuevoX0, out int nuevoY0, out int nuevoX1, out int nuevoY1);
+                SimLevelBuilder.ActualizarObra(_handleObra, nuevoX0, nuevoY0, nuevoX1, nuevoY1); // 3) actualizar el registro anticincel (mismo handle de siempre).
+                return;
+            }
+
             BorrarEnCaliente(Calcular(_anchorX, _baseY)); // 1) borrar la huella VIEJA.
 
             int dx = anclaCelda.x - _outX0;
@@ -460,9 +531,17 @@ namespace Alkahest.Game
             _fase = Fase.Construido;
             MachineFocus.Olvidar(this); // ya no hace falta E: destila solo, siempre.
 
+            // (fix Cesar playtest 33) Hace CRECER el MISMO handle reclamado en
+            // Init (el del plinto) hasta cubrir la huella completa
+            // (matraz+domo+techo) en vez de registrar un segundo handle --
+            // ver el docblock de Init, "BUG SECUNDARIO", para el porqué: un
+            // segundo RegistrarObra aquí dejaba el handle del plinto huérfano
+            // en ObraDelTaller para siempre. `Mudanza.RegistrarMovible` YA se
+            // llamó en Init (este aparato es movible desde el primer frame,
+            // en las dos fases) -- llamarlo otra vez aquí sería un no-op
+            // (RegistrarMovible ya se defiende de duplicados), así que se quita.
             var h = Calcular(_anchorX, _baseY);
-            _handleObra = SimLevelBuilder.RegistrarObra(h.OutX0, h.OutY0, h.OutX1, h.OutY1);
-            Mudanza.RegistrarMovible(this); // desde aquí en adelante, un aparato del taller como cualquier otro.
+            SimLevelBuilder.ActualizarObra(_handleObra, h.OutX0, h.OutY0, h.OutX1, h.OutY1);
 
             Rotular(null, UiStyles.Exito);
             Debug.Log("[ChaosAlchemy] El alambique se ha construido: atrapa el vapor y destila.");

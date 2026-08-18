@@ -160,6 +160,24 @@ namespace Alkahest.Game
         /// </summary>
         public static bool Abierto { get; private set; }
 
+        /// <summary>
+        /// (fix Cesar playtest 33, punto d: "voy al libro y caigo en LEYES,
+        /// no en PROCEDIMIENTOS") Bandera estática consumida en <see cref="Update"/>
+        /// la próxima vez que el libro se abra (ya estuviera abierto o no):
+        /// aterriza en la sección PROCEDIMIENTOS en vez de en la última que
+        /// el jugador tuviera activa. La llama <see cref="SubstanceKnowledge.ActualizarPatentes"/>
+        /// justo cuando encola el banner "¡NUEVO PROCEDIMIENTO!" -- mismo
+        /// patrón estático que <see cref="Mudanza.ForzarSalida"/>: un archivo
+        /// de otra clase no tiene (ni debe tener) una referencia a la
+        /// instancia de JournalHud.
+        /// </summary>
+        private static bool _abrirEnProcedimientosPendiente;
+
+        public static void SolicitarAperturaEnProcedimientos()
+        {
+            _abrirEnProcedimientosPendiente = true;
+        }
+
         // Estructura de leyes: se calcula UNA sola vez en Init (playtest 18:
         // Universe.Leyes de este universo no cambia durante la partida). El
         // TEXTO de cada entrada sí depende de nombres bautizables y de si la
@@ -330,6 +348,20 @@ namespace Alkahest.Game
         /// <summary>(playtest 25) Invitación equivalente para una PATENTE sin bautizar: aquí SÍ hay un botón en la propia página (ver DrawEntradaProcedimiento), no hace falta cerrar el libro.</summary>
         private const string TextoInvitaBautizoPatente = "(sin bautizar — pulsa el botón de abajo)";
 
+        /// <summary>
+        /// (fix Cesar playtest 33, puntos c/d) Cuando la patente todavía
+        /// tiene algún ingrediente sin nombre (<see cref="Hornada.IngredientesBautizados"/>
+        /// en false), la ficha NO ofrece el botón "Bautizar" -- ofrecerlo
+        /// sería repetir el "material ????" que confundió a Cesar, porque
+        /// bautizar la PATENTE (el nombre del procedimiento) no le pone
+        /// nombre a sus materiales. Se invita a resolver la causa real en su
+        /// lugar (SubstanceKnowledge.ActualizarPatentes ya retrasa el propio
+        /// anuncio "¡NUEVO PROCEDIMIENTO!" por el mismo motivo, así que en la
+        /// práctica esta rama solo se ve si el jugador entra a PROCEDIMIENTOS
+        /// por su cuenta antes de que el banner llegue a anunciarla).
+        /// </summary>
+        private const string TextoBautizaIngredientes = "bautiza sus ingredientes para poder patentarlo";
+
         // Pergamino apagado y lomo: coherentes con la paleta ciruela/latón
         // del taller (UiStyles.Tinta/Oro), NO blanco puro -- el reporte pide
         // explícitamente evitar quemar los ojos en un juego oscuro.
@@ -469,6 +501,16 @@ namespace Alkahest.Game
                     if (kb.pageDownKey.wasPressedThisFrame) CambiarPagina(1);
                     else if (kb.pageUpKey.wasPressedThisFrame) CambiarPagina(-1);
                 }
+            }
+
+            // (fix Cesar playtest 33, punto d) Consume la solicitud de
+            // Game/SubstanceKnowledge.cs en cuanto el libro esté visible --
+            // ya sea porque J lo acaba de abrir arriba, o porque ya estaba
+            // abierto cuando el banner de patente se disparó.
+            if (_visible && _abrirEnProcedimientosPendiente)
+            {
+                _abrirEnProcedimientosPendiente = false;
+                CambiarSeccion(Seccion.Procedimientos);
             }
 
             Abierto = _visible;
@@ -792,10 +834,21 @@ namespace Alkahest.Game
         /// <summary>Alto (px de diseño, ver UiStyles.S) del botón "Bautizar" que DrawEntradaProcedimiento añade bajo una patente sin nombre.</summary>
         private const float AltoBotonBautizarPatente = 22f;
 
-        /// <summary>¿La entrada `patenteIdx` (ver PatenteIdxDe) necesita el botón de bautizo bajo su cuerpo? Solo patentes reales (≥0) SIN nombre todavía.</summary>
-        private static bool NecesitaBotonBautizoPatente(int patenteIdx)
+        /// <summary>
+        /// ¿La entrada `patenteIdx` (ver PatenteIdxDe) necesita el botón de
+        /// bautizo bajo su cuerpo? Patentes reales (≥0), SIN nombre todavía
+        /// Y (fix Cesar playtest 33, puntos c/d) con TODOS sus ingredientes
+        /// ya bautizados -- si no, la ficha ya lo dice en prosa (ver
+        /// ConstruirEntradaPatente/TextoBautizaIngredientes) en vez de
+        /// ofrecer un botón que no resolvería el "????" que se ve arriba.
+        /// Instancia (no static, a diferencia de antes): necesita `_knowledge`
+        /// para preguntarle a Hornada.
+        /// </summary>
+        private bool NecesitaBotonBautizoPatente(int patenteIdx)
         {
-            return patenteIdx >= 0 && string.IsNullOrEmpty(Hornada.GetPatente(patenteIdx).Nombre);
+            if (patenteIdx < 0) return false;
+            if (!string.IsNullOrEmpty(Hornada.GetPatente(patenteIdx).Nombre)) return false;
+            return Hornada.IngredientesBautizados(patenteIdx, _knowledge);
         }
 
         private float EntradaAltura(Entrada e, float ancho, bool badge, int patenteIdx = -1)
@@ -1257,8 +1310,7 @@ namespace Alkahest.Game
             int patentes = Mathf.Min(Hornada.PatenteCount, Hornada.MaxPatentes);
             for (int p = 0; p < patentes && _entradasProcedimientosCount < MaxProcedimientos; p++)
             {
-                var patente = Hornada.GetPatente(p);
-                ConstruirEntradaPatente(patente, out string tituloPat, out string detallePat);
+                ConstruirEntradaPatente(p, out string tituloPat, out string detallePat);
                 _entradaProcedimientoPatenteIdx[_entradasProcedimientosCount] = p;
                 _entradasProcedimientos[_entradasProcedimientosCount++] = new Entrada { Titulo = tituloPat, Cuerpo = detallePat, Propaga = false };
             }
@@ -1446,16 +1498,27 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (playtest 25, CONTRATO_PERSISTE.md §6.4) Página de una PATENTE:
-        /// pasos NUMERADOS con máquina + condición + resultado, hasta 4
-        /// hacia atrás (contrato, literal) -- Hornada.Patente.Pasos ya viene
-        /// congelado con esa cota (ver Hornada.CongelarPatente). Máquina y
-        /// condición son los literales que B pasó a Hornada.RegistrarOp
-        /// ("crisol"/"prensa"/"banco de chispa", "tier0"/"combustible:..."/
-        /// "lento"...) -- se muestran TAL CUAL, son ya frases de bitácora.
+        /// (playtest 25, CONTRATO_PERSISTE.md §6.4; firma cambiada en el fix
+        /// de Cesar playtest 33) Página de una PATENTE: pasos NUMERADOS con
+        /// máquina + condición + resultado, hasta 4 hacia atrás (contrato,
+        /// literal) -- Hornada.Patente.Pasos ya viene congelado con esa cota
+        /// (ver Hornada.CongelarPatente). Máquina y condición son los
+        /// literales que B pasó a Hornada.RegistrarOp ("crisol"/"prensa"/
+        /// "banco de chispa", "tier0"/"combustible:..."/"lento"...) -- se
+        /// muestran TAL CUAL, son ya frases de bitácora.
+        ///
+        /// (fix Cesar playtest 33) Recibe el ÍNDICE de patente, no la
+        /// patente ya copiada: hace falta para preguntarle a
+        /// Hornada.IngredientesBautizados si esta ficha puede ofrecer el
+        /// invito a bautizar el PROCEDIMIENTO (TextoInvitaBautizoPatente) o
+        /// si primero hace falta resolver el "???" de sus materiales
+        /// (TextoBautizaIngredientes) -- por construcción esta rama solo
+        /// puede aparecer con la patente TODAVÍA sin nombre, gracias al
+        /// mismo gate en NecesitaBotonBautizoPatente.
         /// </summary>
-        private void ConstruirEntradaPatente(Hornada.Patente patente, out string titulo, out string detalle)
+        private void ConstruirEntradaPatente(int patenteIdx, out string titulo, out string detalle)
         {
+            var patente = Hornada.GetPatente(patenteIdx);
             titulo = string.IsNullOrEmpty(patente.Nombre) ? "(patente sin bautizar)" : patente.Nombre;
 
             string cuerpo = "";
@@ -1472,7 +1535,11 @@ namespace Alkahest.Game
             string resultado = _knowledge.NombreParaHud(patente.MatResultado);
             cuerpo += "Resultado: " + resultado + ".";
             if (string.IsNullOrEmpty(patente.Nombre))
-                cuerpo += " " + TextoInvitaBautizoPatente;
+            {
+                cuerpo += " " + (Hornada.IngredientesBautizados(patenteIdx, _knowledge)
+                    ? TextoInvitaBautizoPatente
+                    : TextoBautizaIngredientes);
+            }
 
             detalle = cuerpo;
         }

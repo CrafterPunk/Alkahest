@@ -657,16 +657,25 @@ namespace Alkahest.Game
             var interior = AbrirPanel(480f, 320f);
 
             // (playtest 31, TIPOGRAFÍA = ALMA) El título es lo PRIMERO que ve
-            // quien enciende el juego, y hasta esta ronda estaba escrito con
-            // la fuente de sistema. Ahora es una capital lapidaria (Cinzel)
-            // con espaciado -- una inscripción, no una etiqueta -- y lleva su
+            // quien enciende el juego. Es una capital lapidaria (Cinzel) con
+            // espaciado -- una inscripción, no una etiqueta -- y lleva su
             // filete con rombo debajo, como la portada de un tratado.
+            //
+            // (fix Cesar playtest 33, tarea 1, "TÍTULO") "CHAOS ALCHEMY" ->
+            // "LIMO PRIMORDIAL": el nombre en inglés no encajaba con el resto
+            // del juego (texto en español latino, regla 53 de CLAUDE.md) ni
+            // con la propia ficción -- el limo primordial ES la sustancia de
+            // la que se separan las cinco bases del retículo (Sim/Universe.cs,
+            // "LO QUE PERSISTE"), el hilo que atraviesa toda la partida desde
+            // el primer caño. Mini-descripción nueva, sobria, sin explicar de
+            // más: la fuente/espaciado (Cinzel + UiStyles.Espaciar) y el
+            // filete con rombo se conservan EXACTOS, solo cambia el texto.
             GUILayout.Space(UiStyles.S(6f));
-            GUILayout.Label(UiStyles.Espaciar("CHAOS ALCHEMY"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(46f)));
+            GUILayout.Label(UiStyles.Espaciar("LIMO PRIMORDIAL"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(46f)));
             var filete = GUILayoutUtility.GetRect(10f, UiStyles.S(12f));
             if (Event.current.type == EventType.Repaint)
                 UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
-            GUILayout.Label("Domestica las leyes de un universo extraño", UiStyles.Subtitulo);
+            GUILayout.Label("Todo lo que existe desciende del limo.", UiStyles.Subtitulo);
 
             GUILayout.Space(UiStyles.S(16f));
             GUILayout.Label("Seed (vacía = aleatoria):", UiStyles.CuerpoTenue);

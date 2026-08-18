@@ -1850,6 +1850,57 @@ namespace Alkahest.Game
         }
 
         /// <summary>
+        /// (fix Cesar playtest 33) EL CUADRADO DE ANCLAJE: la pieza de latón
+        /// que corona <see cref="Anclaje"/> y remata los dos extremos de
+        /// <see cref="Balda"/> -- REEMPLAZA a <see cref="MensulaInclinada"/>
+        /// en las baldas (que se queda sin llamadores ahí, regla 15 de
+        /// CLAUDE.md: el factory sigue vivo, no se borra, solo deja de
+        /// tener quien lo pida desde Game/WorkshopBackdrop.cs porque
+        /// `Sim/SimLevelBuilder.Repisas` ahora está vacío). Placa cuadrada
+        /// con bisel claro/oscuro (mismo lenguaje que el resto del taller) y
+        /// un remache circular grande centrado -- lo que se lee como "una
+        /// pieza clavada", no como una caja lisa.
+        /// </summary>
+        public static Sprite CuadradoAnclaje()
+        {
+            const string clave = "cuadradoanclaje";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(2), h = Tex(2);
+            var px = new Color32[w * h];
+            int borde = Mathf.Max(1, w / 10);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool enBorde = x < borde || x >= w - borde || y < borde || y >= h - borde;
+                    px[y * w + x] = enBorde ? LatonBajo : (y >= h - h / 3 ? LatonAlto : Laton);
+                }
+            }
+
+            // El remache central: dos discos concéntricos por distancia al
+            // cuadrado (sin raíz cuadrada, mismo criterio barato que el resto
+            // de esta familia de sprites -- se genera una vez y se cachea).
+            int cx = w / 2, cy = h / 2, r = Mathf.Max(2, w / 5);
+            int r2 = r * r, r2Interior = r2 * 2 / 3;
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int dx = x - cx, dy = y - cy;
+                    int d2 = dx * dx + dy * dy;
+                    if (d2 > r2) continue;
+                    px[y * w + x] = d2 <= r2Interior ? LatonAlto : LatonBajo;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyCuadradoAnclaje");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
         /// (playtest 33) EL HAZ DE UNA CLARABOYA: un cono de luz fría que se
         /// abre hacia abajo, con los bordes deshilachados por un ruido estable
         /// y la intensidad muriendo con la profundidad. Blanco (lo tinta el
@@ -2297,6 +2348,9 @@ namespace Alkahest.Game
         public const byte TipoColumnaEnsayo = 3;
         public const byte TipoEnsayoMaestro = 4;
         public const byte TipoDispenser = 5;
+        /// <summary>(fix Cesar playtest 33, sistema de baldas/anclajes) Nuevos tipos que entran al registro de Net/MaquinaSync.cs junto a los seis de siempre -- ver Game/Balda.cs/Game/Anclaje.cs.</summary>
+        public const byte TipoBalda = 6;
+        public const byte TipoAnclaje = 7;
 
         /// <summary>
         /// UNA sola pieza representativa por tipo de estación, escalada
@@ -2329,6 +2383,8 @@ namespace Alkahest.Game
                 case TipoColumnaEnsayo: pieza = VidrioPanel(4, 14); break;
                 case TipoEnsayoMaestro: pieza = Dosel(10, 6); break;
                 case TipoDispenser: pieza = CanoGrifo(); break;
+                case TipoBalda: pieza = BaldaPiedra(8, 1); break;
+                case TipoAnclaje: pieza = CuadradoAnclaje(); break;
                 default: pieza = Solido(); break; // red de seguridad: tipo desconocido -> rectángulo genérico, nunca null.
             }
 

@@ -70,7 +70,16 @@ namespace Alkahest.Net
     [RequireComponent(typeof(NetworkObject))]
     public sealed class MaquinaSync : NetworkBehaviour
     {
-        /// <summary>Mismo orden que las constantes Tipo* de MaquinariaSprites.ConstruirVisualEstatico (ver el docblock de esas constantes para el porqué de la duplicación).</summary>
+        /// <summary>
+        /// Mismo orden que las constantes Tipo* de
+        /// MaquinariaSprites.ConstruirVisualEstatico (ver el docblock de esas
+        /// constantes para el porqué de la duplicación). (fix Cesar playtest
+        /// 33) Balda/Anclaje se suman al final -- el sistema de baldas como
+        /// construcción entra al MISMO registro que las cinco estaciones y
+        /// los grifos, así que un invitado ve/puede mover las baldas y los
+        /// anclajes tal cual ve/mueve el resto (réplica visual + petición de
+        /// mudanza vía Game/Mudanza.cs, sin ningún camino nuevo).
+        /// </summary>
         public enum TipoMaquina : byte
         {
             Crisol = 0,
@@ -79,6 +88,8 @@ namespace Alkahest.Net
             ColumnaEnsayo = 3,
             EnsayoMaestro = 4,
             Dispenser = 5,
+            Balda = 6,
+            Anclaje = 7,
         }
 
         /// <summary>Instancia única en la escena (mismo patrón que SimSync/AprendizNet).</summary>
@@ -150,6 +161,31 @@ namespace Alkahest.Net
         private readonly NetworkList<EntradaMaquina> _registro = new NetworkList<EntradaMaquina>(
             readPerm: NetworkVariableReadPermission.Everyone,
             writePerm: NetworkVariableWritePermission.Server);
+
+        /// <summary>
+        /// (fix Cesar playtest 33, MULTI: "no es necesario que otros vean el
+        /// movimiento; basta con que IMPIDA que otro mueva algo que alguien
+        /// ya está moviendo, con un aviso; que vean el sitio final") EL
+        /// CERROJO DE MUDANZA. Paralelo por ÍNDICE a <see cref="_registro"/>
+        /// (mismo índice, crecen juntos en <see cref="PublicarRegistroInicial"/>):
+        /// <see cref="SinBloqueo"/> = nadie lo lleva; cualquier otro valor es
+        /// el `ClientId` de quien lo tiene agarrado ahora mismo. Escrito SOLO
+        /// por el servidor (igual que <see cref="_registro"/>): el cliente
+        /// que agarra algo PIDE el cerrojo (<see cref="PedirBloqueo"/>), no lo
+        /// toma él mismo -- exactamente el mismo patrón de autoridad que ya
+        /// usa la mudanza real (<see cref="SolicitarMudanzaRpc"/>).
+        ///
+        /// DELIBERADAMENTE NO sincroniza la POSICIÓN mientras se arrastra
+        /// (decisión literal de Cesar, "no es necesario que otros vean el
+        /// movimiento"): solo bloquea el gesto y avisa. Los demás ven el
+        /// sitio FINAL cuando <see cref="SolicitarMudanzaRpc"/> confirma la
+        /// mudanza, como siempre.
+        /// </summary>
+        private readonly NetworkList<ulong> _bloqueos = new NetworkList<ulong>(
+            readPerm: NetworkVariableReadPermission.Everyone,
+            writePerm: NetworkVariableWritePermission.Server);
+
+        private const ulong SinBloqueo = ulong.MaxValue;
 
         // ---- HOST: la fuente cruda -----------------------------------------
 
@@ -262,9 +298,19 @@ namespace Alkahest.Net
             var columnas = FindObjectsByType<ColumnaEnsayo>();
             var ensayos = FindObjectsByType<EnsayoMaestro>();
             var grifos = FindObjectsByType<Dispenser>();
+            // (fix Cesar playtest 33) Baldas/anclajes: los crea
+            // Game/Mudanza.cs en su propio Init (host-only, ver el docblock
+            // de ese archivo) -- igual que las siete de arriba, pueden tardar
+            // uno o más Update en existir, así que este escaneo se reintenta
+            // hasta que también estén. `>=1` basta como señal de "ya
+            // terminó de crearlas": el spawn es una sola pasada síncrona
+            // (Balda.SpawnTodas/Anclaje.SpawnDeposito), nunca a medias.
+            var baldas = FindObjectsByType<Balda>();
+            var anclajes = FindObjectsByType<Anclaje>();
 
             if (crisoles.Length < 1 || prensas.Length < 1 || chispas.Length < 1 ||
-                columnas.Length < 1 || ensayos.Length < 1 || grifos.Length < 2)
+                columnas.Length < 1 || ensayos.Length < 1 || grifos.Length < 2 ||
+                baldas.Length < 1 || anclajes.Length < 1)
             {
                 return; // el taller del anfitrión sigue a mitad de construir -- se reintenta el próximo Update.
             }
@@ -276,6 +322,8 @@ namespace Alkahest.Net
             AgregarTipo(TipoMaquina.ColumnaEnsayo, columnas);
             AgregarTipo(TipoMaquina.EnsayoMaestro, ensayos);
             AgregarTipo(TipoMaquina.Dispenser, grifos);
+            AgregarTipo(TipoMaquina.Balda, baldas);
+            AgregarTipo(TipoMaquina.Anclaje, anclajes);
 
             PublicarRegistroInicial();
             _escaneado = true;
@@ -313,9 +361,11 @@ namespace Alkahest.Net
         private void PublicarRegistroInicial()
         {
             _registro.Clear();
+            _bloqueos.Clear();
             for (int i = 0; i < _fuentes.Count; i++)
             {
                 _registro.Add(ConstruirEntrada(_fuentes[i]));
+                _bloqueos.Add(SinBloqueo); // nace libre -- ver el docblock de _bloqueos.
             }
         }
 
@@ -375,12 +425,22 @@ namespace Alkahest.Net
         /// invitado podría llamarlo nunca.
         /// </summary>
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        private void SolicitarMudanzaRpc(byte tipo, byte indice, ushort anclaX, ushort anclaY)
+        private void SolicitarMudanzaRpc(byte tipo, byte indice, ushort anclaX, ushort anclaY, ulong clienteId)
         {
             if (!IsServer) return;
 
             int i = BuscarFuente(tipo, indice);
             if (i < 0) return;
+
+            // (fix Cesar playtest 33, MULTI: cierre de la carrera) autoridad
+            // de verdad -- si otro cliente tiene el cerrojo de este aparato,
+            // la petición se ignora en silencio. El cliente legítimo ya vio
+            // el aviso local "lo está moviendo otro alquimista" ANTES de
+            // poder llegar aquí en el caso normal (ver Game/Mudanza.cs,
+            // IntentarAgarrar); esto solo cierra la carrera de dos gestos
+            // casi simultáneos que el chequeo local no puede ver a tiempo.
+            ulong bloqueoActual = i < _bloqueos.Count ? _bloqueos[i] : SinBloqueo;
+            if (bloqueoActual != SinBloqueo && bloqueoActual != clienteId) return;
 
             var f = _fuentes[i];
             var comoObjeto = f.movible as UnityEngine.Object;
@@ -442,12 +502,148 @@ namespace Alkahest.Net
             }
         }
 
-        /// <summary>Wrapper público estático para que <see cref="MaquinaReplica"/> (un MonoBehaviour normal, no un NetworkBehaviour: no puede invocar un [Rpc] directamente) pida una mudanza. Mismo patrón que SimSync.ReenviarPintura.</summary>
+        /// <summary>
+        /// Wrapper público estático para que <see cref="MaquinaReplica"/> (un
+        /// MonoBehaviour normal, no un NetworkBehaviour: no puede invocar un
+        /// [Rpc] directamente) pida una mudanza. Mismo patrón que
+        /// SimSync.ReenviarPintura. El `clientId` viaja como parámetro
+        /// EXPLÍCITO del RPC (no `RpcParams.Receive.SenderClientId`): mismo
+        /// criterio ya documentado en Net/SimSync.SolicitarSnapshotServerRpc
+        /// -- este proyecto no tiene precedente de esa API y aquí tampoco hay
+        /// nada que proteger de un cliente que mintiera sobre su propio id
+        /// (como mucho conseguiría soltar su PROPIO cerrojo, nunca el de
+        /// otro, porque <see cref="SolicitarMudanzaRpc"/> compara contra el
+        /// cerrojo real).
+        /// </summary>
         public static void PedirMudanza(byte tipo, byte indice, Vector2Int nuevaAncla)
         {
             var s = Instancia;
             if (s == null || !s.IsSpawned || s.IsServer) return;
-            s.SolicitarMudanzaRpc(tipo, indice, (ushort)Mathf.Clamp(nuevaAncla.x, 0, ushort.MaxValue), (ushort)Mathf.Clamp(nuevaAncla.y, 0, ushort.MaxValue));
+            s.SolicitarMudanzaRpc(tipo, indice, (ushort)Mathf.Clamp(nuevaAncla.x, 0, ushort.MaxValue), (ushort)Mathf.Clamp(nuevaAncla.y, 0, ushort.MaxValue), s.NetworkManager.LocalClientId);
+        }
+
+        // =================================================================
+        // (fix Cesar playtest 33, MULTI) EL CERROJO DE MUDANZA
+        // =================================================================
+
+        /// <summary>Índice compartido por <see cref="_registro"/> y <see cref="_bloqueos"/> para (tipo,indice), buscando en el propio NetworkList -- a diferencia de <see cref="BuscarFuente"/> (solo tiene sentido en el anfitrión, que es quien tiene <see cref="_fuentes"/>), esto funciona en los dos lados porque `_registro` está replicado a todo el mundo.</summary>
+        private int BuscarIndiceRegistro(byte tipo, byte indice)
+        {
+            for (int i = 0; i < _registro.Count; i++)
+                if (_registro[i].tipo == tipo && _registro[i].indice == indice) return i;
+            return -1;
+        }
+
+        /// <summary>
+        /// Resuelve (tipo,indice) para un <see cref="IMovible"/> concreto,
+        /// sea el APARATO REAL (anfitrión, busca en <see cref="_fuentes"/>) o
+        /// la RÉPLICA visual de un invitado (busca en <see cref="_replicas"/>,
+        /// que es paralela por índice a <see cref="_registro"/> -- ver
+        /// CrearOActualizarReplica). No hace falta ningún getter nuevo en
+        /// Net/MaquinaReplica.cs (fuera del alcance de este encargo): basta
+        /// con encontrar SU posición en la lista y leer tipo/indice del
+        /// registro en ese MISMO índice.
+        /// </summary>
+        private bool ResolverTipoIndice(IMovible m, out byte tipo, out byte indice)
+        {
+            tipo = 0; indice = 0;
+            if (m == null) return false;
+
+            if (IsServer)
+            {
+                for (int i = 0; i < _fuentes.Count; i++)
+                {
+                    if (!ReferenceEquals(_fuentes[i].movible, m)) continue;
+                    tipo = _fuentes[i].tipo; indice = _fuentes[i].indice;
+                    return true;
+                }
+                return false;
+            }
+
+            for (int i = 0; i < _replicas.Count && i < _registro.Count; i++)
+            {
+                if (!ReferenceEquals(_replicas[i], m)) continue;
+                tipo = _registro[i].tipo; indice = _registro[i].indice;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// ¿Lo tiene agarrado OTRO cliente ahora mismo? Consultado por
+        /// Game/Mudanza.cs::IntentarAgarrar ANTES de dejar que el jugador se
+        /// lo lleve. `m` que no resuelve a (tipo,indice) -- cualquier
+        /// IMovible fuera del registro de MaquinaSync (HeatPlate/ChillStone/
+        /// Criatura/Capullo/StorageRack/Alambique...) -- siempre devuelve
+        /// false: el cerrojo solo existe para los tipos que SÍ están en este
+        /// registro (decisión documentada en el resumen del encargo).
+        /// </summary>
+        public static bool EstaBloqueadoPorOtro(IMovible m)
+        {
+            var s = Instancia;
+            if (s == null || !s.IsSpawned) return false;
+            if (!s.ResolverTipoIndice(m, out byte tipo, out byte indice)) return false;
+
+            int i = s.BuscarIndiceRegistro(tipo, indice);
+            if (i < 0 || i >= s._bloqueos.Count) return false;
+
+            ulong ocupante = s._bloqueos[i];
+            if (ocupante == SinBloqueo) return false;
+            return ocupante != s.NetworkManager.LocalClientId;
+        }
+
+        /// <summary>Pide el cerrojo al agarrar. El anfitrión lo aplica directamente (nunca se manda un RPC a sí mismo, mismo criterio que <see cref="PedirMudanza"/>); un invitado lo pide por RPC.</summary>
+        public static void PedirBloqueo(IMovible m)
+        {
+            var s = Instancia;
+            if (s == null || !s.IsSpawned) return;
+            if (!s.ResolverTipoIndice(m, out byte tipo, out byte indice)) return;
+
+            ulong yo = s.NetworkManager.LocalClientId;
+            if (s.IsServer) s.AplicarBloqueo(tipo, indice, yo);
+            else s.SolicitarBloqueoRpc(tipo, indice, yo);
+        }
+
+        /// <summary>Libera el cerrojo al soltar/cancelar. Mismo criterio host/invitado que <see cref="PedirBloqueo"/>.</summary>
+        public static void PedirLiberar(IMovible m)
+        {
+            var s = Instancia;
+            if (s == null || !s.IsSpawned) return;
+            if (!s.ResolverTipoIndice(m, out byte tipo, out byte indice)) return;
+
+            ulong yo = s.NetworkManager.LocalClientId;
+            if (s.IsServer) s.AplicarLiberacion(tipo, indice, yo);
+            else s.SolicitarLiberarRpc(tipo, indice, yo);
+        }
+
+        private void AplicarBloqueo(byte tipo, byte indice, ulong clienteId)
+        {
+            int i = BuscarIndiceRegistro(tipo, indice);
+            if (i < 0 || i >= _bloqueos.Count) return;
+            if (_bloqueos[i] != SinBloqueo && _bloqueos[i] != clienteId) return; // ya lo tiene otro: se ignora, no se roba un cerrojo ajeno.
+            _bloqueos[i] = clienteId;
+        }
+
+        private void AplicarLiberacion(byte tipo, byte indice, ulong clienteId)
+        {
+            int i = BuscarIndiceRegistro(tipo, indice);
+            if (i < 0 || i >= _bloqueos.Count) return;
+            if (_bloqueos[i] != clienteId) return; // solo quien lo agarró puede soltarlo.
+            _bloqueos[i] = SinBloqueo;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        private void SolicitarBloqueoRpc(byte tipo, byte indice, ulong clienteId)
+        {
+            if (!IsServer) return;
+            AplicarBloqueo(tipo, indice, clienteId);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        private void SolicitarLiberarRpc(byte tipo, byte indice, ulong clienteId)
+        {
+            if (!IsServer) return;
+            AplicarLiberacion(tipo, indice, clienteId);
         }
 
         // =================================================================
