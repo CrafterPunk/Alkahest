@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
+using Alkahest.Net;
 
 namespace Alkahest.Game
 {
@@ -248,7 +249,26 @@ namespace Alkahest.Game
             UiStyles.EscribiendoTexto = true; // (fix playtest 10) ver doc de clase y de UiStyles.EscribiendoTexto.
         }
 
-        /// <summary>Confirma el nombre y cierra: el gesto único del rito (botón o Enter llevan aquí).</summary>
+        /// <summary>
+        /// Confirma el nombre y cierra: el gesto único del rito (botón o
+        /// Enter llevan aquí). EL RITO nunca cambia (mismo campo, mismo
+        /// Enter, mismo cierre) -- lo único que cambia con la red es A QUIÉN
+        /// le pertenece la última palabra.
+        ///
+        /// (playtest 36, EL CAMINO DEL INVITADO) BAUTIZO DEL INVITADO: en la
+        /// escena clásica o si somos el anfitrión, <see cref="SubstanceKnowledge.Bautizar"/>
+        /// local sigue siendo la ÚNICA autoridad (ni SimSync ni SaberSync
+        /// existen en la escena clásica; el anfitrión ES la autoridad, no
+        /// necesita pedirse permiso a sí mismo). Un INVITADO aplica el
+        /// bautizo local de inmediato (el "fantasma optimista" de siempre en
+        /// este proyecto, ver Net/MaquinaReplica.cs::Reposicionar) para que
+        /// el rito se sienta instantáneo, y ADEMÁS manda
+        /// <see cref="SaberSync.PedirBautizo"/> -- el anfitrión lo aplica
+        /// sobre SU conocimiento (la autoridad real del taller compartido) y
+        /// lo devuelve por el registro replicado a todos, este invitado
+        /// incluido, que ve su propio nombre "confirmado" en el mismo valor
+        /// que ya tenía puesto.
+        /// </summary>
         private void Consagrar()
         {
             if (_knowledge == null) return;
@@ -258,6 +278,7 @@ namespace Alkahest.Game
                 return;
             }
             _knowledge.Bautizar(_targetMat, _nameField);
+            if (SimSync.EnSesion && !SimSync.EsServidor) SaberSync.PedirBautizo(_targetMat, _nameField);
             Close();
         }
 

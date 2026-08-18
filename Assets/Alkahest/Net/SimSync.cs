@@ -233,6 +233,20 @@ namespace Alkahest.Net
             Instancia = this;
             EnEscena = true;
 
+            // (playtest 36, EL CAMINO DEL INVITADO) SaberSync (Net/SaberSync.cs,
+            // el saber compartido -- hermano de este archivo) necesita un
+            // GameObject con NetworkObject ya spawneado por NGO, y
+            // Editor/AlkahestNetSceneBuilder.cs (el único sitio donde nace el
+            // GameObject "AlkahestSimSync") está fuera de la lista de
+            // archivos permitidos de esta ronda. Se añade AQUÍ, al propio
+            // GameObject de este componente: es seguro porque Awake() de
+            // TODA la escena corre mucho antes de que NetworkManager.
+            // StartHost()/StartClient() se llame (el jugador todavía tiene
+            // que pasar por el lobby), que es cuando NGO de verdad recopila
+            // los NetworkBehaviour de un objeto de escena para spawnearlo --
+            // ver el docblock de SaberSync para el resto del razonamiento.
+            if (GetComponent<SaberSync>() == null) gameObject.AddComponent<SaberSync>();
+
             _carga = new byte[MaxBytesCarga];
             _rleRx = new byte[CeldasPorChunk * 2];
             _lotePintura = new byte[MaxPinturasPorLote * BytesPorPintura];
@@ -341,9 +355,43 @@ namespace Alkahest.Net
         // =================================================================
 
         /// <summary>
+        /// (playtest 36, EL CAMINO DEL INVITADO) Radio, en celdas, alrededor
+        /// de CUALQUIER avatar conectado (<see cref="AprendizNet.Todos"/>,
+        /// host incluido) dentro del cual un chunk sucio se prioriza en la
+        /// difusión -- ver el docblock de <see cref="DifundirChunksSucios"/>,
+        /// "LA PRIORIDAD POR AVATAR". Un poco más que una pantalla (viewport
+        /// típico bastante por debajo de esto): de sobra para que "lo que
+        /// cualquiera tiene delante" nunca se quede esperando detrás de
+        /// actividad lejana cuando el presupuesto de la difusión aprieta.
+        /// </summary>
+        private const float RadioPrioridadCeldas = 60f;
+
+        /// <summary>
         /// Recorre los chunks buscando los que cambiaron desde el último
         /// envío y los mete en mensajes de hasta <see cref="MaxBytesCarga"/>.
-        /// El barrido es circular desde <see cref="_cursorBarrido"/>.
+        ///
+        /// (playtest 36, auditoría P3, "¿la cadencia de sync prioriza chunks
+        /// cerca de los JUGADORES REMOTOS o solo del host?") ANTES: un único
+        /// barrido circular por ÍNDICE de chunk, sin ninguna noción de
+        /// dónde está nadie -- ni del host ni de los invitados. Con el
+        /// presupuesto de <see cref="MaxChunksPorDifusion"/> ya cubierto por
+        /// actividad lejana (p. ej. el host tallando/vertiendo en su zona),
+        /// un chorro de grifo recién abierto por un invitado en OTRA punta
+        /// del taller podía quedar esperando varias pasadas detrás de
+        /// chunks que a NADIE le importaban todavía -- el "hueco" real detrás
+        /// de "a veces no se ve que sale el líquido de su botellita".
+        ///
+        /// AHORA: dos pasadas. La PRIMERA (<see cref="ChunkCercaDeAlgunAvatar"/>)
+        /// recorre TODO el grid (864 comparaciones de distancia al cuadrado,
+        /// aritmética pura, ver el coste ya aceptado por
+        /// <see cref="Net.MaquinaSync"/> para su propio sondeo) priorizando
+        /// lo sucio cerca de CUALQUIER avatar conectado, sin importar el
+        /// orden del índice. La SEGUNDA es el barrido circular de siempre
+        /// (<see cref="_cursorBarrido"/>, SIN TOCAR su semántica: solo
+        /// avanza sobre chunks que de verdad se mandaron) para lo que sobre
+        /// de presupuesto -- así lo lejano de TODOS los avatares nunca se
+        /// queda esperando para siempre, solo cede el turno cuando hay
+        /// actividad cerca de alguien.
         /// </summary>
         private void DifundirChunksSucios()
         {
@@ -367,10 +415,24 @@ namespace Alkahest.Net
             int chunksEnMensaje = 0;
             int enviadosEstaPasada = 0;
 
-            // El punto de arranque se congela en un local: `_cursorBarrido` se
-            // mueve DENTRO del bucle (para dejar apuntado dónde seguir la
-            // próxima vez) y usarlo también como origen del recorrido haría
-            // que el barrido se saltara chunks.
+            // PASADA 1: prioridad por avatar (ver el docblock de arriba). No
+            // toca `_cursorBarrido` -- es un barrido aparte, siempre desde el
+            // índice 0, que solo importa MIENTRAS haya presupuesto libre.
+            for (int ci = 0; ci < total && enviadosEstaPasada < MaxChunksPorDifusion; ci++)
+            {
+                if (grid.chunkTouchedTick[ci] == _ultimoTickEnviado[ci]) continue;
+                if (!ChunkCercaDeAlgunAvatar(ci)) continue;
+                if (IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje))
+                {
+                    enviadosEstaPasada++;
+                }
+            }
+
+            // PASADA 2: el barrido circular de siempre, para lo que sobre de
+            // presupuesto. El punto de arranque se congela en un local:
+            // `_cursorBarrido` se mueve DENTRO del bucle (para dejar apuntado
+            // dónde seguir la próxima vez) y usarlo también como origen del
+            // recorrido haría que el barrido se saltara chunks.
             int inicio = _cursorBarrido;
 
             for (int paso = 0; paso < total && enviadosEstaPasada < MaxChunksPorDifusion; paso++)
@@ -378,25 +440,12 @@ namespace Alkahest.Net
                 int ci = inicio + paso;
                 if (ci >= total) ci -= total;
 
-                if (grid.chunkTouchedTick[ci] == _ultimoTickEnviado[ci]) continue;
+                // Ya sucio-y-mandado por la pasada 1 (o ya limpio): el mismo
+                // chequeo de siempre lo descarta sin duplicar el envío,
+                // porque la pasada 1 ya actualizó `_ultimoTickEnviado`.
+                if (!IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje)) continue;
 
-                // ¿Cabe otro chunk del peor caso? Si no, se cierra el mensaje
-                // actual y se abre otro: nunca se trunca un chunk a medias.
-                if (longitud + MaxBytesPorChunk > MaxBytesCarga && chunksEnMensaje > 0)
-                {
-                    EnviarCarga(TipoDelta, (ushort)chunksEnMensaje, longitud, null);
-                    longitud = 0;
-                    chunksEnMensaje = 0;
-                }
-
-                int escritos = CodificarChunk(grid, ci, _carga, longitud);
-                if (escritos <= 0) continue;
-
-                longitud += escritos;
-                chunksEnMensaje++;
                 enviadosEstaPasada++;
-                _ultimoTickEnviado[ci] = grid.chunkTouchedTick[ci];
-
                 _cursorBarrido = ci + 1;
                 if (_cursorBarrido >= total) _cursorBarrido = 0;
             }
@@ -405,6 +454,71 @@ namespace Alkahest.Net
             {
                 EnviarCarga(TipoDelta, (ushort)chunksEnMensaje, longitud, null);
             }
+        }
+
+        /// <summary>
+        /// ¿Hay algún avatar conectado (host o invitado, ver
+        /// <see cref="AprendizNet.Todos"/>) a menos de
+        /// <see cref="RadioPrioridadCeldas"/> del CENTRO de este chunk? Pura
+        /// aritmética (distancia al cuadrado, sin raíz), cero allocs -- se
+        /// llama hasta 864 veces por difusión, el mismo presupuesto que ya
+        /// paga <see cref="Net.MaquinaSync"/> por su propio sondeo.
+        /// </summary>
+        private static bool ChunkCercaDeAlgunAvatar(int ci)
+        {
+            var avatares = AprendizNet.Todos;
+            if (avatares.Count == 0) return false;
+
+            int cx = ci % CellGrid.ChunksX;
+            int cy = ci / CellGrid.ChunksX;
+            CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+
+            float c = SimRenderer.CellWorldSize;
+            float centroX = (x0 + x1) * 0.5f * c;
+            float centroY = (y0 + y1) * 0.5f * c;
+            float radioMundo = RadioPrioridadCeldas * c;
+            float r2 = radioMundo * radioMundo;
+
+            for (int i = 0; i < avatares.Count; i++)
+            {
+                var a = avatares[i];
+                if (a == null) continue;
+                Vector3 p = a.transform.position;
+                float dx = p.x - centroX;
+                float dy = p.y - centroY;
+                if (dx * dx + dy * dy <= r2) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Codifica el chunk `ci` en <see cref="_carga"/> si está sucio
+        /// (compara <c>chunkTouchedTick</c> contra <see cref="_ultimoTickEnviado"/>,
+        /// el MISMO criterio en las dos pasadas de <see cref="DifundirChunksSucios"/>),
+        /// cerrando el mensaje actual y abriendo otro si no cabe otro chunk
+        /// del peor caso (nunca se trunca un chunk a medias). Devuelve true
+        /// si se codificó de verdad (y en ese caso ya actualizó
+        /// <see cref="_ultimoTickEnviado"/>, así que la pasada 2 nunca puede
+        /// reenviar lo que ya mandó la pasada 1).
+        /// </summary>
+        private bool IntentarCodificarChunk(CellGrid grid, int ci, ref int longitud, ref int chunksEnMensaje)
+        {
+            if (grid.chunkTouchedTick[ci] == _ultimoTickEnviado[ci]) return false;
+
+            if (longitud + MaxBytesPorChunk > MaxBytesCarga && chunksEnMensaje > 0)
+            {
+                EnviarCarga(TipoDelta, (ushort)chunksEnMensaje, longitud, null);
+                longitud = 0;
+                chunksEnMensaje = 0;
+            }
+
+            int escritos = CodificarChunk(grid, ci, _carga, longitud);
+            if (escritos <= 0) return false;
+
+            longitud += escritos;
+            chunksEnMensaje++;
+            _ultimoTickEnviado[ci] = grid.chunkTouchedTick[ci];
+            return true;
         }
 
         /// <summary>

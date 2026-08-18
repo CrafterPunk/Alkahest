@@ -607,6 +607,41 @@ namespace Alkahest.Game
 
         public bool Vio(byte matId, WitnessFlags flag) => (WitnessOf(matId) & flag) != 0;
 
+        // =================================================================
+        // (playtest 36, EL CAMINO DEL INVITADO) APLICACIÓN REMOTA --
+        // protocolo completo en Net/SaberSync.cs. Tres puertas de entrada
+        // públicas, una por cada cosa que el anfitrión difunde, TODAS
+        // idempotentes a propósito: SaberSync puede reenviar una entrada ya
+        // aplicada (reconexión, sondeo periódico que vuelve a mandar el
+        // mismo valor) sin que nada retroceda, se duplique en la cola de
+        // banners o suba una versión de caché sin que el texto haya
+        // cambiado de verdad.
+        // =================================================================
+
+        /// <summary>Aplica un descubrimiento anunciado por el anfitrión. Reutiliza <see cref="MarcarDescubierto"/> tal cual (misma transición false→true, mismo aviso "ALGO NUEVO" si toca) -- para el conocimiento del invitado, un descubrimiento remoto ES un descubrimiento, no hay una segunda clase.</summary>
+        public void AplicarDescubrimientoRemoto(byte matId) => MarcarDescubierto(matId);
+
+        /// <summary>
+        /// Aplica un bautizo anunciado por el anfitrión (una sustancia que
+        /// otro jugador nombró, o el eco de vuelta del propio bautizo de este
+        /// invitado tras el viaje de ida por <c>Net.SaberSync.PedirBautizo</c>
+        /// y de vuelta por el registro replicado). No-op si el nombre ya es
+        /// EXACTAMENTE ese (evita subir <see cref="NamingVersion"/> sin que
+        /// nada cambiara de verdad cuando SaberSync reenvía una entrada ya
+        /// aplicada).
+        /// </summary>
+        public void AplicarNombreRemoto(byte matId, string nombre)
+        {
+            if (matId >= MaterialId.Count) return;
+            string limpio = string.IsNullOrWhiteSpace(nombre) ? null : nombre.Trim();
+            string actual = MaterialId.EsBaseEstado(matId) ? _baseName[MaterialId.BaseDe(matId)] : _playerName[matId];
+            if (actual == limpio) return;
+            Bautizar(matId, nombre);
+        }
+
+        /// <summary>Aplica una ley presenciada por el anfitrión. Reutiliza <see cref="ApplyLey"/> entero (banner "LEY DESCUBIERTA" incluido): el <c>Universe</c> del espejo es EL MISMO por semilla (regla de oro del netcode, ver CLAUDE.md), así que el texto se construye idéntico en los dos lados sin duplicar la plantilla.</summary>
+        public void AplicarLeyRemota(int leyIndice) => ApplyLey(leyIndice);
+
         public int CountDiscovered()
         {
             int n = 0;
@@ -621,13 +656,36 @@ namespace Alkahest.Game
             return n;
         }
 
+        /// <summary>
+        /// (fix Cesar playtest 36, EL CAMINO DEL INVITADO) ANTES el guardián
+        /// completo era `_sim == null || _sim.Stepper == null`: en un
+        /// invitado (<see cref="AlkahestSim.ModoEspejo"/>) `Stepper` es
+        /// SIEMPRE null (no hay SimStepper en el espejo, regla de oro del
+        /// netcode) -- así que el Update ENTERO de la única copia de
+        /// conocimiento que tiene el invitado nunca corría, ni siquiera
+        /// <see cref="PollFlask"/>/<see cref="PollHover"/>, que NO necesitan
+        /// el stepper (leen el frasco local y la grilla espejada, las dos
+        /// cosas que un invitado SÍ tiene). Resultado real: aspirar o mirar
+        /// fijo una sustancia en el cliente jamás la "descubría" -- el diario
+        /// del invitado se quedaba vacío para siempre aunque tuviera el
+        /// material en el frasco delante. Solo <see cref="ConsumeEvents"/>
+        /// (lee el ring buffer de <c>SimStepper.Events</c>, que solo existe
+        /// con stepper) necesita el guardián de verdad; lo que el jugador
+        /// puede ver/tocar EN PERSONA sigue funcionando local y al instante,
+        /// sin esperar ninguna red -- lo que SÍ exige red (presenciar una
+        /// LEY, o el saber que otro jugador descubrió antes de que este se
+        /// conectara) lo trae <see cref="Net.SaberSync"/> vía
+        /// <see cref="AplicarDescubrimientoRemoto"/>/<see cref="AplicarNombreRemoto"/>/
+        /// <see cref="AplicarLeyRemota"/>, todos idempotentes a propósito
+        /// para poder convivir con el descubrimiento local sin pisarse.
+        /// </summary>
         private void Update()
         {
-            if (_sim == null || _sim.Stepper == null) return;
+            if (_sim == null) return;
 
             PollFlask();
             PollHover();
-            ConsumeEvents();
+            if (_sim.Stepper != null) ConsumeEvents(); // solo existe en el anfitrión/un jugador -- ver el docblock de arriba.
             ActualizarPatentes();
             ActualizarBannerLey();
             if (!DayCycle.InputLocked) ActualizarAvisoBautizo();

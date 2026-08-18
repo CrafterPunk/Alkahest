@@ -338,16 +338,41 @@ namespace Alkahest.Game
             // sobre el vacío.
             new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
 
-            if (!anfitrion)
-            {
-                _spawned = true;
-                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar. Las máquinas y los encargos los lleva el anfitrión.");
-                return;
-            }
-
             var apprentice = avatarLocal.GetComponent<ApprenticeController>();
             var flask = avatarLocal.GetComponent<Flask>();
             var knowledge = avatarLocal.GetComponent<SubstanceKnowledge>();
+
+            if (!anfitrion)
+            {
+                // (fix Cesar playtest 36, EL CAMINO DEL INVITADO) ANTES el
+                // invitado no recibía NADA de aquí para abajo -- "falta de
+                // menús" del reporte de Cesar: sin diario, sin bautizo, sin
+                // pistas, sin panel de encargos. Los cuatro son HUD -- ninguno
+                // escribe en la sim autoritativa, así que los cuatro pueden
+                // vivir en el invitado sin mover un ápice de autoridad:
+                //   · HintSystem: texto local puro (Game/HintSystem.cs no
+                //     depende de nada de red), mismo arranque que el
+                //     anfitrión (jornada 1, no hay jornada 2/3 en esta
+                //     escena).
+                //   · NamingUi/JournalHud: hablan con el SubstanceKnowledge
+                //     de ESTE avatar, que ya recibe lo mínimo del anfitrión
+                //     vía Net/SaberSync.cs (ver el fix de esa clase y de
+                //     SubstanceKnowledge.Update) -- el rito de bautizo es
+                //     local, con la autoridad resuelta por
+                //     Game/NamingUi.cs::Consagrar (SaberSync.PedirBautizo).
+                //   · OrdersHud: sin OrderSystem local (null a propósito),
+                //     cae en su rama read-only replicada (ver el docblock de
+                //     Game/OrdersHud.cs, "ESTADO REPLICADO").
+                var hintsInvitado = new GameObject("HintSystem").AddComponent<HintSystem>();
+                hintsInvitado.ReiniciarParaJornada(1);
+                SpawnNamingUi(flask, knowledge);
+                SpawnJournalHud(knowledge);
+                SpawnOrdersHud(null);
+
+                _spawned = true;
+                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar + menús (diario/bautizo/pistas/encargos replicados). Las máquinas y la sim las lleva el anfitrión.");
+                return;
+            }
 
             var orderSystem = SpawnOrderSystem(knowledge);
 

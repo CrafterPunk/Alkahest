@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 
 namespace Alkahest.Game
 {
@@ -97,15 +98,31 @@ namespace Alkahest.Game
         private int _metaCacheada = -1;
         private string _favorTexto = "";
 
-        /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
+        /// <summary>
+        /// Inyección de dependencias desde AlkahestGameBootstrap. `orderSystem`
+        /// puede ser null (playtest 36, EL CAMINO DEL INVITADO): un invitado
+        /// no tiene OrderSystem local (vive solo en el anfitrión, ver el
+        /// docblock de <see cref="AlkahestGameBootstrap.TrySpawnRed"/>) --
+        /// ver <see cref="ModoReplicado"/> para la rama que lo sustituye.
+        /// </summary>
         public void Init(OrderSystem orderSystem)
         {
             _orderSystem = orderSystem;
         }
 
+        /// <summary>
+        /// (playtest 36, EL CAMINO DEL INVITADO) ¿Estamos pintando encargos
+        /// LEÍDOS DE LA RED en vez de un <see cref="OrderSystem"/> propio?
+        /// Solo tiene sentido sin OrderSystem local Y con una sesión de red
+        /// viva (la escena clásica de un jugador nunca tiene SaberSync, así
+        /// que esto es false ahí sin ni comprobar nada más).
+        /// </summary>
+        private bool ModoReplicado => _orderSystem == null && SaberSync.Instancia != null && SaberSync.Instancia.IsSpawned;
+
         private void Update()
         {
-            if (_orderSystem == null || DayCycle.InputLocked) return;
+            if (DayCycle.InputLocked) return;
+            if (_orderSystem == null && !ModoReplicado) return; // ni local ni red: nada que hacer todavía (se reintenta el próximo frame).
 
             var kb = Keyboard.current;
             if (kb != null && kb.oKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto)
@@ -113,7 +130,13 @@ namespace Alkahest.Game
                 _expandidoManual = !_expandidoManual;
             }
 
-            DetectarCambiosYPulsar();
+            // El pulso automático de expansión (DetectarCambiosYPulsar) lee
+            // OrderSystem.ActiveOrders directamente -- no tiene sentido en
+            // modo replicado (read-only, ver el docblock de la clase de más
+            // abajo): el invitado puede expandir/plegar a mano con O, pero
+            // no hay "algo que anunciar" que este HUD pueda detectar sin
+            // duplicar el registro completo de SaberSync solo para eso.
+            if (_orderSystem != null) DetectarCambiosYPulsar();
         }
 
         /// <summary>
@@ -196,7 +219,13 @@ namespace Alkahest.Game
         {
             // (playtest 21, EL PIVOT) HudSilenciado, hermano de InputLocked
             // -- misma línea, ver el docblock de DayCycle.HudSilenciado.
-            if (_orderSystem == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return;
+            if (DayCycle.InputLocked || DayCycle.HudSilenciado) return;
+
+            if (_orderSystem == null)
+            {
+                if (ModoReplicado) OnGuiReplicado();
+                return;
+            }
 
             UiStyles.Preparar();
             ActualizarFavorTexto();
@@ -315,6 +344,157 @@ namespace Alkahest.Game
 
                 y += gapFila;
             }
+        }
+
+        // =================================================================
+        // (playtest 36, EL CAMINO DEL INVITADO) READ-ONLY, ESTADO REPLICADO.
+        // =================================================================
+        /// <summary>
+        /// Cache de texto por Id de encargo replicado -- MISMO criterio de
+        /// "cero strings por frame salvo cuando cambian de verdad" que
+        /// <see cref="FilaCache"/>/<see cref="ObtenerFila"/> usan para el
+        /// modo local, aplicado a <see cref="SaberSync.EntradaOrden"/> en vez
+        /// de a <see cref="Order"/> (la descripción llega como
+        /// <c>FixedString128Bytes</c>, cuyo <c>ToString()</c> asigna: solo se
+        /// llama cuando el valor cambió).
+        /// </summary>
+        private sealed class DescripcionCache
+        {
+            public Unity.Collections.FixedString128Bytes Ultima;
+            public string Texto = "";
+        }
+        private readonly Dictionary<int, DescripcionCache> _descripcionCache = new Dictionary<int, DescripcionCache>(4);
+
+        /// <summary>
+        /// El invitado no tiene <see cref="OrderSystem"/> local (vive solo en
+        /// el anfitrión): esta rama pinta el MISMO panel de arriba-derecha
+        /// con lo que <see cref="Net.SaberSync"/> replica -- descripción,
+        /// progreso, completado, recompensa por encargo, más el Favor
+        /// compartido del taller. READ-ONLY de verdad: ni una sola línea de
+        /// aquí puede escribir en <c>SaberSync</c> (la autoridad de los
+        /// encargos, como la de la sim, es SIEMPRE el anfitrión). Sin el
+        /// pulso automático de expansión (ver el docblock de <see cref="Update"/>);
+        /// **O** sigue expandiendo/plegando a mano igual que en modo local.
+        /// </summary>
+        private void OnGuiReplicado()
+        {
+            var saber = SaberSync.Instancia;
+            if (saber == null) return;
+
+            UiStyles.Preparar();
+            bool expandido = Expandido;
+            int n = saber.CountOrdenesReplicadas;
+
+            float margen = UiStyles.S(10f);
+            float pad = UiStyles.S(7f);
+            float ancho = UiStyles.S(300f);
+            float interior = ancho - pad * 2f;
+            float ladoCaja = UiStyles.S(14f);
+            float anchoRecompensa = UiStyles.S(48f);
+            float xTextoDesde = ladoCaja + UiStyles.S(6f);
+            float anchoTextoProgreso = interior - xTextoDesde - anchoRecompensa;
+
+            float altoLinea = UiStyles.S(17f);
+            float altoBarra = UiStyles.S(8f);
+            float gapChico = UiStyles.S(3f);
+            float gapFila = UiStyles.S(5f);
+
+            string favorTexto = saber.FavorReplicado.Value + " ★";
+
+            float alto = pad + altoLinea + gapChico + altoLinea + gapFila;
+            for (int i = 0; i < n; i++)
+            {
+                alto += altoLinea;
+                if (expandido)
+                {
+                    var e = saber.ObtenerOrdenReplicada(i);
+                    alto += gapChico + altoBarra;
+                    alto += gapChico + UiStyles.Alto(UiStyles.CuerpoTenue, DescripcionCacheada(e), interior - xTextoDesde);
+                }
+                alto += gapFila;
+            }
+            if (n == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior) + gapFila;
+            alto += pad - (n > 0 ? gapFila : 0f);
+
+            var panel = new Rect(Screen.width - ancho - margen, margen, ancho, alto);
+            UiStyles.Panel(panel);
+
+            float x = panel.x + pad;
+            float y = panel.y + pad;
+
+            GUI.Label(new Rect(x, y, interior, altoLinea), expandido ? TituloExpandido : TituloColapsado, UiStyles.Titulo);
+            y += altoLinea + gapChico;
+
+            GUI.Label(new Rect(x, y, interior, altoLinea), favorTexto, UiStyles.Numero);
+            y += altoLinea + gapFila;
+
+            if (n == 0)
+            {
+                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior);
+                GUI.Label(new Rect(x, y, interior, altoTexto), TextoSinEncargos, UiStyles.CuerpoTenue);
+                y += altoTexto + gapFila;
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                var e = saber.ObtenerOrdenReplicada(i);
+
+                TipoVisual((OrderType)e.tipo, e.completado, out Color colorCaja, out string glifo);
+                var cajaRect = new Rect(x, y + (altoLinea - ladoCaja) * 0.5f, ladoCaja, ladoCaja);
+                UiStyles.Rellenar(cajaRect, colorCaja);
+                var previoColorChip = UiStyles.ChipMini.normal.textColor;
+                UiStyles.ChipMini.normal.textColor = new Color(0f, 0f, 0f, 0.82f);
+                GUI.Label(cajaRect, glifo, UiStyles.ChipMini);
+                UiStyles.ChipMini.normal.textColor = previoColorChip;
+
+                float xTexto = x + xTextoDesde;
+                string textoProgreso = e.completado ? "hecho" : (e.progreso + "/" + e.minCells);
+                GUI.Label(new Rect(xTexto, y, anchoTextoProgreso, altoLinea), textoProgreso,
+                    e.completado ? UiStyles.CuerpoTenue : UiStyles.CuerpoLinea);
+                GUI.Label(new Rect(xTexto + anchoTextoProgreso, y, anchoRecompensa, altoLinea), "+" + e.recompensa + " ★", UiStyles.Numero);
+                y += altoLinea;
+
+                if (expandido)
+                {
+                    y += gapChico;
+                    float frac = e.completado ? 1f : Mathf.Clamp01((float)e.progreso / Mathf.Max(1, e.minCells));
+                    UiStyles.Barra(new Rect(xTexto, y, anchoTextoProgreso + anchoRecompensa, altoBarra),
+                        frac, e.completado ? UiStyles.Exito : UiStyles.Oro);
+                    y += altoBarra + gapChico;
+
+                    string desc = DescripcionCacheada(e);
+                    float altoDesc = UiStyles.Alto(UiStyles.CuerpoTenue, desc, interior - xTextoDesde);
+                    GUI.Label(new Rect(xTexto, y, interior - xTextoDesde, altoDesc), desc, UiStyles.CuerpoTenue);
+                    y += altoDesc;
+                }
+
+                y += gapFila;
+            }
+        }
+
+        /// <summary>
+        /// Solo llama a <c>FixedString128Bytes.ToString()</c> (asigna) la
+        /// primera vez que se ve un Id o cuando su descripción cambió de
+        /// verdad (comparación de struct, sin coste) -- mismo criterio de
+        /// cero-alloc-por-frame que el resto del archivo. Necesario porque
+        /// un re-bautizo SÍ puede cambiar la descripción de un encargo ya
+        /// visto (regla 13 de CLAUDE.md, <c>OrderSystem.RefreshDescripciones</c>
+        /// conserva el Id) -- cachear solo por Id, sin comparar el valor,
+        /// serviría para siempre la frase VIEJA.
+        /// </summary>
+        private string DescripcionCacheada(SaberSync.EntradaOrden e)
+        {
+            if (!_descripcionCache.TryGetValue(e.id, out var cache))
+            {
+                cache = new DescripcionCache();
+                _descripcionCache[e.id] = cache;
+            }
+            if (!cache.Ultima.Equals(e.descripcion))
+            {
+                cache.Ultima = e.descripcion;
+                cache.Texto = e.descripcion.ToString();
+            }
+            return cache.Texto;
         }
     }
 }

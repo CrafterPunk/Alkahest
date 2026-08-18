@@ -2650,3 +2650,22 @@ de sesión (quedaba una ventanita sobre el FRASCO; recordatorio de 3s y silencio
 nombres reales ("balda", "el alambique"...) — deuda: sprites de réplica de Rack/Alambique/Pila
 caen al genérico (MaquinariaSprites quedó fuera del alcance del encargo). Verificado en un
 jugador: 17 baldas + 6 anclajes + 2 pilas + estante + alambique en jerarquía, 0 errores.
+
+**Playtest 36 — PARIDAD MULTI PROFUNDA** (reporte de Cesar probando con un invitado real; captura
+del lado invitado): cuatro causas raíz. (1) Réplicas blancas: ConstruirVisualEstatico no tenía
+casos para Rack/Alambique/Pila → default sin tintar; ahora piezas reales tintadas. (2) El
+empapelado de chapas: MaquinaReplica.OnGUI dibujaba TODAS las chapas incondicionalmente a
+opacidad plena (23 réplicas); ahora por cercanía, y Balda/Anclaje sin chapa jamás (mobiliario:
+la forma es el rótulo — documentado para que nadie lo "arregle" de vuelta). (3) El invitado sin
+menús: TrySpawnRed rama invitado terminaba en un return mudo tras el avatar; Y
+SubstanceKnowledge.Update se apagaba ENTERO con Stepper null (el gate era correcto solo para
+ConsumeEvents y tapaba todo el método). Nuevo Net/SaberSync.cs (autoadjunto en SimSync.Awake —
+sin regenerar escena): descubiertos, nombres (FixedString128, upsert), leyes presenciadas,
+encargos activos + Favor replicados; late-join recibe todo (NetworkList sincroniza estado
+completo al spawn); bautizo de invitado por ServerRpc con eco de autoridad; OrdersHud con rama
+read-only replicada; HintSystem/NamingUi/JournalHud/OrdersHud spawneados para invitados. (4) El
+"a veces no se ve el chorro": la ruta RPC→Paint→dirty estaba SANA (auditada y descartada); el
+bug real era inanición en DifundirChunksSucios (barrido circular ciego con presupuesto 96) —
+ahora dos pasadas: prioridad a chunks a ≤60 celdas de CUALQUIER avatar conectado, resto con el
+cursor de siempre. PENDIENTE DE VERIFICAR por Cesar: prueba real de dos ventanas (la build no es
+una app registrable para el control remoto — el editor solo puede ser un lado).

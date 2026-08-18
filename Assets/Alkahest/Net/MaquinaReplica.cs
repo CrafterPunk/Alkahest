@@ -196,16 +196,51 @@ namespace Alkahest.Net
         // Game/Mudanza.OnGUI y el OnGUI de cualquier máquina real) -- sin
         // texto de estado ni prompt de interacción, solo el nombre: la
         // réplica no hace nada que explicar.
+        //
+        // (fix Cesar playtest 36, EL CAMINO DEL INVITADO) ANTES se dibujaba
+        // SIEMPRE, a cualquier distancia -- con 17 baldas + 6 anclajes del
+        // depósito (playtest 34/35) eso empapelaba la pantalla del invitado
+        // ("la balda" x17, "e e e e" de los anclajes apretados 3 celdas entre
+        // sí). DOS correcciones, mismo patrón que ya usan las máquinas reales
+        // (ver ColumnaEnsayo.OnGUI, `UiStyles.Cercania` + `if (cercania <= 0f)
+        // return;`, en vez del criterio "siempre 0.45..1" de Dispenser --
+        // aquí SÍ interesa que desaparezca del todo: 23 muebles a la vez no
+        // pueden quedarse todos discretamente visibles):
+        //   (a) BALDA/ANCLAJE NUNCA TIENEN CHAPA. Son mobiliario, no
+        //       estaciones -- la lectura la da su FORMA (piedra tallada /
+        //       cuadrito de latón, ver Net/MaquinaSync.cs y
+        //       Game/MaquinariaSprites.cs), no un rótulo. Es la causa raíz
+        //       real de "e e e e": no era un bug de medir el ancho del
+        //       texto, era que NINGÚN anclaje debía llevar chapa -- seis
+        //       "el anclaje" apretados en el depósito (2 celdas de paso, ver
+        //       Game/Anclaje.cs::DepositoPaso) se leen como letras sueltas
+        //       aunque el texto se mida bien.
+        //   (b) EL RESTO (estaciones + Rack/Alambique/Pila) SOLO por
+        //       cercanía: 0 más allá de <see cref="RangoChapaDesvanece"/>,
+        //       pleno dentro de <see cref="RangoChapaPleno"/>. Son pocos (7
+        //       estaciones + 4 muebles nuevos), así que no hace falta el
+        //       suelo de 0.45 que usan los grifos reales (esos SON estaciones
+        //       con estado urgente que avisar; una réplica solo dice su
+        //       nombre).
         // =================================================================
+        private const float RangoChapaPleno = 3.2f;
+        private const float RangoChapaDesvanece = 5.5f;
+
         private void OnGUI()
         {
             if (DayCycle.InputLocked) return;
             if (Alkahest.Dev.DevPalette.IsOpen) return;
             if (UiStyles.EscribiendoTexto) return;
             if (JournalHud.Abierto) return;
+            if (_tipo == MaquinariaSprites.TipoBalda || _tipo == MaquinariaSprites.TipoAnclaje) return; // mobiliario: sin chapa, ver doc de arriba.
+
+            var jugador = ApprenticeController.AprendizLocal;
+            float cercania = UiStyles.Cercania(_centroActual, jugador != null ? jugador.transform : null, RangoChapaPleno, RangoChapaDesvanece);
+            if (cercania <= 0f) return;
 
             UiStyles.Preparar();
-            UiStyles.PlacaMundo(_centroActual, _nombre, UiStyles.TextoTenue, UiStyles.S(30f));
+            Color tenue = UiStyles.TextoTenue;
+            UiStyles.PlacaMundo(_centroActual, _nombre, new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercania), UiStyles.S(30f));
         }
 
         /// <summary>

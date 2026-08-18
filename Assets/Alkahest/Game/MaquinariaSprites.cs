@@ -2353,6 +2353,22 @@ namespace Alkahest.Game
         public const byte TipoAnclaje = 7;
 
         /// <summary>
+        /// (playtest 36, EL CAMINO DEL INVITADO) Rack/Alambique/Pila entran
+        /// AQUÍ, en el mismo archivo que quedó fuera de alcance en el
+        /// playtest 34/35 (ver el docblock viejo de
+        /// <see cref="ConstruirVisualEstatico"/>, conservado más abajo salvo
+        /// por esta correción): antes caían al <c>default: Solido()</c>
+        /// genérico -- un rectángulo blanco sin tintar, la mitad del reporte
+        /// de Cesar ("las réplicas de estante/alambique/pilas son
+        /// rectángulos blancos"). Mismos valores numéricos que
+        /// <c>Net.MaquinaSync.TipoMaquina</c> (8/9/10) -- ver el docblock de
+        /// esa clase para por qué se repiten en vez de compartir el enum.
+        /// </summary>
+        public const byte TipoRack = 8;
+        public const byte TipoAlambique = 9;
+        public const byte TipoPila = 10;
+
+        /// <summary>
         /// UNA sola pieza representativa por tipo de estación, escalada
         /// EXACTA a <paramref name="tamanoMundo"/> vía <see cref="CrearCapa"/>
         /// (que reescala cualquier sprite ya generado al hueco de mundo que
@@ -2369,11 +2385,40 @@ namespace Alkahest.Game
         /// DECISIÓN: fidelidad reducida a UNA pieza por estación en vez de la
         /// rig completa; documentado aquí para que quien la eche en falta
         /// sepa por qué y dónde ampliarla si hace falta más adelante.
+        ///
+        /// (playtest 36) CUATRO tipos son COMPUESTOS de dos o tres piezas
+        /// (Balda: piedra+cuadritos; Rack: listón+redomas; Alambique:
+        /// domo+matraz) en vez de una sola -- lo pide el mueble real (ver los
+        /// helpers <c>ConstruirReplica*</c> más abajo). NUNCA blanco sin
+        /// tintar: toda pieza de aquí sale de la MISMA fábrica que usan las
+        /// máquinas reales, con los colores reales del taller (latón/
+        /// carboncillo/piedra/vidrio) horneados en la textura -- si algún día
+        /// hace falta <see cref="Solido"/> en esta familia, SIEMPRE con
+        /// <c>SpriteRenderer.color</c> puesto a un tono del taller, nunca
+        /// blanco de fábrica (ver <see cref="ColorCarboncilloReplica"/>).
         /// Devuelve el <see cref="SpriteRenderer"/> creado (hijo nuevo de
-        /// `padre`) por si el llamante quiere teñirlo o atenuarlo.
+        /// `padre`) por si el llamante quiere teñirlo o atenuarlo -- para los
+        /// tipos compuestos es la pieza PRINCIPAL (piedra/listón/domo): las
+        /// piezas secundarias son hijas del mismo `padre` y se mueven solas
+        /// con él (mismo mecanismo que arrastra los halos/sombras de una
+        /// máquina real, ver Reposicionar en Net/MaquinaReplica.cs), pero
+        /// <see cref="MaquinaReplica.ActualizarDesdeRegistro"/> solo
+        /// reescala la pieza devuelta -- aceptable porque, como documenta esa
+        /// clase, "ninguna estación cambia de tamaño en este POC".
         /// </summary>
         public static SpriteRenderer ConstruirVisualEstatico(Transform padre, byte tipoMaquina, Vector2 tamanoMundo)
         {
+            float ancho = Mathf.Max(0.02f, tamanoMundo.x);
+            float alto = Mathf.Max(0.02f, tamanoMundo.y);
+
+            switch (tipoMaquina)
+            {
+                case TipoBalda: return ConstruirReplicaBalda(padre, ancho, alto);
+                case TipoRack: return ConstruirReplicaRack(padre, ancho, alto);
+                case TipoAlambique: return ConstruirReplicaAlambique(padre, ancho, alto);
+                case TipoPila: return CrearCapa(padre, "ReplicaVisualEstatica", MarcoBandeja(10, 5), ReplicaVisualSortingOrder, ancho, alto);
+            }
+
             Sprite pieza;
             switch (tipoMaquina)
             {
@@ -2383,14 +2428,111 @@ namespace Alkahest.Game
                 case TipoColumnaEnsayo: pieza = VidrioPanel(4, 14); break;
                 case TipoEnsayoMaestro: pieza = Dosel(10, 6); break;
                 case TipoDispenser: pieza = CanoGrifo(); break;
-                case TipoBalda: pieza = BaldaPiedra(8, 1); break;
                 case TipoAnclaje: pieza = CuadradoAnclaje(); break;
-                default: pieza = Solido(); break; // red de seguridad: tipo desconocido -> rectángulo genérico, nunca null.
+                // red de seguridad: tipo desconocido -> Solido() SIEMPRE
+                // tintado de carboncillo (ver ColorCarboncilloReplica) -- nunca el
+                // blanco de fábrica de Solido(), que es justo el bug que
+                // motivó esta ronda para Rack/Alambique/Pila.
+                default:
+                    var sr = CrearCapa(padre, "ReplicaVisualEstatica", Solido(), ReplicaVisualSortingOrder, ancho, alto);
+                    sr.color = ColorCarboncilloReplica;
+                    return sr;
             }
 
-            float ancho = Mathf.Max(0.02f, tamanoMundo.x);
-            float alto = Mathf.Max(0.02f, tamanoMundo.y);
             return CrearCapa(padre, "ReplicaVisualEstatica", pieza, ReplicaVisualSortingOrder, ancho, alto);
+        }
+
+        /// <summary>Tono de emergencia para <see cref="Solido"/> cuando esta familia lo usa como red de seguridad -- carboncillo del taller (mismo valor que <see cref="Hierro"/>), NUNCA blanco. Ver el docblock de <see cref="ConstruirVisualEstatico"/>.</summary>
+        private static readonly Color ColorCarboncilloReplica = new Color(0x45 / 255f, 0x3D / 255f, 0x38 / 255f, 1f);
+
+        /// <summary>
+        /// (playtest 36) BALDA: la piedra tallada de <see cref="BaldaPiedra"/>
+        /// más los dos "cuadritos" de latón en cada extremo
+        /// (<see cref="CuadradoAnclaje"/>) que hacen que se lea como MUEBLE y
+        /// no como una raya de roca (mismo lenguaje que
+        /// Game/Balda.cs::BuildVisual) -- tamaño derivado del propio alto de
+        /// la réplica (el remate real mide el DOBLE de la losa, "asomado"),
+        /// nunca una constante absoluta.
+        /// </summary>
+        private static SpriteRenderer ConstruirReplicaBalda(Transform padre, float ancho, float alto)
+        {
+            var principal = CrearCapa(padre, "ReplicaVisualEstatica", BaldaPiedra(8, 1), ReplicaVisualSortingOrder, ancho, alto);
+
+            float remate = Mathf.Min(alto * 2f, ancho * 0.22f);
+            if (remate > 0.01f)
+            {
+                var izq = new GameObject("RemateIzq");
+                izq.transform.SetParent(padre, false);
+                izq.transform.position = padre.position + new Vector3(-ancho * 0.5f + remate * 0.5f, 0f, 0f);
+                CrearCapa(izq.transform, "Sprite", CuadradoAnclaje(), ReplicaVisualSortingOrder + 1, remate, remate);
+
+                var der = new GameObject("RemateDer");
+                der.transform.SetParent(padre, false);
+                der.transform.position = padre.position + new Vector3(ancho * 0.5f - remate * 0.5f, 0f, 0f);
+                CrearCapa(der.transform, "Sprite", CuadradoAnclaje(), ReplicaVisualSortingOrder + 1, remate, remate);
+            }
+
+            return principal;
+        }
+
+        /// <summary>
+        /// (playtest 36) RACK (estante de redomas): el LISTÓN
+        /// (<see cref="ListonEstante"/>) ocupa la banda inferior y tres
+        /// redomas de vidrio (<see cref="VidrioRedoma"/>, silueta vacía --
+        /// una réplica no conoce el contenido de cada frasco real, y teñirlas
+        /// al azar mentiría sobre qué hay en el estante) se paran encima --
+        /// mismo lenguaje visual que Game/StorageRack.cs, reducido a UNA fila
+        /// representativa (fidelidad reducida, ver el docblock de
+        /// <see cref="ConstruirVisualEstatico"/>).
+        /// </summary>
+        private static SpriteRenderer ConstruirReplicaRack(Transform padre, float ancho, float alto)
+        {
+            float altoListon = Mathf.Min(alto * 0.22f, alto);
+            var liston = CrearCapa(padre, "ReplicaVisualEstatica", ListonEstante(220), ReplicaVisualSortingOrder, ancho, altoListon);
+            liston.transform.position = padre.position + new Vector3(0f, -alto * 0.5f + altoListon * 0.5f, 0f);
+
+            float altoRedoma = alto - altoListon;
+            if (altoRedoma > 0.01f)
+            {
+                const int n = 3;
+                float anchoRedoma = Mathf.Min(ancho / (n * 1.6f), altoRedoma * 0.55f);
+                float paso = ancho / (n + 1);
+                for (int i = 0; i < n; i++)
+                {
+                    float x = -ancho * 0.5f + paso * (i + 1);
+                    var go = new GameObject("Redoma_" + i);
+                    go.transform.SetParent(padre, false);
+                    go.transform.position = padre.position + new Vector3(x, -alto * 0.5f + altoListon + altoRedoma * 0.5f, 0f);
+                    CrearCapa(go.transform, "Sprite", VidrioRedoma(), ReplicaVisualSortingOrder + 1, anchoRedoma, altoRedoma * 0.92f);
+                }
+            }
+
+            return liston;
+        }
+
+        /// <summary>
+        /// (playtest 36) ALAMBIQUE: DOMO arriba + MATRAZ abajo, los dos con
+        /// <see cref="VidrioPanel"/> (mismo sprite que usa Game/Alambique.cs
+        /// de verdad para las dos piezas) en las MISMAS proporciones
+        /// 9:9/9:5 (DomoAlto/MatrazAlto) que el aparato real, así que una
+        /// réplica alta y una baja se leen con la misma silueta
+        /// domo-sobre-matraz que el jugador ya conoce.
+        /// </summary>
+        private static SpriteRenderer ConstruirReplicaAlambique(Transform padre, float ancho, float alto)
+        {
+            const float fracDomo = 9f / 14f; // DomoAlto / (DomoAlto+MatrazAlto), Game/Alambique.cs.
+            float altoDomo = alto * fracDomo;
+            float altoMatraz = alto - altoDomo;
+
+            var domo = CrearCapa(padre, "ReplicaVisualEstatica", VidrioPanel(9, 9), ReplicaVisualSortingOrder, ancho * 0.8f, altoDomo);
+            domo.transform.position = padre.position + new Vector3(0f, alto * 0.5f - altoDomo * 0.5f, 0f);
+
+            var matraz = new GameObject("Matraz");
+            matraz.transform.SetParent(padre, false);
+            matraz.transform.position = padre.position + new Vector3(0f, -alto * 0.5f + altoMatraz * 0.5f, 0f);
+            CrearCapa(matraz.transform, "Sprite", VidrioPanel(9, 5), ReplicaVisualSortingOrder, ancho, altoMatraz);
+
+            return domo;
         }
 
         /// <summary>Orden de dibujo de la réplica: por debajo del aprendiz (47-50, ver Net/AprendizNet.cs/ApprenticeController) y de la silueta genérica de Mudanza (44) -- una réplica nunca debe tapar la sombra de arrastre que se dibuja sobre ella.</summary>
