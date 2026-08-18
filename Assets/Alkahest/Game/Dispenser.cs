@@ -233,10 +233,34 @@ namespace Alkahest.Game
         // Game/Mudanza.cs para el contrato completo).
         // ---------------------------------------------------------------
 
-        /// <summary>Centro visual del caño (la brida se ancla en transform.position, pero el caño en sí cuelga con un offset local de 2.5 celdas -- ver BuildVisual). Se usa como hitbox de agarre, no como PuntoFoco (ese sigue siendo _anclaRotulo, sin cambios).</summary>
-        public Vector3 CentroMundo => transform.position + new Vector3(2.5f * SimRenderer.CellWorldSize, 0f, 0f);
-        /// <summary>Tamaño del sprite del caño (8x5 celdas, fijo -- ver MaquinariaSprites.CanoGrifo). El grifo NUNCA cambia de ancho, a diferencia de HeatPlate/ChillStone.</summary>
-        public Vector2 TamanoMundo => new Vector2(8f * SimRenderer.CellWorldSize, 5f * SimRenderer.CellWorldSize);
+        /// <summary>
+        /// Centro visual del caño (la brida se ancla en transform.position,
+        /// pero el caño en sí cuelga con un offset local de 2.5 celdas MÁS
+        /// la mitad del voladizo extra -- ver BuildVisual, campo `extra`).
+        /// Se usa como hitbox de agarre, no como PuntoFoco (ese sigue siendo
+        /// _anclaRotulo, sin cambios).
+        /// </summary>
+        public Vector3 CentroMundo => transform.position + new Vector3(
+            2.5f * SimRenderer.CellWorldSize + VoladizoExtraMundo * 0.5f, 0f, 0f);
+
+        /// <summary>
+        /// (fix Cesar playtest 34, tarea "c") BOUNDS REALES DEL CAÑO CON SU
+        /// VOLADIZO -- antes esto era un tamaño FIJO (8x5 celdas, el sprite
+        /// base), que ignoraba <c>extra</c> (el estiramiento por
+        /// <see cref="_spoutOffsetCells"/> que sí aplica BuildVisual al
+        /// propio sprite, ver ese método). Un caño con voladizo mayor al
+        /// default dibujaría una guía de mudanza más corta que su boquilla
+        /// real -- inofensivo hoy (los dos caños del laboratorio volvieron al
+        /// voladizo default 5 en el playtest 27), pero un bug real y
+        /// silencioso para el primer caño que vuelva a pedir uno distinto
+        /// (ver el docblock de <see cref="_spoutOffsetCells"/>). El grifo
+        /// NUNCA incluye la pila en su footprint (ver el docblock de
+        /// Game/Pila.cs, tarea "a": "el grifo se muda SOLO").
+        /// </summary>
+        public Vector2 TamanoMundo => new Vector2(8f * SimRenderer.CellWorldSize + VoladizoExtraMundo, 5f * SimRenderer.CellWorldSize);
+
+        /// <summary>Unidades de mundo que el voladizo de ESTE caño estira el sprite respecto al default -- 0 para cualquier grifo con <see cref="_spoutOffsetCells"/>==<see cref="SpoutOffsetCellsDefault"/> (el caso normal). Mismo cálculo que `extra` en BuildVisual, factorizado aquí porque CentroMundo/TamanoMundo también lo necesitan.</summary>
+        private float VoladizoExtraMundo => Mathf.Max(0f, (_spoutOffsetCells - SpoutOffsetCellsDefault) * SimRenderer.CellWorldSize);
 
         /// <summary>
         /// Celda de anclaje: mountCellX/mountCellY, la MISMA celda que recibía
@@ -268,15 +292,27 @@ namespace Alkahest.Game
                 && anclaCelda.y >= 1 && anclaCelda.y <= CellGrid.H - 2;
         }
 
-        /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
-        /// <param name="pilaX0">(playtest 27, mandato 2) Borde IZQUIERDO de la pila de recogida de este caño, en celdas, o 0 si no tiene. Ver <see cref="BuildPilaEnmarcada"/>.</param>
-        /// <param name="pilaAncho">Ancho EXTERIOR de la pila (muros incluidos), o 0 = sin pila.</param>
-        /// <param name="pilaAlto">Alto EXTERIOR de la pila.</param>
-        /// <param name="pilaBaseY">Fila inferior EXTERIOR de la pila.</param>
+        /// <summary>
+        /// Inyección de dependencias desde AlkahestGameBootstrap.
+        ///
+        /// (fix Cesar playtest 34, "GRIFOS Y PILAS SE MUDAN POR SEPARADO")
+        /// LOS CUATRO PARÁMETROS `pilaX0/pilaAncho/pilaAlto/pilaBaseY` DEL
+        /// PLAYTEST 27 SE RETIRARON DE ESTA FIRMA. El grifo dibujaba el marco
+        /// decorativo de su pila (<see cref="BuildPilaEnmarcada"/>) como HIJO
+        /// de su propio transform, así que mover el grifo con Mudanza
+        /// arrastraba el marco lejos de la cubeta de piedra real (que nunca
+        /// se movía, tallada aparte por Sim/SimLevelBuilder) -- Cesar:
+        /// "verifica qué pasa con su pila". Ese marco ahora es responsabilidad
+        /// exclusiva de <see cref="Alkahest.Game.Pila"/> (archivo nuevo, ver su
+        /// docblock), un IMovible independiente que se agarra y suelta con su
+        /// propio gesto. <see cref="BuildPilaEnmarcada"/> se queda declarado
+        /// SIN llamante (regla 15 de CLAUDE.md: documentar lo que se retira,
+        /// no solo dejar de invocarlo) por si algún día un grifo necesita de
+        /// nuevo un marco propio que NO sea una pila independiente.
+        /// </summary>
         public void Init(AlkahestSim sim, Transform player, int mountCellX, int mountCellY, byte materialId,
             OrderSystem orderSystem = null, int favorCost = 0, bool bloqueado = false, int spoutOffsetCells = SpoutOffsetCellsDefault,
-            int racionCeldas = 0,
-            int pilaX0 = 0, int pilaAncho = 0, int pilaAlto = 0, int pilaBaseY = 0)
+            int racionCeldas = 0)
         {
             _racionCeldas = racionCeldas;
             _emitidasEstaApertura = 0;
@@ -292,7 +328,6 @@ namespace Alkahest.Game
             _knowledge = FindAnyObjectByType<SubstanceKnowledge>(); // ver doc del campo.
 
             BuildVisual(mountCellX, mountCellY);
-            if (pilaAncho > 0 && pilaAlto > 0) BuildPilaEnmarcada(pilaX0, pilaBaseY, pilaAncho, pilaAlto);
             MachineFocus.Registrar(this);
             Mudanza.RegistrarMovible(this); // (playtest 19) ver doc de clase "TALLER MOVIBLE".
         }
@@ -361,12 +396,20 @@ namespace Alkahest.Game
         /// idioma o la gramática se rompe justo en la primera máquina que ve
         /// el jugador.
         ///
-        /// POR QUÉ AQUÍ Y NO EN UNA CLASE NUEVA: la pila no existe sin su
-        /// caño (es "dónde cae ESTE chorro"), así que el dueño natural del
-        /// marco es el caño. Todos los parámetros son OPCIONALES y por
-        /// defecto 0: los cinco grifos del taller clásico
-        /// (<c>SpawnOneDispenser</c>) siguen llamando a Init exactamente
-        /// igual que antes y no dibujan ningún marco.
+        /// POR QUÉ AQUÍ Y NO EN UNA CLASE NUEVA (RAZÓN ORIGINAL, playtest 27):
+        /// la pila no existe sin su caño (es "dónde cae ESTE chorro"), así que
+        /// el dueño natural del marco es el caño.
+        ///
+        /// (fix Cesar playtest 34) ESA RAZÓN DEJÓ DE SER CIERTA: la pila SÍ
+        /// puede existir sin su caño desde que se convirtió en un IMovible
+        /// independiente (ver <see cref="Alkahest.Game.Pila"/>) -- justamente
+        /// porque, siendo hijo del transform del grifo, este marco se movía
+        /// CON el grifo al mudarlo, dejando la cubeta de piedra real (que
+        /// nunca se movía) sin su labio decorativo. RETIRADA SIN LLAMANTE
+        /// (regla 15 de CLAUDE.md, mismo criterio que
+        /// <c>Sim/SimLevelBuilder.PlaceCharco</c>): el método se queda
+        /// definido, intacto, por si algún día un grifo vuelve a necesitar un
+        /// marco propio que NO sea una pila independiente.
         /// </summary>
         private void BuildPilaEnmarcada(int pilaX0, int pilaBaseY, int pilaAncho, int pilaAlto)
         {

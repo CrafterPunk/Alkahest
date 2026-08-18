@@ -174,7 +174,7 @@ namespace Alkahest.Game
             // deformar el sprite del caño (mandato 7, Cesar: "no estires el
             // tamaño del caño de Limo").
             var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
-                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem, SimLevelBuilder.PilaAguaX0);
+                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem);
             // (playtest 26, fix integración) alcanceCano=12: los dos caños
             // comparten pared y con el voladizo default (5) sus chorros caían
             // por la MISMA columna -- el limo desembocaba en la pila del agua.
@@ -188,7 +188,7 @@ namespace Alkahest.Game
             // chorros pasa a resolverse con GEOMETRÍA (la estación de fuentes
             // de la reconstrucción 6x), no deformando el aparato.
             var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
-                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem, SimLevelBuilder.PilaLimoX0);
+                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem);
             _dispensers = new[] { canoAgua, canoLimo };
             SpawnDeliveryChute(orderSystem); // la Tolva SIGUE EXISTIENDO, sellada tras la roca (ver BuildDeliveryNiche).
             // (playtest 30, "LA ALQUIMIA VISIBLE", tarea 5) EL ESTANTE DE
@@ -352,12 +352,25 @@ namespace Alkahest.Game
             var orderSystem = SpawnOrderSystem(knowledge);
 
             var canoAgua = SpawnCanoBasico(apprentice.transform, "Water", MaterialId.Water,
-                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem, SimLevelBuilder.PilaAguaX0);
+                SimLevelBuilder.CanoAguaX, SimLevelBuilder.CanoAguaY, orderSystem);
             var canoLimo = SpawnCanoBasico(apprentice.transform, "Limo", MaterialId.Limo,
-                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem, SimLevelBuilder.PilaLimoX0);
+                SimLevelBuilder.CanoLimoX, SimLevelBuilder.CanoLimoY, orderSystem);
             _dispensers = new[] { canoAgua, canoLimo };
 
             SpawnDeliveryChute(orderSystem);
+
+            // (fix Cesar playtest 34, causa raíz confirmada del reporte "EN
+            // MULTI no aparecen las redomas ni el alambique") EL PLAYTEST 30
+            // wireó SpawnStorageRack/SpawnAlambique SOLO dentro de TrySpawn
+            // (modo un jugador) -- TrySpawnRed nunca los llamaba, así que ni
+            // el anfitrión del multi los veía. Se spawnean aquí, en el
+            // ANFITRIÓN (la sim -- y con ella toda mampostería real -- solo
+            // vive donde vive el host, ver el docblock de esta clase, punto
+            // 2), con el mismo patrón que el resto de esta lista: los
+            // invitados los ven vía réplica (Net/MaquinaSync.cs, tipos Rack/
+            // Alambique añadidos en esta misma ronda).
+            SpawnStorageRack(apprentice.transform, flask, knowledge);
+            SpawnAlambique(apprentice.transform);
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
@@ -571,9 +584,18 @@ namespace Alkahest.Game
         /// Coste 0 de Favor y sin sellar: son la base de la que parte todo, no
         /// una recompensa. El Favor ni siquiera se gana todavía en este modo
         /// (los encargos no existen hasta que se excave hasta la Tolva).
+        ///
+        /// (fix Cesar playtest 34, "GRIFOS Y PILAS SE MUDAN POR SEPARADO")
+        /// YA NO recibe `pilaX0` ni pasa ningún dato de pila a
+        /// <see cref="Dispenser.Init"/>: el grifo dejó de dibujar el marco de
+        /// su pila (ver el docblock de <c>Dispenser.BuildPilaEnmarcada</c>),
+        /// esa pieza la crea por su cuenta <c>Game/Pila.cs::SpawnTodas</c>
+        /// (llamado desde Game/Mudanza.cs, mismo patrón que Balda/Anclaje) a
+        /// partir de <see cref="SimLevelBuilder.PilaPlanes"/> -- este método
+        /// ya no necesita saber que las pilas existen.
         /// </summary>
         private Dispenser SpawnCanoBasico(Transform player, string label, byte matId, int columnaX, int filaY,
-            OrderSystem orderSystem, int pilaX0, int alcanceCano = 5)
+            OrderSystem orderSystem, int alcanceCano = 5)
         {
             var go = new GameObject($"CanoBasico_{label}");
             var dispenser = go.AddComponent<Dispenser>();
@@ -583,15 +605,9 @@ namespace Alkahest.Game
             // grifo abierto sobre el suelo corrido de la línea inundaban el
             // laboratorio entero. Solo afecta a los DOS caños del laboratorio
             // (este método); los grifos del taller clásico siguen infinitos.
-            // (playtest 27) El caño enmarca su propia pila -- ver
-            // Dispenser.BuildPilaEnmarcada. Las medidas salen del plano
-            // (SimLevelBuilder), nunca de aquí: la regla de este archivo sigue
-            // siendo que NINGUNA coordenada vive en el bootstrap.
             dispenser.Init(_sim, player,
                 columnaX, filaY,
-                matId, orderSystem, 0, false, alcanceCano, racionCeldas: 45,
-                pilaX0: pilaX0, pilaAncho: SimLevelBuilder.PilaAnchoOuter,
-                pilaAlto: SimLevelBuilder.PilaHondoOuter, pilaBaseY: SimLevelBuilder.CuartoY0 + 2);
+                matId, orderSystem, 0, false, alcanceCano, racionCeldas: 45);
             return dispenser;
         }
 
@@ -673,9 +689,15 @@ namespace Alkahest.Game
         /// (playtest 30, "LA ALQUIMIA VISIBLE", tarea 3) EL ALAMBIQUE: nace
         /// como obra pendiente (ver el docblock de Game/Alambique.cs) sobre
         /// el plinto que ya talló Sim/SimLevelBuilder.cs en el génesis del
-        /// mundo. Solo en <see cref="TrySpawn"/> (modo un jugador): la
-        /// integración con el taller COMPARTIDO (Net/, <see cref="TrySpawnRed"/>)
-        /// queda fuera de este encargo a propósito (regla "NO toques Net/").
+        /// mundo.
+        ///
+        /// (fix Cesar playtest 34) YA NO ES "Solo en <see cref="TrySpawn"/>
+        /// (modo un jugador)" -- ese límite dejó fuera al multi durante tres
+        /// rondas (el mismo hueco que las redomas, ver <see cref="TrySpawnRed"/>,
+        /// que ahora también llama a este método en el ANFITRIÓN). No hizo
+        /// falta tocar Game/Alambique.cs: `Init` ya tenía la firma correcta
+        /// para llamarse desde cualquier lado, el gap vivía enteramente en
+        /// este archivo (qué método llamaba a quién), no en el aparato.
         /// </summary>
         private void SpawnAlambique(Transform player)
         {

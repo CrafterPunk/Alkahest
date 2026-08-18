@@ -2636,3 +2636,17 @@ réplicas de red de Balda/Anclaje dicen "aparato" (MaquinaReplica fuera de alcan
 depósito de anclajes sin verificar contra mampostería en el editor. RUMBO STEAM NEXT FEST
 OCTUBRE 2026 (registro cierra fin de agosto): avance estimado 60% — falta Steamworks propio
 (appid real, página, cápsulas — trámite de Cesar), pase de audio, y 30 min jugables sin tutor.
+
+**Playtest 35 (los ajustes del 34)**: los dos "no aparecen" eran espejos exactos — StorageRack/
+Alambique solo se spawneaban en TrySpawn (un jugador) y los soportes con un gate `EsServidor`
+que en la escena clásica (sin SimSync) es false: cada cosa vivía solo donde el otro modo la
+echaba de menos; gate correcto `EnEscena && !EsServidor`. Grifos y PILAS ahora se mudan POR
+SEPARADO (Game/Pila.cs nuevo, patrón soberano; la guía contiene el voladizo real del caño — de
+paso un bug dormido en TamanoMundo) y ambos entran al registro de red con cerrojo. El estante
+iba a aparecer FLOTANDO SOBRE LAS PILAS al moverse las fuentes al centro (EstanteX0=PilaAguaX0,
+regla 47 de manual): ahora a la izquierda en alto sobre el crisol (88..124, sobre el domo del
+alambique, derivado no adivinado) como sugirió la captura de Cesar. F9 cierra DEL TODO el panel
+de sesión (quedaba una ventanita sobre el FRASCO; recordatorio de 3s y silencio). Réplicas con
+nombres reales ("balda", "el alambique"...) — deuda: sprites de réplica de Rack/Alambique/Pila
+caen al genérico (MaquinariaSprites quedó fuera del alcance del encargo). Verificado en un
+jugador: 17 baldas + 6 anclajes + 2 pilas + estante + alambique en jerarquía, 0 errores.

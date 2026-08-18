@@ -208,6 +208,20 @@ namespace Alkahest.Net
             UiStyles.PlacaMundo(_centroActual, _nombre, UiStyles.TextoTenue, UiStyles.S(30f));
         }
 
+        /// <summary>
+        /// (fix Cesar playtest 34) ANTES, Balda/Anclaje (tipos 6/7, sumados
+        /// en el playtest 33) no tenían caso propio aquí y caían al
+        /// `default: "aparato"` genérico -- un invitado veía la chapa
+        /// "aparato" sobre una balda o un anclaje, indistinguible de
+        /// cualquier otra cosa sin nombre. Nombres reales para los cuatro
+        /// tipos que faltaban (Balda/Anclaje/Rack/Alambique -- Cesar los pidió
+        /// por nombre: "balda", "anclaje", "estante de redomas", "alambique").
+        /// Rack/Alambique/Pila no tienen constante en MaquinariaSprites.cs
+        /// (fuera de alcance de esta ronda, ver el docblock de
+        /// <see cref="MaquinaSync.TipoMaquina"/>), así que se comparan
+        /// directamente contra el enum de Net/ en vez de una constante de
+        /// Game/ -- mismo valor numérico, dos rutas de acceso.
+        /// </summary>
         private static string NombreEstacion(byte tipo)
         {
             switch (tipo)
@@ -218,6 +232,11 @@ namespace Alkahest.Net
                 case MaquinariaSprites.TipoColumnaEnsayo: return "la columna de ensayo";
                 case MaquinariaSprites.TipoEnsayoMaestro: return "el ensayo del maestro";
                 case MaquinariaSprites.TipoDispenser: return "el grifo";
+                case MaquinariaSprites.TipoBalda: return "la balda";
+                case MaquinariaSprites.TipoAnclaje: return "el anclaje";
+                case (byte)MaquinaSync.TipoMaquina.Rack: return "el estante de redomas";
+                case (byte)MaquinaSync.TipoMaquina.Alambique: return "el alambique";
+                case (byte)MaquinaSync.TipoMaquina.Pila: return "la pila";
                 default: return "aparato";
             }
         }

@@ -399,14 +399,50 @@ namespace Alkahest.Game
         ///
         /// `SimSync.EsServidor` ya es la comprobación que usa
         /// AlkahestGameBootstrap.TrySpawnRed para esta misma decisión
-        /// ("¿soy quien construye el taller de verdad?"); en la escena de un
-        /// jugador (sin NetworkManager activo) es trivialmente `true`.
+        /// ("¿soy quien construye el taller de verdad?").
+        ///
+        /// (fix Cesar playtest 34, CAUSA RAÍZ CONFIRMADA DEL BUG "en un
+        /// jugador no aparecen los soportes") EL PÁRRAFO DE ARRIBA MENTÍA:
+        /// `SimSync.EsServidor` NO es trivialmente `true` en la escena
+        /// clásica -- es `Instancia != null && Instancia.IsSpawned &&
+        /// Instancia.IsServer` (ver Net/SimSync.cs), y en la escena SIN
+        /// `SimSync` (la clásica de un jugador) `Instancia` es `null`, así
+        /// que la expresión entera da `false`. El guardián que debía dejar
+        /// pasar SIEMPRE al modo un jugador lo bloqueaba SIEMPRE: ni un
+        /// jugador solo ni el anfitrión del multi (ahí SÍ hay `SimSync`,
+        /// pero antes de que la sesión termine de spawnear `EsServidor`
+        /// también puede ser `false` un frame) veían nunca baldas, anclajes
+        /// ni pilas. La comprobación correcta distingue las DOS preguntas
+        /// que `EsServidor` mezclaba en una sola: "¿hay escena multi?" (
+        /// <see cref="SimSync.EnEscena"/>, true solo si el GameObject de
+        /// SimSync existe en la escena) y, SOLO si la hay, "¿soy el
+        /// anfitrión?" (<see cref="SimSync.EsServidor"/>). En la escena
+        /// clásica `EnEscena` es `false` y la expresión entera pasa siempre,
+        /// tal como se pretendía desde el principio.
         // -----------------------------------------------------------------
         private void SpawnBaldasYAnclajesSiCorresponde()
         {
-            if (!SimSync.EsServidor) return;
+            if (SimSync.EnEscena && !SimSync.EsServidor) return; // multi: solo el anfitrión talla. Clásico (EnEscena=false): siempre entra.
             Balda.SpawnTodas(_sim);
             Anclaje.SpawnDeposito(_sim, transform);
+            // (fix Cesar playtest 34, "GRIFOS Y PILAS SE MUDAN POR SEPARADO",
+            // tarea b) LAS PILAS: mismo patrón exacto que Balda -- geometría
+            // del mundo, no herramienta del jugador, spawneada UNA vez con el
+            // mismo guardián host-only/flag-estático que Balda/Anclaje. Antes
+            // de esta ronda `Sim/SimLevelBuilder.BuildPilasFuentes` tallaba
+            // las dos "U" de piedra directamente en el génesis, sin ningún
+            // objeto que las representara: mover el grifo (que SÍ es
+            // IMovible) no movía la pila -- eso también fue bug por omisión,
+            // pero el síntoma que reportó Cesar es el opuesto ("la pila SIGUE
+            // al grifo"), y la causa real de ESE síntoma es que
+            // Game/Dispenser.cs dibujaba el marco decorativo de la pila como
+            // HIJO de su propio transform (ver el docblock de
+            // Dispenser.BuildPilaEnmarcada) -- un hijo se arrastra solo con
+            // el padre. Con las pilas convertidas en objetos independientes
+            // (ver Game/Pila.cs) las dos cosas quedan resueltas a la vez: el
+            // grifo ya no tiene ningún hijo que represente a la pila, y la
+            // pila tiene su propio Reposicionar.
+            Pila.SpawnTodas(_sim);
         }
 
         private void Update()

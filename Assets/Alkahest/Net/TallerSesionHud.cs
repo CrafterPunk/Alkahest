@@ -39,6 +39,23 @@ namespace Alkahest.Net
         private bool _plegado;
         private bool _autoPlegadoHecho;
 
+        /// <summary>
+        /// (fix Cesar playtest 34, "ajustes finales") ANTES, con el panel
+        /// oculto (<see cref="_plegado"/>==true) OnGUI seguía dibujando una
+        /// ventanita permanente ("F9 · sesión (N en el taller)") en
+        /// (16,16) -- justo donde vive el panel del FRASCO (arriba-
+        /// izquierda), así que "ocultar" en realidad dejaba un recuadro
+        /// superpuesto para siempre. Cesar: *"F9 cierra del todo el panel...
+        /// ya sé que vuelve con F9, no hace falta recordatorio en
+        /// pantalla"*. F9 pasa a alternar VISIBLE COMPLETO <-> NADA EN
+        /// ABSOLUTO: <see cref="Time.time"/> &lt; este valor es la única
+        /// ventana en la que OnGUI dibuja algo mientras _plegado es true (un
+        /// recordatorio de <see cref="RecordatorioTrasOcultarSeg"/> segundos
+        /// justo tras ocultar, ni uno más) -- ver OnGUI/Update.
+        /// </summary>
+        private float _recordatorioHasta;
+        private const float RecordatorioTrasOcultarSeg = 3f;
+
         private void Reset()
         {
             if (sessionCoordinator == null) sessionCoordinator = FindAnyObjectByType<SessionCoordinator>();
@@ -58,6 +75,10 @@ namespace Alkahest.Net
             if (teclado != null && teclado.f9Key.wasPressedThisFrame && !UiStyles.EscribiendoTexto)
             {
                 _plegado = !_plegado;
+                // (fix Cesar playtest 34) Solo al pasar a OCULTO se arma el
+                // recordatorio breve -- al volver a mostrar (_plegado=false)
+                // no hace falta nada, la ventana entera ya está a la vista.
+                if (_plegado) _recordatorioHasta = Time.time + RecordatorioTrasOcultarSeg;
             }
 
             // Autoplegado: en cuanto hay al menos dos aprendices en el taller,
@@ -67,22 +88,32 @@ namespace Alkahest.Net
             {
                 _autoPlegadoHecho = true;
                 _plegado = true;
+                _recordatorioHasta = Time.time + RecordatorioTrasOcultarSeg;
             }
         }
 
         private void OnGUI()
         {
-            UiStyles.Preparar();
-
             if (_plegado)
             {
-                var r = new Rect(16f, 16f, UiStyles.S(220f), UiStyles.S(24f));
-                UiStyles.Panel(r);
-                GUI.Label(new Rect(r.x + UiStyles.S(8f), r.y, r.width, r.height),
-                    "F9 · sesión (" + AprendizNet.Todos.Count + " en el taller)", UiStyles.CuerpoTenue);
+                // (fix Cesar playtest 34) F9 OCULTO = NADA EN ABSOLUTO, salvo
+                // los primeros segundos justo tras ocultar (ver el docblock
+                // de _recordatorioHasta) -- ANTES esta rama dibujaba una
+                // ventanita PERMANENTE que se superponía al panel del frasco
+                // arriba-izquierda; ahora, pasado el recordatorio, ni
+                // siquiera se llama a UiStyles.Preparar().
+                if (Time.time < _recordatorioHasta)
+                {
+                    UiStyles.Preparar();
+                    var r = new Rect(16f, 16f, UiStyles.S(220f), UiStyles.S(24f));
+                    UiStyles.Panel(r);
+                    GUI.Label(new Rect(r.x + UiStyles.S(8f), r.y, r.width, r.height),
+                        "F9 · sesión (" + AprendizNet.Todos.Count + " en el taller)", UiStyles.CuerpoTenue);
+                }
                 return;
             }
 
+            UiStyles.Preparar();
             _ventana.width = UiStyles.S(330f);
             _ventana = GUILayout.Window(VentanaId, _ventana, DibujarVentana, "EL TALLER COMPARTIDO");
         }

@@ -73,12 +73,25 @@ namespace Alkahest.Net
         /// <summary>
         /// Mismo orden que las constantes Tipo* de
         /// MaquinariaSprites.ConstruirVisualEstatico (ver el docblock de esas
-        /// constantes para el porqué de la duplicación). (fix Cesar playtest
-        /// 33) Balda/Anclaje se suman al final -- el sistema de baldas como
-        /// construcción entra al MISMO registro que las cinco estaciones y
-        /// los grifos, así que un invitado ve/puede mover las baldas y los
-        /// anclajes tal cual ve/mueve el resto (réplica visual + petición de
-        /// mudanza vía Game/Mudanza.cs, sin ningún camino nuevo).
+        /// constantes para el porqué de la duplicación) -- SOLO para los
+        /// valores 0..7. (fix Cesar playtest 33) Balda/Anclaje se suman al
+        /// final -- el sistema de baldas como construcción entra al MISMO
+        /// registro que las cinco estaciones y los grifos, así que un
+        /// invitado ve/puede mover las baldas y los anclajes tal cual
+        /// ve/mueve el resto (réplica visual + petición de mudanza vía
+        /// Game/Mudanza.cs, sin ningún camino nuevo).
+        ///
+        /// (fix Cesar playtest 34, causa raíz confirmada del reporte "EN
+        /// MULTI no aparecen las redomas ni el alambique") Rack/Alambique/
+        /// Pila se suman DESPUÉS de esa correspondencia -- MaquinariaSprites.cs
+        /// (Game/) no está en la lista de archivos permitidos de esta ronda,
+        /// así que <c>ConstruirVisualEstatico</c> no tiene un caso dedicado
+        /// para 8/9/10 y cae a su <c>default: Solido()</c> (un rectángulo
+        /// genérico, "nunca null" según su propio comentario) -- una réplica
+        /// menos fiel que las de 0..7, pero agarrable, movible y con chapa
+        /// correcta (ver Net/MaquinaReplica.cs), que es lo que pedía el
+        /// encargo. Consolidar un sprite propio para cada uno queda como
+        /// deuda para una ronda con MaquinariaSprites.cs en alcance.
         /// </summary>
         public enum TipoMaquina : byte
         {
@@ -90,6 +103,9 @@ namespace Alkahest.Net
             Dispenser = 5,
             Balda = 6,
             Anclaje = 7,
+            Rack = 8,
+            Alambique = 9,
+            Pila = 10,
         }
 
         /// <summary>Instancia única en la escena (mismo patrón que SimSync/AprendizNet).</summary>
@@ -307,10 +323,22 @@ namespace Alkahest.Net
             // (Balda.SpawnTodas/Anclaje.SpawnDeposito), nunca a medias.
             var baldas = FindObjectsByType<Balda>();
             var anclajes = FindObjectsByType<Anclaje>();
+            // (fix Cesar playtest 34) Estante de redomas + Alambique: los crea
+            // AlkahestGameBootstrap.TrySpawnRed (ver ese archivo, fix de esta
+            // misma ronda -- antes NUNCA se llamaban ahí, la causa raíz del
+            // reporte "en multi no aparecen las redomas ni el alambique").
+            // Pilas: las crea Game/Mudanza.cs, mismo sitio y mismo guardián
+            // que Balda/Anclaje (ver Game/Pila.cs::SpawnTodas). Mismo criterio
+            // de longitud fija que `grifos.Length < 2`: siempre hay
+            // exactamente 1 estante, 1 alambique y 2 pilas (agua/limo).
+            var estantes = FindObjectsByType<StorageRack>();
+            var alambiques = FindObjectsByType<Alambique>();
+            var pilas = FindObjectsByType<Pila>();
 
             if (crisoles.Length < 1 || prensas.Length < 1 || chispas.Length < 1 ||
                 columnas.Length < 1 || ensayos.Length < 1 || grifos.Length < 2 ||
-                baldas.Length < 1 || anclajes.Length < 1)
+                baldas.Length < 1 || anclajes.Length < 1 ||
+                estantes.Length < 1 || alambiques.Length < 1 || pilas.Length < 2)
             {
                 return; // el taller del anfitrión sigue a mitad de construir -- se reintenta el próximo Update.
             }
@@ -324,6 +352,9 @@ namespace Alkahest.Net
             AgregarTipo(TipoMaquina.Dispenser, grifos);
             AgregarTipo(TipoMaquina.Balda, baldas);
             AgregarTipo(TipoMaquina.Anclaje, anclajes);
+            AgregarTipo(TipoMaquina.Rack, estantes);
+            AgregarTipo(TipoMaquina.Alambique, alambiques);
+            AgregarTipo(TipoMaquina.Pila, pilas);
 
             PublicarRegistroInicial();
             _escaneado = true;
@@ -574,9 +605,11 @@ namespace Alkahest.Net
         /// Game/Mudanza.cs::IntentarAgarrar ANTES de dejar que el jugador se
         /// lo lleve. `m` que no resuelve a (tipo,indice) -- cualquier
         /// IMovible fuera del registro de MaquinaSync (HeatPlate/ChillStone/
-        /// Criatura/Capullo/StorageRack/Alambique...) -- siempre devuelve
-        /// false: el cerrojo solo existe para los tipos que SÍ están en este
-        /// registro (decisión documentada en el resumen del encargo).
+        /// Criatura/Capullo, los únicos que quedan fuera tras el playtest 34
+        /// -- StorageRack/Alambique/Pila SÍ están dentro desde esta ronda,
+        /// ver <see cref="TipoMaquina"/>) -- siempre devuelve false: el
+        /// cerrojo solo existe para los tipos que SÍ están en este registro
+        /// (decisión documentada en el resumen del encargo).
         /// </summary>
         public static bool EstaBloqueadoPorOtro(IMovible m)
         {

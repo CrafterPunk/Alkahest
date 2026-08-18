@@ -1296,6 +1296,27 @@ namespace Alkahest.Sim
         /// <summary>Pila del LIMO. (playtest 34) 158 -&gt; 218: interior 220..229 -- la boquilla del limo cae en 222.</summary>
         public const int PilaLimoX0 = 218;
 
+        /// <summary>Fila de suelo EXTERIOR compartida por las dos pilas -- mismo baseY que Crisol/Prensa/BancoChispa/Ensayo (una fila encima del suelo general, ver BuildCuartoFloor). Antes vivía como variable local dentro de BuildPilasFuentes; ahora es pública porque <see cref="PilaPlanes"/> (y cualquiera que lea el plano) la necesita.</summary>
+        public const int PilaBaseY = CuartoY0 + 2;
+
+        /// <summary>
+        /// (fix Cesar playtest 34, "GRIFOS Y PILAS SE MUDAN POR SEPARADO")
+        /// Una pila ya troceada: la "U" de piedra completa (paredes+suelo),
+        /// footprint EXTERIOR -- ver Game/Pila.cs, el reemplazo del tallado
+        /// directo que hacía <see cref="BuildPilasFuentes"/> hasta esta
+        /// ronda (mismo relevo que <see cref="BaldaPlanes"/> le hizo a las
+        /// viejas <c>Repisas</c> en el playtest 33: la mampostería estática
+        /// pasa a ser un objeto <c>IMovible</c>).
+        /// </summary>
+        public struct PilaPlan { public int X0, Y0, Ancho, Hondo, Muro; }
+
+        /// <summary>Las dos pilas de la estación de fuentes -- MISMAS medidas que siempre (PilaAnchoOuter/PilaHondoOuter/PilaMuroGrosor), ahora expuestas como catálogo para que Game/Pila.cs las talle en el génesis (<see cref="Pila.TallarEnPlano"/>, llamado desde <see cref="BuildPilasFuentes"/>) y las vuelva a instanciar en caliente (<see cref="Pila.SpawnTodas"/>, llamado desde Game/Mudanza.cs).</summary>
+        public static readonly PilaPlan[] PilaPlanes =
+        {
+            new PilaPlan { X0 = PilaAguaX0, Y0 = PilaBaseY, Ancho = PilaAnchoOuter, Hondo = PilaHondoOuter, Muro = PilaMuroGrosor },
+            new PilaPlan { X0 = PilaLimoX0, Y0 = PilaBaseY, Ancho = PilaAnchoOuter, Hondo = PilaHondoOuter, Muro = PilaMuroGrosor },
+        };
+
         /// <summary>Machón de piedra ENTRE las dos pilas: es lo que sostiene el caño de limo más alto y a otra X (ver el bloque de arriba). Tres celdas de ancho, del suelo al arranque del caño.</summary>
         public const int MensulaLimoX0 = 215;
         public const int MensulaLimoX1 = 217;
@@ -1372,25 +1393,55 @@ namespace Alkahest.Sim
         /// </summary>
         public const int CanoLimoY = CanoNutrienteY;
 
-        // ---- Estante de redomas (playtest 30) ----------------------------
+        // ---- Estante de redomas (playtest 30, REUBICADO playtest 34) -----
         // "LA ALQUIMIA VISIBLE" (encargo de Cesar) reactiva Game/StorageRack.cs
-        // en el cuarto íntimo. DECISIÓN: las constantes viejas `RackX0`=320/
-        // `RackX1`=374/`RackTopY`=239 NO SE REUTILIZAN -- son del taller
-        // CLÁSICO (banco de grifos, enterrado desde el playtest 26) y hoy caen
-        // NUMÉRICAMENTE dentro del cuarto íntimo (`CuartoX0..X1`=140..357,
-        // `CuartoY0..Y1`=168..240), pisando el Banco de Chispa
-        // (`BancoChispaX`=299) y el Ensayo del Maestro (`EnsayoPlintoX`=331) --
-        // exactamente el error que la regla 47 de CLAUDE.md pide evitar.
-        // Sitio nuevo: la MISMA huella en X que las dos pilas de las fuentes
-        // (zona tranquila, "cerca de las fuentes" del encargo), a una altura
-        // por ENCIMA de los dos caños básicos (<see cref="CanoNutrienteY"/>=196,
-        // el más alto de los dos) para que ni el chorro de agua ni el de limo
-        // crucen las redomas al caer. Game/StorageRack.cs es pura vista (no
-        // talla mampostería, deriva sus medidas del ancho real -- regla 39),
-        // así que no hace falta registrar obra ni tallar plinto aquí.
-        public const int EstanteX0 = PilaAguaX0; // 141
-        public const int EstanteX1 = PilaLimoX0 + PilaAnchoOuter - 1; // 171
-        public const int EstanteBaseY = CanoNutrienteY + 4; // 200
+        // en el cuarto íntimo. DECISIÓN ORIGINAL (playtest 30, YA NO VIGENTE,
+        // conservada para que se entienda la cronología): la MISMA huella en
+        // X que las dos pilas de las fuentes (`EstanteX0 = PilaAguaX0`),
+        // "cerca de las fuentes". Válido cuando la estación de fuentes vivía
+        // en el muro izquierdo -- (fix Cesar playtest 34) LA ESTACIÓN DE
+        // FUENTES SE MUDÓ AL CENTRO (ver el bloque grande junto a
+        // `PilaAguaX0`) y esta constante SE MUDÓ CON ELLA sin que nadie lo
+        // decidiera, por la MISMA trampa que describe la regla 47 de
+        // CLAUDE.md ("no reutilizar una constante de posición solo porque el
+        // nombre encaja"): `EstanteX0..X1` pasaron a coincidir EXACTAMENTE
+        // con `PilaAguaX0..PilaLimoX0+13` (201..231), o sea las redomas
+        // habrían aparecido flotando ENCIMA de las dos pilas de agua/limo
+        // -- ni "cerca de las fuentes" ni visible, la causa real del bug
+        // "en MULTI/un jugador no aparecen las redomas" que reportó Cesar
+        // para esta ronda (además del gap de spawn de la hipótesis A).
+        //
+        // SITIO NUEVO (captura de Cesar): zona IZQUIERDA, sobre la zona del
+        // CRISOL (`CrisolX`=102, huella real 88..124 -- ver el docblock junto
+        // a esa constante), a la ALTURA DE LA GALERÍA DE BALDAS de esa misma
+        // zona (`_galeriasOriginales[0]/[1]`, Y=`CuartoY0+42`=178, las "alas"
+        // que flanquean el plinto del Alambique) -- no a ras de suelo. El
+        // ANCHO completo (88..124, 37 celdas) SÍ cruza por encima del propio
+        // Alambique (huella real X 96..108, ver `Alambique.Calcular`), así
+        // que la altura no puede ser la de esas baldas (Y=178, la MISMA fila
+        // que el techo del plinto): tiene que quedar POR ENCIMA del domo de
+        // vidrio del Alambique entero. `EstanteBaseY` se DERIVA de la
+        // geometría real del Alambique (regla 39/47: leer medidas, no
+        // adivinarlas) -- `AlambiqueBaseY` + `MatrazAlto` + `DomoAlto` + 1
+        // (techo) es EXACTAMENTE `Alambique.Calcular(...).OutY1`, el borde
+        // superior real de su domo (verificado a mano: 178+5+9+1=193) -- más
+        // <see cref="EstanteMargenSobreAlambique"/> de aire para que el
+        // listón de las redomas no toque el cristal. Game/StorageRack.cs
+        // sigue siendo pura vista (no talla mampostería, deriva sus medidas
+        // del ancho real -- regla 39), así que no hace falta registrar obra
+        // ni tallar plinto aquí -- puede flotar sobre el Alambique sin que
+        // el cincel ni la física tengan nada que decir al respecto.
+        //
+        // EL DEPÓSITO DE ANCLAJES NO QUEDA HUÉRFANO: `Game/Anclaje.cs::
+        // SpawnDeposito` ya deriva su sitio de `EstanteX0`/`EstanteBaseY`
+        // (nunca de un literal propio, ver ese archivo), así que se muda
+        // solo con el estante -- sigue naciendo `DepositoDesnivel`=14 celdas
+        // por encima de las redomas, en el mismo aire libre de la zona del
+        // crisol, sin tocar ninguna mampostería nueva.
+        private const int EstanteMargenSobreAlambique = 5; // celdas de aire entre el techo del domo del Alambique y el listón del estante -- puramente estético, para que no se toquen visualmente.
+        public const int EstanteX0 = CrisolX - 14; // 88 -- borde izquierdo de la huella real del Crisol (ver el docblock junto a CrisolX).
+        public const int EstanteX1 = CrisolX + 22; // 124 -- borde derecho de esa misma huella.
+        public const int EstanteBaseY = AlambiqueBaseY + Alambique.MatrazAlto + Alambique.DomoAlto + 1 + EstanteMargenSobreAlambique; // 193 (techo real del domo) + 5 = 198.
 
         // =================================================================
         // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.5) --
@@ -1973,9 +2024,19 @@ namespace Alkahest.Sim
         /// </summary>
         private static void BuildPilasFuentes(CellGrid grid)
         {
-            int y0 = CuartoY0 + 2; // mismo baseY que Crisol/Prensa/BancoChispa/Ensayo -- una fila ENCIMA del suelo general (BuildCuartoFloor), para que el interior no colisione con la losa.
-            DrawUShape(grid, PilaAguaX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
-            DrawUShape(grid, PilaLimoX0, y0, PilaAnchoOuter, PilaHondoOuter, PilaMuroGrosor);
+            // (fix Cesar playtest 34) Las dos "U" de piedra ya NO se tallan
+            // aquí a mano -- Game/Pila.cs::TallarEnPlano hace exactamente el
+            // mismo DrawUShape + RegistrarObra de siempre (mismas medidas,
+            // <see cref="PilaPlanes"/>), pero como método ESTÁTICO de la
+            // clase dueña de la geometría, igual que Balda/Crisol/Prensa/etc.
+            // -- así Game/Pila.cs puede reclamar el MISMO handle de obra al
+            // instanciarse (ver Pila.Init/HallarObraExacta) en vez de que
+            // este archivo registre uno y la instancia otro.
+            for (int i = 0; i < PilaPlanes.Length; i++)
+            {
+                var p = PilaPlanes[i];
+                Pila.TallarEnPlano(grid, p.X0, p.Y0, p.Ancho, p.Hondo, p.Muro);
+            }
 
             // Los machones: de la losa al remate, macizos. El del limo sube
             // por ENTRE las dos pilas (215..217, con la del agua acabando en
@@ -1988,9 +2049,12 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, MensulaAguaX0, CuartoY0, MensulaAguaX1 - MensulaAguaX0 + 1,
                 MensulaAguaTopY - CuartoY0 + 1, MaterialId.Stone);
 
-            // (playtest 27) Registro anticincel de la estación completa -- ver ObraDelTaller.
-            RegistrarObra(PilaAguaX0, y0, PilaAguaX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
-            RegistrarObra(PilaLimoX0, y0, PilaLimoX0 + PilaAnchoOuter - 1, y0 + PilaHondoOuter - 1);
+            // (playtest 27) Registro anticincel de los machones -- ver
+            // ObraDelTaller. Las dos pilas YA quedaron registradas dentro de
+            // Pila.TallarEnPlano (fix Cesar playtest 34, ver el bucle de
+            // arriba): duplicar su RegistrarObra aquí crearía un SEGUNDO
+            // handle fantasma que Game/Pila.cs nunca reclamaría (el mismo
+            // bug de handle huérfano que ya describe Game/Alambique.cs).
             RegistrarObra(MensulaLimoX0, CuartoY0, MensulaLimoX1, MensulaLimoTopY);
             RegistrarObra(MensulaAguaX0, CuartoY0, MensulaAguaX1, MensulaAguaTopY);
         }
