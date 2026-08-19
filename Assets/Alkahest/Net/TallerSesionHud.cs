@@ -182,18 +182,29 @@ namespace Alkahest.Net
                 var modo = sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam);
                 bool steamListo = FriendsLoop.Platform.SteamBootstrap.Instance != null
                     && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady;
-                if (modo == TransportMode.Steam && !steamListo)
+                bool cayoALocal = modo == TransportMode.Steam && !steamListo;
+                if (cayoALocal) modo = TransportMode.LocalLoopback;
+
+                sessionCoordinator.StartHost(modo, MaxJugadores);
+
+                // (playtest 42, hotfix de la captura de Cesar: el panel decía
+                // "Abrí tu taller en modo LOCAL: puedes jugar" y JUSTO DEBAJO
+                // "Algo falló: StartHost devolvió false" -- dos mensajes
+                // contradictorios a la vez) El aviso del fallback se redacta
+                // DESPUÉS de intentar el arranque, según lo que de verdad
+                // pasó: el modo local es síncrono, así que aquí ya se sabe si
+                // Hosting o no. El diagnóstico fino del fallo (puerto ocupado
+                // por otra ventana, sesión a medio cerrar) lo pone ahora el
+                // propio coordinador en LastError -- este aviso solo evita
+                // prometer un taller que no abrió.
+                if (cayoALocal)
                 {
-                    modo = TransportMode.LocalLoopback;
-                    // (fix, reporte de Cesar: "apenas se lee" + "sí estoy
-                    // conectado") El diagnóstico real puede ser DOS cosas:
-                    // cliente cerrado O steam_appid.txt ausente junto al exe
-                    // (el caso de Cesar: Steam abierto y aun así Init falla).
-                    // El texto nombra ambas, se dibuja GRANDE y caduca solo.
-                    _avisoLocal = "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nAbrí tu taller en modo LOCAL: puedes jugar; para amigos, rehaz la build o abre Steam y reinicia.";
+                    bool abrio = sessionCoordinator.CurrentState == SessionCoordinator.ConnectionState.Hosting;
+                    _avisoLocal = abrio
+                        ? "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nAbrí tu taller en modo LOCAL: puedes jugar; para amigos, rehaz la build o abre Steam y reinicia."
+                        : "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nY el modo LOCAL tampoco pudo abrir — mira el motivo aquí abajo.";
                     _avisoLocalHasta = Time.time + 14f;
                 }
-                sessionCoordinator.StartHost(modo, MaxJugadores);
             }
 
             if (GUILayout.Button("UNIRME al taller de un amigo (Steam)", UiStyles.Boton))

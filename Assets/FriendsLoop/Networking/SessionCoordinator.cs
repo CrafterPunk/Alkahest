@@ -147,6 +147,39 @@ namespace FriendsLoop.Networking
                         return;
                     }
 
+                    // (playtest 42, hotfix del reporte de Cesar: "StartHost
+                    // devolvió false" SIN decir por qué) DOS guardas de
+                    // diagnóstico ANTES de intentar nada, porque el false de
+                    // NGO es mudo y el jugador no puede actuar sobre "algo
+                    // falló":
+                    // 1) SESIÓN ANTERIOR A MEDIO CERRAR: si NGO sigue
+                    //    escuchando aunque este coordinador se crea Offline
+                    //    (un Shutdown() asíncrono que no terminó, o un error
+                    //    a mitad de arranque), StartHost devolvería false.
+                    //    Se cierra aquí y se pide UN reintento -- el Shutdown
+                    //    de NGO tarda un frame, no se puede encadenar en la
+                    //    misma llamada.
+                    if (networkManager.IsListening || networkManager.IsServer || networkManager.IsClient)
+                    {
+                        networkManager.Shutdown();
+                        RaiseError("Quedaba una sesión anterior a medio cerrar; ya la cerré -- pulsa ANFITRIÓN otra vez.");
+                        SetState(ConnectionState.Offline);
+                        return;
+                    }
+
+                    // 2) PUERTO OCUPADO: la causa más probable del false en
+                    //    una prueba de dos ventanas -- la OTRA ventana ya es
+                    //    anfitriona del 7777 (o un proceso viejo del juego lo
+                    //    retiene). Se sondea con un bind UDP de usar-y-tirar
+                    //    (UTP corre sobre UDP): barato, exacto, y convierte
+                    //    un "false" mudo en una instrucción accionable.
+                    if (!PuertoUdpLibre(LocalPort))
+                    {
+                        RaiseError("El puerto " + LocalPort + " ya está en uso. Si esta es tu SEGUNDA ventana, en esta pulsa UNIRME en local (solo una ventana puede ser ANFITRIÓN). Si no hay otra ventana, un proceso viejo del juego retiene el puerto: ciérralo desde el Administrador de tareas o reinicia el PC.");
+                        SetState(ConnectionState.Offline);
+                        return;
+                    }
+
                     unityTransport.SetConnectionData(LocalHostAddress, LocalPort);
                     if (!networkManager.StartHost())
                     {
@@ -256,6 +289,44 @@ namespace FriendsLoop.Networking
             m_PendingHostAfterLobby = false;
             SetState(ConnectionState.Offline);
             SessionEvents.RaiseSessionLeft();
+        }
+
+        /// <summary>
+        /// (playtest 42) ¿Está libre el puerto UDP dado en el loopback? Sonda
+        /// de usar-y-tirar para diagnosticar el "StartHost devolvió false"
+        /// mudo de NGO/UTP ANTES de intentarlo -- la consume solo
+        /// <see cref="StartHost"/> en modo local. El socket se cierra en el
+        /// finally: no retiene nada, y un bind UDP fallido con
+        /// AddressAlreadyInUse es exactamente la firma de "otra ventana ya es
+        /// anfitriona" (UTP corre sobre UDP, mismo protocolo que sondeamos).
+        /// Cualquier OTRA excepción se trata como "libre": mejor dejar que
+        /// UTP lo intente de verdad que bloquear el arranque por una sonda
+        /// paranoica.
+        /// </summary>
+        private static bool PuertoUdpLibre(ushort puerto)
+        {
+            System.Net.Sockets.Socket sonda = null;
+            try
+            {
+                sonda = new System.Net.Sockets.Socket(
+                    System.Net.Sockets.AddressFamily.InterNetwork,
+                    System.Net.Sockets.SocketType.Dgram,
+                    System.Net.Sockets.ProtocolType.Udp);
+                sonda.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, puerto));
+                return true;
+            }
+            catch (System.Net.Sockets.SocketException e)
+            {
+                return e.SocketErrorCode != System.Net.Sockets.SocketError.AddressAlreadyInUse;
+            }
+            catch
+            {
+                return true;
+            }
+            finally
+            {
+                sonda?.Close();
+            }
         }
 
         private bool AssignUnityTransport()

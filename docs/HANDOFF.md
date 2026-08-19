@@ -2878,3 +2878,30 @@ clics sintéticos down+up en el mismo frame SE PIERDEN (usar left_mouse_down→w
 = apuntar + Q (no hay right_mouse_down), el panel F3 se desplaza si el material tiene
 descripción. Regla 53 recordada: al re-stagear DLLs, renombrar la de espacios
 (SteamTransportNGO.dll) — los 4 errores CS2001 de esta ronda fueron eso.
+
+---
+
+## Playtest 42 → HOTFIX MULTI: el "StartHost devolvió false" mudo ahora se explica solo
+
+Captura de Cesar probando multi: ANFITRIÓN → "Steam no respondió... Abrí tu taller en modo
+LOCAL: puedes jugar" y JUSTO DEBAJO "Algo falló: No se pudo iniciar el host local (StartHost
+devolvió false)" — dos mensajes contradictorios y ninguna causa accionable.
+
+**Causa más probable** (dos ventanas en el mismo PC): la otra ventana ya era ANFITRIONA del
+puerto 7777 — o un proceso viejo del juego lo retenía — y el bind UDP de UTP falla con un false
+mudo de NGO. **El fix no adivina: diagnostica.** En SessionCoordinator.StartHost (modo local),
+DOS guardas antes de intentar nada: (1) NGO todavía escuchando aunque el coordinador se crea
+Offline (Shutdown asíncrono a medio terminar) → se cierra y se pide UN reintento; (2) sonda
+UDP de usar-y-tirar sobre el 7777 (PuertoUdpLibre — UTP corre sobre UDP, misma firma): si está
+ocupado, el error dice EXACTAMENTE qué hacer ("si esta es tu SEGUNDA ventana, pulsa UNIRME —
+solo una puede ser ANFITRIÓN; si no hay otra, un proceso viejo retiene el puerto: Administrador
+de tareas o reinicio"). Cualquier otra excepción de la sonda se trata como libre (mejor que UTP
+lo intente de verdad que bloquear por paranoia).
+
+**Y el aviso contradictorio**: TallerSesionHud ahora redacta el aviso del fallback DESPUÉS de
+intentar el arranque (el modo local es síncrono): si abrió, la promesa de siempre; si no,
+"Y el modo LOCAL tampoco pudo abrir — mira el motivo aquí abajo", donde LastError trae el
+diagnóstico fino. Nunca más "puedes jugar" encima de "algo falló".
+
+Recordatorio de prueba de dos ventanas: UNA ventana ANFITRIÓN en local, la SEGUNDA siempre
+UNIRME en local. Para el exe: rehacer la build (menú Alkahest → 4) para que lleve este fix.
