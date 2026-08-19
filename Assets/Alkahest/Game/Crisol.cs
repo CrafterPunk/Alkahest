@@ -292,8 +292,55 @@ namespace Alkahest.Game
         private float _alfaResalte;
         private const int Burbujas = 6;
         private readonly SpriteRenderer[] _burbujas = new SpriteRenderer[Burbujas];
+        // -----------------------------------------------------------------
+        // BOCANADAS DE LA CHIMENEA (retocadas en el playtest 41,
+        // CONTRATO_VAPOR.md §2 -- "la animación de vapor es muy mala", Cesar)
+        //
+        // QUÉ SE MIRÓ ANTES DE TOCAR NADA (regla 52): con el gas de la sim ya
+        // convectando de verdad (encargo S), el penacho REAL que sale del
+        // brasero y de la boca del crisol es ancho, irregular y serpentea. Al
+        // lado de eso, estas cuatro bocanadas se leían como una cinta
+        // transportadora, y por tres motivos concretos que estaban en la
+        // fórmula:
+        //   (a) nacían a alfa 0.70 de golpe en la boca del tubo -- un POP. El
+        //       humo real no aparece opaco: se hace visible.
+        //   (b) las cuatro compartían periodo, altura, velocidad y amplitud
+        //       exactos, desfasadas 1/4 de ciclo: un carrusel perfectamente
+        //       periódico, que es justo lo que el ojo lee como "animación".
+        //   (c) el rizo lateral era un seno de amplitud fija, así que las
+        //       cuatro trazaban LA MISMA ese.
+        //
+        // DECISIÓN (sprite vs gas): NO se retiran. La chimenea es el verbo del
+        // cuerpo del crisol (gramática visual del playtest 26: "chimenea =
+        // está trabajando") y ahí NO nace gas de la sim -- la combustión
+        // ocurre dentro del cesto, no en el tubo. Retirarlas dejaría al
+        // aparato sin señal de trabajo. Lo que sí cambian es de RANGO: pasan
+        // de protagonista a ACENTO (alfa pico 0.70 -> 0.34) y dejan de mentir
+        // como animación:
+        //   - nacen transparentes y se hacen visibles en el primer 22% de su
+        //     vida (mata el pop) y se apagan al cuadrado (una voluta se
+        //     desvanece, no se corta);
+        //   - cada bocanada lleva su propio periodo, altura, amplitud y
+        //     deriva, sacados de una tabla FIJA por índice (ver
+        //     HumoVariacion*): rompe el carrusel sin un solo Random ni una
+        //     alloc por frame;
+        //   - el rizo suma una DERIVA que crece con la altura (el humo se
+        //     escora al alejarse del tubo) en vez de un seno puro.
+        // -----------------------------------------------------------------
         private const int HumoPuffs = 4;
         private const float HumoCicloSeg = 2.4f;
+        /// <summary>Alfa máxima de una bocanada. Bajada de 0.70 a 0.34 en el playtest 41: el gas real de la sim es el protagonista y esto es un acento del aparato, no humo que compita con él.</summary>
+        private const float HumoAlfaPico = 0.34f;
+        /// <summary>Fracción de vida durante la que la bocanada SE HACE VISIBLE al salir del tubo. Sin esto nace opaca de golpe en la boca -- el "pop" que delataba la animación.</summary>
+        private const float HumoFraccionEntrada = 0.22f;
+        /// <summary>Multiplicador del periodo de cada bocanada (índice 0..3). Números primos entre sí a ojo para que las cuatro no vuelvan a coincidir en fase: sin esto son un carrusel.</summary>
+        private static readonly float[] HumoVariacionPeriodo = { 1.00f, 1.37f, 0.79f, 1.18f };
+        /// <summary>Altura que alcanza cada bocanada, en celdas. Distintas entre sí: una columna de humo no tiene un techo común.</summary>
+        private static readonly float[] HumoVariacionAltura = { 12.0f, 9.5f, 14.5f, 11.0f };
+        /// <summary>Amplitud del rizo lateral de cada bocanada, en celdas.</summary>
+        private static readonly float[] HumoVariacionRizo = { 1.20f, 0.70f, 1.60f, 0.95f };
+        /// <summary>Deriva lateral acumulada al final del ascenso, en celdas: el humo SE ESCORA según sube en vez de volver siempre al eje del tubo.</summary>
+        private static readonly float[] HumoVariacionDeriva = { 0.9f, -1.4f, 1.8f, -0.6f };
         private readonly SpriteRenderer[] _humo = new SpriteRenderer[HumoPuffs];
         private Vector3 _humoOrigen;
 
@@ -979,6 +1026,27 @@ namespace Alkahest.Game
                 return true;
             }
 
+            // --- AGUA: hierve directo a vapor (playtest 41, CONTRATO_VAPOR.md
+            // 1a). MaterialId.Water es VOCABULARIO fijo (id=3), no un id del
+            // bloque bases×estado -- EsBaseEstado(Water) es false, así que sin
+            // esta rama el corte de justo abajo la descartaba SIEMPRE y
+            // "encender" con agua en la cámara no hacía nada (la causa raíz
+            // exacta del diagnóstico §0.1 del contrato: "no entendí por qué no
+            // pude hervir el agua"). Con CrisolTier0Raw=120 por encima de todo
+            // boilsAt posible del agua en cualquier seed (raw 100..119, ver
+            // Universe.waterBoilC/CrisolTier0Raw), el fuego más flojo del
+            // crisol YA hierve agua siempre; el chequeo de umbral de abajo es
+            // por ROBUSTEZ (combustible más frío que tier0, o un futuro
+            // override que baje `cima`), no porque vaya a fallar hoy.
+            if (entrada == MaterialId.Water)
+            {
+                if (cima < universe.Get(MaterialId.Water).boilsAt) return false;
+                salida = MaterialId.Steam;
+                condicion = CondicionCalor();
+                verbo = "hirviendo";
+                return true;
+            }
+
             if (!MaterialId.EsBaseEstado(entrada)) return false;
 
             int baseIdx = MaterialId.BaseDe(entrada);
@@ -1159,6 +1227,18 @@ namespace Alkahest.Game
             // las que agua de verdad abandona la cámara -- justo lo que pide
             // el mandato. Las demás (fundiendo/calcinando/ceramizando/
             // recociendo) no llevan agua, así que no emiten nada.
+            //
+            // "hirviendo" (playtest 41, CONTRATO_VAPOR.md 1a) se deja FUERA a
+            // propósito, decisión verificada y documentada aquí: en
+            // extrayendo/evaporando el agua es solo una FRACCIÓN de lo que
+            // había en la cámara (el resto se queda como arena/polvo), así
+            // que el empujón de EmitirVaporCubeta es lo único que hace visible
+            // que algo de agua se fue. En "hirviendo" el bucle de arriba YA
+            // convirtió el 100% de la cámara a Steam real -- empujar más
+            // Steam encima solo duplicaría vapor sobre vapor (y, peor, sobre
+            // celdas que a menudo ya NO están vacías porque son la propia
+            // cámara ahora llena de Steam), sin añadir nada que el jugador no
+            // vea ya con el agua entera dejando la olla.
             if (convertidas > 0 && (_hornadaVerbo == "extrayendo" || _hornadaVerbo == "evaporando"))
                 EmitirVaporCubeta(convertidas);
 
@@ -1537,15 +1617,32 @@ namespace Alkahest.Game
             }
 
             // Humo: solo mientras el cesto arde de verdad (el verbo en el cuerpo).
+            // Ver el bloque de constantes HumoVariacion* arriba para el porqué
+            // de cada término (playtest 41: de carrusel a acento).
             for (int i = 0; i < HumoPuffs; i++)
             {
                 var sr = _humo[i];
                 if (sr == null) continue;
                 if (!_cestoArdiendo) { sr.color = new Color(sr.color.r, sr.color.g, sr.color.b, 0f); continue; }
-                float fase = Mathf.Repeat(Time.time / HumoCicloSeg + i / (float)HumoPuffs, 1f);
-                sr.transform.position = _humoOrigen + new Vector3(Mathf.Sin(fase * Mathf.PI * 2f + i) * c * 1.2f, fase * c * 12f, 0f);
-                sr.transform.localScale = Vector3.one * (0.6f + fase * 1.4f) * (c * 3f) / sr.sprite.rect.width;
-                sr.color = new Color(0.82f, 0.80f, 0.78f, (1f - fase) * 0.7f);
+
+                // Periodo propio por bocanada: las cuatro dejan de coincidir.
+                float fase = Mathf.Repeat(Time.time / (HumoCicloSeg * HumoVariacionPeriodo[i]) + i / (float)HumoPuffs, 1f);
+
+                // Rizo (seno de amplitud propia) + DERIVA que crece con la
+                // altura: la voluta se escora al alejarse del tubo en vez de
+                // volver siempre al eje.
+                float dx = Mathf.Sin(fase * Mathf.PI * 2f + i * 1.7f) * HumoVariacionRizo[i]
+                         + fase * HumoVariacionDeriva[i];
+                sr.transform.position = _humoOrigen + new Vector3(dx * c, fase * c * HumoVariacionAltura[i], 0f);
+                sr.transform.localScale = Vector3.one * (0.5f + fase * 1.7f) * (c * 3f) / sr.sprite.rect.width;
+
+                // Alfa: ENTRA (se hace visible al salir del tubo, mata el pop)
+                // y SALE al cuadrado (se desvanece, no se corta).
+                float restante = 1f - fase;
+                float alfa = fase < HumoFraccionEntrada
+                    ? (fase / HumoFraccionEntrada) * HumoAlfaPico
+                    : restante * restante * HumoAlfaPico / ((1f - HumoFraccionEntrada) * (1f - HumoFraccionEntrada));
+                sr.color = new Color(0.82f, 0.80f, 0.78f, alfa);
             }
 
             if (_resalte != null)

@@ -2827,3 +2827,54 @@ reaparece sola en el beat 5.4. Nada de esto es casualidad: es la seed congelada 
 **Deudas**: el contador de manipulaciones aproxima por ráfagas del frasco (sin tocar
 Flask/Crisol); Freeze/Crystallize sin partícula propia (heredada del 39); el playtest con la
 gente de la primera prueba (medir minuto 1 + autonomía) es el paso 3 del orden acordado.
+
+---
+
+## Playtest 41 → EL VAPOR VIVO (hervir de verdad, gas con rumbo, color que no miente)
+
+Feedback de Cesar tras el 40: no pudo hervir agua; el polvo celeste "se pone amarillo" al
+calentarse; el vapor subía "en vertical perfecta", se estancaba bajo muros, y la animación de
+vapor era "muy mala". Contrato en docs/CONTRATO_VAPOR.md con el diagnóstico de causas raíz
+hecho ANTES de encargar (regla: no se re-diagnostica en el encargo). Dos encargos SECUENCIALES:
+S (Sonnet, sim) y V (Opus CON OJOS en el PC real — Cesar pidió explícitamente que la visión
+fuera de Opus).
+
+**LAS TRES CAUSAS RAÍZ**: (1) `DecidirHornada` cortaba con `EsBaseEstado` — el agua JAMÁS tuvo
+rama de hornada (la promesa del manual se perdió en la reescritura del pt27). (2) El tinte
+térmico del renderer fundía el color al 100% hacia ámbar por encima de raw 150 — a fuego de
+brasero cualquier material perdía su identidad. (3) La lateralidad del gas re-sorteaba
+dirección CADA tick — temblaba en el sitio en vez de derivar.
+
+**ENCARGO S**: rama "hirviendo" (Water+cima≥boilsAt → Steam; el teatro `VaporPorCeldas` queda
+excluido para esta hornada: la cámara entera YA es vapor real). CONVECCIÓN: rumbo/viento
+coherente por hash de baja frecuencia (sal 551, `_tick>>4, x>>3, y>>3` — misma celda mantiene
+rumbo ~0,5s, bloques de 8x8 comparten corriente: viento, no ruido), ondulación 30% en ascenso
+libre (sal 549 — nada de vertical perfecta), deriva térmica degradada a desempate, escape bajo
+techo: diagonal-rumbo → diagonal-contraria → lateral-rumbo → lateral-contraria. HALLAZGO de
+verificación: el gas nacido por `SetCell` directo (PaintStable/CerrarHornada) llegaba con
+aux==0 y moría EN SU PRIMER TICK — mismo bug que ProcessFire pt9; siembra con jitter (sal 553).
+Sin ese fix, "hirviendo" habría vaciado la cámara en vapor invisible. MEDIDO: dispersión
+lateral de una columna libre +52% (stddev X 1,59→2,41); escape bajo saliente: pico de celdas
+fuera de la sombra 19→42 (+121%); banco 6 escenarios: peor caso +3,5% (mixto), sin-gas planos.
+
+**ENCARGO V (Opus con ojos, 2 pasadas desplegadas y capturadas con la MISMA seed 187415343)**:
+INCANDESCENCIA en dos capas — brasa ADITIVA (+72R/+30G/+6B escalada; sumar no borra la
+diferencia entre materiales) + mezcla ACOTADA a techo 0,45 (a raw 255 sobrevive el 55% de cada
+canal), curva ~t^1.5 sin Pow; a 320°C (el caso de Cesar) la mezcla es 0,245: "el azul, al
+blanco", nunca "material amarillo". BOCANADAS de chimenea degradadas a acento: alfa 0,70→0,34
+con fade de entrada, y tablas por índice de periodo/altura/rizo/deriva (antes las 4 bocanadas
+idénticas desfasadas 1/4 = carrusel); se quedan porque la chimenea es el verbo del cuerpo
+(pt26) y ahí no nace gas real. VAHO reubicado a la SUPERFICIE del penacho (dentro de la masa
+era invisible y gastaba presupuesto): nace solo con aire arriba/al lado, más lento y longevo.
+`Alambique.cs` NO tocado: no tenía teatro de vapor — su vapor ES el gas real (verificado el
+ciclo completo: columna del crisol → respiradero → "agua destilada: 7"). Falso positivo
+cazado: la banda "oliva" sobre el azul caliente era CrystalSeed de una ley de la seed, no
+tinte.
+
+**Deudas**: rótulo del alambique dice "llevas 0" cuando llevas cerámico en el frasco (solo
+cuenta lo YA vertido — merece distinguir "llevas" de "has vertido"); grep pendiente de otros
+consumidores de PaintStable/SetCell con gasLifetime>0 y aux==0; cabina para próximas rondas:
+clics sintéticos down+up en el mismo frame SE PIERDEN (usar left_mouse_down→wait→up), verter
+= apuntar + Q (no hay right_mouse_down), el panel F3 se desplaza si el material tiene
+descripción. Regla 53 recordada: al re-stagear DLLs, renombrar la de espacios
+(SteamTransportNGO.dll) — los 4 errores CS2001 de esta ronda fueron eso.

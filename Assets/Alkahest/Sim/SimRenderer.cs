@@ -721,6 +721,25 @@ namespace Alkahest.Sim
         // a cámara -- el taller recuerda incendios que ocurrieron fuera de
         // vista), así que una vuelta completa tarda H/PatinaRowsPerFrame
         // frames (288/12 = 24 frames, bajo medio segundo a 60fps).
+        // =================================================================
+        // INCANDESCENCIA (playtest 41, CONTRATO_VAPOR.md §2)
+        // Los cuatro números que gobiernan "cómo se ve un material caliente".
+        // Los consume ComputeCellColor (busca "INCANDESCENCIA LEGIBLE" para
+        // el razonamiento completo y la cronología del bug que arreglan).
+        // Se dejan aquí, con nombre, para que recalibrarlos sea cambiar una
+        // cifra y volver a mirar -- no bucear en el hot path.
+        // =================================================================
+        /// <summary>Temperatura raw a partir de la cual una celda empieza a verse caliente. 150 raw = ~180°C. Sin cambios respecto al playtest 40: el problema era la profundidad del tinte, no cuándo arranca.</summary>
+        private const byte IncandInicioRaw = 150;
+        /// <summary>Techo de MEZCLA hacia el ámbar, incluso a raw 255. 0.45 = a fuego pleno sobrevive el 55% del matiz del material. Subirlo por encima de ~0.55 reabre el bug de "polvo azul que se ve amarillo" (regla 52: se juzga en pantalla, no en el hex).</summary>
+        private const float IncandTechoMezcla = 0.45f;
+        /// <summary>Brasa ADITIVA a fuego pleno, canal rojo. Sumar (en vez de mezclar) conserva intactas las diferencias entre materiales: es la capa que hace que el calor se lea como luz propia y no como repintado.</summary>
+        private const float IncandBrasaR = 72f;
+        /// <summary>Brasa aditiva, canal verde: bastante menor que el rojo para que el rescoldo tire a naranja, no a blanco.</summary>
+        private const float IncandBrasaG = 30f;
+        /// <summary>Brasa aditiva, canal azul: casi nula -- una brasa no emite azul. Deja que el azul propio del material sobreviva entero al calor.</summary>
+        private const float IncandBrasaB = 6f;
+
         private int _patinaRow;
         private int _patinaDecayCounter;
         private const int PatinaRowsPerFrame = 12;
@@ -1161,16 +1180,69 @@ namespace Alkahest.Sim
                 b = ClampByte(b + amt);
             }
 
-            // Tinte de temperatura: por encima de raw 150 (~180°C) se calienta hacia
-            // naranja/blanco incandescente proporcionalmente a la temperatura.
+            // INCANDESCENCIA LEGIBLE (playtest 41, CONTRATO_VAPOR.md §2 -- fix
+            // del "amarillo engañoso"). Traduce la temperatura a color PARA EL
+            // JUGADOR que tiene que reconocer qué material está mirando
+            // mientras arde; el consumidor es su ojo, no la sim (esta función
+            // no escribe nada en el grid).
+            //
+            // QUÉ HABÍA Y POR QUÉ SE CAMBIÓ (regla 15): antes era
+            //     t01 = (raw-150)/105;  r=Lerp(r,255,t01); g=Lerp(g,214,t01); b=Lerp(b,140,t01);
+            // es decir, una mezcla LINEAL que llegaba al 100% en raw 255. A
+            // fuego de brasero (raw 220 = 320°C, medido en pantalla con el
+            // hover de F3) eso ya fundía el 67% del color: un polvo azul se
+            // veía AMARILLO y, al recogerlo con el frasco, volvía a ser azul.
+            // Cesar lo reportó tras el playtest 40 con esas palabras exactas
+            // ("me confundió el cambio de color del limo que al calentarlo se
+            // pone amarillo pero al recogerlo resulta que es azul"). El fallo
+            // no era el tinte: era que el tinte BORRABA la identidad.
+            //
+            // CÓMO SE ARREGLA, en dos capas deliberadamente distintas:
+            //  (1) BRASA ADITIVA -- una suma constante por canal, sesgada al
+            //      rojo. Sumar NO cambia la diferencia entre dos materiales
+            //      (si A y B distaban 90 en el canal verde, siguen distando
+            //      90): es lo que hace que el calor se lea como LUZ PROPIA
+            //      encima de la sustancia, no como repintarla. Es también lo
+            //      físicamente honesto: un cuerpo caliente EMITE, no cambia
+            //      de pigmento.
+            //  (2) MEZCLA ACOTADA hacia el ámbar con TECHO 0.45 -- a raw 255
+            //      (390°C) sobrevive el 55% del matiz original. Es el techo
+            //      que pide el contrato (45-55%) y el que garantiza que dos
+            //      materiales distintos SIGAN siendo dos colores distintos en
+            //      el punto más caliente que el taller puede alcanzar.
+            //
+            // CURVA: el arranque sigue en raw 150 (~180°C) a propósito -- lo
+            // que sobraba no era el aviso temprano de calor sino su
+            // PROFUNDIDAD -- pero la respuesta pasa a ser CUADRÁTICA. A raw
+            // 200 (~280°C) la mezcla es 0.10 (un rescoldo tenue, como manda
+            // el diagnóstico §0.2) y a raw 220 (~320°C, el caso que Cesar
+            // vio) es 0.20 con un empujón rojo de +32: el azul sigue
+            // leyéndose azul, pero caliente. Verificado con capturas en el
+            // taller real, no calculado a ciegas.
             byte raw = _grid.temp[idx];
-            if (raw > 150)
+            if (raw > IncandInicioRaw)
             {
-                float t01 = (raw - 150) / 105f;
+                float t01 = (raw - IncandInicioRaw) / (float)(255 - IncandInicioRaw);
                 if (t01 > 1f) t01 = 1f;
-                r = LerpByte(r, 255, t01);
-                g = LerpByte(g, 214, t01);
-                b = LerpByte(b, 140, t01);
+                // Curva ~t^1.5 escrita con dos multiplicaciones (nada de Pow en
+                // el hot path del refresco de textura). CALIBRADA MIRANDO, en
+                // dos pasadas: la primera usó t*t y el matiz se salvaba, pero
+                // en la banda 180-270°C el calor dejaba de NOTARSE -- cambiar
+                // el bug de "miente" por el de "no avisa" no es arreglarlo.
+                // Con esta curva, a 320°C la mezcla es 0.25 (se ve caliente de
+                // lejos) y el azul sigue siendo azul.
+                float suave = t01 * (0.45f + 0.55f * t01);
+
+                // (1) brasa aditiva: conserva íntegras las diferencias entre materiales.
+                r = ClampByte(r + (int)(IncandBrasaR * suave));
+                g = ClampByte(g + (int)(IncandBrasaG * suave));
+                b = ClampByte(b + (int)(IncandBrasaB * suave));
+
+                // (2) mezcla hacia el ámbar, con techo: nunca borra el matiz.
+                float mezcla = suave * IncandTechoMezcla;
+                r = LerpByte(r, 255, mezcla);
+                g = LerpByte(g, 214, mezcla);
+                b = LerpByte(b, 150, mezcla);
             }
 
             // PÁTINA (playtest 39, contrato ENCARGO S 1d): última capa, encima

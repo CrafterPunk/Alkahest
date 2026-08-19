@@ -126,6 +126,9 @@ namespace Alkahest.Sim
         private const uint SalBrasaVida = 521;             // ConvertirEnBrasa: jitter de vida (8-12s del contrato).
         private const uint SalBrasaReencender = 523;       // ProcessBrasa: probabilidad baja de reencender un vecino inflamable.
         private const uint SalGasDeambular = 547;          // ProcessGas: lateral bajo cielo abierto / bolsa bajo techo (sustituye a la sal 5, que se queda solo para la subida diagonal -- ver ProcessGas).
+        private const uint SalGasOndulacion = 549;         // (playtest 41, CONTRATO_VAPOR 1b) ProcessGas: tirada de "¿serpenteo esta vez?" en ascenso libre -- alta frecuencia a propósito, es solo el dado del CUÁNDO, no del HACIA DÓNDE (eso lo decide SalGasRumbo).
+        private const uint SalGasRumbo = 551;              // (playtest 41, CONTRATO_VAPOR 1b) ProcessGas: RUMBO/VIENTO coherente -- hash de BAJA frecuencia (_tick>>4, x>>3, y>>3): misma celda mantiene rumbo ~medio segundo, celdas vecinas del mismo bloque de 8x8 comparten corriente. Sustituye al viejo `rng.NextBool()` de sal 5 (por tick, sin memoria -- por eso el gas "temblaba" en vez de derivar, diagnóstico §0.3 del contrato) como fuente PRINCIPAL de lateralidad; la deriva térmica (sal 5, ver más abajo) pasa a ser el desempate cuando SÍ hay gradiente real entre los dos vecinos.
+        private const uint SalGasSemillaVida = 553;        // (playtest 41, hallazgo de verificación CONTRATO_VAPOR 1a) ProcessGas: jitter de vida al SEMBRAR aux==0 de un gas creado sin pasar por Transform() (PaintStable/SetCell directo) -- ver el docblock en ProcessGas.
         /// <summary>Temp raw a partir de la cual el Limo se separa (contrato 4.3, valor EXACTO del contrato). Nota de honestidad para quien audite esto: el propio contrato describe este umbral como "alcanzable con el rescoldo tier0" (~116°C), pero 150 &gt; Universe.CrisolTier0Raw (118) -- con solo el rescoldo NUNCA se alcanza; hace falta combustible (tier1). Implementado tal cual el número congelado; discrepancia anotada como pregunta al director, no corregida aquí.</summary>
         // (fix integración) 112 (= 104 °C), no los 150 del contrato original: el
         // contrato decía "150 (60°C)" -- aritmética rota, raw 150 son 180 °C, por
@@ -1315,11 +1318,58 @@ namespace Alkahest.Sim
         private const int GasBolsaLateralPct = 60; // bajo techo: más presión lateral que una nube suelta a cielo abierto.
         private const int GasDeambularPct = 35;    // cielo abierto: el mismo 35% de siempre (deambular/turbulencia).
         // private const int GasBolsaVidaExtra = 3; // (retirada en integración pt39, regla 15) la vida extra por movimiento hacía inmortal al gas embolsado; hoy el extra es medio-decaimiento bajo techo, ver el descuento en ProcessGas.
+        // (playtest 41, CONTRATO_VAPOR 1b) CONVECCIÓN CREÍBLE: un gas tiene
+        // "inercia de intención" -- quiere subir, y cuando no puede, DERIVA
+        // con rumbo sostenido en vez de temblar. Dos piezas nuevas:
+        //   1) ONDULACIÓN en ascenso libre: con Empty justo encima, ~30% de
+        //      las veces se prueba la diagonal-arriba en el rumbo del viento
+        //      ANTES que la vertical -- nada de columnas perfectamente
+        //      rectas (pedido literal de Cesar: "no suba en vertical
+        //      perfecta").
+        //   2) RUMBO/VIENTO de baja frecuencia (SalGasRumbo, ver arriba):
+        //      gobierna tanto la ondulación como el orden de escape bajo
+        //      techo (antes lo hacía un `rng.NextBool()` por tick que no
+        //      recordaba nada de un tick al siguiente -- de ahí el temblor
+        //      del diagnóstico §0.3). La deriva térmica hacia el vecino más
+        //      caliente SIGUE viva como desempate cuando hay gradiente real.
+        private const int GasOndulacionPct = 30; // ~30% del contrato: la columna serpentea, no se estanca en vertical perfecta.
 
         private void ProcessGas(int x, int y, int idx, MaterialDef def)
         {
             if (def.gasLifetime > 0)
             {
+                // (playtest 41, hallazgo de la verificación CONTRATO_VAPOR.md
+                // 1a -- fuera del texto literal del contrato, pero en la
+                // MISMA función que encarga, y necesario para que "hirviendo"
+                // cumpla su propia definición de hecho) SIEMBRA PARA GAS
+                // NACIDO SIN Transform(): una celda de arquetipo Gas con
+                // aux==0 EN LA ENTRADA de este bloque es SIEMPRE recién
+                // creada por un SetCell directo -- `AlkahestSim.PaintStable`
+                // (que usa `EmitirVaporCubeta` en Crisol.cs para el vapor de
+                // extrayendo/evaporando) o el `SetCell` de
+                // `Crisol.CerrarHornada` que vacía la cámara hirviendo en
+                // Steam -- porque NINGUNO de los dos pasa por `Transform()`,
+                // que es quien normalmente siembra esta vida (ver el jitter
+                // idéntico ahí abajo). Nunca puede ser "vida agotada de un
+                // tick anterior": el camino de más abajo TRANSFORMA la celda
+                // fuera del arquetipo Gas en el MISMO tick en que la vida
+                // llega a 0 (idéntico razonamiento al fix de ProcessFire en
+                // playtest 9 para el Fuego recién pintado con aux==0, ver
+                // FreeFireSeedLife). SIN esto, todo vapor pintado
+                // directamente desaparecía en su primerísimo tick procesado
+                // -- nunca llegaba a leerse como vapor, contradiciendo la
+                // propia promesa del contrato ("la cámara se vacía en vapor
+                // VISIBLE"). Jitter ±4 idéntico al de Transform(), mismo
+                // motivo: celdas nacidas juntas (una hornada entera) no
+                // deben expirar todas en el mismo tick exacto.
+                if (_grid.aux[idx] == 0)
+                {
+                    var seedRng = XorShift.FromCell(_tick, x, y, SalGasSemillaVida);
+                    int jitterSemilla = seedRng.Next(9) - 4;
+                    int vidaSemilla = def.gasLifetime + jitterSemilla;
+                    _grid.aux[idx] = (byte)(vidaSemilla < 1 ? 1 : (vidaSemilla > 255 ? 255 : vidaSemilla));
+                }
+
                 // (fix integración pt39) La "vida extra embolsados" del
                 // contrato 1c, ACOTADA: bajo techo directo el gas decae a
                 // MITAD de ritmo (se salta el descuento en ticks impares).
@@ -1359,11 +1409,39 @@ namespace Alkahest.Sim
             // bolsa más abajo.
             bool bajoTecho = aboveIdx < 0;
 
+            // RUMBO/VIENTO: hash de BAJA frecuencia (_tick >> 4 cambia cada 16
+            // ticks, ~medio segundo a 30Hz; x>>3/y>>3 agrupa en bloques de
+            // 8x8) -- SIN estado nuevo por celda, pero una misma celda (y sus
+            // vecinas del mismo bloque) leen el MISMO rumbo mientras dura la
+            // ventana: se lee como viento, no como ruido. Se calcula aquí
+            // arriba porque lo usan tanto la ondulación de ascenso libre como
+            // el orden de escape bajo techo, más abajo.
+            bool rumboLeft = XorShift.FromCell(_tick >> 4, x >> 3, y >> 3, SalGasRumbo).NextBool();
+
             if (aboveIdx >= 0)
             {
                 byte am = _grid.mat[aboveIdx];
                 if (am == MaterialId.Empty)
                 {
+                    // ONDULACIÓN (contrato 1b): ~30% de las veces, antes de
+                    // subir recto, se prueba la diagonal-arriba en el rumbo
+                    // del viento. Si esa celda no está libre (o cae fuera del
+                    // mundo), se cae al alza vertical de siempre -- nunca se
+                    // pierde el tick por un serpenteo fallido.
+                    if (XorShift.FromCell(_tick, x, y, SalGasOndulacion).ChancePercent(GasOndulacionPct))
+                    {
+                        int dxOnd = rumboLeft ? -1 : 1;
+                        int nxOnd = x + dxOnd, nyOnd = y + 1;
+                        if (CellGrid.InBounds(nxOnd, nyOnd))
+                        {
+                            int nidxOnd = CellGrid.Idx(nxOnd, nyOnd);
+                            if (_grid.mat[nidxOnd] == MaterialId.Empty)
+                            {
+                                Move(x, y, idx, nxOnd, nyOnd, nidxOnd);
+                                return;
+                            }
+                        }
+                    }
                     Move(x, y, idx, x, y + 1, aboveIdx);
                     return;
                 }
@@ -1376,13 +1454,20 @@ namespace Alkahest.Sim
                 bajoTecho = adef.archetype != MaterialArchetype.Gas; // otro gas encima no es "techo": sigue siendo cielo abierto de gas.
             }
 
-            // DERIVA TÉRMICA: sesga el lateral hacia el vecino ortogonal más
-            // caliente (determinista); en empate (o los dos fuera de mundo),
-            // cae al azar de siempre.
+            // LATERALIDAD: el RUMBO coherente de arriba es ahora la fuente
+            // PRINCIPAL (antes era un `rng.NextBool()` sembrado por tick, sin
+            // memoria de un tick al siguiente -- el gas "temblaba en el
+            // sitio" en vez de derivar, diagnóstico §0.3 del contrato). La
+            // deriva térmica hacia el vecino ortogonal más caliente queda
+            // como DESEMPATE: solo pisa el rumbo cuando SÍ hay gradiente real
+            // entre los dos lados (con el ambiente uniforme de la regla 31,
+            // eso es la excepción -- cerca de una llama o una placa, no en
+            // general -- así que en la práctica el rumbo gobierna casi
+            // siempre, que es justo el viento sostenido que pedía el
+            // contrato).
             int tLeft = CellGrid.InBounds(x - 1, y) ? _grid.temp[CellGrid.Idx(x - 1, y)] : -1;
             int tRight = CellGrid.InBounds(x + 1, y) ? _grid.temp[CellGrid.Idx(x + 1, y)] : -1;
-            var rng = XorShift.FromCell(_tick, x, y, 5);
-            bool leftFirst = tLeft != tRight ? tLeft > tRight : rng.NextBool();
+            bool leftFirst = tLeft != tRight ? tLeft > tRight : rumboLeft;
 
             for (int i = 0; i < 2; i++)
             {

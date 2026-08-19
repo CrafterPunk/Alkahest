@@ -116,7 +116,7 @@ namespace Alkahest.Game
             30f,  // Chispa: sube al nacer (vy inicial positiva) y la gravedad la vence enseguida, como una brasa.
             -6f,  // Mota: aire caliente, asciende despacio.
             70f,  // Polvo: se posa rápido, poco vuelo.
-            -10f, // Vaho: vapor, asciende con más ganas que una mota.
+            -7f,  // Vaho: vapor. Bajado de -10 a -7 en el playtest 41: con el gas REAL ya convectando (encargo S), un vaho que ascendía más rápido que la propia columna de Steam se despegaba de ella y se leía como otra cosa. Ahora acompaña, no adelanta.
         };
 
         // Fricción exponencial sobre (vx,vy), en 1/segundo -- 0 = sin
@@ -494,9 +494,13 @@ namespace Alkahest.Game
                     case SimEventType.Boil:
                         // El instante de hervir: una voluta puntual, además
                         // del vaho continuo que ya emite el Steam resultante.
+                        // (playtest 41) Mismo ritmo perezoso que TrySpawnVaho:
+                        // las volutas de un hervor y las del vapor ya formado
+                        // tienen que moverse igual o se leen como dos efectos
+                        // distintos ocurriendo en el mismo sitio.
                         Spawn(TipoParticula.Vaho, e.x + 0.5f, e.y + 0.5f,
-                              Random.Range(-0.25f, 0.25f), Random.Range(0.5f, 1.1f),
-                              Random.Range(0.8f, 1.5f), new Color32(224, 228, 232, 130));
+                              Random.Range(-0.25f, 0.25f), Random.Range(0.3f, 0.8f),
+                              Random.Range(0.9f, 2.0f), new Color32(224, 228, 232, 130));
                         break;
                     case SimEventType.Ember:
                         // Un fuego acaba de morir en brasa: ráfaga de 3
@@ -534,7 +538,7 @@ namespace Alkahest.Game
             }
             if (matId == MaterialId.Steam)
             {
-                TrySpawnVaho(x, y);
+                TrySpawnVaho(x, y, idx);
                 return;
             }
             // (integración pt39) La BRASA respira: ascuas tenues muy
@@ -666,17 +670,52 @@ namespace Alkahest.Game
             }
         }
 
-        private void TrySpawnVaho(int x, int y)
+        /// <summary>
+        /// Voluta de vapor. RECALIBRADO EN EL PLAYTEST 41
+        /// (CONTRATO_VAPOR.md §2), tras mirar en pantalla una columna de
+        /// hervor real del crisol con la convección nueva del encargo S:
+        ///
+        /// DENTRO de una masa densa de Steam estas motas eran INVISIBLES --
+        /// un téxel blanquecino sobre otro téxel blanquecino no aporta nada y
+        /// solo gasta presupuesto de nacimientos. Donde el vaho SÍ se lee es
+        /// en el BORDE del penacho: ahí una voluta que se desprende y se
+        /// demora es exactamente lo que dibuja la silueta del gas y lo hace
+        /// parecer materia y no un bloque de píxeles. Así que ahora el vaho
+        /// nace SOLO en celdas de vapor con aire libre encima o al lado.
+        ///
+        /// La decisión de fondo (contrato: "sprite vs gas") es que el gas real
+        /// es el protagonista y esta capa pasa a ACENTO: menos volutas, mejor
+        /// colocadas, más lentas y más largas -- acompañan la corriente en vez
+        /// de taparla.
+        /// </summary>
+        private void TrySpawnVaho(int x, int y, int idx)
         {
+            if (!GasEnLaSuperficie(x, y, idx)) return; // dentro de la masa no se ve: no se paga.
             if (Random.value > ProbVaho) return;
             // El color real del Steam del roster YA es blanco-azulado
             // semitransparente (224,228,232,130 en Universe.cs), no blanco
             // puro -- se usa tal cual, derivado del material real.
             Color32 col = _universe.Get(MaterialId.Steam).baseColor;
-            float vx = Random.Range(-0.3f, 0.3f);
-            float vy = Random.Range(0.4f, 1.0f);
-            float vidaSeg = Random.Range(0.6f, 1.5f);
+            float vx = Random.Range(-0.25f, 0.25f);
+            float vy = Random.Range(0.25f, 0.7f);  // más perezosa que antes (0.4-1.0): acompaña al gas, no lo adelanta.
+            float vidaSeg = Random.Range(0.9f, 2.0f); // y se demora más: una voluta que se deshace, no un parpadeo.
             Spawn(TipoParticula.Vaho, x + 0.5f, y + 0.5f, vx, vy, vidaSeg, col);
+        }
+
+        /// <summary>
+        /// ¿Esta celda de gas está en el CONTORNO de su masa (aire libre
+        /// arriba o a un lado)? Lo consume <see cref="TrySpawnVaho"/> para
+        /// nacer solo donde una voluta se puede ver. idx+W = arriba, idx±1 =
+        /// laterales (misma convención que SimStepper/SimRenderer). No mira
+        /// hacia abajo a propósito: una voluta que se desprende del vientre
+        /// de una nube y cae no existe.
+        /// </summary>
+        private bool GasEnLaSuperficie(int x, int y, int idx)
+        {
+            if (y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty) return true;
+            if (x > 0 && _grid.mat[idx - 1] == MaterialId.Empty) return true;
+            if (x < CellGrid.W - 1 && _grid.mat[idx + 1] == MaterialId.Empty) return true;
+            return false;
         }
     }
 }
