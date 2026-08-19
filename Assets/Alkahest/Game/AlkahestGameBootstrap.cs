@@ -244,6 +244,13 @@ namespace Alkahest.Game
             // Azoth), pero no dejarlo al azar: es la razón real, no una
             // casualidad de que el campo se haya quedado en null.
             new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            // (ENCARGO F, Playtest 39) LA CAPA DE PARTÍCULAS DESPRENDIDAS
+            // (Game/ParticulasFx.cs, TODO vive ahí): decorativa, NO-SIM,
+            // client-local -- se crea aquí igual que el resto de capas
+            // puramente visuales de este método (WorkshopBackdrop, un par de
+            // líneas arriba), sin depender del aprendiz ni de ninguna otra
+            // máquina.
+            new GameObject("ParticulasFx").AddComponent<ParticulasFx>().Init(_sim);
             var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
             MasterSupplies supplies = null;
             //   var supplies = new GameObject("MasterSupplies").AddComponent<MasterSupplies>();
@@ -337,6 +344,13 @@ namespace Alkahest.Game
             // lo tienen los dos lados, o el invitado vería el taller flotando
             // sobre el vacío.
             new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            // (ENCARGO F, Playtest 39) LA CAPA DE PARTÍCULAS, TAMBIÉN EN LOS
+            // DOS LADOS: es client-local por diseño (Game/ParticulasFx.cs) --
+            // cada cliente (anfitrión O invitado) genera sus propias motas de
+            // lo que VE en su propia grilla (real o espejo, da igual), así
+            // que se crea ANTES de la bifurcación anfitrión/invitado de más
+            // abajo, junto al resto de lo puramente visual.
+            new GameObject("ParticulasFx").AddComponent<ParticulasFx>().Init(_sim);
 
             var apprentice = avatarLocal.GetComponent<ApprenticeController>();
             var flask = avatarLocal.GetComponent<Flask>();

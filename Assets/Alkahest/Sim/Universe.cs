@@ -47,7 +47,18 @@ namespace Alkahest.Sim
         /// <summary>Materias base por semilla (sorteadas en <see cref="Universe.Create"/>).</summary>
         public const int BasesCount = 5;
 
-        public const int Count = 58; // 18 + 5*8
+        // -----------------------------------------------------------------
+        // LA BRASA (playtest 39, contrato ENCARGO S 1b): la VEJEZ del fuego --
+        // ni combustible (no arde por sí sola) ni fuego (no es la lengua
+        // visible), un tercer estado con temporizador propio. Id nuevo al
+        // FINAL del roster fijo (58), después del bloque bases×estados
+        // (18..57): así ningún id existente se desplaza y `MatDe`/`BaseDe`/
+        // `EstadoDe` (aritmética posicional sobre BaseEstado0) siguen
+        // intactos sin tocar una sola línea.
+        // -----------------------------------------------------------------
+        public const byte Brasa = 58;
+
+        public const int Count = 59; // 18 + 5*8 + 1 (Brasa)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -593,7 +604,26 @@ namespace Alkahest.Sim
                 fluidity = 3,
                 flammable = true,
                 ignitionTemp = CellGrid.CToRaw(oilIgnitionC),
-                burnsInto = MaterialId.Fire,
+                burnsInto = MaterialId.Fire, // camino legado: sin efecto mientras combustReserva>0 (ver TryIgnite/ApplyPhase), documentado por si algún día se apaga el sistema nuevo para este material.
+                // -----------------------------------------------------------------
+                // EL PATRÓN ORO (playtest 39, contrato ENCARGO S 1a): "un charco
+                // encendido debe arder DECENAS de segundos consumiéndose
+                // visiblemente desde el borde encendido". Con combustPasoTicks=8
+                // (potencia de 2, máscara barata) y combustReserva=120 (el tope
+                // real es 127: 7 bits libres de aux en un Liquid, ver
+                // MaterialDef.combustReserva), el CENTRO de la duración es
+                // 120*8=960 ticks = 32s a 30Hz -- "decenas de segundos" con
+                // margen a los dos lados. combustResiduo=Empty: el aceite arde
+                // SIN dejar nada sólido (todo el rastro es el humo ya emitido
+                // durante la quema + la pátina que deja SimRenderer en la piedra
+                // de alrededor).
+                combustReserva = 120,
+                combustPasoTicks = 8,
+                combustCalorRaw = 12,
+                combustHumoPct = 8,
+                combustPropagacionPct = 15, // mismo orden que el 12% del TryIgnite legado: el frente avanza, no explota (fix playtest 9 sigue vigente).
+                combustLenguaPct = 35,
+                combustResiduo = MaterialId.Empty,
             };
 
             mats[MaterialId.Slime] = new MaterialDef
@@ -766,6 +796,56 @@ namespace Alkahest.Sim
                 colorJitter = 14,
                 density = liquidDensity[MaterialId.Acid],
                 fluidity = 4,
+            };
+
+            // -----------------------------------------------------------------
+            // LA BRASA (playtest 39, contrato ENCARGO S 1b). VOCABULARIO DEL
+            // TALLER (regla 17 de CLAUDE.md): se ve SIEMPRE igual en toda
+            // partida -- es un fenómeno mundano como Fire/Smoke/Ash/Steam, no
+            // algo que el jugador bautiza. `patron=Liso` con `emitsGlow=true`
+            // (regla 17: Liso es lo único que puede llevar el vocabulario).
+            //
+            // DECISIÓN (contrato deja abierto "no cae -- o cae como polvo,
+            // decide S"): archetype=Powder, cae como la Ceniza en la que se
+            // convierte -- una brasa suelta es literalmente un trozo de
+            // combustible a medio consumir, del mismo orden físico que la
+            // ceniza, no una losa. `aux` en Powder está libre entero (ver
+            // SimStepper), así que su cuenta atrás de vida no colisiona con
+            // nada.
+            //
+            // Color rescoldo naranja-rojo APAGADO (nunca blanco, contrato
+            // 1b): mucho más oscuro/rojo que Fire (255,140,40) para que se
+            // lea como "lo que queda", no como llama nueva. `emitsGlow=true`
+            // le da el parpadeo determinista genérico de ComputeCellColor
+            // (mismo mecanismo que Fire/Vivium/Crystal, sin código nuevo en
+            // el renderer) y patron=Pulso (con patronFuerza/ritmoAnim bajos)
+            // añade la respiración lenta y SUTIL que pide el contrato --
+            // Pulso no dibuja textura de posición, solo hace latir el brillo
+            // (ver PatronMorfologico.Pulso), calibrado suave a propósito
+            // (fuerza 45 frente a los 90 típicos de Motas/Manchas) para que
+            // sea "sutil", no un faro.
+            mats[MaterialId.Brasa] = new MaterialDef
+            {
+                id = MaterialId.Brasa,
+                devName = "Brasa",
+                archetype = MaterialArchetype.Powder,
+                baseColor = new Color32(150, 58, 24, 255),
+                colorJitter = 18,
+                density = 110, // ligeramente menos densa que Ash (120): un residuo aún más suelto, a medio consumir.
+                fluidity = 1,
+                emitsGlow = true,
+                patron = PatronMorfologico.Pulso,
+                borde = BordeMorfologico.Neto,
+                patronFuerza = 45,
+                ritmoAnim = 14,
+                // gasLifetime reutilizado como SEMILLA de vida (unidades de
+                // SimStepper.BrasaLifeUnitTicks ticks cada una, ver
+                // SimStepper.ConvertirEnBrasa): 75 unidades * 4 ticks/unidad
+                // = 300 ticks = 10s a 30Hz, el CENTRO del rango 8-12s del
+                // contrato; ConvertirEnBrasa añade jitter ±15 unidades
+                // (60..90 -> 8..12s) con su propia sal, así que este valor es
+                // solo el punto medio documentado, no el rango real.
+                gasLifetime = 75,
             };
 
             // ===================================================================
@@ -2812,6 +2892,35 @@ namespace Alkahest.Sim
                         patronEscala = 2, patronFuerza = 90, ritmoAnim = 30, emision = 0,
                         semillaPatron = (byte)rng.Next(256),
                     };
+
+                    // -----------------------------------------------------------------
+                    // COMBUSTIÓN PERSISTENTE del Calcinado combustible (playtest 39,
+                    // contrato ENCARGO S 1a: "los calcinados combustibles de las bases
+                    // (los que Universe.EsCombustible marca) reciben valores"). Hasta
+                    // esta ronda `t.CombustibleBase[b]` solo alimentaba la lógica
+                    // ABSTRACTA de hornadas del Crisol (Universe.EsCombustible/
+                    // TempCombustibleRaw) -- el MaterialDef en sí no era `flammable`
+                    // y jamás ardía de verdad en el mundo. Ahora sí: mismo umbral
+                    // exacto (`t.TempCombustibleRawBase[b]`, ya en unidades raw) como
+                    // `ignitionTemp`, para que el ensayo del Crisol y la ignición real
+                    // de la sim SIEMPRE coincidan en el mismo número.
+                    if (t.CombustibleBase[b])
+                    {
+                        mats[id].flammable = true;
+                        mats[id].ignitionTemp = (short)t.TempCombustibleRawBase[b];
+                        mats[id].burnsInto = MaterialId.Fire; // camino legado: sin efecto mientras combustReserva>0.
+                        // Reserva en unidades LLENAS (Powder: aux libre entero, sin el
+                        // recorte a 7 bits de los líquidos) -- 90*8=720 ticks=24s: un
+                        // lecho sólido arde más lento que se enciende (el cesto del
+                        // Crisol, contrato 1b), pero no eterno.
+                        mats[id].combustReserva = 90;
+                        mats[id].combustPasoTicks = 8;
+                        mats[id].combustCalorRaw = 18;   // un poco más que el aceite: combustible sólido, brasa más caliente.
+                        mats[id].combustHumoPct = 15;    // más humo que un líquido: combustión sucia de sólido.
+                        mats[id].combustPropagacionPct = 20; // un lecho de combustible propaga más agresivo que un charco.
+                        mats[id].combustLenguaPct = 30;
+                        mats[id].combustResiduo = MaterialId.Brasa; // sólido combustible -> BRASA (contrato 1a/1b), nunca Empty.
+                    }
                 }
                 // Solucion: color del AGUA teñido 60% hacia el tono base (tech del tinte).
                 {

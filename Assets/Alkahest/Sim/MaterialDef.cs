@@ -117,11 +117,62 @@ namespace Alkahest.Sim
         public short condensesAt = short.MinValue;
         public byte condensesInto;
 
-        /// <summary>Vida media en ticks para gases/fuego. 0 = eterno (no expira).</summary>
+        /// <summary>Vida media en ticks para gases/fuego. 0 = eterno (no expira). Para MaterialId.Brasa (Powder) se reutiliza como semilla base de vida en UNIDADES de <c>SimStepper.BrasaLifeUnitTicks</c> ticks cada una -- ver SimStepper.ConvertirEnBrasa.</summary>
         public byte gasLifetime;
 
         /// <summary>Si es true, SimRenderer le añade un resplandor/tinte adicional (fuego, brasas, Vivium).</summary>
         public bool emitsGlow;
+
+        // =================================================================
+        // COMBUSTIÓN PERSISTENTE (playtest 39, contrato ENCARGO S 1a)
+        // =================================================================
+        // El fuego de siempre (MaterialArchetype.Fire) nacía y moría solo
+        // (aux = vida en ticks) sin importarle si tenía combustible debajo:
+        // era un actor sin memoria. Estos campos convierten al COMBUSTIBLE
+        // mismo (el aceite, un polvo Calcinado inflamable...) en la celda que
+        // arde de verdad -- Fire pasa a ser solo la LENGUA VISIBLE que
+        // escupe. Ver SimStepper.ProcessCombustion para el consumidor.
+        //
+        // combustReserva == 0 es EL GATE: significa "este material no
+        // participa del sistema nuevo" y conserva el camino LEGADO de
+        // siempre (ignitionTemp -> Transform directo a burnsInto, igual que
+        // en toda ronda anterior). Por diseño de esta ronda (contrato 1a:
+        // "el aceite y los calcinados combustibles de las bases... reciben
+        // valores") SOLO Oil y el/los Calcinado(s) que Universe.EsCombustible
+        // marca reciben combustReserva>0 -- Slime/Azoth-inflamables-por-seed
+        // y Nutrient/Vivium (también `flammable`) se QUEDAN a propósito en
+        // el camino legado esta ronda: decisión de alcance explícita, no un
+        // olvido (ver el informe de la ronda). Extenderlos es tan barato
+        // como rellenar estos mismos campos en una ronda futura.
+        /// <summary>
+        /// Unidades de reserva de combustible. 0 = material fuera del
+        /// sistema de combustión persistente (legado). Para arquetipo
+        /// Liquid, CellGrid.aux solo tiene 7 bits libres para esto (el bit 0
+        /// ya lo usa la memoria de flujo horizontal, ver
+        /// SimStepper.ProcessLiquid) -- CLAMP a 127 para cualquier líquido
+        /// combustible, documentado donde se lee/escribe
+        /// (SimStepper.GetCombustReserva/SetCombustReserva). Para Powder,
+        /// aux está libre entero: 0..255.
+        /// </summary>
+        public byte combustReserva = 0;
+
+        /// <summary>Ticks entre cada unidad de reserva consumida -- SIEMPRE potencia de 2 (el muestreo usa una máscara de bits barata, no módulo: ver SimStepper.ProcessCombustion). Cuanto más alto, más lento arde para la misma reserva.</summary>
+        public byte combustPasoTicks = 8;
+
+        /// <summary>Calor (raw) inyectado a la propia celda y a los 4 vecinos ortogonales (vía SimStepper.InjectHeat) en cada paso de combustión muestreado -- más suave que la lengua de Fire, que fija su propia celda a 255.</summary>
+        public byte combustCalorRaw = 15;
+
+        /// <summary>Probabilidad % por paso de combustión de soltar un Smoke en un vecino vacío.</summary>
+        public byte combustHumoPct = 12;
+
+        /// <summary>Probabilidad % por paso de combustión de intentar encender cada vecino inflamable (agresividad de propagación; aparte del contacto ya-caliente, que sigue siendo instantáneo).</summary>
+        public byte combustPropagacionPct = 15;
+
+        /// <summary>Probabilidad % por paso de combustión de escupir una lengua de Fire visible en la celda vacía justo encima.</summary>
+        public byte combustLenguaPct = 35;
+
+        /// <summary>Material que queda cuando la reserva se agota. Líquidos: normalmente Empty ("arde sin dejar nada", el humo ya emitido durante la quema es todo el rastro). Sólidos/polvos: MaterialId.Brasa.</summary>
+        public byte combustResiduo = MaterialId.Empty;
 
         // =================================================================
         // FIRMA VISUAL (playtest 12) — la identidad de una sustancia

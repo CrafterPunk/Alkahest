@@ -630,6 +630,12 @@ namespace Alkahest.Sim
             // visible -- ahora son cosas distintas y barrer de más cuesta
             // proporcional al MUNDO en vez de a la PANTALLA, justo lo que este
             // encargo pide evitar.
+            // (playtest 39, contrato ENCARGO S 1d) La pátina se actualiza SIEMPRE
+            // (independiente de la vista: el taller recuerda incendios que
+            // ocurrieron fuera de cámara) -- por eso vive fuera del recorte de
+            // ComputeVisibleChunkRange, con su propio acumulador de franjas.
+            ActualizarPatinaFranja();
+
             ComputeVisibleChunkRange(out int cx0, out int cy0, out int cx1, out int cy1);
 
             bool anyDrawn = false;
@@ -702,6 +708,115 @@ namespace Alkahest.Sim
             {
                 _texture.Apply(false);
             }
+        }
+
+        // =================================================================
+        // PÁTINA — LA MEMORIA SUPERFICIAL (playtest 39, contrato ENCARGO S 1d)
+        // =================================================================
+        // La escribe y la lee SOLO este archivo (JAMÁS SimStepper, ver el
+        // docblock de CellGrid.patina): cero coste en el tick de sim, y en
+        // multi cada cliente la reconstruye sola de lo que ve replicado.
+        // Sondeo por ACUMULADOR DE FRANJAS (contrato: "no todo el mundo"):
+        // unas pocas filas por frame, TODO el ancho del mundo (no se recorta
+        // a cámara -- el taller recuerda incendios que ocurrieron fuera de
+        // vista), así que una vuelta completa tarda H/PatinaRowsPerFrame
+        // frames (288/12 = 24 frames, bajo medio segundo a 60fps).
+        private int _patinaRow;
+        private int _patinaDecayCounter;
+        private const int PatinaRowsPerFrame = 12;
+        private const byte PatinaMojadoTecho = 90;   // techo de "húmedo": se seca rápido.
+        private const byte PatinaTizneTecho = 220;   // techo de "tizne": casi permanente.
+        private const int PatinaTizneIncremento = 14;     // junto a Fire/Brasa.
+        private const int PatinaTizneHumoIncremento = 6;  // bajo una bóveda con Smoke pegado -- más lento que el contacto directo con la llama.
+        private const int PatinaMojadoIncremento = 10;     // junto a un líquido.
+        private const int PatinaDecayMojado = 2;           // por franja procesada, sin contacto: "se seca solo".
+        private const int PatinaDecayTizneCadaFranjas = 6; // el tizne decae 1 unidad cada N pasadas de ESA fila (casi permanente, no "se seca").
+
+        private void ActualizarPatinaFranja()
+        {
+            if (_grid == null || _universe == null) return;
+            _patinaDecayCounter++;
+            bool decayTizneEstaVuelta = (_patinaDecayCounter % PatinaDecayTizneCadaFranjas) == 0;
+
+            for (int r = 0; r < PatinaRowsPerFrame; r++)
+            {
+                int y = _patinaRow;
+                _patinaRow++;
+                if (_patinaRow >= CellGrid.H) _patinaRow = 0;
+
+                int rowBase = y * CellGrid.W;
+                for (int x = 0; x < CellGrid.W; x++)
+                {
+                    int idx = rowBase + x;
+                    byte matId = _grid.mat[idx];
+                    // La pátina solo vive en superficies SÓLIDAS (piedra, obra
+                    // del taller) -- es lo que el contrato describe en los tres
+                    // casos (tizne junto a fuego, mojado junto a sólido, bóveda
+                    // tiznada), nunca la propia sustancia líquida/gas/fuego.
+                    // (integración pt39) Y si la celda DEJÓ de ser sólida (el
+                    // cincel talló, la mudanza se llevó su mampostería), la
+                    // mancha muere aquí mismo: así la piedra que se re-talle o
+                    // re-pinte después nace LIMPIA, sin manchas fantasma, y
+                    // Cincel/Mudanza no necesitan saber que la pátina existe
+                    // (este barrido por franjas es el único punto de verdad).
+                    if (_universe.Get(matId).archetype != MaterialArchetype.StaticSolid)
+                    {
+                        if (_grid.patina[idx] != 0) _grid.patina[idx] = 0;
+                        continue;
+                    }
+
+                    bool juntoATizne = TieneVecinoOrtogonal(x, y, MaterialId.Fire) || TieneVecinoOrtogonal(x, y, MaterialId.Brasa);
+                    bool humoEncima = !juntoATizne && y > 0 && _grid.mat[idx - CellGrid.W] == MaterialId.Smoke;
+                    bool juntoALiquido = !juntoATizne && !humoEncima && TieneVecinoLiquido(x, y);
+
+                    byte pat = _grid.patina[idx];
+                    if (juntoATizne)
+                    {
+                        int v = pat + PatinaTizneIncremento;
+                        _grid.patina[idx] = (byte)(v > PatinaTizneTecho ? PatinaTizneTecho : v);
+                    }
+                    else if (humoEncima)
+                    {
+                        int v = pat + PatinaTizneHumoIncremento;
+                        _grid.patina[idx] = (byte)(v > PatinaTizneTecho ? PatinaTizneTecho : v);
+                    }
+                    else if (juntoALiquido)
+                    {
+                        int v = pat + PatinaMojadoIncremento;
+                        _grid.patina[idx] = (byte)(v > PatinaMojadoTecho ? PatinaMojadoTecho : v);
+                    }
+                    else if (pat > 0)
+                    {
+                        if (pat <= PatinaMojadoTecho)
+                        {
+                            int v = pat - PatinaDecayMojado;
+                            _grid.patina[idx] = (byte)(v < 0 ? 0 : v);
+                        }
+                        else if (decayTizneEstaVuelta)
+                        {
+                            _grid.patina[idx] = (byte)(pat - 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        private bool TieneVecinoOrtogonal(int x, int y, byte materialId)
+        {
+            if (x > 0 && _grid.mat[CellGrid.Idx(x - 1, y)] == materialId) return true;
+            if (x < CellGrid.W - 1 && _grid.mat[CellGrid.Idx(x + 1, y)] == materialId) return true;
+            if (y > 0 && _grid.mat[CellGrid.Idx(x, y - 1)] == materialId) return true;
+            if (y < CellGrid.H - 1 && _grid.mat[CellGrid.Idx(x, y + 1)] == materialId) return true;
+            return false;
+        }
+
+        private bool TieneVecinoLiquido(int x, int y)
+        {
+            if (x > 0 && _universe.Get(_grid.mat[CellGrid.Idx(x - 1, y)]).archetype == MaterialArchetype.Liquid) return true;
+            if (x < CellGrid.W - 1 && _universe.Get(_grid.mat[CellGrid.Idx(x + 1, y)]).archetype == MaterialArchetype.Liquid) return true;
+            if (y > 0 && _universe.Get(_grid.mat[CellGrid.Idx(x, y - 1)]).archetype == MaterialArchetype.Liquid) return true;
+            if (y < CellGrid.H - 1 && _universe.Get(_grid.mat[CellGrid.Idx(x, y + 1)]).archetype == MaterialArchetype.Liquid) return true;
+            return false;
         }
 
         private void RenderChunk(int cx, int cy, uint tick, int chunkIndex)
@@ -1056,6 +1171,33 @@ namespace Alkahest.Sim
                 r = LerpByte(r, 255, t01);
                 g = LerpByte(g, 214, t01);
                 b = LerpByte(b, 140, t01);
+            }
+
+            // PÁTINA (playtest 39, contrato ENCARGO S 1d): última capa, encima
+            // de todo lo demás -- es literalmente SUCIEDAD sobre la
+            // superficie. Ver ActualizarPatinaFranja para quién la escribe;
+            // aquí solo se LEE y se traduce a color. Un solo canal para dos
+            // lecturas (decisión de S, ver el docblock de CellGrid.patina):
+            // valores bajos = húmedo (oscurece un poco, tira a frío), valores
+            // altos = tizne (oscurece mucho, tira a carbón).
+            byte pat = _grid.patina[idx];
+            if (pat > 0)
+            {
+                if (pat <= PatinaMojadoTecho)
+                {
+                    float t01 = (pat / (float)PatinaMojadoTecho) * 0.7f;
+                    r = LerpByte(r, ClampByte(r - 35), t01);
+                    g = LerpByte(g, ClampByte(g - 25), t01);
+                    b = LerpByte(b, ClampByte(b + 10), t01);
+                }
+                else
+                {
+                    float t01 = (pat - PatinaMojadoTecho) / (float)(PatinaTizneTecho - PatinaMojadoTecho);
+                    if (t01 > 1f) t01 = 1f;
+                    r = LerpByte(r, 18, t01 * 0.75f);
+                    g = LerpByte(g, 16, t01 * 0.75f);
+                    b = LerpByte(b, 15, t01 * 0.75f);
+                }
             }
 
             return new Color32(r, g, b, baseColor.a);

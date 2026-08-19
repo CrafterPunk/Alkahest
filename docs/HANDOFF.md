@@ -2697,3 +2697,75 @@ curadas (bautizo ganado con el Maestro exigiéndolo, fracaso forense ASCENDIDO A
 desbloqueos como preguntas literales, currículo de 4+1 ideas, final abierto con el anzuelo del
 vasito del alambique + contador de autonomía como métrica reina). Orden acordado a validar por
 Cesar: motor → semilla → playtest.
+
+---
+
+## Playtest 39 → LA RONDA DE MOTOR (el fuego como proceso + la capa de partículas)
+
+El GO de Cesar al paquete del informe (partículas + pátina + gases + reacciones dirigidas) MÁS
+la extensión acordada: combustión persistente parametrizada y brasas. Sin cuerpos rígidos
+(decidido). Contrato congelado en docs/CONTRATO_MOTOR.md, dos encargos Sonnet en paralelo con
+archivos disjuntos, integrados y auditados por Fable.
+
+**COMBUSTIÓN PERSISTENTE (encargo S)**: el combustible ES la celda que arde. MaterialDef gana 7
+parámetros (reserva/ritmo/calor/humo/propagación/lengua/residuo); el estado "ardiendo" vive en
+`aux` (Liquid: 7 bits, preserva el bit de flujo; Powder: byte entero). El Fire de siempre pasa a
+ser LA LENGUA VISIBLE que escupe la celda ardiendo, no el consumidor. Ignición (temp o contacto)
+ahora PRENDE la celda en vez de transformarla; el agua sigue mandando (mismos criterios de
+extinción, con chorro de Steam). Aceite = patrón oro: un charco arde ~32s/celda consumiéndose
+desde el borde (~90-100s la piscina entera, verificado con diagnóstico confinado tick a tick).
+Calcinados combustibles de la seed conectados por primera vez a la ignición REAL (antes solo el
+Crisol los conocía como abstracción). Guardas críticas: ApplyPhase/TryIgnite no re-maximizan la
+reserva de una celda ya ardiendo (fuego eterno), y regla 55b: la celda ardiendo se mantiene
+despierta ella misma.
+
+**BRASA (MaterialId 58, Count 59)**: la vejez del fuego. Sólido-polvo rescoldo (ámbar apagado
+con pulso, jamás blanco), vive 8-12s (jitter sal 521), emite calor modesto, REENCIENDE vecinos
+inflamables al 8% por paso (sal 523), agua → Ash + Steam al instante, decae a Ash. Residuo de
+los combustibles sólidos; el aceite muere en nada (líquido). El brasero del Crisol ahora es
+HONESTO: sus celdas de combustible arden de verdad y dejan brasas reales en el cesto (la lógica
+de tiers sigue siendo la autoridad química). Evento nuevo `Ember` (al final del enum, sin
+renumerar).
+
+**GASES CON CORRIENTES**: deriva térmica determinista (el lateral se sesga al vecino más
+caliente) + BOLSAS bajo techo (60% de presión lateral vs 35% a cielo abierto, prueba el otro
+lado si la bolsa cierra). La "vida extra embolsado" del contrato se integró como MEDIO
+DECAIMIENTO bajo techo directo — la versión original (+3 por movimiento) era matemáticamente
+inmortal y motivó la regla 55a.
+
+**PÁTINA**: `CellGrid.patina` (byte, un canal con doble lectura: mojado ≤90 que se seca, tizne
+hasta 220 casi permanente), escrita y leída SOLO por SimRenderer (barrido de 12 filas/frame):
+tizne junto a Fire/Brasa, tiznado lento bajo humo pegado a bóveda, mojado junto a líquidos.
+Cero coste en el tick, determinismo intacto, y en multi cada cliente la genera de lo que VE —
+invitados incluidos, sin un byte de tráfico. La pátina de una celda que DEJA de ser sólida se
+limpia sola en el barrido (cincel/mudanza no necesitan saber que existe).
+
+**REACCIONES DIRIGIDAS**: `SimStepper.RegistrarZonaInteres` + máscara por chunk; MaybeReact 1/2
+en las cubetas de todas las estaciones (registradas por SimLevelBuilder.RegistrarZonasInteres,
+invocado desde Crisol.Init), 1/8 en el resto del mundo.
+
+**CAPA DE PARTÍCULAS (encargo F, Game/ParticulasFx.cs nuevo)**: decorativas no-sim (Random de
+Unity, client-local en multi, cero tráfico). Ring de 4096 structs preasignados, overlay
+Texture2D 768x288 alineado con la textura del mundo (sorting -4), doble lista de téxeles sucios
+con swap por referencia, Apply ≤1/frame y solo si hubo cambios. Emisión por OBSERVACIÓN
+(touchedTick ventana de 10 ticks + mat/temp, franja de 6 filas/frame alrededor de la cámara,
+presupuesto 64 nacimientos/frame): salpicaduras de líquidos al aterrizar, chispas del Fire (su
+misma fórmula de color joven/viejo), motas del aire caliente del crisol, nubecitas de polvo,
+vaho del Steam. Integración Fable: enganche adicional al ring de eventos NO destructivo
+(`LeerEventosDesde`, cursor propio, solo anfitrión/un jugador) para ráfagas episódicas — Ignite
+(2 chispas amarillas), Boil (voluta), Ember (3 ascuas, "el último suspiro" que marca rescoldo
+reencendible) — y ascuas tenues de las celdas Brasa vivas (4%).
+
+**EL BANCO (con el 6º escenario INCENDIO SOSTENIDO nuevo)**: el sandbox hoy corre ~3,5x más
+lento que la máquina que midió el informe (verificado con git stash: el baseline SIN cambios da
+7,7/20,9/9,5/7,3/15,2 ms en esta misma sesión). La comparación honesta es relativa: el delta de
+TODA la ronda es +2-8% por escenario. Tabla final integrada (media/pico ms): cascada 7,97/11,5 ·
+diluvio 21,97/45,6 · incendio 9,69/15,9 · arena 7,64/12,9 · mixto 15,66/21,9 · incendio
+sostenido 7,28/10,6 — headroom 1,5-4,8x hasta en este sandbox lento. En el PC de juego el margen
+real es mucho mayor.
+
+**Sales nuevas**: 503 (paso de combustión), 509 (extinción), 521 (vida brasa), 523 (reencender),
+547 (gas deambular/bolsa). **Deudas**: `Crisol.RefrescarLlamasBrasero` parcialmente redundante
+con las lenguas reales (recortable); Freeze/Crystallize/Grow/Dissolve aún sin partícula propia;
+el invitado no recibe eventos (sin stepper) — sus ráfagas episódicas salen solo de la
+observación continua.

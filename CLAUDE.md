@@ -441,6 +441,18 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     experimento que salió con datos; la ceniza es combustible malo. Toda mecánica destructiva
     nueva se diseña respondiendo: ¿qué evidencia queda y qué enseña?
 
+55. **TODO PROCESO VIVO DEBE DEMOSTRARSE MORTAL Y DESPIERTO (playtest 39, la ronda de motor)**:
+    dos caras de la misma auditoría, obligatoria para cualquier mecánica con recursos por tick.
+    (a) MORTAL: si una celda GANA recurso por hacer algo frecuente (moverse, tocar, reaccionar),
+    calcula el balance esperado ganancia−decaimiento ANTES de integrar — el primer diseño de
+    "bolsas de gas" daba +1,8/tick de vida contra −1 de descuento: humo matemáticamente INMORTAL
+    bajo la bóveda sellada del taller (y el banco de 300 ticks era demasiado corto para verlo).
+    La vida extra se expresa como decaimiento más lento acotado, jamás como ganancia por evento.
+    (b) DESPIERTO: un proceso que consume recurso en el tiempo (combustión, brasa) pero que en la
+    mayoría de sus pasos no mueve ni transforma nada debe llamar a `WakeChunk` sobre sí mismo —
+    si depende de que OTROS despierten su chunk, una racha del RNG lo congela en silencio a
+    mitad de proceso (el charco a medio arder como estatua, la brasa eterna).
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa

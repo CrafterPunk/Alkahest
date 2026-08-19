@@ -11,6 +11,17 @@ namespace Alkahest.Sim
         Dissolve = 5,     // material disuelto por Acid
         /// <summary>(playtest 18) Una LEY acaba de ocurrir. `leyIndice` dice cuál. Es el único evento que identifica una ley.</summary>
         Ley = 6,
+        /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1f) Una celda de combustible
+        /// persistente se agotó y quedó en MaterialId.Brasa, o una Brasa
+        /// reencendió un vecino. Tipo NUEVO AL FINAL del enum (nunca
+        /// renumerar, CLAUDE.md regla del ring de eventos): pensado para que
+        /// la futura capa de partículas (encargo F, integración de Fable)
+        /// spawee ascuas -- ningún consumidor actual lo conoce todavía
+        /// (SubstanceKnowledge/DirectorDeAudio caen a su `default` silencioso
+        /// sin romperse, verificado antes de añadir este valor).
+        /// </summary>
+        Ember = 7,
     }
 
     /// <summary>

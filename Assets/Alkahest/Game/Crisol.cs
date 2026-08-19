@@ -345,6 +345,17 @@ namespace Alkahest.Game
             BuildVisual();
             _targetRaw = 0; // REPOSO: el crisol no empuja nada hasta que enciendas una hornada.
 
+            // (playtest 39, contrato ENCARGO S 1e) REACCIONES DIRIGIDAS: se
+            // registran aquí, no en SimLevelBuilder (que solo talla CellGrid
+            // y no tiene SimStepper), porque el Crisol es el único archivo de
+            // este encargo con acceso a AMBOS a la vez en tiempo de
+            // ejecución. Ver el docblock de SimLevelBuilder.RegistrarZonasInteres
+            // para el porqué completo y la deuda de integración anotada
+            // (el sitio "natural" es el bootstrap del nivel, que no es
+            // archivo de este encargo). Solo hace falta UNA vez -- el Crisol
+            // es una instancia única del taller.
+            if (_sim.Stepper != null) SimLevelBuilder.RegistrarZonasInteres(_sim.Stepper);
+
             MachineFocus.Registrar(this);
             // (playtest 29) El registro anticincel lo hace la INSTANCIA, no
             // TallarEnPlano -- ver el docblock de _handleObra y el bloque
@@ -902,15 +913,39 @@ namespace Alkahest.Game
             Rotular(null, UiStyles.Aviso);
         }
 
+        /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1b) LA TEATRO SINCRONIZADO: hasta
+        /// esta ronda, "gastar" una celda de combustible era borrarla al
+        /// instante (SetCell a Empty) -- el cesto nunca se veía arder de
+        /// verdad, solo la llama pintada aparte por RefrescarLlamasBrasero.
+        /// Ahora se ENCIENDE de verdad (Sim/SimStepper.EncenderCombustionPersistente):
+        /// consume su propia reserva a su propio ritmo y deja BRASA real
+        /// cuando se agota, en vez de desaparecer sin rastro. LA AUTORIDAD
+        /// del resultado químico SIGUE SIENDO DecidirHornada -- esto no
+        /// cambia qué transforma la hornada ni cuándo cierra (ese reloj es
+        /// completamente independiente de cuánto tarde la celda en
+        /// consumirse de verdad), solo lo que se VE en el cesto mientras
+        /// tanto. Si el material del cesto no tiene parámetros de combustión
+        /// persistente (Universe.EsCombustible no lo marcó esta seed, o es
+        /// un combustible legado), cae al borrado instantáneo de siempre.
+        /// </summary>
         private void ConsumirUnaCeldaDeCombustible()
         {
             var grid = _sim.Grid;
-            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+            var stepper = _sim.Stepper;
+            uint tick = stepper != null ? stepper.Tick : 0u;
             for (int y = _braY0; y <= _braY1; y++)
             {
                 for (int x = _braX0; x <= _braX1; x++)
                 {
                     if (grid.GetMat(x, y) != _fuelMat) continue;
+                    // Ya ardiendo de una hornada anterior (la duración de
+                    // combustión real puede superar los HornadaSegundos de la
+                    // abstracción): busca otra celda en vez de re-encenderla
+                    // o borrarla a medio consumir.
+                    if (stepper != null && stepper.EstaCombustionActiva(x, y)) continue;
+                    if (stepper != null && stepper.EncenderCombustionPersistente(x, y)) return;
+
                     grid.SetCell(x, y, MaterialId.Empty);
                     grid.WakeChunk(x, y, tick);
                     return;

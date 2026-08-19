@@ -149,6 +149,26 @@ namespace Alkahest.Sim
         /// <summary>Doble búfer para las reglas morfológicas que leen vecinos (reacción-difusión). Solo lo usa SimStepper.</summary>
         public readonly byte[] morphScratch;
 
+        // =================================================================
+        // PÁTINA — LA MEMORIA SUPERFICIAL (playtest 39, contrato ENCARGO S 1d)
+        // =================================================================
+        // Un único byte 0..255 por celda, escrito y leído EXCLUSIVAMENTE por
+        // Sim/SimRenderer.cs (JAMÁS por SimStepper: el determinismo de la sim
+        // no depende de este array en absoluto, y en multi cada cliente lo
+        // reconstruye solo de lo que VE en su grilla replicada -- cero bytes
+        // de tráfico de red). 0 = superficie limpia.
+        //
+        // UN SOLO CANAL PARA DOS LECTURAS (decisión de S, el contrato deja
+        // los finos abiertos): valores bajos (hasta ~90) se leen como
+        // HUMEDAD (un sólido que estuvo junto a líquido, oscurecido y con un
+        // tinte frío) y decaen rápido -- "se seca solo"; valores altos
+        // (hasta ~220) se leen como TIZNE (un sólido que estuvo junto a
+        // Fuego/Brasa ardiendo, o bajo una bóveda con Humo pasando) y decaen
+        // muchísimo más despacio -- el taller RECUERDA sus incendios. Ver
+        // SimRenderer.ActualizarPatinaFranja/ComputeCellColor para el
+        // acumulador y la traducción a color.
+        public readonly byte[] patina;
+
         public CellGrid()
         {
             mat = new byte[W * H];
@@ -156,6 +176,7 @@ namespace Alkahest.Sim
             aux = new byte[W * H];
             morph = new byte[W * H];
             morphScratch = new byte[W * H];
+            patina = new byte[W * H];
             ambient = new byte[W * H];
             for (int i = 0; i < ambient.Length; i++) ambient[i] = AmbientRaw;
             touchedTick = new uint[W * H];
@@ -270,6 +291,22 @@ namespace Alkahest.Sim
             int ci = ChunkIndex(cx, cy);
             chunkSleepTimer[ci] = 0;
             chunkTouchedTick[ci] = tick;
+        }
+
+        /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1d) Limpia la pátina de una celda
+        /// (a 0). DEUDA DE INTEGRACIÓN PARA FABLE: el contrato pide que "el
+        /// cincel y la mudanza LIMPIEN pátina donde tallan/restauran" para
+        /// que no queden manchas flotando en aire nuevo -- Game/Cincel.cs y
+        /// Game/Mudanza.cs NO son archivos de este encargo (propiedad
+        /// disjunta, ver CLAUDE.md regla 37), así que esta ronda solo expone
+        /// el helper; falta la llamada desde esos dos archivos en la
+        /// integración.
+        /// </summary>
+        public void LimpiarPatina(int x, int y)
+        {
+            if (!InBounds(x, y)) return;
+            patina[Idx(x, y)] = 0;
         }
     }
 }

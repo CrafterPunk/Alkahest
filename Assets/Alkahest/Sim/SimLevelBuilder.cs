@@ -2016,6 +2016,54 @@ namespace Alkahest.Sim
         }
 
         /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1e, REACCIONES DIRIGIDAS) Registra
+        /// como "zona de interés" (MaybeReact muestrea 1/2 en vez de 1/8, ver
+        /// SimStepper.RegistrarZonaInteres) las cubetas de TODAS las máquinas
+        /// del cuarto -- donde el jugador mira mientras algo reacciona. Toque
+        /// PURAMENTE ADITIVO (contrato: "solo llamadas aditivas de registro
+        /// de zonas") -- no cambia ni una celda del plano, solo llama a la
+        /// API nueva de SimStepper con las mismas constantes de geometría que
+        /// ya usa BuildCuartoIntimo para tallar cada estación.
+        ///
+        /// Los rectángulos son GENEROSOS a propósito (huella de la máquina +
+        /// margen hacia arriba para el vapor/humo que sube de su cubeta): una
+        /// zona de interés que se pasa un poco no rompe nada (sigue siendo
+        /// "más reacciones", nunca menos), así que no hace falta la
+        /// aritmética exacta de cada TallarEnPlano (Prensa/ColumnaEnsayo/
+        /// BancoChispa/EnsayoMaestro/Alambique NO son archivos de este
+        /// encargo -- propiedad disjunta, CLAUDE.md regla 37/41).
+        ///
+        /// NO SE LLAMA DESDE AQUÍ MISMO: SimLevelBuilder no tiene una
+        /// referencia a SimStepper (solo talla CellGrid). El único archivo de
+        /// este encargo con acceso simultáneo a ambos en tiempo de ejecución
+        /// es Game/Crisol.cs (recibe AlkahestSim en Init) -- ver la llamada
+        /// allí. Deuda de integración anotada en el informe de la ronda: el
+        /// sitio "natural" para esta llamada es el bootstrap del nivel
+        /// (Game/AlkahestGameBootstrap.cs), que no es archivo de este
+        /// encargo.
+        /// </summary>
+        public static void RegistrarZonasInteres(SimStepper stepper)
+        {
+            if (stepper == null) return;
+
+            // Estaciones de la LÍNEA DEL TALLER (huella exterior documentada
+            // junto a cada constante de ancla, + margen vertical hacia la
+            // boca/vapor de cada una).
+            stepper.RegistrarZonaInteres(88, BaseYDeEstacion(CrisolX) - 4, 125, BaseYDeEstacion(CrisolX) + 45); // Crisol: cámara+boca+brasero (huella 88..124) + hogar/vapor.
+            stepper.RegistrarZonaInteres(143, BaseYDeEstacion(PrensaX) - 2, 174, BaseYDeEstacion(PrensaX) + 25); // Prensa (huella 143..173).
+            stepper.RegistrarZonaInteres(258, BaseYDeEstacion(ColumnaX0) - 2, 281, BaseYDeEstacion(ColumnaX0) + 40); // Columna de Ensayo (huella exterior 258..280) + tanque.
+            stepper.RegistrarZonaInteres(289, BaseYDeEstacion(BancoChispaX) - 2, 316, BaseYDeEstacion(BancoChispaX) + 25); // Banco de Chispa (huella 289..315).
+            stepper.RegistrarZonaInteres(EnsayoPlintoX - 20, BaseYDeEstacion(EnsayoPlintoX) - 2, EnsayoPlintoX + 20, BaseYDeEstacion(EnsayoPlintoX) + 30); // Ensayo Maestro (sin huella exacta documentada aquí: margen generoso alrededor del ancla).
+            stepper.RegistrarZonaInteres(AlambiqueX - 20, AlambiqueBaseY - 4, AlambiqueX + 20, AlambiqueBaseY + 40); // Alambique (comparte X con el Crisol, cota propia).
+
+            // Las cubetas/pilas de fuentes -- rectángulos EXACTOS ya conocidos
+            // por este archivo (interior real, no una estimación).
+            stepper.RegistrarZonaInteres(BasinInteriorX0, BasinInteriorY0, BasinInteriorX1 + 1, BasinInteriorY1 + 1); // pila caliente.
+            stepper.RegistrarZonaInteres(ChillTrayInteriorX0, ChillTrayInteriorY0, ChillTrayInteriorX1 + 1, ChillTrayY0 + ChillTrayHeight); // bandeja fría.
+            stepper.RegistrarZonaInteres(PilaAguaX0, PilaBaseY, PilaLimoX0 + 6, PilaBaseY + 12); // las dos pilas del cuarto íntimo (agua+limo, adyacentes).
+        }
+
+        /// <summary>
         /// (playtest 27) LA ESTACIÓN DE FUENTES entera: las dos pilas grandes
         /// (14x9 exterior, interior 10x7 = 70 celdas cada una) y el MACHÓN DE
         /// PIEDRA entre ellas que sostiene el caño de limo más alto y a otra

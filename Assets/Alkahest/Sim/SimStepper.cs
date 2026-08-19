@@ -51,6 +51,24 @@ namespace Alkahest.Sim
         public const int EventBufferSize = 256;
         private readonly SimNotableEvent[] _events = new SimNotableEvent[EventBufferSize];
         private int _eventHead;
+        // (playtest 39, contrato ENCARGO S 1f) Índice de escritura MONOTÓNICO
+        // (nunca se enmascara/reinicia): en paralelo al `_eventHead` de
+        // siempre (que SÍ se enmascara y siguen usando, SIN cambios, todos
+        // los lectores existentes -- ConsumeEvents/ConsumirEventosSim). Solo
+        // lo consume LeerEventosDesde, más abajo: le permite a un cursor
+        // propio detectar cuántos eventos han pasado de verdad desde la
+        // última lectura, no solo "adónde apunta la cabeza ahora".
+        private ulong _eventWriteIndex;
+
+        // ---------------------------------------------------------------------------------
+        // (playtest 39, contrato ENCARGO S 1e) REACCIONES DIRIGIDAS. Máscara
+        // por chunk: true = zona de interés (las cubetas de las máquinas,
+        // donde el jugador MIRA) -- MaybeReact muestrea 1/2 ahí y 1/8 en el
+        // resto del mundo. Preasignada una vez, cero allocs; la rellena
+        // RegistrarZonaInteres (llamado al construir el nivel, NO en el hot
+        // path pese a vivir en esta clase).
+        // ---------------------------------------------------------------------------------
+        private readonly bool[] _zonaInteresChunk = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
 
         // ---------------------------------------------------------------------------------
         // (playtest 15 -- mundo a 768x288, 6x) Búfer reutilizado tick a tick por MorphTick
@@ -92,6 +110,22 @@ namespace Alkahest.Sim
         // ---------------------------------------------------------------------------------
         private const uint SalDisolucion = 237;
         private const uint SalLimoSeparacion = 239;
+
+        // ---------------------------------------------------------------------------------
+        // COMBUSTIÓN PERSISTENTE / BRASA / GASES CON CORRIENTES (playtest 39,
+        // contrato ENCARGO S). Sales NUEVAS -- verificadas por grep contra
+        // TODAS las constantes ya usadas en Assets/ antes de fijarlas (1, 2,
+        // 5, 9, 13, 17, 42, 77, 88, 91, 205, 237, 239, 241, 401, 0x7A11, y los
+        // desplazamientos 201/209/213/221 + semillaPatron [byte, hasta 255]
+        // de MorphTick más abajo en este mismo archivo) -- se eligen por
+        // encima de 500 para no compartir ni rango con los desplazamientos
+        // dinámicos de semillaPatron.
+        // ---------------------------------------------------------------------------------
+        private const uint SalCombustionPaso = 503;      // ProcessCombustion: calor/lengua/humo/propagación de una celda ardiendo.
+        private const uint SalCombustionExtincion = 509;  // ProcessCombustion/ProcessBrasa: a qué vecino vacío escapa el chorro de Steam al apagarse con agua.
+        private const uint SalBrasaVida = 521;             // ConvertirEnBrasa: jitter de vida (8-12s del contrato).
+        private const uint SalBrasaReencender = 523;       // ProcessBrasa: probabilidad baja de reencender un vecino inflamable.
+        private const uint SalGasDeambular = 547;          // ProcessGas: lateral bajo cielo abierto / bolsa bajo techo (sustituye a la sal 5, que se queda solo para la subida diagonal -- ver ProcessGas).
         /// <summary>Temp raw a partir de la cual el Limo se separa (contrato 4.3, valor EXACTO del contrato). Nota de honestidad para quien audite esto: el propio contrato describe este umbral como "alcanzable con el rescoldo tier0" (~116°C), pero 150 &gt; Universe.CrisolTier0Raw (118) -- con solo el rescoldo NUNCA se alcanza; hace falta combustible (tier1). Implementado tal cual el número congelado; discrepancia anotada como pregunta al director, no corregida aquí.</summary>
         // (fix integración) 112 (= 104 °C), no los 150 del contrato original: el
         // contrato decía "150 (60°C)" -- aritmética rota, raw 150 son 180 °C, por
@@ -132,6 +166,72 @@ namespace Alkahest.Sim
             e.tick = _tick;
             e.leyIndice = leyIndice;
             _eventHead = (_eventHead + 1) & (EventBufferSize - 1);
+            _eventWriteIndex++; // (contrato 1f) ver el docblock del campo -- puramente aditivo, no cambia EventHead ni el comportamiento para nadie que ya leyera _events/EventHead.
+        }
+
+        /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1f) Lector NO DESTRUCTIVO
+        /// multi-cursor del ring de eventos, alternativa a repetir a mano el
+        /// bucle `while (i != head...)` que ya duplican
+        /// Game/SubstanceKnowledge.ConsumeEvents y
+        /// Audio/DirectorDeAudio.ConsumirEventosSim -- SIN tocar la firma ni
+        /// la semántica de ninguno de los dos (siguen leyendo `Events`/
+        /// `EventHead` exactamente igual que siempre). Cada consumidor lleva
+        /// su PROPIO `cursor` (arrancar en 0) y esta llamada solo avanza esa
+        /// copia -- cuantos lectores hagan falta conviven sin coordinarse
+        /// entre sí (incluida la futura capa de partículas de Fable).
+        /// </summary>
+        /// <param name="cursor">Cursor propio del llamante; se actualiza in-place.</param>
+        /// <param name="destino">Buffer del llamante donde copiar los eventos nuevos -- cero allocs aquí dentro.</param>
+        /// <returns>Cuántos eventos se copiaron (0..min(destino.Length, EventBufferSize)).</returns>
+        public int LeerEventosDesde(ref ulong cursor, SimNotableEvent[] destino)
+        {
+            ulong disponibles = _eventWriteIndex - cursor;
+            if (disponibles > (ulong)EventBufferSize)
+            {
+                // El ring dio la vuelta por encima del cursor mientras no leía:
+                // los eventos más viejos ya se sobrescribieron -- se pierden en
+                // silencio, EXACTAMENTE la misma asunción que ya hacen
+                // ConsumeEvents/ConsumirEventosSim con su `steps < EventBufferSize`.
+                // Reengancha al principio de lo que SÍ sigue vivo en el buffer.
+                cursor = _eventWriteIndex - (ulong)EventBufferSize;
+                disponibles = (ulong)EventBufferSize;
+            }
+            int n = (int)disponibles;
+            if (n > destino.Length) n = destino.Length;
+            int mask = EventBufferSize - 1;
+            for (int k = 0; k < n; k++)
+            {
+                int idx = (int)((cursor + (ulong)k) & (ulong)mask);
+                destino[k] = _events[idx];
+            }
+            cursor += (ulong)n;
+            return n;
+        }
+
+        /// <summary>
+        /// (playtest 39, contrato ENCARGO S 1e) Marca como ZONA DE INTERÉS
+        /// (más reacciones visibles: MaybeReact muestrea 1/2 en vez de 1/8)
+        /// todos los chunks que toca el rectángulo [x0,x1)x[y0,y1) en celdas.
+        /// Pensado para llamarse UNA vez al construir el nivel (desde
+        /// Sim/SimLevelBuilder.cs y/o Game/Crisol.cs, las cubetas de las
+        /// máquinas) -- idempotente, coste ínfimo (unas pocas decenas de
+        /// chunks como mucho), NO es hot path pese a vivir en esta clase.
+        /// </summary>
+        public void RegistrarZonaInteres(int x0, int y0, int x1, int y1)
+        {
+            int cx0 = Math.Max(0, x0 / CellGrid.CHUNK);
+            int cy0 = Math.Max(0, y0 / CellGrid.CHUNK);
+            int cx1 = Math.Min(CellGrid.ChunksX - 1, (x1 - 1) / CellGrid.CHUNK);
+            int cy1 = Math.Min(CellGrid.ChunksY - 1, (y1 - 1) / CellGrid.CHUNK);
+            for (int cy = cy0; cy <= cy1; cy++)
+            {
+                for (int cx = cx0; cx <= cx1; cx++)
+                {
+                    if (cx < 0 || cx >= CellGrid.ChunksX || cy < 0 || cy >= CellGrid.ChunksY) continue;
+                    _zonaInteresChunk[CellGrid.ChunkIndex(cx, cy)] = true;
+                }
+            }
         }
 
         /// <summary>
@@ -275,7 +375,15 @@ namespace Alkahest.Sim
         // ---------------------------------------------------------------------------------
         private void MaybeReact(int x, int y, int idx, bool moved)
         {
-            if (!moved && ((x + y + (int)_tick) & 7) != 0) return;
+            if (moved) { ProcessReactions(x, y, idx); return; }
+
+            // (playtest 39, contrato ENCARGO S 1e) REACCIONES DIRIGIDAS: 1/2
+            // dentro de una zona de interés (las cubetas de las máquinas,
+            // registradas por RegistrarZonaInteres), 1/8 en el resto del
+            // mundo -- el patrón de siempre (`&7`) pasa a `&1` solo ahí.
+            int cx = x / CellGrid.CHUNK, cy = y / CellGrid.CHUNK;
+            int mask = _zonaInteresChunk[CellGrid.ChunkIndex(cx, cy)] ? 1 : 7;
+            if (((x + y + (int)_tick) & mask) != 0) return;
             ProcessReactions(x, y, idx);
         }
 
@@ -522,10 +630,31 @@ namespace Alkahest.Sim
             // Placa Ardiente = raw 220 (320 °C); ignitionTemp del aceite varía por seed en
             // ~208..312 °C (raw ~164..216) -- 220 la supera SIEMPRE, así que el camino
             // placa->aceite->fuego ahora sí funciona para cualquier seed.
-            else if (def.flammable && def.ignitionTemp != short.MaxValue && t > def.ignitionTemp)
+            // (playtest 39, contrato ENCARGO S 1a) La guarda extra
+            // `GetCombustReserva(...)==0` es NUEVA e IMPRESCINDIBLE: una
+            // celda de combustión persistente YA ardiendo sigue estando por
+            // encima de su propio ignitionTemp (la calienta ELLA MISMA,
+            // ver ProcessCombustion) -- sin esta guarda, este branch la
+            // "reencendería" a reserva MÁXIMA cada tick, y la reserva nunca
+            // bajaría de su valor inicial (fuego eterno, contradice
+            // "consumo progresivo" del contrato).
+            else if (def.flammable && def.ignitionTemp != short.MaxValue && t > def.ignitionTemp
+                && (def.combustReserva == 0 || GetCombustReserva(idx, def.archetype) == 0))
             {
-                PushEvent(SimEventType.Ignite, m, idx % W, idx / W);
-                Transform(idx, def.burnsInto);
+                int x = idx % W, y = idx / W;
+                PushEvent(SimEventType.Ignite, m, x, y);
+                if (def.combustReserva > 0)
+                {
+                    // PRENDE la celda (le pone reserva en aux) en vez de
+                    // convertirla en Fire de golpe -- el Fire pasa a ser solo
+                    // la lengua visible que escupe ProcessCombustion.
+                    SetCombustReserva(idx, def.archetype, def.combustReserva);
+                    _grid.WakeChunk(x, y, _tick);
+                }
+                else
+                {
+                    Transform(idx, def.burnsInto); // camino legado (Slime/Azoth/Nutrient/Vivium inflamables, decisión de alcance -- ver MaterialDef.combustReserva).
+                }
             }
         }
 
@@ -578,11 +707,271 @@ namespace Alkahest.Sim
         }
 
         // ---------------------------------------------------------------------------------
+        // COMBUSTIÓN PERSISTENTE (playtest 39, contrato ENCARGO S 1a/1b). El
+        // combustible ES la celda que arde: `def.combustReserva>0` es el gate
+        // (materiales sin parámetros de combustión se quedan en el camino
+        // legado de siempre, ver ApplyPhase/TryIgnite más abajo). El estado
+        // dinámico "¿arde ESTA celda ahora mismo, con cuánta reserva?" vive
+        // en CellGrid.aux -- con una salvedad de bits para Liquid, ver estos
+        // dos helpers.
+        // ---------------------------------------------------------------------------------
+
+        /// <summary>Lee la reserva de combustión de `idx`, respetando el recorte de bits de Liquid (bit 0 = memoria de flujo, ver ProcessLiquid) frente a Powder (byte entero libre).</summary>
+        private int GetCombustReserva(int idx, MaterialArchetype archetype)
+        {
+            return archetype == MaterialArchetype.Liquid
+                ? (_grid.aux[idx] & 0xFE) >> 1
+                : _grid.aux[idx];
+        }
+
+        /// <summary>Escribe la reserva de combustión en `idx`. Para Liquid, clampea a 127 (7 bits) y PRESERVA el bit 0 (dirección de flujo) intacto -- ver MaterialDef.combustReserva.</summary>
+        private void SetCombustReserva(int idx, MaterialArchetype archetype, int reserva)
+        {
+            if (archetype == MaterialArchetype.Liquid)
+            {
+                if (reserva < 0) reserva = 0; else if (reserva > 127) reserva = 127;
+                _grid.aux[idx] = (byte)((_grid.aux[idx] & 0x01) | (reserva << 1));
+            }
+            else
+            {
+                if (reserva < 0) reserva = 0; else if (reserva > 255) reserva = 255;
+                _grid.aux[idx] = (byte)reserva;
+            }
+        }
+
+        /// <summary>
+        /// (contrato 1b) Enciende MANUALMENTE una celda de combustible
+        /// persistente sin pasar por temperatura/ignitionTemp -- el gancho
+        /// público que usa Game/Crisol.cs para que el cesto del brasero arda
+        /// DE VERDAD en cuanto la hornada decide gastar esa celda (en vez de
+        /// borrarla al instante). No hace nada si el material no participa
+        /// del sistema (combustReserva==0, camino legado) o si esa celda ya
+        /// estaba ardiendo.
+        /// </summary>
+        public bool EncenderCombustionPersistente(int x, int y)
+        {
+            if (!CellGrid.InBounds(x, y)) return false;
+            int idx = CellGrid.Idx(x, y);
+            var def = _universe.Get(_grid.mat[idx]);
+            if (def.combustReserva == 0) return false;
+            if (GetCombustReserva(idx, def.archetype) > 0) return false;
+            PushEvent(SimEventType.Ignite, def.id, x, y);
+            SetCombustReserva(idx, def.archetype, def.combustReserva);
+            _grid.WakeChunk(x, y, _tick);
+            return true;
+        }
+
+        /// <summary>(contrato 1b) ¿Esta celda es combustible persistente Y está ardiendo ahora mismo? Consulta pública para que Crisol.cs no re-encienda ni borre una celda a medio consumir.</summary>
+        public bool EstaCombustionActiva(int x, int y)
+        {
+            if (!CellGrid.InBounds(x, y)) return false;
+            int idx = CellGrid.Idx(x, y);
+            var def = _universe.Get(_grid.mat[idx]);
+            return def.combustReserva > 0 && GetCombustReserva(idx, def.archetype) > 0;
+        }
+
+        /// <summary>
+        /// El paso de combustión de una celda ya encendida: extinción por
+        /// agua (mismo criterio que ProcessFire), y -- muestreado por
+        /// `def.combustPasoTicks` -- calor, lengua de Fire visible, humo,
+        /// propagación a vecinos y consumo de una unidad de reserva. Llamado
+        /// desde ProcessLiquid/ProcessPowder ANTES de su física normal de
+        /// movimiento (una celda ardiendo sigue fluyendo/cayendo igual: el
+        /// contrato pide que un charco se consuma "visiblemente desde el
+        /// borde", no que se congele mientras arde).
+        /// </summary>
+        private void ProcessCombustion(int x, int y, int idx, MaterialDef def)
+        {
+            if (def.combustReserva == 0) return; // material fuera del sistema: salida barata, un solo if.
+            int reserva = GetCombustReserva(idx, def.archetype);
+            if (reserva <= 0) return; // celda fría.
+
+            // EXTINCIÓN POR AGUA (contrato 1a: "el agua sigue mandando"), mismo
+            // criterio que ProcessFire -- agua encima, o 2+ vecinos ortogonales.
+            int waterNeighbors = CountOrthogonalNeighbors(x, y, MaterialId.Water);
+            bool waterAbove = y < H - 1 && _grid.mat[idx + W] == MaterialId.Water;
+            if (waterAbove || waterNeighbors >= 2)
+            {
+                SetCombustReserva(idx, def.archetype, 0);
+                SpawnSteamPuff(x, y);
+                return;
+            }
+
+            // Muestreo del paso de combustión: máscara de potencia de 2 (mismo
+            // patrón barato que MaybeReact), NO cada tick (contrato 1a).
+            if (((x + y + (int)_tick) & (def.combustPasoTicks - 1)) != 0) return;
+
+            // (fix integración pt39) Una celda ARDIENDO es un proceso vivo:
+            // mantiene su chunk despierto ella misma. Sin esto, una racha
+            // desafortunada del RNG (sin lengua ni humo ni propagación en ~30
+            // ticks) dejaría dormir el chunk y la combustión se CONGELARÍA en
+            // silencio hasta que algo externo lo despertara -- el charco a
+            // medio arder como estatua.
+            _grid.WakeChunk(x, y, _tick);
+
+            int nt = _grid.temp[idx] + def.combustCalorRaw;
+            _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
+            InjectHeat(x, y, def.combustCalorRaw);
+
+            var rng = XorShift.FromCell(_tick, x, y, SalCombustionPaso);
+
+            // Lengua de Fire visible arriba (el Fire de siempre pasa a ser SOLO
+            // esto: la parte que se ve, no la que consume el material).
+            if (y < H - 1 && rng.ChancePercent(def.combustLenguaPct))
+            {
+                int aboveIdx = idx + W;
+                if (_grid.mat[aboveIdx] == MaterialId.Empty) Transform(aboveIdx, MaterialId.Fire);
+            }
+
+            if (rng.ChancePercent(def.combustHumoPct)) SpawnSmokeNear(x, y, ref rng);
+
+            if (rng.ChancePercent(def.combustPropagacionPct))
+            {
+                TryIgnite(x - 1, y);
+                TryIgnite(x + 1, y);
+                TryIgnite(x, y - 1);
+                TryIgnite(x, y + 1);
+            }
+
+            reserva--;
+            if (reserva <= 0)
+            {
+                SetCombustReserva(idx, def.archetype, 0);
+                if (def.combustResiduo == MaterialId.Brasa) ConvertirEnBrasa(x, y, idx);
+                else Transform(idx, def.combustResiduo);
+            }
+            else
+            {
+                SetCombustReserva(idx, def.archetype, reserva);
+            }
+        }
+
+        /// <summary>Suelta un Smoke en el primer vecino ortogonal vacío disponible (orden fijo, barato -- no hace falta "el mejor", solo uno).</summary>
+        private void SpawnSmokeNear(int x, int y, ref XorShift rng)
+        {
+            Span4Dirs(x, y, out int n0, out int n1, out int n2, out int n3);
+            if (TrySpawnAt(n0)) return;
+            if (TrySpawnAt(n1)) return;
+            if (TrySpawnAt(n2)) return;
+            TrySpawnAt(n3);
+
+            bool TrySpawnAt(int nidx)
+            {
+                if (nidx < 0 || _grid.mat[nidx] != MaterialId.Empty) return false;
+                Transform(nidx, MaterialId.Smoke);
+                return true;
+            }
+        }
+
+        /// <summary>Empuja un chorro de Steam en el primer vecino ortogonal vacío disponible -- lo que se ve al extinguir una celda ardiendo o una Brasa con agua.</summary>
+        private void SpawnSteamPuff(int x, int y)
+        {
+            Span4Dirs(x, y, out int n0, out int n1, out int n2, out int n3);
+            if (n0 >= 0 && _grid.mat[n0] == MaterialId.Empty) { Transform(n0, MaterialId.Steam); return; }
+            if (n1 >= 0 && _grid.mat[n1] == MaterialId.Empty) { Transform(n1, MaterialId.Steam); return; }
+            if (n2 >= 0 && _grid.mat[n2] == MaterialId.Empty) { Transform(n2, MaterialId.Steam); return; }
+            if (n3 >= 0 && _grid.mat[n3] == MaterialId.Empty) Transform(n3, MaterialId.Steam);
+        }
+
+        /// <summary>Índices de los 4 vecinos ortogonales de (x,y), o -1 si están fuera de mundo. Orden fijo arriba/abajo/izq/der (da igual, ningún llamante depende del orden salvo por determinismo interno).</summary>
+        private void Span4Dirs(int x, int y, out int up, out int down, out int left, out int right)
+        {
+            up = (y < H - 1) ? CellGrid.Idx(x, y + 1) : -1;
+            down = (y > 0) ? CellGrid.Idx(x, y - 1) : -1;
+            left = (x > 0) ? CellGrid.Idx(x - 1, y) : -1;
+            right = (x < W - 1) ? CellGrid.Idx(x + 1, y) : -1;
+        }
+
+        // ---------------------------------------------------------------------------------
+        // LA BRASA (contrato 1b): la vejez del fuego. Vive en aux (Powder,
+        // byte libre entero) como cuenta atrás en unidades de
+        // BrasaLifeUnitTicks ticks -- 8-12s del contrato = 60..90 unidades a
+        // 4 ticks/unidad.
+        // ---------------------------------------------------------------------------------
+        private const int BrasaLifeUnitTicks = 4;
+        private const int BrasaCalorRaw = 10; // menos que el fuego (InjectHeat 40) y que un combustible en llamas (12-18): "todavía calor", no una hoguera.
+        private const int BrasaReencenderPct = 8; // "probabilidad baja" (contrato 1b), por paso de BrasaLifeUnitTicks ticks.
+
+        /// <summary>Transforma `idx` en Brasa y le siembra una vida propia (60-90 unidades = 8-12s a 30Hz, contrato 1b) -- NO pasa por el jitter genérico de Transform (pensado para Gas/Fire, rango de ±4 demasiado estrecho para este reparto).</summary>
+        private void ConvertirEnBrasa(int x, int y, int idx)
+        {
+            Transform(idx, MaterialId.Brasa); // aux queda en 0 (Powder: camino "else" de Transform).
+            var rng = XorShift.FromCell(_tick, x, y, SalBrasaVida);
+            _grid.aux[idx] = (byte)(60 + rng.Next(31)); // 60..90
+            PushEvent(SimEventType.Ember, MaterialId.Brasa, x, y);
+        }
+
+        /// <summary>
+        /// Tick de una celda de Brasa: agua la mata a Ash con Steam (mismo
+        /// criterio que el fuego); si no, cada BrasaLifeUnitTicks ticks emite
+        /// calor, intenta reencender vecinos inflamables con probabilidad
+        /// baja ("echarle combustible fresco encima a una brasa = el fuego
+        /// renace", contrato 1b) y descuenta una unidad de vida. Devuelve
+        /// true si la celda dejó de ser Brasa este tick (el llamante,
+        /// ProcessPowder, debe `return` sin tratarla como polvo normal).
+        /// </summary>
+        private bool ProcessBrasa(int x, int y, int idx)
+        {
+            int waterNeighbors = CountOrthogonalNeighbors(x, y, MaterialId.Water);
+            bool waterAbove = y < H - 1 && _grid.mat[idx + W] == MaterialId.Water;
+            if (waterAbove || waterNeighbors >= 2)
+            {
+                Transform(idx, MaterialId.Ash);
+                SpawnSteamPuff(x, y);
+                return true;
+            }
+
+            if (((x + y + (int)_tick) & (BrasaLifeUnitTicks - 1)) != 0) return false;
+
+            // (fix integración pt39) Mismo motivo que en ProcessCombustion:
+            // la Brasa no mueve ni transforma nada en la mayoría de sus
+            // pasos -- sin despertarse a sí misma, su chunk se dormiría y la
+            // cuenta atrás quedaría congelada (brasas eternas hasta que algo
+            // pasara cerca).
+            _grid.WakeChunk(x, y, _tick);
+
+            int nt = _grid.temp[idx] + BrasaCalorRaw;
+            _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
+            InjectHeat(x, y, BrasaCalorRaw);
+
+            var rng = XorShift.FromCell(_tick, x, y, SalBrasaReencender);
+            if (rng.ChancePercent(BrasaReencenderPct))
+            {
+                TryIgnite(x - 1, y);
+                TryIgnite(x + 1, y);
+                TryIgnite(x, y - 1);
+                TryIgnite(x, y + 1);
+            }
+
+            byte life = _grid.aux[idx];
+            if (life > 0) life--;
+            _grid.aux[idx] = life;
+            if (life == 0)
+            {
+                Transform(idx, MaterialId.Ash);
+                return true;
+            }
+            return false;
+        }
+
+        // ---------------------------------------------------------------------------------
         // Powder
         // ---------------------------------------------------------------------------------
         private void ProcessPowder(int x, int y, int idx, MaterialDef def)
         {
             if (y == 0) return; // fila 0 es siempre borde de Stone
+
+            // (contrato 1b) La Brasa tiene su propio ciclo de vida -- se
+            // comprueba ANTES de la física de polvo normal, y si decae este
+            // tick (a Ash) se sale sin caer/deslizar como si siguiera siendo
+            // Brasa un instante más.
+            if (def.id == MaterialId.Brasa && ProcessBrasa(x, y, idx)) return;
+
+            // (contrato 1a) Combustión persistente: si esta celda de polvo
+            // combustible está ardiendo, procesa su paso ANTES de la caída
+            // normal (una celda ardiendo sigue cayendo/deslizando igual).
+            ProcessCombustion(x, y, idx, def);
+            if (_grid.mat[idx] != def.id) return; // se consumió (Brasa/Empty) este mismo tick: nada más que hacer aquí.
 
             int belowIdx = idx - W;
             var belowDef = _universe.Get(_grid.mat[belowIdx]);
@@ -680,6 +1069,16 @@ namespace Alkahest.Sim
             {
                 if (ProcessDisolucionAgua(x, y, idx)) return;
             }
+
+            // (playtest 39, contrato ENCARGO S 1a) Combustión persistente: si
+            // este líquido combustible está ardiendo, procesa su paso de
+            // combustión ANTES del flujo normal -- un charco encendido SIGUE
+            // fluyendo mientras arde (el contrato pide que se consuma
+            // "visiblemente desde el borde", no que se congele). Si la
+            // reserva se agotó ESTE tick, la celda ya no es Liquid (residuo
+            // Empty/Brasa) y no hay nada más que hacer aquí.
+            ProcessCombustion(x, y, idx, def);
+            if (_grid.mat[idx] != def.id) return;
 
             int belowIdx = idx - W;
             var belowDef = _universe.Get(_grid.mat[belowIdx]);
@@ -908,12 +1307,38 @@ namespace Alkahest.Sim
         // ---------------------------------------------------------------------------------
         // Gas
         // ---------------------------------------------------------------------------------
+        // (playtest 39, contrato ENCARGO S 1c) GASES CON CORRIENTES: el
+        // lateral ya no es 50/50 -- se sesga determinista hacia el vecino
+        // ortogonal MÁS CALIENTE (temp), y al toparse con techo el gas forma
+        // BOLSAS (se esparce lateralmente en vez de quedarse quieto muriendo,
+        // con un pequeño extra de vida por estar "atrapado" bajo la bóveda).
+        private const int GasBolsaLateralPct = 60; // bajo techo: más presión lateral que una nube suelta a cielo abierto.
+        private const int GasDeambularPct = 35;    // cielo abierto: el mismo 35% de siempre (deambular/turbulencia).
+        // private const int GasBolsaVidaExtra = 3; // (retirada en integración pt39, regla 15) la vida extra por movimiento hacía inmortal al gas embolsado; hoy el extra es medio-decaimiento bajo techo, ver el descuento en ProcessGas.
+
         private void ProcessGas(int x, int y, int idx, MaterialDef def)
         {
             if (def.gasLifetime > 0)
             {
+                // (fix integración pt39) La "vida extra embolsados" del
+                // contrato 1c, ACOTADA: bajo techo directo el gas decae a
+                // MITAD de ritmo (se salta el descuento en ticks impares).
+                // La primera versión (+3 de vida por paso lateral logrado al
+                // 60%) era matemáticamente INMORTAL (+1.8/tick de media
+                // contra -1/tick de descuento): en el taller -- que es todo
+                // bóveda SELLADA -- el humo habría vagado para siempre con
+                // sus chunks despiertos para siempre. Doble vida embolsado:
+                // bolsa convincente Y mortal.
+                bool decaeEsteTick = true;
+                if (y < H - 1)
+                {
+                    byte encima = _grid.mat[idx + W];
+                    if (encima != MaterialId.Empty && _universe.Get(encima).archetype != MaterialArchetype.Gas
+                        && ((int)_tick & 1) == 1)
+                        decaeEsteTick = false;
+                }
                 byte life = _grid.aux[idx];
-                if (life > 0) life--;
+                if (life > 0 && decaeEsteTick) life--;
                 _grid.aux[idx] = life;
                 if (life == 0)
                 {
@@ -929,6 +1354,11 @@ namespace Alkahest.Sim
             int aboveIdx = -1;
             if (y < H - 1) aboveIdx = idx + W;
 
+            // ¿Hay TECHO directamente encima? (algo que no es gas ni vacío, o
+            // el borde superior del mundo) -- lo que dispara el régimen de
+            // bolsa más abajo.
+            bool bajoTecho = aboveIdx < 0;
+
             if (aboveIdx >= 0)
             {
                 byte am = _grid.mat[aboveIdx];
@@ -943,10 +1373,17 @@ namespace Alkahest.Sim
                     Move(x, y, idx, x, y + 1, aboveIdx);
                     return;
                 }
+                bajoTecho = adef.archetype != MaterialArchetype.Gas; // otro gas encima no es "techo": sigue siendo cielo abierto de gas.
             }
 
+            // DERIVA TÉRMICA: sesga el lateral hacia el vecino ortogonal más
+            // caliente (determinista); en empate (o los dos fuera de mundo),
+            // cae al azar de siempre.
+            int tLeft = CellGrid.InBounds(x - 1, y) ? _grid.temp[CellGrid.Idx(x - 1, y)] : -1;
+            int tRight = CellGrid.InBounds(x + 1, y) ? _grid.temp[CellGrid.Idx(x + 1, y)] : -1;
             var rng = XorShift.FromCell(_tick, x, y, 5);
-            bool leftFirst = rng.NextBool();
+            bool leftFirst = tLeft != tRight ? tLeft > tRight : rng.NextBool();
+
             for (int i = 0; i < 2; i++)
             {
                 int dx = (i == 0) == leftFirst ? -1 : 1;
@@ -961,20 +1398,39 @@ namespace Alkahest.Sim
                 }
             }
 
-            // Deambular lateral aleatorio para dar sensación de corriente/turbulencia.
-            if (rng.ChancePercent(35))
+            // BOLSAS BAJO TECHO / deambular a cielo abierto -- misma tirada,
+            // umbral distinto; prioriza el lado caliente que ya calculó la
+            // deriva de arriba (leftFirst), no un tiro nuevo.
+            var rngLateral = XorShift.FromCell(_tick, x, y, SalGasDeambular);
+            int lateralPct = bajoTecho ? GasBolsaLateralPct : GasDeambularPct;
+            if (rngLateral.ChancePercent(lateralPct))
             {
-                int dx = rng.NextBool() ? 1 : -1;
-                int nx = x + dx;
-                if (CellGrid.InBounds(nx, y))
-                {
-                    int nidx = CellGrid.Idx(nx, y);
-                    if (_grid.mat[nidx] == MaterialId.Empty)
-                    {
-                        Move(x, y, idx, nx, y, nidx);
-                    }
-                }
+                int dx = leftFirst ? -1 : 1;
+                if (TryGasLateral(x, y, idx, dx, bajoTecho, def)) return;
+                if (bajoTecho) TryGasLateral(x, y, idx, -dx, true, def); // bolsa cerrada por un lado: prueba el otro antes de rendirse.
             }
+        }
+
+        /// <summary>Movimiento lateral (misma fila) de una celda de gas hacia `dx`, con el extra de vida de "embolsado" si `bajoTecho`. Devuelve true si se movió.</summary>
+        private bool TryGasLateral(int x, int y, int idx, int dx, bool bajoTecho, MaterialDef def)
+        {
+            int nx = x + dx;
+            if (!CellGrid.InBounds(nx, y)) return false;
+            int nidx = CellGrid.Idx(nx, y);
+            if (_grid.mat[nidx] != MaterialId.Empty) return false;
+
+            Move(x, y, idx, nx, y, nidx);
+            // (fix integración pt39) AQUÍ vivía el "+GasBolsaVidaExtra por
+            // paso lateral logrado" -- retirado (regla 15): ganar vida por
+            // MOVERSE hacía inmortal al humo embolsado (ver el docblock del
+            // descuento en ProcessGas, donde ahora vive la vida extra como
+            // medio-decaimiento acotado bajo techo).
+            // if (bajoTecho && def.gasLifetime > 0)
+            // {
+            //     int life = _grid.aux[nidx] + GasBolsaVidaExtra;
+            //     _grid.aux[nidx] = (byte)(life > 255 ? 255 : life);
+            // }
+            return true;
         }
 
         // ---------------------------------------------------------------------------------
@@ -1113,6 +1569,11 @@ namespace Alkahest.Sim
             var ndef = _universe.Get(nm);
             if (!ndef.flammable) return;
 
+            // (contrato 1a) Ya ardiendo (combustión persistente): nada que
+            // reencender -- evita el mismo problema de "reencendido a tope
+            // cada tick" que la guarda nueva de ApplyPhase.
+            if (ndef.combustReserva > 0 && GetCombustReserva(nidx, ndef.archetype) > 0) return;
+
             bool hotEnough = ndef.ignitionTemp != short.MaxValue && _grid.temp[nidx] > ndef.ignitionTemp;
             var rng = XorShift.FromCell(_tick, nx, ny, 17);
             // (fix playtest 9) Antes 50%/tick: un charco de aceite conectado se prendía
@@ -1126,7 +1587,19 @@ namespace Alkahest.Sim
             if (hotEnough || rng.ChancePercent(12))
             {
                 PushEvent(SimEventType.Ignite, nm, nx, ny);
-                Transform(nidx, MaterialId.Fire);
+                // (contrato 1a) PRENDE en vez de convertir a Fire de golpe,
+                // igual que la rama nueva de ApplyPhase -- ver ese comentario
+                // para el porqué. Camino legado sin cambios si el material no
+                // participa del sistema nuevo.
+                if (ndef.combustReserva > 0)
+                {
+                    SetCombustReserva(nidx, ndef.archetype, ndef.combustReserva);
+                    _grid.WakeChunk(nx, ny, _tick);
+                }
+                else
+                {
+                    Transform(nidx, MaterialId.Fire);
+                }
             }
         }
 
