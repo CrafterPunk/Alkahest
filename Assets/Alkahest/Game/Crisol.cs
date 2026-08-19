@@ -60,7 +60,7 @@ namespace Alkahest.Game
     ///    qué transformación va a ocurrir (material dominante de la cámara x
     ///    temperatura disponible, ver <see cref="DecidirHornada"/>) y ya no
     ///    cambia: una pasada, una transformación, siempre.
-    ///  · La hornada corre <see cref="HornadaSegundos"/> segundos a ritmo
+    ///  · La hornada corre <see cref="HornadaSegundosDefault"/> segundos a ritmo (o la del fraguado, ver <see cref="_hornadaSegundosActual"/>)
     ///    VISIBLE: el rescoldo sube, las burbujas suben, el cesto ruge y la
     ///    silueta entera late. Nada ocurre "de golpe".
     ///  · Al acabar, el crisol **REPOSA CON EL RESULTADO DENTRO**, y lo
@@ -128,7 +128,7 @@ namespace Alkahest.Game
     /// docs/CONTRATO_TERMICA.md §2a)
     /// =====================================================================
     /// Hasta esta ronda, la cámara entera convertía de golpe en
-    /// <see cref="CerrarHornada"/> al agotarse <see cref="HornadaSegundos"/>:
+    /// <see cref="CerrarHornada"/> al agotarse <see cref="_hornadaSegundosActual"/>:
     /// diez segundos de rescoldo/burbujas subiendo y ni una sola celda
     /// cambiando de material hasta el chasquido final. Ahora
     /// <see cref="ProcessConversionFrente"/> convierte celda a celda, TICK A
@@ -221,8 +221,57 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         // HORNADA (mandato 4)
         // -----------------------------------------------------------------
-        /// <summary>Duración de una hornada. El contrato pide 8-12s "con progreso que se ve": 10 es el centro, y es el tiempo en el que da tiempo a MIRAR sin aburrirse.</summary>
-        private const float HornadaSegundos = 10f;
+        /// <summary>Duración de una hornada NORMAL. El contrato pide 8-12s "con progreso que se ve": 10 es el centro, y es el tiempo en el que da tiempo a MIRAR sin aburrirse. (playtest 47, rename: era "HornadaSegundos" const; el ENCARGO C necesita una duración VARIABLE por hornada para el fraguado del mortero/hormigón -- ver <see cref="_hornadaSegundosActual"/> y las dos constantes de abajo.)</summary>
+        private const float HornadaSegundosDefault = 10f;
+
+        // -----------------------------------------------------------------
+        // FRAGUADO (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1a): "mortero
+        // y hormigón nacen POLVO-húmedo que FRAGUA a sólido estático con el
+        // tiempo (... aux-countdown estilo Brasa -- fraguar ES un
+        // countdown)". Sim/SimStepper.cs (donde vive ProcessBrasa, el patrón
+        // que el contrato cita) NO es un archivo de este encargo (la lista es
+        // Sim/Universe.cs, Game/Crisol.cs, Game/SubstanceKnowledge.cs,
+        // Game/AlbumReal.cs, Game/HintSystem.cs) -- tocarlo habría invadido
+        // la propiedad disjunta que protege la regla 41/37 de CLAUDE.md
+        // (encargo M edita en paralelo DayCycle/DirectorDeAudio/UiStyles, y
+        // un tercer archivo compartido sin contrato es exactamente el hueco
+        // que esas reglas piden evitar).
+        //
+        // DECISIÓN DE C (documentada, fuera de la letra literal del
+        // contrato): el fraguado se modela como LA PROPIA DURACIÓN de la
+        // hornada, extendida SOLO para estos dos productos -- Mortero y
+        // Hormigon salen de la cámara YA CURADOS (StaticSolid desde el
+        // primer tick, ver Sim/Universe.cs), y lo que el jugador ve fraguar
+        // es la hornada misma corriendo más tiempo de lo normal, con el
+        // verbo puesto ("amasando…"/"fraguando…" y la cuenta atrás de
+        // EtiquetaCamara). No hay una fase POLVO-húmedo por separado con su
+        // propio matId: simplificación explícita, documentada aquí y en el
+        // informe de la ronda.
+        //
+        // POR QUÉ ESTO SIGUE CUMPLIENDO LA REGLA 55 DE CLAUDE.md (MORTAL Y
+        // DESPIERTO) SIN TOCAR SimStepper:
+        //  (a) MORTAL: el countdown vive en `_hornadaT` contra
+        //      `_hornadaSegundosActual`, con el MISMO `if (_hornadaT >=
+        //      _hornadaSegundosActual) CerrarHornada();` de siempre (ver
+        //      Update()) -- bounded, siempre termina.
+        //  (b) DESPIERTO: `EmpujarTemperatura()` corre CADA tick de la
+        //      hornada y llama a `AlkahestSim.InyectarTemperatura` sobre
+        //      cada celda con carga, que WakeChunk-ea esa celda EN CADA
+        //      LLAMADA (ver AlkahestSim.InyectarTemperatura) -- el chunk de
+        //      la cámara no puede dormirse mientras la hornada extendida
+        //      corre, sin necesitar que nadie más lo despierte.
+        //
+        // TIEMPOS ELEGIDOS (banda 20-30s del contrato, decisión de C): 22s
+        // para el mortero (amasar es el gesto más simple, romano, "de
+        // siempre") y 28s para el hormigón (más ingredientes, más curado,
+        // "el hormigón aguanta más" ya vale para el tiempo de fragua
+        // también, no solo para su resistencia).
+        // -----------------------------------------------------------------
+        private const float FraguadoMorteroSegundos = 22f;
+        private const float FraguadoHormigonSegundos = 28f;
+
+        /// <summary>(playtest 47, ENCARGO C) Umbral de "mezcla relevante" del contrato §1b: el secundario debe ser AL MENOS el 20% de la carga. Sin división en punto flotante: secundario/nCam &gt;= 0.20 &lt;=&gt; secundario*5 &gt;= nCam.</summary>
+        private const int CruceUmbralSecundarioX5 = 5;
         /// <summary>Fracción de la hornada durante la que el objetivo térmico se mantiene POR DEBAJO del umbral del mundo (ver <see cref="TechoSeguroPara"/>): así ninguna transformación ocurre antes de tiempo y no hay ninguna carrera invisible.</summary>
         private const float FraccionConTecho = 0.88f;
         /// <summary>Cuánto sube/baja la temperatura de la cámara por tick de física mientras corre una hornada.</summary>
@@ -360,10 +409,14 @@ namespace Alkahest.Game
         private Fase _fase = Fase.Reposo;
         private float _hornadaT;
         private byte _hornadaEntrada, _hornadaSalida;
+        /// <summary>(playtest 47, ENCARGO C) Segundo material de entrada de un CRUCE (MaterialId.Empty si esta hornada no es un cruce) -- ver ProcessConversionFrente/CerrarHornada, que convierten AMBOS ingredientes al producto único, y HayMezclaRelevante/IntentarEncender, que lo detectan.</summary>
+        private byte _hornadaSecundarioEntrada;
         private byte _hornadaCima;      // temperatura que alcanza esta hornada.
         private byte _hornadaTecho;     // clampeo durante FraccionConTecho.
         private string _hornadaCondicion;
         private string _hornadaVerbo;
+        /// <summary>(playtest 47, ENCARGO C) Duración REAL de la hornada en curso -- HornadaSegundosDefault salvo que el cruce sea Mortero/Hormigon (ver FraguadoMorteroSegundos/FraguadoHormigonSegundos y su docblock: EL FRAGUADO ES la propia duración extendida de la pasada).</summary>
+        private float _hornadaSegundosActual = HornadaSegundosDefault;
         private byte _targetRaw;        // objetivo térmico ACTUAL (0 = no empujar nada: reposo).
         private byte _reposoRaw;        // temperatura de mantenimiento del resultado (fase Lista).
 
@@ -372,6 +425,10 @@ namespace Alkahest.Game
 
         private bool _camaraTieneAlgo;
         private byte _dominanteCamara;
+        /// <summary>(playtest 47, ENCARGO C) Segundo material más frecuente de la cámara AHORA MISMO (Empty si no hay o la cámara tiene un solo material) -- ver SondearCamara/HayMezclaRelevante.</summary>
+        private byte _secundarioCamara;
+        private int _secundarioCamaraCount;
+        private int _cargaCamaraCount; // total de celdas ocupadas de la cámara (== nCam de SondearCamara), para el umbral del 20%.
 
         /// <summary>Acumulador del sondeo de la llama del brasero (LA ALQUIMIA VISIBLE, tarea 1) -- ver <see cref="RefrescarLlamasBrasero"/>.</summary>
         private float _llamaAcc;
@@ -881,7 +938,7 @@ namespace Alkahest.Game
                     // EmpujarTemperatura de abajo aplicado sobre la MISMA
                     // temperatura que acaba de leer, así que va entre las dos.
                     ProcessConversionFrente();
-                    if (_hornadaT >= HornadaSegundos) CerrarHornada();
+                    if (_hornadaT >= _hornadaSegundosActual) CerrarHornada();
                 }
                 EmpujarTemperatura();
                 _accumulator -= TickDt;
@@ -908,8 +965,8 @@ namespace Alkahest.Game
         {
             var grid = _sim.Grid;
             int nCam = 0, nCesto = 0;
-            byte dominante = MaterialId.Empty;
-            int mejor = 0;
+            byte dominante = MaterialId.Empty, secundario = MaterialId.Empty;
+            int mejor = 0, segundo = 0;
 
             for (int y = _camY0; y <= _camY1; y++)
             {
@@ -922,7 +979,15 @@ namespace Alkahest.Game
                     for (int y2 = _camY0; y2 <= _camY1; y2++)
                         for (int x2 = _camX0; x2 <= _camX1; x2++)
                             if (grid.GetMat(x2, y2) == m) cuenta++;
-                    if (cuenta > mejor) { mejor = cuenta; dominante = m; }
+                    // (playtest 47, ENCARGO C) Rastro del SEGUNDO material más
+                    // frecuente, a coste cero extra (mismo `cuenta` ya
+                    // calculado arriba para el dominante) -- lo consume
+                    // HayMezclaRelevante/TryCruce para detectar la MEZCLA EN
+                    // CUBETA. `m != dominante` evita que el propio dominante
+                    // se cuente dos veces cuando su `cuenta` empata con el
+                    // segundo puesto ya registrado.
+                    if (cuenta > mejor) { segundo = mejor; secundario = dominante; mejor = cuenta; dominante = m; }
+                    else if (m != dominante && cuenta > segundo) { segundo = cuenta; secundario = m; }
                 }
             }
 
@@ -953,6 +1018,9 @@ namespace Alkahest.Game
 
             _camaraTieneAlgo = nCam > 0;
             _dominanteCamara = dominante;
+            _secundarioCamara = secundario;
+            _secundarioCamaraCount = segundo;
+            _cargaCamaraCount = nCam;
             _fuelMat = fuel;
 
             // El resultado ya no está solo en la cámara: o el jugador lo
@@ -963,12 +1031,21 @@ namespace Alkahest.Game
             if (_fase == Fase.Lista && (!_camaraTieneAlgo || _dominanteCamara != _hornadaSalida)) VolverAReposo();
         }
 
+        /// <summary>(playtest 47, ENCARGO C) ¿La cámara tiene ahora mismo una MEZCLA relevante para la tabla de cruces -- dominante + secundario, con el secundario cubriendo al menos el 20% de la carga (contrato §1b, literal)?</summary>
+        private bool HayMezclaRelevante()
+        {
+            if (_secundarioCamara == MaterialId.Empty || _cargaCamaraCount <= 0) return false;
+            return _secundarioCamaraCount * CruceUmbralSecundarioX5 >= _cargaCamaraCount; // secundario/carga >= 0.20, sin flotantes.
+        }
+
         private void VolverAReposo()
         {
             _fase = Fase.Reposo;
             _targetRaw = 0;
             _cestoArdiendo = false;
             _hornadaT = 0f;
+            _hornadaSecundarioEntrada = MaterialId.Empty; // (playtest 47) fin de cualquier cruce en curso; VolverAReposo también corre entre hornadas normales, donde ya era Empty.
+            _hornadaSegundosActual = HornadaSegundosDefault;
         }
 
         /// <summary>
@@ -1055,18 +1132,76 @@ namespace Alkahest.Game
                 ? universe.TempCombustibleRaw(_fuelMat)
                 : Universe.CrisolTier0Raw;
 
-            if (!DecidirHornada(universe, _dominanteCamara, cima,
-                    out byte salida, out string condicion, out string verbo, out byte objetivo))
+            byte salida = MaterialId.Empty;
+            string condicion = null, verbo = null;
+            byte objetivo = cima;
+            byte secundarioEntrada = MaterialId.Empty;
+            float segundosHornada = HornadaSegundosDefault;
+
+            // =============================================================
+            // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1b) LA MEZCLA EN
+            // CUBETA: consulta PREVIA a la escalera de DecidirHornada. Si la
+            // cámara tiene una mezcla relevante (dominante + secundario >=
+            // 20%, ver HayMezclaRelevante) Y el par coincide con una receta
+            // conocida a esta temperatura (Universe.TryCruce), el cruce ES
+            // la transformación de esta hornada -- la promesa de "una
+            // transformación por hornada" se mantiene porque el cruce cuenta
+            // como esa única transformación, no como una extra.
+            //
+            // RESERVADO A SEMILLA CERO (decisión de C, documentada en el
+            // informe de la ronda): las identidades reales que dan nombre a
+            // los ingredientes ("cal apagada", "arena de sílice"...) solo
+            // existen ancladas a la seed congelada 777002
+            // (Universe.SemillaCeroBaseIdx); en modo CAÓTICO las 5 bases de
+            // la seed cumplen los mismos ROLES por posición (la dócil, la de
+            // la cal...), pero esta ronda NO generaliza el cruce a esos
+            // roles -- deuda explícita para una ronda futura (ver el informe
+            // de la ronda para el plan).
+            //
+            // Si TryCruce devuelve false (el par no coincide con ninguna
+            // receta, O coincide pero este fuego no la alcanza), se cae a la
+            // escalera de siempre con el DOMINANTE solo -- "sin mezcla
+            // válida -> la escalera de siempre" (contrato §1b, literal).
+            // =============================================================
+            byte prodCruce = MaterialId.Empty; string verboCruce = null, condCruce = null;
+            bool esCruce = AlkahestGameBootstrap.ModoSemillaCero && HayMezclaRelevante()
+                && Universe.TryCruce(_dominanteCamara, _secundarioCamara, cima, out prodCruce, out verboCruce, out condCruce);
+
+            if (esCruce)
+            {
+                salida = prodCruce;
+                verbo = verboCruce;
+                condicion = condCruce;
+                objetivo = cima;
+                secundarioEntrada = _secundarioCamara;
+
+                // FRAGUADO (ver el docblock de FraguadoMorteroSegundos/
+                // FraguadoHormigonSegundos): el mortero y el hormigón curan
+                // durante una hornada EXTENDIDA en vez de una fase
+                // polvo-húmedo aparte.
+                if (salida == MaterialId.Mortero) segundosHornada = FraguadoMorteroSegundos;
+                else if (salida == MaterialId.Hormigon) segundosHornada = FraguadoHormigonSegundos;
+            }
+            else if (!DecidirHornada(universe, _dominanteCamara, cima,
+                    out salida, out condicion, out verbo, out objetivo))
             {
                 Rotular("este fuego no le hace nada · prueba otro combustible", UiStyles.Aviso);
+                // (playtest 47, ENCARGO C, ANTI-"NADA", INFORME_REALIDAD.md §5)
+                // la hornada NO tiene transformación posible: se anota como
+                // una RESISTENCIA GANADA, no un silencio -- alimenta la ficha
+                // del material (SubstanceKnowledge.RegistrarObservacionPropiedad
+                // ya hace el dedup por material+condición, sin spam).
+                if (_conocimiento != null) _conocimiento.RegistrarObservacionPropiedad(_dominanteCamara, "resiste este fuego");
                 return false;
             }
 
             _hornadaEntrada = _dominanteCamara;
+            _hornadaSecundarioEntrada = secundarioEntrada;
             _hornadaSalida = salida;
             _hornadaCondicion = condicion;
             _hornadaVerbo = verbo;
             _hornadaCima = objetivo;
+            _hornadaSegundosActual = segundosHornada;
             _hornadaTecho = TechoSeguroPara(universe, _hornadaEntrada, objetivo);
             _hornadaT = 0f;
             _hornadaConvertidasAcumulado = 0; // (playtest 44) una hornada nueva, un contador de frente nuevo.
@@ -1133,7 +1268,7 @@ namespace Alkahest.Game
                 {
                     if (grid.GetMat(x, y) != _fuelMat) continue;
                     // Ya ardiendo de una hornada anterior (la duración de
-                    // combustión real puede superar los HornadaSegundos de la
+                    // combustión real puede superar los _hornadaSegundosActual de la
                     // abstracción): busca otra celda en vez de re-encenderla
                     // o borrarla a medio consumir.
                     if (stepper != null && stepper.EstaCombustionActiva(x, y)) continue;
@@ -1327,7 +1462,7 @@ namespace Alkahest.Game
 
         private void ActualizarObjetivoHornada()
         {
-            float t = Mathf.Clamp01(_hornadaT / HornadaSegundos);
+            float t = Mathf.Clamp01(_hornadaT / _hornadaSegundosActual);
             byte cima = _hornadaCima;
             byte techo = _hornadaTecho;
             // Rampa visible: la temperatura SUBE durante toda la pasada (el
@@ -1407,7 +1542,7 @@ namespace Alkahest.Game
                     if (((x + y + (int)tick) & MuestreoMascara) != 0) continue; // muestreo barato: 1 de cada 4 celdas por tick.
 
                     int idx = CellGrid.Idx(x, y);
-                    if (grid.GetMat(idx) != _hornadaEntrada) continue;
+                    if (!EsMaterialDeEntrada(grid.GetMat(idx))) continue;
                     if (grid.temp[idx] < umbral) continue; // esta fila aún no llegó a SU umbral.
 
                     var rng = XorShift.FromCell(tick, x, y, SalFrenteHornada);
@@ -1418,6 +1553,22 @@ namespace Alkahest.Game
                     _hornadaConvertidasAcumulado++;
                 }
             }
+        }
+
+        /// <summary>
+        /// (playtest 47, ENCARGO C) ¿`m` es uno de los materiales de entrada
+        /// de LA HORNADA EN CURSO? Para una hornada normal es solo
+        /// `_hornadaEntrada` (el dominante); para un CRUCE son los DOS
+        /// ingredientes -- ambos se convierten al MISMO producto, porque se
+        /// mezclaron en uno solo (el cruce "amasando"/"fraguando"/etc. no
+        /// deja residuo del ingrediente secundario en la cubeta). Lo
+        /// consultan ProcessConversionFrente y CerrarHornada, los dos únicos
+        /// puntos que convierten materia de la cámara.
+        /// </summary>
+        private bool EsMaterialDeEntrada(byte m)
+        {
+            if (m == _hornadaEntrada) return true;
+            return _hornadaSecundarioEntrada != MaterialId.Empty && m == _hornadaSecundarioEntrada;
         }
 
         private void CerrarHornada()
@@ -1431,7 +1582,7 @@ namespace Alkahest.Game
                 for (int x = _camX0; x <= _camX1; x++)
                 {
                     int idx = CellGrid.Idx(x, y);
-                    if (grid.GetMat(idx) != _hornadaEntrada) continue;
+                    if (!EsMaterialDeEntrada(grid.GetMat(idx))) continue;
                     grid.SetCell(idx, _hornadaSalida, resetAux: false);
                     grid.WakeChunk(x, y, tick);
                     stragglers++;
@@ -1452,6 +1603,18 @@ namespace Alkahest.Game
             _hornadaConvertidasAcumulado += stragglers;
             int convertidas = _hornadaConvertidasAcumulado;
 
+            // (playtest 47, ENCARGO C) Para un cruce, `_hornadaCondicion` es
+            // el VERBO del cruce ("amasando", "fraguando"...) -- la
+            // "condición del cruce (patentable)" del contrato §1b. DEUDA
+            // CONOCIDA (documentada, Game/Hornada.cs no es archivo de este
+            // encargo): `Hornada.RegistrarOp` solo CONGELA patente cuando
+            // `MaterialId.EsBaseEstado(matSalida)` (ver su código), y los 6
+            // productos cruzados son ids standalone -- el ring buffer SÍ
+            // registra el paso (así que una cadena posterior que sí llegue a
+            // un (base,estado) puede incluirlo), pero el cruce en sí NUNCA
+            // patenta solo. El producto se descubre igual por el flujo
+            // normal (Flask/hover -> SubstanceKnowledge.MarcarDescubierto),
+            // que es lo que pide el contrato ("álbum/ficha gratis").
             if (convertidas > 0) Hornada.RegistrarOp("crisol", _hornadaEntrada, _hornadaSalida, _hornadaCondicion);
 
             // (integración pt40, SEMILLA CERO) Si la hornada DESTRUYÓ la
@@ -1774,7 +1937,7 @@ namespace Alkahest.Game
         {
             float c = SimRenderer.CellWorldSize;
             bool corriendo = _fase == Fase.Corriendo;
-            float t = corriendo ? Mathf.Clamp01(_hornadaT / HornadaSegundos) : 0f;
+            float t = corriendo ? Mathf.Clamp01(_hornadaT / _hornadaSegundosActual) : 0f;
 
             // El hogar: rescoldo tenue en reposo, sube con la hornada.
             if (_brasasHogar != null)
@@ -1938,7 +2101,7 @@ namespace Alkahest.Game
             if (_aviso != null && Time.time < _avisoHasta) return _aviso;
             if (_fase == Fase.Corriendo)
             {
-                int quedan = Mathf.CeilToInt(Mathf.Max(0f, HornadaSegundos - _hornadaT));
+                int quedan = Mathf.CeilToInt(Mathf.Max(0f, _hornadaSegundosActual - _hornadaT));
                 return _hornadaVerbo + "… " + quedan + "s";
             }
             if (_fase == Fase.Lista) return "hornada lista · recógela con el frasco";

@@ -154,7 +154,7 @@ namespace Alkahest.Game
         {
             if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaPrensa))
             {
-                SpawnPrensa(_playerSemillaCero);
+                SpawnPrensa(_playerSemillaCero, _knowledgeSemillaCero);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] = true;
             }
             if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaColumna))
@@ -337,7 +337,7 @@ namespace Alkahest.Game
             // una chapa "E — usar" que se vea a través del tapiado.
             if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaPrensa))
             {
-                SpawnPrensa(apprentice.transform);
+                SpawnPrensa(apprentice.transform, knowledge);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] = true;
             }
             if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaChispa))
@@ -598,7 +598,7 @@ namespace Alkahest.Game
             SpawnOrdersHud(orderSystem);
 
             SpawnCrisol(apprentice.transform, knowledge);
-            SpawnPrensa(apprentice.transform);
+            SpawnPrensa(apprentice.transform, knowledge);
             SpawnBancoChispa(apprentice.transform, knowledge);
             SpawnColumnaEnsayo(apprentice.transform, knowledge);
             // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS, TAMBIÉN EN
@@ -843,11 +843,14 @@ namespace Alkahest.Game
         }
 
         /// <summary>LO QUE PERSISTE (contrato §5.4): la Prensa, en <see cref="SimLevelBuilder.PrensaX"/>.</summary>
-        private void SpawnPrensa(Transform player)
+        private void SpawnPrensa(Transform player, SubstanceKnowledge knowledge)
         {
             var go = new GameObject("Prensa");
             var prensa = go.AddComponent<Prensa>();
             prensa.Init(_sim, player, SimLevelBuilder.PrensaX);
+            // (integración pt47) la resistencia anotada (CONTRATO_FASE_A §1d)
+            // -- conectado APARTE de Init para respetar su firma congelada.
+            prensa.ConectarConocimiento(knowledge);
         }
 
         /// <summary>

@@ -3096,3 +3096,44 @@ regla 53: 0 errores.
 **PRÓXIMA RONDA (a decisión de Cesar tras el informe)**: Fase A propuesta — renames de la
 auditoría + matriz anti-"nada" + recetas cruzadas + (pendiente del mandato nocturno) menú de
 inicio con volumen.
+
+---
+
+## Playtest 47 → FASE A: SER DUEÑOS DE LO QUE HAY (recetas cruzadas + renames + resistencias + menú)
+
+GO de Cesar al plan del INFORME_REALIDAD §7. Contrato docs/CONTRATO_FASE_A.md. Dos encargos
+paralelos (C=cruces, M=menú) + integración Fable. Cesar prueba TODO al final de esta fase.
+
+**ENCARGO C — LA MEZCLA EN CUBETA**: 6 materiales nuevos (Mortero=59, VidrioVerde=60, Lejia=61,
+Hormigon=62, Esmaltado=63, Clinker=64 → Count=65) con identidad real verbatim (nombre/color/
+reseña). Tabla de cruces en Universe.TryCruce (dominante+secundario ≥20% de la cámara, el cruce
+ES la única transformación de la hornada): cal apagada+arena→mortero "amasando" · caliza+
+arcilla→clínker (fuego pleno) "cociendo clínker" · clínker+arena→hormigón "fraguando" · arena+
+ceniza→vidrio de botella "fundiendo con fundente" (la mezcla funde a banda MÁS BAJA que la
+arena pura: la lección real del fundente) · ceniza+agua→lejía "lixiviando" · bizcocho+arena→
+esmaltado. AUDITORÍA DE INTEGRACIÓN: el informe del agente resumía MAL tres ingredientes
+(caliza cruda por cal apagada, mortero por clínker, turba por ceniza) — el CÓDIGO estaba
+correcto; lección: el informe no es la verdad, el código sí. Los 4 RENAMES de la auditoría
+aplicados verbatim (sal de estampido/caliza prensada/cal sobrecocida/ámbar de brea).
+RESISTENCIAS ANOTADAS (rebanada del anti-"nada"): "resiste este fuego" desde la hornada
+imposible y "resiste la prensa" desde el RESISTE — integración Fable en Prensa vía
+ConectarConocimiento (la firma congelada de Init se respeta; 3 llamadores cableados). Página 7
+del álbum "MEZCLAS DEL OFICIO" con las recetas como preguntas. Cruces gateados a Semilla Cero
+(deuda: generalizar por roles al caótico). Fraguado de mortero/hormigón como hornada extendida
+(22s/28s). Banco reconstruido y corrido: sin regresión (sandbox 2 núcleos, orden relativo
+intacto).
+
+**ENCARGO M — EL MENÚ**: AJUSTES en el título (volumen general = AudioListener.volume; efectos
+del taller = multiplicador en DirectorDeAudio.FactorMaestro, el punto único que ya alimentaba
+loops y one-shots; PlayerPrefs ChaosAlchemy_VolGeneral/VolEfectos; slider con thumb de latón
+nuevo en UiStyles). PAUSA con Escape: escalera de guardas documentada (EscribiendoTexto →
+nada; diario/álbum abiertos → ellos consumen su ESC; ajustes abiertos → los cierra; solo con
+mundo limpio en Playing alterna pausa). Un jugador congela la sim (AlkahestSim.Paused); multi
+NO congela por garantía ESTRUCTURAL (el DayCycle de pausa multi se auto-instancia vía
+ForzarDesbloqueoSesion SIN referencia a _sim — no puede congelar aunque quiera). VOLVER AL
+TÍTULO: un jugador recarga escena sin skipTitle; multi = SessionCoordinator.Disconnect + carga
+de AlkahestLab.
+
+**Deudas**: pausa multi sin probar en vivo (dos ventanas = prueba de Cesar); cruces solo en
+Semilla Cero; la matriz completa material×operación (~350 celdas) sigue pendiente como encargo
+propio; el slider comparte textura de riel con los campos de texto.

@@ -163,6 +163,13 @@ namespace Alkahest.Game
                 && anclaCelda.y >= 1 && anclaCelda.y + alto - 1 <= CellGrid.H - 2;
         }
 
+        // (integración pt47) El saber, inyectado APARTE de Init para no romper
+        // la firma congelada de arriba ("FIRMA SIN CAMBIOS"): el Bootstrap lo
+        // conecta justo después de Init. Nulo-tolerante: sin conocimiento, la
+        // prensa funciona igual y solo se pierde la anotación de resistencia.
+        private SubstanceKnowledge _conocimiento;
+        public void ConectarConocimiento(SubstanceKnowledge conocimiento) => _conocimiento = conocimiento;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap. FIRMA SIN CAMBIOS. `anchorX` = SimLevelBuilder.PrensaX.</summary>
         public void Init(AlkahestSim sim, Transform player, int anchorX)
         {
@@ -508,6 +515,14 @@ namespace Alkahest.Game
             byte salidaDominante = MaterialSalida(dominanteMat, respuestaDominante);
             Hornada.RegistrarOp("prensa", dominanteMat, salidaDominante, CondicionDe(respuestaDominante));
             _chapaEstado = RotuloDe(respuestaDominante);
+
+            // (integración pt47, CONTRATO_FASE_A §1d) RESISTENCIA ANOTADA: el
+            // "RESISTE" dramático de siempre ahora además deja DATO en la
+            // ficha (principio "todo camino da algo" del INFORME_REALIDAD §5
+            // -- un resultado negativo también es botín). Una vez por
+            // material: el dedup vive en RegistrarResistePrensa.
+            if (respuestaDominante == RespuestaPrensa.Resistir && _conocimiento != null)
+                _conocimiento.RegistrarResistePrensa(dominanteMat);
         }
 
         private void AplicarRespuesta(int x, int y, byte mat, Universe universe, CellGrid grid, uint tick)

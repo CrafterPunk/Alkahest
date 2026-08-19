@@ -214,14 +214,49 @@ namespace Alkahest.Game
             MaterialId.Fire, MaterialId.Smoke, MaterialId.Ash, MaterialId.Brasa, MaterialId.Stone,
         };
 
+        // -----------------------------------------------------------------
+        // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1e) PÁGINA "MEZCLAS DEL
+        // OFICIO": las 5+1 figuritas de las recetas cruzadas (mortero,
+        // clínker, hormigón, vidrio de botella, lejía, esmaltado), NO cuentan
+        // en el progreso N/M del retículo (mismo criterio que _clasicos: son
+        // otra colección, con su propio "6/6" -- ver DibujarPaginaMezclas).
+        // Orden: el de la tabla del contrato §1b (mortero, clínker,
+        // hormigón, vidrio, lejía, esmaltado).
+        // -----------------------------------------------------------------
+        private static readonly byte[] _cruces =
+        {
+            MaterialId.Mortero, MaterialId.Clinker, MaterialId.Hormigon,
+            MaterialId.VidrioVerde, MaterialId.Lejia, MaterialId.Esmaltado,
+        };
+
+        /// <summary>Las recetas COMO PREGUNTAS (contrato §1e, literal: "¿cal + arena?"), mismo orden que <see cref="_cruces"/> -- se muestran tal cual mientras el producto sigue sin descubrir; ver <see cref="_cruceRespuestas"/> para lo que las sustituye al revelarse.</summary>
+        private static readonly string[] _crucePreguntas =
+        {
+            "¿cal apagada + arena?", "¿caliza + arcilla?", "¿clínker + arena?",
+            "¿arena + ceniza?", "¿ceniza + agua?", "¿bizcocho + arena?",
+        };
+
+        /// <summary>La receta YA RESUELTA (mismo orden que _cruces), mostrada solo tras descubrir el producto -- el nombre real del resultado se añade en tiempo de dibujo (EtiquetaDe), nunca concatenado aquí (cero allocs).</summary>
+        private static readonly string[] _cruceIngredientes =
+        {
+            "cal apagada + arena", "caliza + arcilla", "clínker + arena",
+            "arena + ceniza", "ceniza + agua", "bizcocho + arena",
+        };
+
         /// <summary>Cabecera de familia mientras su Polvo (la raíz) sigue sin descubrir -- literales YA en mayúsculas (cero allocs), indexadas por baseIdx (0..4).</summary>
         private static readonly string[] _familiaFallback = { "FAMILIA 1", "FAMILIA 2", "FAMILIA 3", "FAMILIA 4", "FAMILIA 5" };
 
         /// <summary>Total de figuritas del retículo (5 bases × 8 estados) -- la M de "N/M". Fijo: NO se reduce por casos "sin entrada" (p.ej. la arena no se disuelve, diseño §2) -- esa celda simplemente queda para siempre como "?", una verdad del universo tan legítima como cualquier otra ficha sin completar.</summary>
         private const int TotalFiguritas = MaterialId.BasesCount * 8;
 
-        /// <summary>Páginas del álbum: una por familia + la de los clásicos del arco al final. Lo lee Game/JournalHud.cs para su paginación real (botones "anterior/siguiente" + Re Pág/Av Pág del libro), así que el álbum de la pestaña y el de pantalla completa pasan página con el MISMO criterio.</summary>
-        public static int PaginasTotales => MaterialId.BasesCount + 1;
+        /// <summary>Páginas del álbum: una por familia + la de los clásicos del arco + (playtest 47, ENCARGO C) la de MEZCLAS DEL OFICIO, al final de todo. Lo lee Game/JournalHud.cs para su paginación real (botones "anterior/siguiente" + Re Pág/Av Pág del libro), así que el álbum de la pestaña y el de pantalla completa pasan página con el MISMO criterio.</summary>
+        public static int PaginasTotales => MaterialId.BasesCount + 2;
+
+        /// <summary>Índice de página de los clásicos del arco (la sexta, tras las 5 familias).</summary>
+        private const int PaginaClasicos = MaterialId.BasesCount;
+
+        /// <summary>(playtest 47, ENCARGO C) Índice de página de MEZCLAS DEL OFICIO -- la séptima, tras los clásicos (contrato §1e, literal).</summary>
+        private const int PaginaMezclas = MaterialId.BasesCount + 1;
 
         // -----------------------------------------------------------------
         // Dependencias / estado.
@@ -791,7 +826,8 @@ namespace Alkahest.Game
             }
 
             pagina = Mathf.Clamp(pagina, 0, PaginasTotales - 1);
-            if (pagina >= MaterialId.BasesCount) DibujarPaginaClasicos(izq, der, sim, knowledge);
+            if (pagina == PaginaMezclas) DibujarPaginaMezclas(izq, der, sim, knowledge); // (playtest 47, ENCARGO C)
+            else if (pagina == PaginaClasicos) DibujarPaginaClasicos(izq, der, sim, knowledge);
             else DibujarPaginaFamilia(izq, der, pagina, sim, knowledge);
 
             // PROGRESO TOTAL en la esquina de la página derecha, siempre presente y siempre
@@ -987,6 +1023,81 @@ namespace Alkahest.Game
         private const string NotaClasicos = "el vocabulario del taller: lo conoces desde el primer día";
 
         // -------------------------------------------------------------
+        // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1e) PÁGINA "MEZCLAS
+        // DEL OFICIO" -- SOLO ADITIVO: nueva página, misma anatomía de doble
+        // hoja que el resto del álbum, tocando lo MÍNIMO del código
+        // existente (dos líneas en PaginasTotales/DibujarPaginaDoble, ver
+        // arriba). Izquierda: las 6 figuritas en mini-vitrinas (mismo
+        // DibujarVitrina que ya usan clásicos y familias -- ningún dibujo
+        // nuevo). Derecha: EN VEZ del árbol de familia, las recetas COMO
+        // PREGUNTAS que se revelan al descubrir (contrato, literal) -- una
+        // fila de texto por cruce, no una figura.
+        // -------------------------------------------------------------
+        private static void DibujarPaginaMezclas(Rect izq, Rect der, AlkahestSim sim, SubstanceKnowledge knowledge)
+        {
+            float altoCabecera = _estiloCabeceraFamilia.lineHeight;
+            GUI.Label(new Rect(izq.x, izq.y, izq.width, altoCabecera), "MEZCLAS DEL OFICIO", _estiloCabeceraFamilia);
+            GUI.Label(new Rect(der.x, der.y, der.width, altoCabecera), "LAS RECETAS", _estiloCabeceraFamilia);
+
+            // Progreso DE ESTA COLECCIÓN (no cuenta en el N/M del retículo,
+            // mismo criterio que _clasicos -- ver TotalFiguritas).
+            int hechas = 0;
+            for (int i = 0; i < _cruces.Length; i++) if (knowledge.EsDescubierto(_cruces[i])) hechas++;
+            if (_progresoMezclasCacheN != hechas + 1)
+            {
+                _progresoMezclasCacheN = hechas + 1;
+                _progresoMezclasTexto = hechas + " / " + _cruces.Length;
+            }
+            float yProg = izq.y + altoCabecera + UiStyles.S(2f);
+            GUI.Label(new Rect(izq.x, yProg, izq.width, _estiloProgresoFamilia.lineHeight), _progresoMezclasTexto, _estiloProgresoFamilia);
+
+            float yFilete = yProg + _estiloProgresoFamilia.lineHeight + UiStyles.S(7f);
+            UiStyles.FileteRombo(izq.x + izq.width * 0.5f, yFilete, izq.width * 0.86f, UiStyles.Laton);
+            UiStyles.FileteRombo(der.x + der.width * 0.5f, yFilete, der.width * 0.86f, UiStyles.Laton);
+
+            // ---- HOJA IZQUIERDA: las 6 figuritas, 2 columnas x 3 filas. ----
+            var rejilla = new Rect(izq.x, yFilete + UiStyles.S(10f), izq.width, izq.yMax - yFilete - UiStyles.S(10f));
+            float anchoCelda = rejilla.width / 2f;
+            float altoCelda = rejilla.height / 3f;
+            for (int i = 0; i < _cruces.Length; i++)
+            {
+                int col = i % 2, fila = i / 2;
+                var celda = new Rect(rejilla.x + anchoCelda * col, rejilla.y + altoCelda * fila, anchoCelda, altoCelda);
+                DibujarVitrina(celda, _cruces[i], null, sim, knowledge);
+            }
+
+            // ---- HOJA DERECHA: las recetas como preguntas, una fila por cruce. ----
+            float yNota = yFilete + UiStyles.S(8f);
+            GUI.Label(new Rect(der.x, yNota, der.width, _estiloNotaArbol.lineHeight), NotaMezclas, _estiloNotaArbol);
+
+            float yFilas = yNota + _estiloNotaArbol.lineHeight + UiStyles.S(12f);
+            float altoFilaTexto = der.yMax - yFilas - _estiloProgresoTotal.lineHeight; // deja sitio al "ÁLBUM N/M" de la esquina.
+            float altoPorFila = Mathf.Max(UiStyles.S(20f), altoFilaTexto / _cruces.Length);
+
+            for (int i = 0; i < _cruces.Length; i++)
+            {
+                bool revelado = knowledge.EsDescubierto(_cruces[i]);
+                if (_mezclaCacheRevelado[i] != revelado || _mezclaTextoCache[i] == null)
+                {
+                    _mezclaCacheRevelado[i] = revelado;
+                    _mezclaTextoCache[i] = revelado
+                        ? _cruceIngredientes[i] + " → " + EtiquetaDe(_cruces[i], knowledge)
+                        : _crucePreguntas[i];
+                }
+                var fila = new Rect(der.x, yFilas + altoPorFila * i, der.width, altoPorFila);
+                GUI.Label(fila, _mezclaTextoCache[i], revelado ? _estiloRecetaRevelada : _estiloRecetaPregunta);
+            }
+        }
+
+        private const string NotaMezclas = "el crisol también mezcla: dos cosas en la cubeta pueden ser una tercera";
+        private static int _progresoMezclasCacheN = -1;
+        private static string _progresoMezclasTexto = "";
+        // Cero allocs por frame: el texto de cada fila solo se reconstruye cuando el estado
+        // revelado/pregunta de ESE cruce cambia (mismo patrón que _progresoFamTexto).
+        private static readonly bool[] _mezclaCacheRevelado = new bool[_cruces.Length];
+        private static readonly string[] _mezclaTextoCache = new string[_cruces.Length];
+
+        // -------------------------------------------------------------
         // PIEZAS COMPARTIDAS
         // -------------------------------------------------------------
 
@@ -1158,7 +1269,8 @@ namespace Alkahest.Game
         private static readonly Color _grisBorde = new Color(0.32f, 0.30f, 0.33f, 0.8f);
 
         private static GUIStyle _estiloCabeceraFamilia, _estiloProgresoFamilia, _estiloProgresoTotal,
-                                _estiloVerbo, _estiloNombreFigurita, _estiloRotuloEstado, _estiloSigno, _estiloNotaArbol;
+                                _estiloVerbo, _estiloNombreFigurita, _estiloRotuloEstado, _estiloSigno, _estiloNotaArbol,
+                                _estiloRecetaPregunta, _estiloRecetaRevelada;
         private static int _alturaEstilosEstaticos = -1;
 
         private static void PrepararEstilosPropios()
@@ -1175,6 +1287,11 @@ namespace Alkahest.Game
             _estiloRotuloEstado = Nuevo(UiStyles.S(10f), FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.TextoTenue, false, UiStyles.FuenteTitulos);
             _estiloSigno = Nuevo(UiStyles.S(18f), FontStyle.Bold, TextAnchor.MiddleCenter, UiStyles.TextoTenue, false);
             _estiloNotaArbol = Nuevo(UiStyles.S(11f), FontStyle.Italic, TextAnchor.UpperCenter, UiStyles.TextoTenue, false);
+            // (playtest 47, ENCARGO C) Las filas de "LAS RECETAS": pregunta tenue en cursiva
+            // mientras siga sin descubrir, respuesta clara y derecha una vez revelada -- mismo
+            // contraste tenue/claro que el resto del álbum usa para "sin descubrir"/"descubierto".
+            _estiloRecetaPregunta = Nuevo(UiStyles.S(13f), FontStyle.Italic, TextAnchor.UpperLeft, UiStyles.TextoTenue, false);
+            _estiloRecetaRevelada = Nuevo(UiStyles.S(13f), FontStyle.Normal, TextAnchor.UpperLeft, UiStyles.Texto, false);
         }
 
         /// <summary>

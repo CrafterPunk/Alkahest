@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using Alkahest.Sim;
+using Alkahest.Audio;
+using FriendsLoop.Networking;
 
 namespace Alkahest.Game
 {
@@ -158,6 +160,53 @@ namespace Alkahest.Game
         {
             InputLocked = false;
             HudSilenciado = false;
+
+            // =============================================================
+            // (ENCARGO M, CONTRATO_FASE_A.md §2) PAUSA/AJUSTES TAMBIÉN EN
+            // MULTI -- pero la escena MULTI, por diseño (ver el docblock de
+            // arriba y AlkahestGameBootstrap.TrySpawnRed), NUNCA instancia
+            // DayCycle por el camino normal: sin un DayCycle vivo, Escape no
+            // tiene quién lo escuche, y el panel de AJUSTES del Título
+            // tampoco existiría ahí. Se AUTO-INSTANCIA aquí, la única vez
+            // que TrySpawnRed llama a este método por sesión (protegido por
+            // su propio `_spawned`; el FindAnyObjectByType de abajo es una
+            // segunda defensa barata, no el mecanismo principal).
+            //
+            // ESTA INSTANCIA NUNCA RECIBE Init(sim, orderSystem, ...) --
+            // arranca con <see cref="ArrancarSoloParaPausaMulti"/>, que la
+            // deja en Phase.Playing con el reloj infinito (mismo camino que
+            // ya usa la sesión sin reloj de un jugador, ver EnterPlaying/
+            // DrawPlayingHud) y CON _sim EN NULL A PROPÓSITO: es la garantía
+            // ESTRUCTURAL (no una condición en tiempo de ejecución que
+            // alguien pueda romper mañana) de que "en multi la pausa no
+            // congela la sim compartida" -- ver ApplyPause, que solo toca
+            // `_sim.Paused` si `_sim != null`, y aquí `_sim` nunca se asigna.
+            // Todos los demás campos de la jornada clásica (_orderSystem,
+            // _knowledge, _hints...) se quedan en null también; sus
+            // null-checks ya existentes en Update/OnGUI los vuelven no-op.
+            // =============================================================
+            if (FindAnyObjectByType<DayCycle>() == null)
+            {
+                var go = new GameObject("DayCycle_PausaMulti");
+                go.AddComponent<DayCycle>().ArrancarSoloParaPausaMulti();
+            }
+        }
+
+        /// <summary>
+        /// (ENCARGO M) Arranque MÍNIMO para la escena MULTI -- ver el
+        /// docblock de <see cref="ForzarDesbloqueoSesion"/>, que es el único
+        /// llamador. Entra directo en Phase.Playing con el reloj infinito
+        /// (mismo estado que deja <see cref="EnterPlaying"/> en la sesión
+        /// sin reloj de un jugador): cero dibujo nuevo que mantener, porque
+        /// <see cref="DrawPlayingHud"/> ya sabe quedarse callado con
+        /// `_timeRemaining` en infinito. Lo único que este modo aporta de
+        /// verdad es que `Update()`/`OnGUI()` vuelven a correr en la escena
+        /// MULTI (nadie más lo hacía) para poder escuchar Escape.
+        /// </summary>
+        public void ArrancarSoloParaPausaMulti()
+        {
+            _modoMulti = true;
+            EnterPlaying();
         }
 
         private AlkahestSim _sim;
@@ -210,6 +259,54 @@ namespace Alkahest.Game
         private float _tolvaCheckTimer;
         private float _encargosBannerCountdown;
 
+        // =================================================================
+        // (ENCARGO M, CONTRATO_FASE_A.md §2) PAUSA + AJUSTES.
+        // =================================================================
+        /// <summary>True SOLO en la instancia auto-creada de la escena MULTI (ver <see cref="ArrancarSoloParaPausaMulti"/>). Decide, en <see cref="VolverAlTitulo"/>, si "volver al título" recarga esta misma escena (un jugador) o desconecta y carga la escena CLÁSICA (multi, que no tiene título propio).</summary>
+        private bool _modoMulti;
+        /// <summary>True mientras el overlay de PAUSA está activo (Escape durante Playing). Ortogonal a `_phase` a propósito: la pausa NO es una fase nueva de la jornada, es una interrupción de Playing -- ver <see cref="ApplyPause"/>.</summary>
+        private bool _pausado;
+        /// <summary>True mientras el panel de AJUSTES está sobre pantalla -- se abre desde el Título O desde la Pausa (mismo panel, ver <see cref="DrawAjustes"/>); al cerrarlo con "listo" (o Escape) se vuelve a lo que hubiera debajo (Título o Pausa) sin que este archivo tenga que recordar de dónde vino.</summary>
+        private bool _ajustesAbiertos;
+
+        private const string PrefKeyVolGeneral = "ChaosAlchemy_VolGeneral";
+        /// <summary>
+        /// Volumen general (AudioListener.volume), 0..1. Inicializador de
+        /// campo ESTÁTICO: se carga de PlayerPrefs la primera vez que algo
+        /// toca esta clase (mismo criterio que DirectorDeAudio.VolumenEfectos),
+        /// así que el slider del Título ve el valor persistido incluso antes
+        /// de que exista ninguna instancia de DayCycle.
+        /// </summary>
+        private static float _volGeneral = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolGeneral, 1f));
+
+        /// <summary>Nombre de la escena CLÁSICA (Título -> 3 jornadas), para "VOLVER AL TÍTULO" desde la escena MULTI -- ver <see cref="VolverAlTitulo"/>. Decisión fuera de contrato: no existía una constante compartida para este nombre; si la escena se renombrara algún día sin tocar este archivo, `SceneManager.LoadScene` falla con un solo error de consola, nada revienta en juego.</summary>
+        private const string SceneNameClasica = "AlkahestLab";
+
+        private void Awake()
+        {
+            // (ENCARGO M) Aplicar el volumen general guardado ANTES de que
+            // suene nada. AudioListener.volume es API de motor -- no se
+            // puede fijar desde un inicializador estático de campo con
+            // garantías -- así que se aplica aquí, una vez por instancia de
+            // DayCycle, que en las dos escenas (clásica vía
+            // AlkahestGameBootstrap.SpawnDayCycle, MULTI vía
+            // ArrancarSoloParaPausaMulti) es literalmente el primer
+            // componente en existir de la partida. Si alguna vez hubiera dos
+            // instancias a la vez (no debería), reaplicar el mismo valor es
+            // un no-op inocuo.
+            AudioListener.volume = _volGeneral;
+        }
+
+        private static void SetVolGeneral(float v)
+        {
+            v = Mathf.Clamp01(v);
+            if (Mathf.Approximately(v, _volGeneral)) return;
+            _volGeneral = v;
+            AudioListener.volume = _volGeneral;
+            PlayerPrefs.SetFloat(PrefKeyVolGeneral, _volGeneral);
+            PlayerPrefs.Save();
+        }
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, OrderSystem orderSystem, SubstanceKnowledge knowledge,
             MasterSupplies supplies = null, HintSystem hints = null)
@@ -261,9 +358,10 @@ namespace Alkahest.Game
 
         private void Update()
         {
+            ManejarEscape();
             ApplyPause();
 
-            if (_phase == Phase.Playing)
+            if (_phase == Phase.Playing && !_pausado)
             {
                 // (playtest 21, EL PIVOT) SESIÓN SIN RELOJ (CONTRATO_PIVOT.md,
                 // decisión de Cesar: "el cuarto íntimo pasa a ser EL juego").
@@ -502,9 +600,102 @@ namespace Alkahest.Game
 
         private void ApplyPause()
         {
-            bool locked = _phase != Phase.Playing;
+            // (ENCARGO M) `_pausado` (Escape durante Playing, ver
+            // ManejarEscape) bloquea el input exactamente igual que
+            // cualquier otra fase que no sea Playing -- para Flask/
+            // Dispenser/HeatPlate/ChillStone/NamingUi, "pausado" y "estamos
+            // en el Título" son la misma cosa: no se puede tocar el mundo.
+            bool locked = _phase != Phase.Playing || _pausado;
             InputLocked = locked;
+            // UN JUGADOR: `_sim` es real y esta línea congela la simulación
+            // (AlkahestSim.Paused) tanto en pausa como en el resto de fases
+            // que no son Playing -- comportamiento SIN CAMBIOS respecto a
+            // antes de este encargo.
+            // MULTI: la instancia auto-creada por ArrancarSoloParaPausaMulti
+            // NUNCA recibe `_sim` (ver su docblock) -- así que esta línea es
+            // ESTRUCTURALMENTE incapaz de congelar la sim compartida. "En
+            // multi la pausa no congela la sim" no depende de una condición
+            // en tiempo de ejecución que alguien pueda romper mañana; depende
+            // de que a esta instancia nunca se le pasa la referencia.
             if (_sim != null) _sim.Paused = locked;
+        }
+
+        /// <summary>
+        /// (ENCARGO M) ESCALERA DE GUARDAS DE ESCAPE, en orden -- cada peldaño
+        /// documenta POR QUÉ va antes que el siguiente:
+        ///
+        ///  1) <see cref="UiStyles.EscribiendoTexto"/>: mientras el jugador
+        ///     escribe (el rito de NamingUi, o el campo de patente de
+        ///     Hornada dentro de JournalHud) Escape le PERTENECE a ese campo
+        ///     -- las dos clases ya escuchan Escape ELLAS MISMAS para
+        ///     cerrarse (ver NamingUi.Update, que comprueba
+        ///     `_open &amp;&amp; kb.escapeKey...` SIN mirar EscribiendoTexto, a
+        ///     propósito: Escape es la única tecla que sigue funcionando
+        ///     mientras se escribe). Si esta clase TAMBIÉN reaccionara a la
+        ///     misma pulsación, un Escape cerraría el rito Y abriría la
+        ///     pausa en el mismo frame -- un efecto doble que nadie pidió.
+        ///     No hacer nada y dejar que el campo se cierre solo.
+        ///
+        ///  2) <see cref="JournalHud.Abierto"/> / <see cref="AlbumReal.Abierto"/>:
+        ///     el diario y el álbum son ventanas de pantalla completa que
+        ///     YA consumen su propio Escape para cerrarSE (mismo criterio
+        ///     que el punto 1, ver sus respectivos Update). Dejarlas
+        ///     cerrarse primero: nunca competir por la misma pulsación.
+        ///
+        ///  3) <see cref="_ajustesAbiertos"/>: el panel de AJUSTES (propio
+        ///     de esta clase, se abre desde el Título o desde la Pausa) es
+        ///     la capa modal más externa que SÍ gestiona este método --
+        ///     Escape lo cierra y NADA MÁS (ni abre ni cierra pausa en el
+        ///     mismo gesto). Funciona en cualquier fase (Título incluido),
+        ///     no solo en Playing.
+        ///
+        ///  4) Con el mundo "limpio" (ninguna de las tres capas de arriba
+        ///     activa) Escape abre/cierra la PAUSA -- pero SOLO durante
+        ///     Playing: Título/DayIntro/DayEnd/EndScreen ya son sus propios
+        ///     modales con sus propios botones ("Salir", "Comenzar
+        ///     jornada"...) y "pausar" no significa nada ahí.
+        /// </summary>
+        private void ManejarEscape()
+        {
+            var kb = Keyboard.current;
+            if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
+
+            if (UiStyles.EscribiendoTexto) return; // (1)
+            if (JournalHud.Abierto || AlbumReal.Abierto) return; // (2)
+
+            if (_ajustesAbiertos) { _ajustesAbiertos = false; return; } // (3)
+
+            if (_phase != Phase.Playing) return; // (4a) fuera de Playing, Escape no hace nada.
+            _pausado = !_pausado; // (4b)
+        }
+
+        /// <summary>
+        /// (ENCARGO M) "VOLVER AL TÍTULO" desde la Pausa.
+        /// UN JUGADOR: recarga la MISMA escena SIN fijar
+        /// <see cref="_skipTitleOnLoad"/> (a diferencia de <see cref="RestartRun"/>)
+        /// -- Init() lo lee en false y cae directo a EnterTitle(), que es
+        /// justo la pantalla que este botón promete. No hace falta pasar por
+        /// RestartRun/una seed: esto no es "empezar una partida nueva", es
+        /// "quiero salir de esta a la pantalla de inicio".
+        /// MULTI: la escena MULTI no tiene título propio (regla del POC, ver
+        /// AlkahestGameBootstrap.TrySpawnRed) -- desconectar primero (MISMO
+        /// gesto que el botón "SALIR de la sesión" de
+        /// Net/TallerSesionHud.cs: <see cref="SessionCoordinator.Disconnect"/>,
+        /// que apaga el NetworkManager y abandona el lobby de Steam) y CARGAR
+        /// LA ESCENA CLÁSICA por nombre (<see cref="SceneNameClasica"/>).
+        /// </summary>
+        private void VolverAlTitulo()
+        {
+            if (_modoMulti)
+            {
+                var coordinador = FindAnyObjectByType<SessionCoordinator>();
+                if (coordinador != null) coordinador.Disconnect();
+                SceneManager.LoadScene(SceneNameClasica);
+            }
+            else
+            {
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            }
         }
 
         // -----------------------------------------------------------------
@@ -615,6 +806,18 @@ namespace Alkahest.Game
 
         private void OnGUI()
         {
+            // (ENCARGO M) AJUSTES y PAUSA son overlays MODALES por encima de
+            // cualquier fase -- se comprueban ANTES del switch, y cada uno
+            // hace `return` para no dibujar la fase de debajo en el mismo
+            // frame. Orden: AJUSTES gana sobre PAUSA (si se abrió AJUSTES
+            // desde dentro de la Pausa, se ve el panel de AJUSTES solo, no
+            // los dos superpuestos); al cerrar AJUSTES con "listo"/Escape
+            // (ver ManejarEscape) se vuelve a lo que hubiera debajo (Pausa o
+            // el propio Título) sin código extra: el siguiente OnGUI ya no
+            // entra en esta rama y cae al switch de siempre.
+            if (_ajustesAbiertos) { DrawAjustes(); return; }
+            if (_pausado) { DrawPausa(); return; }
+
             switch (_phase)
             {
                 case Phase.Title: DrawTitle(); break;
@@ -656,7 +859,11 @@ namespace Alkahest.Game
             UiStyles.Preparar();
             // (playtest 40, SEMILLA CERO) 320 -> 380: el panel gana el botón
             // principal nuevo + su filete separador -- ver el bloque de abajo.
-            var interior = AbrirPanel(480f, 380f);
+            // (ENCARGO M) 480 -> 560 de ancho: la fila de botones pasa de dos
+            // a tres (MODO CAÓTICO / AJUSTES / Salir, ver más abajo) y a 480
+            // quedaban apretados contra el texto largo de MODO CAÓTICO --
+            // decisión fuera de contrato, documentada aquí.
+            var interior = AbrirPanel(560f, 380f);
 
             // (playtest 31, TIPOGRAFÍA = ALMA) El título es lo PRIMERO que ve
             // quien enciende el juego. Es una capital lapidaria (Cinzel) con
@@ -714,11 +921,103 @@ namespace Alkahest.Game
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun(ParseSeedField());
             }
+            // (ENCARGO M, CONTRATO_FASE_A.md §2) "botón AJUSTES bajo el
+            // filete (entre MODO CAÓTICO y Salir)": literal, en la misma
+            // fila, en medio de los otros dos.
+            if (GUILayout.Button("AJUSTES", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            {
+                _ajustesAbiertos = true;
+            }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
             {
                 QuitGame();
             }
             GUILayout.EndHorizontal();
+
+            GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// (ENCARGO M) EL PANEL DE AJUSTES: un único método, reutilizado
+        /// tanto desde el Título como desde la Pausa (ver <see cref="_ajustesAbiertos"/>)
+        /// -- "el mismo panel" que pide el contrato. Dos sliders sobre los
+        /// dos únicos números que este encargo controla: el volumen general
+        /// del motor (<see cref="AudioListener.volume"/>, vía
+        /// <see cref="SetVolGeneral"/>) y el multiplicador de efectos del
+        /// taller (<see cref="DirectorDeAudio.VolumenEfectos"/>, propiedad
+        /// estática -- funciona igual haya o no una instancia de
+        /// DirectorDeAudio viva, ver su doc). Los dos se PERSISTEN en
+        /// PlayerPrefs en el momento en que cambian (no solo al pulsar
+        /// "listo"): cerrar el juego a media sesión no pierde el ajuste.
+        /// </summary>
+        private void DrawAjustes()
+        {
+            DrawFullscreenDim();
+            UiStyles.Preparar();
+            var interior = AbrirPanel(420f, 260f);
+
+            GUILayout.Label(UiStyles.Espaciar("AJUSTES"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(38f)));
+            var filete = GUILayoutUtility.GetRect(10f, UiStyles.S(10f));
+            if (Event.current.type == EventType.Repaint)
+                UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
+
+            GUILayout.Space(UiStyles.S(14f));
+            GUILayout.Label("Volumen general — " + Mathf.RoundToInt(_volGeneral * 100f) + "%", UiStyles.Cuerpo);
+            float nuevoGeneral = GUILayout.HorizontalSlider(_volGeneral, 0f, 1f, UiStyles.Slider, UiStyles.SliderThumb,
+                GUILayout.Height(UiStyles.S(20f)));
+            if (!Mathf.Approximately(nuevoGeneral, _volGeneral)) SetVolGeneral(nuevoGeneral);
+
+            GUILayout.Space(UiStyles.S(16f));
+            float efectosActual = DirectorDeAudio.VolumenEfectos;
+            GUILayout.Label("Efectos del taller — " + Mathf.RoundToInt(efectosActual * 100f) + "%", UiStyles.Cuerpo);
+            float nuevoEfectos = GUILayout.HorizontalSlider(efectosActual, 0f, 1f, UiStyles.Slider, UiStyles.SliderThumb,
+                GUILayout.Height(UiStyles.S(20f)));
+            if (!Mathf.Approximately(nuevoEfectos, efectosActual)) DirectorDeAudio.VolumenEfectos = nuevoEfectos;
+
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("listo", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            {
+                _ajustesAbiertos = false;
+            }
+
+            GUILayout.EndArea();
+        }
+
+        /// <summary>
+        /// (ENCARGO M) EL OVERLAY DE PAUSA: solo alcanzable durante Playing
+        /// (ver <see cref="ManejarEscape"/>). Tres gestos -- REANUDAR (cierra
+        /// la pausa sin más), AJUSTES (abre <see cref="DrawAjustes"/> sin
+        /// cerrar la pausa: al volver de AJUSTES seguimos en pausa) y VOLVER
+        /// AL TÍTULO (<see cref="VolverAlTitulo"/>, con su propia rama de un
+        /// jugador/multi).
+        /// </summary>
+        private void DrawPausa()
+        {
+            DrawFullscreenDim();
+            UiStyles.Preparar();
+            AbrirPanel(360f, 240f);
+
+            GUILayout.Label(UiStyles.Espaciar("PAUSA"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(38f)));
+            GUILayout.Space(UiStyles.S(6f));
+            GUILayout.Label(_modoMulti
+                ? "El taller compartido sigue corriendo para el resto -- esto solo te pausa a ti."
+                : "La simulación está congelada.", UiStyles.CuerpoTenue);
+
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("REANUDAR", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            {
+                _pausado = false;
+            }
+            GUILayout.Space(UiStyles.S(8f));
+            if (GUILayout.Button("AJUSTES", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            {
+                _ajustesAbiertos = true;
+            }
+            GUILayout.Space(UiStyles.S(8f));
+            if (GUILayout.Button("VOLVER AL TÍTULO", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            {
+                VolverAlTitulo();
+            }
 
             GUILayout.EndArea();
         }

@@ -58,7 +58,43 @@ namespace Alkahest.Sim
         // -----------------------------------------------------------------
         public const byte Brasa = 58;
 
-        public const int Count = 59; // 18 + 5*8 + 1 (Brasa)
+        // -----------------------------------------------------------------
+        // LAS RECETAS CRUZADAS (playtest 47, ENCARGO C, CONTRATO_FASE_A.md
+        // §1a/§1b): seis materiales NUEVOS, standalone (fuera del bloque
+        // bases×estado -- no son (base,estado) de ninguna de las 5 bases,
+        // son la MEZCLA de dos de ellas), producidos por
+        // Game/Crisol.DecidirHornada cuando la cámara contiene una mezcla
+        // relevante (ver Universe.TryCruce). Ids al FINAL del roster fijo,
+        // igual que Brasa: así ningún id existente se desplaza y
+        // MatDe/BaseDe/EstadoDe (aritmética posicional sobre BaseEstado0)
+        // siguen intactos sin tocar una sola línea. Count sube 59 -> 65.
+        //
+        // DECISIÓN FUERA DE CONTRATO (documentada en el informe de la
+        // ronda): el contrato pedía "CalizaCeramico existente" como
+        // producto del cruce caliza+arcilla, pero ese id (39,
+        // MatDe(2,Ceramico)) YA es el rename "cal sobrecocida" (§1c #3) --
+        // usar el MISMO id para dos cosas (la caliza sobrecocida SOLA y el
+        // clínker de verdad, con arcilla) habría hecho mentiroso al propio
+        // rename ("cal sobrecocida: para clínker de verdad, mezcla" ya no
+        // sería cierto si mezclar te devolviera EL MISMO material). Se
+        // decidió el camino más simple y honesto que el propio contrato deja
+        // como alternativa: <see cref="Clinker"/>, un id propio para el
+        // cruce, con su color/reseña dados en el contrato.
+        // -----------------------------------------------------------------
+        /// <summary>"mortero" -- cal apagada + arena de sílice, cualquier fuego. Ver Universe.TryCruce.</summary>
+        public const byte Mortero = 59;
+        /// <summary>"vidrio de botella" -- arena de sílice + ceniza, fuego pleno (funde a banda MÁS BAJA que la fusión pura de la arena: la potasa real baja el punto de fusión). Ver Universe.TryCruce.</summary>
+        public const byte VidrioVerde = 60;
+        /// <summary>"lejía de ceniza" -- ceniza + agua, fuego bajo. Ver Universe.TryCruce.</summary>
+        public const byte Lejia = 61;
+        /// <summary>"hormigón" -- clínker + arena de sílice, fuego bajo. Ver Universe.TryCruce.</summary>
+        public const byte Hormigon = 62;
+        /// <summary>"cerámica esmaltada" -- bizcocho + arena de sílice, fuego pleno. Ver Universe.TryCruce.</summary>
+        public const byte Esmaltado = 63;
+        /// <summary>"clínker" -- caliza molida + arcilla, fuego pleno. El id PROPIO del cruce (ver el bloque de comentarios de arriba); NO confundir con MatDe(2,Ceramico) ("cal sobrecocida", la caliza sobrecocida SOLA). Ver Universe.TryCruce.</summary>
+        public const byte Clinker = 64;
+
+        public const int Count = 65; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -868,6 +904,132 @@ namespace Alkahest.Sim
             };
 
             // ===================================================================
+            // LAS RECETAS CRUZADAS (playtest 47, ENCARGO C). Seis materiales
+            // NUEVOS con IDENTIDAD REAL propia (no sorteada, no jitter de
+            // patrón como lo innominado -- mismo trato que el vocabulario del
+            // taller y Brasa, regla 17 de CLAUDE.md: se ven IGUAL en toda
+            // partida). Colores/arquetipos/físicas VERBATIM del contrato
+            // donde el contrato los da; el resto es DECISIÓN de C, documentada
+            // aquí y en el informe de la ronda:
+            //  - Mortero/Hormigon/Clinker/Esmaltado: StaticSolid con COHESIÓN
+            //    (regla 7 de CLAUDE.md, "los productos sólidos del retículo
+            //    SÍ caen al perder apoyo, con cohesión") -- "el hormigón
+            //    aguanta MÁS que el mortero" se cumple en dos ejes: cohesión
+            //    física (7 vs 5, hormigón voladiza más) Y persistencia térmica
+            //    (ver RellenarPersistenciaCruces más abajo). Clinker (8) es el
+            //    más duro de los cuatro -- caliza y arcilla cocidas a fuego
+            //    pleno, el techo de la familia, igual que el Cerámico real.
+            //  - VidrioVerde: StaticSolid cohesión 3, LITERAL del contrato
+            //    ("física del Templado").
+            //  - Lejia: Liquid, como cualquier disolución.
+            //  - RESPUESTA A LA PRENSA: los cinco sólidos usan Resistir, no
+            //    Compactar/Reventar -- Game/Prensa.cs (fuera de este encargo)
+            //    solo aplica esas dos respuestas a ids EsBaseEstado
+            //    (AplicarRespuesta/MaterialSalida gatean por eso), así que
+            //    para un id standalone como estos, Reventar/Compactar serían
+            //    un rótulo mentiroso sin efecto real. Resistir además ALIMENTA
+            //    la resistencia anotada del propio encargo ("resiste la
+            //    prensa", ver SubstanceKnowledge.RegistrarResistePrensa) --
+            //    coherente con que son productos YA CURADOS, no materia prima.
+            //    Lejia (líquido) usa Escupir, mismo criterio que Agua/
+            //    Fundido/Solución (los líquidos no se comprimen).
+            // ===================================================================
+            mats[MaterialId.Mortero] = new MaterialDef
+            {
+                id = MaterialId.Mortero,
+                devName = "Mortero",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(200, 196, 184, 255),
+                colorJitter = 10,
+                density = 210,
+                caeSolido = true,
+                cohesionCeldas = 5,
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Neto,
+            };
+            mats[MaterialId.VidrioVerde] = new MaterialDef
+            {
+                id = MaterialId.VidrioVerde,
+                devName = "VidrioVerde",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(110, 160, 120, 255),
+                colorJitter = 10,
+                density = 195,
+                // "física del Templado" (contrato §1a, literal): cae con
+                // cohesión 3 -- el mismo número que el Templado real
+                // (MaterialDef del roster base×estado, EstadoMateria.Templado).
+                caeSolido = true,
+                cohesionCeldas = 3,
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Halo,
+            };
+            mats[MaterialId.Lejia] = new MaterialDef
+            {
+                id = MaterialId.Lejia,
+                devName = "Lejia",
+                archetype = MaterialArchetype.Liquid,
+                baseColor = new Color32(210, 205, 180, 255),
+                colorJitter = 10,
+                density = (short)(liquidDensity[MaterialId.Water] + 15), // agua con potasa disuelta: algo más densa que el agua pura.
+                fluidity = 4,
+                // Mismo lenguaje visual que las Soluciones reales
+                // (ConstruirEstadosDerivados, "disolución visible", playtest
+                // 20): Motas + borde Difuso, patronFuerza 90 -- es LITERALMENTE
+                // lo mismo (algo disuelto en agua), así que hereda su firma.
+                patron = PatronMorfologico.Motas,
+                borde = BordeMorfologico.Difuso,
+                patronEscala = 2,
+                patronFuerza = 90,
+                ritmoAnim = 30,
+            };
+            mats[MaterialId.Hormigon] = new MaterialDef
+            {
+                id = MaterialId.Hormigon,
+                devName = "Hormigon",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(168, 164, 156, 255),
+                colorJitter = 10,
+                density = 230,
+                caeSolido = true,
+                cohesionCeldas = 7, // más que el mortero (5): "el hormigón aguanta más" (contrato §1a), verdad real.
+                // Vetas sutiles (decisión de C): el árido grueso del hormigón
+                // real se lee como jaspeado, a diferencia de la pasta lisa
+                // del mortero -- diferenciación visual barata (Vetas es
+                // puramente posicional, coste cero en el stepper, regla 16).
+                patron = PatronMorfologico.Vetas,
+                borde = BordeMorfologico.Neto,
+                patronEscala = 3,
+                patronFuerza = 55,
+            };
+            mats[MaterialId.Esmaltado] = new MaterialDef
+            {
+                id = MaterialId.Esmaltado,
+                devName = "Esmaltado",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(196, 120, 88, 255),
+                colorJitter = 10,
+                density = 220,
+                caeSolido = true,
+                cohesionCeldas = 6, // LITERAL del contrato §1a.
+                // Escarcha: el brillo vítreo del esmalte sobre la superficie.
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Escarcha,
+            };
+            mats[MaterialId.Clinker] = new MaterialDef
+            {
+                id = MaterialId.Clinker,
+                devName = "Clinker",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(150, 145, 138, 255), // LITERAL del contrato (puntos finos, ENCARGO C).
+                colorJitter = 12,
+                density = 235,
+                caeSolido = true,
+                cohesionCeldas = 8, // el techo de la familia: caliza y arcilla cocidas a fuego pleno, tan duro como el Cerámico real.
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Neto,
+            };
+
+            // ===================================================================
             // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4) — el
             // limo primigenio + las 40 variantes base×estado, generadas EN
             // BUCLE desde tablas sorteadas por seed (cero código por-material,
@@ -925,6 +1087,16 @@ namespace Alkahest.Sim
                 out byte[] conductividadPorMaterial, out bool[] solubleEnAguaPorMaterial,
                 out bool[] esCombustiblePorMaterial, out byte[] tempCombustibleRawPorMaterial,
                 out byte ganadorGarantizado, out byte tempEnsayoCalorRaw, out int baseCombustibleGarantizada);
+
+            // (playtest 47, ENCARGO C) Los 6 ids de las recetas cruzadas
+            // (59..64) quedan FUERA de los dos bucles de ResolverPersistencia
+            // (0..BaseEstado0-1 = vocabulario, y el bloque bases×estado):
+            // exactamente el mismo hueco que ya dejaba Brasa (58, nunca
+            // relleno tampoco). Se rellenan aquí, a mano, sobre los arrays ya
+            // devueltos -- ver el docblock de RellenarPersistenciaCruces.
+            RellenarPersistenciaCruces(umbralPersistenciaRaw, prensaPorMaterial,
+                conductividadPorMaterial, solubleEnAguaPorMaterial,
+                esCombustiblePorMaterial, tempCombustibleRawPorMaterial);
 
             ConstruirPolvoBases(mats, rng, tablasPersistencia);
 
@@ -2772,6 +2944,158 @@ namespace Alkahest.Sim
             return 255;
         }
 
+        /// <summary>
+        /// (playtest 47, ENCARGO C) Persistencia/prensa manual para los 6 ids
+        /// de las recetas cruzadas (59..64) -- el mismo hueco que
+        /// ResolverPersistencia ya dejaba sin rellenar para Brasa (58), ver el
+        /// comentario en Create() junto a la llamada. Números DECISIÓN DE C,
+        /// documentados en el informe de la ronda:
+        ///  - UmbralPersistenciaRaw: "el hormigón aguanta MÁS que el mortero"
+        ///    (contrato §1a) se cumple aquí en el eje TÉRMICO (210 vs 150);
+        ///    Clinker (230) y Esmaltado (235) son los más resistentes (fuego
+        ///    pleno cocidos ya, como el Cerámico real, cuyo umbral es
+        ///    CeramicoUmbral[b] -- típicamente 220-255 en la tabla generada);
+        ///    VidrioVerde (155) es DELIBERADAMENTE más bajo que un vidrio
+        ///    puro -- funde con fundente, y lo que baja el punto de fusión al
+        ///    nacer lo vuelve a bajar al recalentar (misma lección, dos
+        ///    veces). Lejia (110) es la más floja: es agua con potasa, se
+        ///    evapora como cualquier disolución.
+        ///  - Prensa/Conductividad/Soluble/Combustible: ver el bloque de
+        ///    comentarios junto a los MaterialDef nuevos en Create().
+        /// </summary>
+        private static void RellenarPersistenciaCruces(
+            byte[] umbralPersistenciaRaw, RespuestaPrensa[] prensaPorMaterial,
+            byte[] conductividadPorMaterial, bool[] solubleEnAguaPorMaterial,
+            bool[] esCombustiblePorMaterial, byte[] tempCombustibleRawPorMaterial)
+        {
+            void Rellenar(byte id, byte umbral, RespuestaPrensa prensa)
+            {
+                umbralPersistenciaRaw[id] = umbral;
+                prensaPorMaterial[id] = prensa;
+                conductividadPorMaterial[id] = 0;
+                solubleEnAguaPorMaterial[id] = false;
+                esCombustiblePorMaterial[id] = false;
+                tempCombustibleRawPorMaterial[id] = 0;
+            }
+
+            Rellenar(MaterialId.Mortero, 150, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.VidrioVerde, 155, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Lejia, 110, RespuestaPrensa.Escupir);
+            Rellenar(MaterialId.Hormigon, 210, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Esmaltado, 235, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Clinker, 230, RespuestaPrensa.Resistir);
+        }
+
+        // ===================================================================
+        // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1b) LA MEZCLA EN CUBETA:
+        // la tabla de cruces. Estática (estos pares/productos dependen SOLO de
+        // la identidad real, que a su vez solo existe atada a la seed
+        // congelada de Semilla Cero -- ver Universe.SemillaCeroBaseIdx), igual
+        // de espíritu que Universe._identidadReal.
+        //
+        // BANDAS TÉRMICAS: <see cref="Crisol.CrisolTier0Raw"/... perdón,
+        // <see cref="CrisolTier0Raw"/> (120) es el rescoldo SIN combustible;
+        // el crisol nunca baja de ahí (Game/Crisol.IntentarEncender: `cima =
+        // fuelMat!=Empty ? TempCombustibleRaw(fuelMat) : CrisolTier0Raw`).
+        // Por eso "cualquiera" y "bajo" son EL MISMO umbral numérico
+        // (CrisolTier0Raw): ambos se cumplen siempre que hay hornada. Se
+        // mantienen como dos nombres distintos por CLARIDAD DE DISEÑO (el
+        // contrato los pide como conceptos separados) y por si una ronda
+        // futura introduce un fuego por debajo del rescoldo propio -- hoy no
+        // existe, así que numéricamente coinciden, documentado a propósito.
+        // <see cref="CruceFuegoPlenoRaw"/> (145) SÍ es un gate real: exige
+        // combustible de verdad cargado (el peor combustible sorteable de la
+        // tabla es 165..190 raw en TODA seed, ver TempCombustibleRawBase) --
+        // muy por debajo de eso, así que cualquier combustible real basta,
+        // pero el rescoldo solo (120) nunca lo cruza.
+        //
+        // LA LECCIÓN DEL VIDRIO DE BOTELLA: CruceFuegoPlenoRaw=145 es
+        // MUCHO más bajo que FusionRaw(base0) en Semilla Cero (220, ver el
+        // override 2 de AplicarOverridesSemillaCero) -- la potasa de la
+        // ceniza (el fundente real) baja el punto de fusión de la arena, y el
+        // NÚMERO lo dice: el vidrio de botella funde a 145, el vidrio puro
+        // pediría 220 (de hecho, INALCANZABLE con el mejor combustible de
+        // esta seed, 165..190 -- la ceniza no es un atajo cualquiera, es LA
+        // ÚNICA forma práctica de fundir arena en este universo).
+        // ===================================================================
+        /// <summary>Tier de fuego que exige un cruce (ver el bloque de comentarios de arriba).</summary>
+        public enum TierCruce : byte { Cualquiera = 0, Bajo = 1, Pleno = 2 }
+
+        /// <summary>Gate real de "fuego pleno" para un cruce: exige combustible cargado (ver el bloque de comentarios de arriba).</summary>
+        public const byte CruceFuegoPlenoRaw = 145;
+
+        private readonly struct CruceReceta
+        {
+            public readonly byte A, B, Producto;
+            public readonly TierCruce Tier;
+            public readonly string Verbo;
+            public CruceReceta(byte a, byte b, byte producto, TierCruce tier, string verbo)
+            { A = a; B = b; Producto = producto; Tier = tier; Verbo = verbo; }
+        }
+
+        // Ids de los ingredientes, VERBATIM de la identidad real de Semilla
+        // Cero (§2 de ConstruirIdentidadReal): base0=arena, base1=arcilla,
+        // base2=caliza, base3=veta vegetal, base4=sal (SemillaCeroBaseIdx).
+        // static readonly, no const: MatDe() no es una expresión constante de
+        // compilación (hace aritmética sobre BaseEstado0) -- se calculan UNA
+        // vez al cargar la clase, antes de _cruces (orden textual).
+        private static readonly byte _cruceArenaPolvo = MaterialId.MatDe(0, EstadoMateria.Polvo);       // "arena de sílice"
+        private static readonly byte _cruceArcillaPolvo = MaterialId.MatDe(1, EstadoMateria.Polvo);     // "arcilla"
+        private static readonly byte _cruceBizcocho = MaterialId.MatDe(1, EstadoMateria.Recocido);      // "bizcocho"
+        private static readonly byte _cruceCalizaPolvo = MaterialId.MatDe(2, EstadoMateria.Polvo);      // "caliza molida"
+        private static readonly byte _cruceCalApagada = MaterialId.MatDe(2, EstadoMateria.Recocido);    // "cal apagada"
+
+        private static readonly CruceReceta[] _cruces =
+        {
+            // cal apagada + arena de sílice -> Mortero, cualquiera (tier0 basta), "amasando".
+            new CruceReceta(_cruceCalApagada, _cruceArenaPolvo, MaterialId.Mortero, TierCruce.Cualquiera, "amasando"),
+            // caliza molida + arcilla -> Clinker, pleno, "cociendo clínker".
+            new CruceReceta(_cruceCalizaPolvo, _cruceArcillaPolvo, MaterialId.Clinker, TierCruce.Pleno, "cociendo clínker"),
+            // clínker + arena de sílice -> Hormigon, bajo, "fraguando".
+            // (DECISIÓN DE C, documentada) el "agua presente" del contrato se
+            // SIMPLIFICA fuera: este sistema detecta solo dominante+secundario
+            // (dos materiales), no un tercer ingrediente -- el agua queda
+            // implícita en el gesto ("fraguando") y en la propia reseña de
+            // Hormigon ("...y agua"), sin comprobación mecánica aparte.
+            new CruceReceta(MaterialId.Clinker, _cruceArenaPolvo, MaterialId.Hormigon, TierCruce.Bajo, "fraguando"),
+            // arena de sílice + ceniza -> VidrioVerde, pleno (a banda MÁS BAJA
+            // que la fusión pura, ver el bloque de comentarios de arriba).
+            new CruceReceta(_cruceArenaPolvo, MaterialId.Ash, MaterialId.VidrioVerde, TierCruce.Pleno, "fundiendo con fundente"),
+            // ceniza + agua -> Lejia, bajo, "lixiviando".
+            new CruceReceta(MaterialId.Ash, MaterialId.Water, MaterialId.Lejia, TierCruce.Bajo, "lixiviando"),
+            // bizcocho + arena de sílice -> Esmaltado, pleno, "esmaltando".
+            new CruceReceta(_cruceBizcocho, _cruceArenaPolvo, MaterialId.Esmaltado, TierCruce.Pleno, "esmaltando"),
+        };
+
+        /// <summary>
+        /// (ENCARGO C) ¿Los dos materiales de la cámara forman un cruce
+        /// conocido a esta temperatura? Orden-independiente (dominante/
+        /// secundario pueden llegar en cualquiera de los dos papeles). LLAMAR
+        /// SOLO bajo AlkahestGameBootstrap.ModoSemillaCero (API pura, no se
+        /// autoprotege -- mismo contrato que TieneIdentidadReal, ver su
+        /// docblock): la Game/Crisol.cs es quien decide el gate, este método
+        /// no conoce el modo de juego.
+        /// </summary>
+        public static bool TryCruce(byte matA, byte matB, byte cimaRaw, out byte producto, out string verbo, out string condicion)
+        {
+            producto = MaterialId.Empty; verbo = null; condicion = null;
+            for (int i = 0; i < _cruces.Length; i++)
+            {
+                var r = _cruces[i];
+                bool coincide = (matA == r.A && matB == r.B) || (matA == r.B && matB == r.A);
+                if (!coincide) continue;
+
+                bool fuegoAlcanza = r.Tier == TierCruce.Pleno ? cimaRaw >= CruceFuegoPlenoRaw : cimaRaw >= CrisolTier0Raw;
+                if (!fuegoAlcanza) return false; // el par existe, pero este fuego no alcanza -- la escalera de siempre decide.
+
+                producto = r.Producto;
+                verbo = r.Verbo;
+                condicion = r.Verbo; // (Encargo C) la condición patentable del cruce ES su verbo -- ver Hornada.RegistrarOp, no depende de qué combustible ardía.
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Interpola linealmente byte a byte entre dos Color32 (mismo espíritu que SimRenderer.LerpByte, copiado aquí para no tocar SimRenderer -- sección 7 del contrato). El alfa siempre sale en 255 (todas las variantes bases×estado son opacas, mismo criterio que lo innominado, regla 23).</summary>
         private static Color32 LerpColor32(Color32 from, Color32 to, float t01)
         {
@@ -3086,15 +3410,20 @@ namespace Alkahest.Sim
             tabla[MaterialId.MatDe(2, EstadoMateria.Fundido)] = new IdentidadReal("caliza fundida", "Solo un fuego brutal la funde; antes prefiere volverse cal.");
             tabla[MaterialId.MatDe(2, EstadoMateria.Templado)] = new IdentidadReal("caliche", "Costra dura de cal y arena. Suelos enteros del desierto son esto.");
             tabla[MaterialId.MatDe(2, EstadoMateria.Recocido)] = new IdentidadReal("cal apagada", "Cal reposada con calma: la pasta que une muros desde Roma.");
-            tabla[MaterialId.MatDe(2, EstadoMateria.Compacto)] = new IdentidadReal("mármol joven", "Caliza comprimida: dale eras y presión y tendrás mármol. Tu prensa hace trampa.");
-            tabla[MaterialId.MatDe(2, EstadoMateria.Ceramico)] = new IdentidadReal("clínker", "Caliza cocida a lo bruto: el corazón del cemento moderno.");
+            // (playtest 47, ENCARGO C, rename #2 de la auditoría §2 de INFORME_REALIDAD.md, VERBATIM)
+            tabla[MaterialId.MatDe(2, EstadoMateria.Compacto)] = new IdentidadReal("caliza prensada", "El mármol real pide eras de presión y calor. Esto es el primer paso — tu prensa hace la parte rápida.");
+            // (playtest 47, ENCARGO C, rename #3: "clínker" pasa a ser el NOMBRE DEL CRUCE
+            // caliza+arcilla, ver MaterialId.Clinker/Universe.TryCruce -- esta entrada
+            // solo-caliza pasa a "cal sobrecocida", VERBATIM, la pista del cruce dicha por el material.)
+            tabla[MaterialId.MatDe(2, EstadoMateria.Ceramico)] = new IdentidadReal("cal sobrecocida", "Caliza cocida de más, sin arcilla que la acompañe. Para clínker de verdad, mezcla.");
             tabla[MaterialId.MatDe(2, EstadoMateria.Calcinado)] = new IdentidadReal("cal viva", "Caliza quemada que SUELTA su aire antiguo. Con agua reacciona caliente: respétala.");
             tabla[MaterialId.MatDe(2, EstadoMateria.Solucion)] = new IdentidadReal("agua de cal", "Cal disuelta: se usaba para encalar casas y curar aguas.");
 
             // ---- base3 = VETA VEGETAL (el combustible garantizado; extracción 95) ----
             tabla[MaterialId.MatDe(3, EstadoMateria.Polvo)] = new IdentidadReal("turba", "Materia vegetal a medio camino de ser carbón. Arde mal, pero arde — y abona.");
             tabla[MaterialId.MatDe(3, EstadoMateria.Fundido)] = new IdentidadReal("brea", "Alquitrán vegetal fundido: con esto se sellaban los barcos.");
-            tabla[MaterialId.MatDe(3, EstadoMateria.Templado)] = new IdentidadReal("resina dura", "Brea enfriada de golpe: quebradiza y ámbar. El ámbar real es resina con paciencia.");
+            // (playtest 47, ENCARGO C, rename #4 de la auditoría, VERBATIM)
+            tabla[MaterialId.MatDe(3, EstadoMateria.Templado)] = new IdentidadReal("ámbar de brea", "Brea enfriada de golpe, quebradiza y translúcida. El ámbar real es resina con un millón de años de paciencia.");
             tabla[MaterialId.MatDe(3, EstadoMateria.Recocido)] = new IdentidadReal("brea dócil", "Enfriada despacio queda maleable: masilla de calafate.");
             tabla[MaterialId.MatDe(3, EstadoMateria.Compacto)] = new IdentidadReal("briqueta", "Turba prensada: el combustible de las estufas pobres de Europa entera.");
             tabla[MaterialId.MatDe(3, EstadoMateria.Ceramico)] = new IdentidadReal("carbón coquizado", "Cocido sin aire hasta ser casi puro carbono: el coque que funde el acero del mundo.");
@@ -3104,12 +3433,25 @@ namespace Alkahest.Sim
             // ---- base4 = SAL (extracción 154 — la última en soltar) ----
             tabla[MaterialId.MatDe(4, EstadoMateria.Polvo)] = new IdentidadReal("sal de roca", "Mar antiguo evaporado. Valió como moneda: de ahí viene 'salario'.");
             tabla[MaterialId.MatDe(4, EstadoMateria.Fundido)] = new IdentidadReal("sal fundida", "Líquida a ~800°: las plantas solares la usan para guardar calor. Y CONDUCE.");
-            tabla[MaterialId.MatDe(4, EstadoMateria.Templado)] = new IdentidadReal("sal vítrea", "Enfriada de golpe queda cristal frágil que revienta a la prensa.");
+            // (playtest 47, ENCARGO C, rename #1 de la auditoría, VERBATIM)
+            tabla[MaterialId.MatDe(4, EstadoMateria.Templado)] = new IdentidadReal("sal de estampido", "La sal no se vuelve vidrio: REVIENTA al calentarse por el agua atrapada en sus cristales. Los cocineros lo llaman decrepitación.");
             tabla[MaterialId.MatDe(4, EstadoMateria.Recocido)] = new IdentidadReal("sal recristalizada", "Cristales grandes y ordenados, como la flor de sal.");
             tabla[MaterialId.MatDe(4, EstadoMateria.Compacto)] = new IdentidadReal("halita", "Sal prensada en roca: hay minas-catedral excavadas en ella (Wieliczka).");
             tabla[MaterialId.MatDe(4, EstadoMateria.Ceramico)] = new IdentidadReal("bloque salino", "Sal cocida y dura: los bloques que se dan a lamer al ganado.");
             tabla[MaterialId.MatDe(4, EstadoMateria.Calcinado)] = new IdentidadReal("sal tostada", "Seca y quebradiza; los cocineros la tuestan para ahumarla.");
             tabla[MaterialId.MatDe(4, EstadoMateria.Solucion)] = new IdentidadReal("salmuera", "Sal disuelta: el mar en un frasco. CONDUCE la electricidad — la lámpara lo delata.");
+
+            // ---- RECETAS CRUZADAS (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1a) ----
+            // Cinco reseñas VERBATIM del contrato + una (Clinker) COMPUESTA por C
+            // (decisión explícita del contrato: "reseña actual del clínker del pt45
+            // mejorada mencionando la arcilla" -- ver el bloque de comentarios junto
+            // a MaterialId.Clinker para por qué es un id propio y no el rename #3).
+            tabla[MaterialId.Mortero] = new IdentidadReal("mortero", "Cal apagada y arena: la pasta que pegó Roma entera. Fragua lento y para siempre.");
+            tabla[MaterialId.VidrioVerde] = new IdentidadReal("vidrio de botella", "Arena fundida con ceniza: la potasa baja el punto de fusión. Así se hizo todo el vidrio de bosque medieval — verde por el hierro de la ceniza.");
+            tabla[MaterialId.Lejia] = new IdentidadReal("lejía de ceniza", "Agua que pasó por ceniza y le robó la potasa. Limpia, quema, y con grasa haría jabón — la receta más vieja de la química doméstica.");
+            tabla[MaterialId.Hormigon] = new IdentidadReal("hormigón", "Clínker molido, arena y agua: piedra líquida que fragua donde la viertas. El material más usado del planeta después del agua.");
+            tabla[MaterialId.Esmaltado] = new IdentidadReal("cerámica esmaltada", "Bizcocho cocido con arena encima: la sílice vitrifica en la superficie. Brillo de vajilla noble.");
+            tabla[MaterialId.Clinker] = new IdentidadReal("clínker", "Caliza y arcilla cocidas juntas a lo bruto: el corazón del cemento moderno. La arcilla era la pieza que faltaba — sola, la caliza solo se sobrecuece.");
 
             return tabla;
         }

@@ -162,6 +162,12 @@ namespace Alkahest.Game
             // congeló sin adivinar, sin convertir esto en dos consejos.
             "Congela agua sobre la placa fría (E) -- pincha una sonda (G) para ver el grado exacto.",
             "Con el hielo ya listo, corre a la Tolva: el frío no espera, se derrite si te demoras.",
+            // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1e, consejo pedido literal por el
+            // contrato) LA MEZCLA EN CUBETA: sin este consejo, el jugador que ya domina la
+            // escalera de un solo material no tiene ninguna pista de que verter DOS cosas a la
+            // vez cambia la regla del juego -- mismo criterio de la regla 48 de CLAUDE.md
+            // (todo verbo nuevo necesita su consejo ejecutable).
+            "El crisol también MEZCLA: dos cosas en la cubeta pueden ser una tercera.",
             "Pulsa T para bautizar cuando el Maestro te lo pida -- el libro (J) guarda lo que aprendas.",
             // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL, docs/DISENO_QUIMICA_REAL.md §3) EL
             // ÁLBUM: consejo nuevo pedido por el encargo, sobre Game/AlbumReal.cs (tecla B).

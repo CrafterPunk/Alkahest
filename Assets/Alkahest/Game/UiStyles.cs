@@ -117,6 +117,11 @@ namespace Alkahest.Game
         public static GUIStyle Boton { get; private set; }
         public static GUIStyle Campo { get; private set; }
 
+        /// <summary>(ENCARGO M, AJUSTES) Riel horizontal del slider de volumen -- ver <see cref="SliderThumb"/> para el porqué falta este par en UiStyles hasta ahora (nadie había pedido un control continuo antes de esta ronda).</summary>
+        public static GUIStyle Slider { get; private set; }
+        /// <summary>(ENCARGO M) "El thumb de latón" pedido por el encargo: un chip macizo del mismo metal que <see cref="Laton"/>/<see cref="LatonOscuro"/> que ya visten botones y campos -- nunca el grabber gris por defecto de IMGUI, que rompería la coherencia del taller igual que el skin de sistema que <see cref="VestirSkin"/> ya corrigió para botones/campos/ventanas.</summary>
+        public static GUIStyle SliderThumb { get; private set; }
+
         /// <summary>(playtest 31) TÍTULO DE RITO: Cinzel, oro, centrado, grande. Para "BAUTIZO" y los encabezados ceremoniales que no son el título del juego.</summary>
         public static GUIStyle TituloRito { get; private set; }
         /// <summary>(playtest 31) Línea ceremonial: cursiva tenue centrada, el susurro bajo un título ("El nombre que le des lo verá todo el taller").</summary>
@@ -175,6 +180,31 @@ namespace Alkahest.Game
             Campo = new GUIStyle(GUI.skin.textField) { fontSize = F(15) };
             Campo.normal.textColor = Texto;
             Campo.focused.textColor = Texto;
+
+            // (ENCARGO M, AJUSTES) MISMO PATRÓN que Boton/Campo dos líneas
+            // arriba: se copian del skin (ya vestido por VestirSkin, que
+            // corrió justo antes) y se reconstruyen solo cuando cambia la
+            // resolución -- las texturas en sí (_texCampo para el riel,
+            // _texSliderThumb para el grabber) se construyen UNA vez en
+            // VestirSkin, no aquí. Riel: reutiliza _texCampo (carboncillo +
+            // filo de latón, la misma "ranura" que ya usan los campos de
+            // texto) en vez de inventar una tercera textura solo para esto.
+            Slider = new GUIStyle(GUI.skin.horizontalSlider);
+            Slider.fixedHeight = S(8f);
+            Slider.border = new RectOffset(MarcoBorde, MarcoBorde, MarcoBorde, MarcoBorde);
+            Slider.normal.background = _texCampo;
+            Slider.hover.background = _texCampo;
+            Slider.active.background = _texCampo;
+            Slider.focused.background = _texCampo;
+
+            SliderThumb = new GUIStyle(GUI.skin.horizontalSliderThumb);
+            SliderThumb.fixedWidth = S(16f);
+            SliderThumb.fixedHeight = S(20f);
+            SliderThumb.border = new RectOffset(MarcoBorde, MarcoBorde, MarcoBorde, MarcoBorde);
+            SliderThumb.normal.background = _texSliderThumb;
+            SliderThumb.hover.background = _texSliderThumb;
+            SliderThumb.active.background = _texSliderThumb;
+            SliderThumb.focused.background = _texSliderThumb;
         }
 
         private static GUIStyle Etiqueta(GUIStyle raiz, int tam, FontStyle fuente, TextAnchor anclaje, Color color, bool ajustar, Font tipografia = null)
@@ -216,7 +246,7 @@ namespace Alkahest.Game
         // muertas, o sea recuadros en blanco donde antes había campos.
         // -----------------------------------------------------------------
         private static bool _skinVestido;
-        private static Texture2D _texCampo, _texCampoFoco, _texBoton, _texBotonHover, _texVentana;
+        private static Texture2D _texCampo, _texCampoFoco, _texBoton, _texBotonHover, _texVentana, _texSliderThumb;
 
         private static void VestirSkin()
         {
@@ -228,6 +258,12 @@ namespace Alkahest.Game
             _texBoton = TexturaMarco(new Color(0.125f, 0.118f, 0.128f, 1f), LatonOscuro, new Color(0f, 0f, 0f, 0.25f));
             _texBotonHover = TexturaMarco(new Color(0.20f, 0.17f, 0.13f, 1f), Laton, new Color(0f, 0f, 0f, 0.20f));
             _texVentana = TexturaMarco(Pergamino, Laton, new Color(0f, 0f, 0f, 0.40f));
+            // (ENCARGO M, AJUSTES) "el thumb de latón": fondo Laton macizo con
+            // filo LatonOscuro -- mismo TexturaMarco que ya usan botones/
+            // campos/ventana, solo con el metal como RELLENO en vez de como
+            // borde, para que el grabber lea como una pieza sólida, no como
+            // un hueco.
+            _texSliderThumb = TexturaMarco(Laton, LatonOscuro, new Color(0f, 0f, 0f, 0.35f));
 
             var skin = GUI.skin;
             if (skin == null) return;

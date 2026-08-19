@@ -156,6 +156,42 @@ namespace Alkahest.Audio
         private const int VocesOneShot = 8;
         private const float VolumenMaestroPorDefecto = 0.5f; // (encargo) "Volumen maestro por defecto 0.5".
         private const string PrefKeySilenciado = "ChaosAlchemy_AudioSilenciado";
+        private const string PrefKeyVolEfectos = "ChaosAlchemy_VolEfectos";
+
+        // ===================================================================
+        // ENCARGO M (CONTRATO_FASE_A.md, "AJUSTES"): "Efectos del taller" --
+        // el multiplicador (0..1) que el panel de AJUSTES de Game/DayCycle.cs
+        // controla. PERSISTIDO en PlayerPrefs y cargado por el inicializador
+        // estático de campo de abajo (corre la PRIMERA vez que algo toca esta
+        // clase, no hace falta esperar a que exista una instancia de
+        // DirectorDeAudio) -- así el slider del Título, ANTES de que
+        // AlkahestGameBootstrap cree el director de audio de verdad, ya lee y
+        // escribe el mismo valor que usará la partida.
+        //
+        // SE APLICA EN UN SOLO PUNTO: la propiedad <see cref="FactorMaestro"/>
+        // de más abajo, que YA era el único sitio del que salía "cuánto suena
+        // todo" -- la alimentan (a) TODOS los BUCLES (ambiente/fuego/grifos/
+        // vapor/grifos-espejo), vía <see cref="ActualizarEsquive"/> rampando
+        // `_factorMaestroSuavizado` hacia `FactorMaestro`, y (b) TODOS los
+        // one-shots, directamente en <see cref="ReproducirOneShot"/>. Multiplicar
+        // aquí y en ningún otro sitio basta para que absolutamente toda fuente
+        // de audio del taller responda al slider sin tocar ninguna de ellas
+        // -- cero allocs (una multiplicación de floats más en una propiedad
+        // que ya se evaluaba cada frame).
+        // ===================================================================
+        public static float VolumenEfectos
+        {
+            get => _volumenEfectos;
+            set
+            {
+                float v = Mathf.Clamp01(value);
+                if (Mathf.Approximately(v, _volumenEfectos)) return;
+                _volumenEfectos = v;
+                PlayerPrefs.SetFloat(PrefKeyVolEfectos, _volumenEfectos);
+                PlayerPrefs.Save();
+            }
+        }
+        private static float _volumenEfectos = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolEfectos, 1f));
 
         // ===================================================================
         // PRESUPUESTO DE MEZCLA (fix playtest 9, causa 1c del popeo)
@@ -425,7 +461,10 @@ namespace Alkahest.Audio
         private string _avisoTexto;
         private float _avisoHasta;
 
-        private float FactorMaestro => _silenciado ? 0f : VolumenMaestroPorDefecto;
+        // (ENCARGO M) EL PUNTO ÚNICO: VolumenEfectos entra aquí y solo aquí --
+        // ver el bloque grande de arriba para el porqué esto basta para toda
+        // la mezcla.
+        private float FactorMaestro => _silenciado ? 0f : VolumenMaestroPorDefecto * VolumenEfectos;
 
         // Guard intencional sobre una constante (mismo criterio que el guard de
         // CHUNK en Sim/SimRenderer.cs): con SistemaActivo=true el compilador

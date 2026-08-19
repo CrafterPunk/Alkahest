@@ -801,6 +801,35 @@ namespace Alkahest.Game
         /// <summary>Observaciones de propiedad acumuladas (RegistrarObservacionPropiedad) para la ficha de SUSTANCIAS del diario. Cadena vacía si no hay ninguna.</summary>
         public string ObservacionesDe(byte matId) => matId < MaterialId.Count ? (_observaciones[matId] ?? "") : "";
 
+        /// <summary>
+        /// (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1d, "la primera
+        /// encarnación del anti-'nada'") Envoltorio de una línea sobre
+        /// <see cref="RegistrarObservacionPropiedad"/> con el texto EXACTO
+        /// "resiste la prensa" -- una única fuente de verdad para ese string
+        /// (Game/Prensa.cs, que NO es un archivo de este encargo, debe
+        /// llamarlo y no reescribir el literal a mano). El dedup por
+        /// material+condición ya lo hace RegistrarObservacionPropiedad, sin
+        /// spam si se prensa el mismo material resistente una y otra vez.
+        ///
+        /// DEUDA DE INTEGRACIÓN PARA FABLE (Game/Prensa.cs no es archivo de
+        /// este encargo, documentado en vez de tocado):
+        ///  1) `Prensa.Init(AlkahestSim sim, Transform player, int anchorX)`
+        ///     no recibe hoy ninguna `SubstanceKnowledge` -- añadir un cuarto
+        ///     parámetro `SubstanceKnowledge conocimiento` y guardarlo en un
+        ///     campo `_conocimiento` (mismo patrón que Game/Crisol.cs), y
+        ///     actualizar al ÚNICO llamante (Game/AlkahestGameBootstrap.cs)
+        ///     para que pase la instancia que ya construye para el Crisol.
+        ///  2) En `Prensa.AplicarRespuesta(int x, int y, byte mat, ...)`, el
+        ///     `switch (resp)` HOY no tiene rama para
+        ///     `RespuestaPrensa.Resistir` (cae al `default: break;`) --
+        ///     añadir:
+        ///       <c>case RespuestaPrensa.Resistir:
+        ///           if (_conocimiento != null) _conocimiento.RegistrarResistePrensa(mat);
+        ///           break;</c>
+        ///     dentro del mismo `switch`, junto a Compactar/Reventar/Escupir.
+        /// </summary>
+        public void RegistrarResistePrensa(byte matId) => RegistrarObservacionPropiedad(matId, "resiste la prensa");
+
         /// <summary>Sube cada vez que RegistrarObservacionPropiedad cambia de verdad el texto de un material -- mismo patrón que NamingVersion/LeyesVersion/Hornada.PatentesVersion, para que JournalHud sepa cuándo reconstruir la ficha de SUSTANCIAS.</summary>
         public int ObservacionesVersion { get; private set; }
 
