@@ -313,6 +313,25 @@ namespace Alkahest.Sim
         // se deriva del código que lo consume, no del nombre.
         public const byte CrisolTier0Raw = 120;
 
+        /// <summary>
+        /// (playtest 40, CONTRATO_SEMILLA.md §3) LA SEMILLA DE AUTOR de
+        /// "SEMILLA CERO — tu primer taller". Congelada tras verificar con el
+        /// arnés headless (<c>Tools~/BenchSim/Harness.cs</c>, ver el informe
+        /// de la ronda) que, combinada con <see cref="AplicarOverridesSemillaCero"/>,
+        /// cumple 1-4 del contrato. NO es 777001 (el valor sugerido en el
+        /// contrato como punto de partida): con esa seed
+        /// <c>GanadorGarantizado</c> y <c>BaseCombustibleGarantizada</c>
+        /// coinciden en la MISMA base (b0==b1==3) -- la trampa del beat 4
+        /// necesita un combustible YA obtenible (el de <c>BaseCombustibleGarantizada</c>)
+        /// DISTINTO de la base que se está intentando calcinar, o no hay con
+        /// qué "alimentar el brasero" antes de tener la propia calcinada (el
+        /// problema del huevo y la gallina). 777002 sí separa ambas
+        /// (GanadorGarantizado en base 1, BaseCombustibleGarantizada en base
+        /// 3) -- verificado imprimiendo <c>Universe.Create(777002)</c> con el
+        /// arnés. Documentado también en <see cref="AplicarOverridesSemillaCero"/>.
+        /// </summary>
+        public const uint SemillaCero = 777002u;
+
         private readonly byte[] _umbralPersistenciaRaw;      // [MaterialId.Count]
         private readonly RespuestaPrensa[] _prensaPorMaterial; // [MaterialId.Count]
         private readonly byte[] _conductividadPorMaterial;    // [MaterialId.Count]
@@ -2951,6 +2970,225 @@ namespace Alkahest.Sim
                     };
                 }
             }
+        }
+
+        // =====================================================================
+        // SEMILLA CERO (playtest 40, CONTRATO_SEMILLA.md §3, ENCARGO M). Pasada
+        // de OVERRIDES POST-GENERACIÓN: corre DESPUÉS de que Create() ya
+        // terminó (leyes, firmas visuales, tablas de persistencia, TODO ya
+        // baked). No reordena nada del sorteo normal -- solo AJUSTA, a mano,
+        // los números de UNA base concreta (la "base 0 de Semilla Cero" que
+        // este método elige, ver más abajo) para que el arco de beats de
+        // DISENO_SEMILLA_CERO.md sea posible SIEMPRE con esta semilla, sin
+        // dejarlo al azar del sorteo. Solo se llama cuando
+        // Game/AlkahestGameBootstrap.ModoSemillaCero es true (Game/AlkahestSim.cs
+        // es quien decide la seed y llama a este método -- ver el docblock de
+        // CrearMundoInterno). El modo caótico NUNCA pasa por aquí: cada
+        // Universe.Create(seed) normal sale intacto.
+        //
+        // POR QUÉ LA "BASE GANADORA" DE ESTE MÉTODO NO ES `GanadorGarantizado`:
+        // la primera versión de este override usaba `BaseDe(GanadorGarantizado)`
+        // como "la base del beat 1" (lectura literal de "la base ganadora del
+        // solver" del contrato) -- pero para la seed 777002 GanadorGarantizado
+        // ES el Calcinado de esa base (id 32, base 1, estado Calcinado): el
+        // MISMO material que el override #2 necesita volver FRÁGIL (banda de
+        // calcinación estrecha, se quema a Ash si se pasa de fuego) es el que
+        // la garantía de persistencia necesita robusto (sobrevivir a
+        // tempEnsayo+10, hasta 190 raw en el peor caso) para el Ensayo del
+        // beat 5 ("¿DE VERDAD aguanta?"). Las dos exigencias son
+        // matemáticamente incompatibles sobre el MISMO material. Resuelto
+        // desacoplando: "la base del beat 1" es una DESIGNACIÓN de M (aquí,
+        // <see cref="SemillaCeroBaseIdx"/>), no el resultado del solver de
+        // persistencia -- ese solver sigue garantizando SU PROPIA promesa
+        // (algo sobrevive al Ensayo) sin que este método la toque.
+        /// <summary>La base que Semilla Cero designa como "el sedimento celeste" del beat 1 -- ver el docblock de <see cref="AplicarOverridesSemillaCero"/> para el porqué de la designación explícita (no es GanadorGarantizado ni BaseCombustibleGarantizada de esta seed).</summary>
+        public const int SemillaCeroBaseIdx = 0;
+
+        /// <summary>
+        /// Aplica los cuatro overrides del contrato §3 sobre un Universe ya
+        /// creado con <see cref="SemillaCero"/> (o una semilla vecina si
+        /// algún día hiciera falta recongelar). Documentados 1 a 1:
+        ///
+        /// 1. EXTRACCIÓN A FUEGO PROPIO, BANDA GENEROSA: <see cref="ExtraccionRaw"/>
+        ///    de <see cref="SemillaCeroBaseIdx"/> baja a un valor muy por
+        ///    debajo de <see cref="CrisolTier0Raw"/> (100, 20 raw de margen) --
+        ///    la primera hornada de Limo a fuego propio SIEMPRE saca esta
+        ///    base. Defensivo: cualquier OTRA base cuya banda natural caiga
+        ///    en el hueco (100, tier0] se clampea por debajo de 100 -- si no,
+        ///    `Game/Crisol.DecidirHornada` (que elige la banda MÁS ALTA
+        ///    alcanzable, no la de esta base por nombre) podría sacar la base
+        ///    equivocada en el beat 1.
+        /// 2. BANDA DE CALCINACIÓN ESTRECHA + SOBRECALENTAMIENTO -&gt; ASH: la
+        ///    banda natural del solver es ancha a propósito (CalcinadoUmbral =
+        ///    FusionRaw+15..30, contrato 4.2) para que un combustible normal
+        ///    NUNCA la cruce sin querer -- Semilla Cero quiere justo lo
+        ///    contrario para esta base, así que se sobreescriben los tres
+        ///    números implicados (FusionRaw, CalcinacionRaw y el umbral de
+        ///    persistencia del Calcinado, vía <see cref="_umbralPersistenciaRaw"/>)
+        ///    a mano. El camino "por encima de la banda -&gt; Ash" NO se
+        ///    modela como una transición genérica de <c>MaterialDef.boilsAt</c>
+        ///    (eso afectaría a TODAS las seeds, rompiendo "el caótico no
+        ///    cambia" -- regla dura del contrato): vive como una comparación
+        ///    contra la TABLA, detrás de <c>AlkahestGameBootstrap.ModoSemillaCero</c>,
+        ///    en <c>Game/Crisol.DecidirHornada</c> -- ver el comentario ahí.
+        ///    `Game/Crisol.TempReposoPara` también se ajustó (ver su
+        ///    docblock) para que un Calcinado recién salido de la hornada no
+        ///    se queme SOLO en reposo: esa función asumía CalcinadoUmbral
+        ///    &gt; FusionRaw por construcción del solver, relación que este
+        ///    override rompe a propósito.
+        /// 3. CALCINADO COMBUSTIBLE GARANTIZADO: NO se toca nada -- el solver
+        ///    de persistencia YA lo garantiza (<see cref="BaseCombustibleGarantizada"/>,
+        ///    logueado como "combustible=base N"). Para 777002 es la base 3,
+        ///    DISTINTA de <see cref="SemillaCeroBaseIdx"/> (0): es el
+        ///    combustible que el jugador YA tiene cuando el Maestro pide
+        ///    "más de eso, pero TOSTADO" -- el que, usado de más, dispara la
+        ///    trampa del override 2. Se deja un Assert de solo-editor por si
+        ///    una futura seed recongelada rompiera esta separación en
+        ///    silencio.
+        /// 4. COLOR CELESTE: el Polvo de <see cref="SemillaCeroBaseIdx"/> se
+        ///    retiñe a una familia celeste clara y los 7 estados derivados se
+        ///    recalculan con LAS MISMAS fórmulas de <see cref="ConstruirEstadosDerivados"/>
+        ///    (duplicadas aquí a propósito -- ese método es privado y corre
+        ///    una sola vez dentro de Create(), antes de que exista este
+        ///    override) para que Templado/Compacto/Calcinado/etc. de esta
+        ///    base sigan leyéndose como la MISMA sustancia en todos los
+        ///    beats, no solo el Polvo del beat 1.
+        ///
+        /// ADEMÁS (fuera de la numeración 1-4 pero exigido por el contrato,
+        /// "Ceniza combustible tier 0.5"): <see cref="MaterialId.Ash"/> se
+        /// vuelve combustible SOLO en esta instancia de Universe (nunca en el
+        /// caótico, que jamás llama a este método) -- ver el bloque
+        /// correspondiente más abajo.
+        /// </summary>
+        public static void AplicarOverridesSemillaCero(Universe u)
+        {
+            const int b0 = SemillaCeroBaseIdx;
+
+            // ---- Override 1: extracción a fuego propio, banda generosa ----
+            const byte extraccionB0 = 100; // 20 raw por debajo de CrisolTier0Raw=120.
+            u._extraccionRaw[b0] = extraccionB0;
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                if (b == b0) continue;
+                // Defensivo (ver docblock arriba): ninguna otra base puede
+                // quedar "más alcanzable" que b0 a fuego propio, o
+                // Game/Crisol.DecidirHornada (Limo -> la banda MÁS ALTA
+                // alcanzable) sacaría esa otra base en el beat 1.
+                if (u._extraccionRaw[b] > extraccionB0 && u._extraccionRaw[b] <= CrisolTier0Raw)
+                    u._extraccionRaw[b] = (byte)(extraccionB0 - 5);
+            }
+
+            // ---- Override 2: banda de calcinación estrecha + techo de Ash ----
+            // Números elegidos con margen generoso entre sí (verificados a
+            // mano contra Game/Crisol.DecidirHornada y TempReposoPara, ver el
+            // informe de la ronda para la tabla completa):
+            //   CrisolTier0Raw=120 < calcinacionB0=130 < ashTier0_5=145
+            //     < techoCalcinadoB0=170 < fusionB0=220 < tierUnoDeB1(natural,~185 en 777002).
+            // Espera: tierUnoDeB1 (165..190 en toda seed, ver TempCombustibleRawBase
+            // en SortearTablaPersistencia) SIEMPRE cae por encima de
+            // techoCalcinadoB0=170 con margen -- salvo el peor caso exacto
+            // 165..169, donde la trampa del beat 4 no dispararía. Por eso el
+            // Assert de más abajo: si la seed recongelada alguna vez cae ahí,
+            // que falle ruidosamente en editor en vez de fallar en silencio
+            // en la mesa de Cesar (regla 51 de CLAUDE.md).
+            const byte fusionB0 = 220;
+            const byte calcinacionB0 = 130;
+            const byte techoCalcinadoB0 = 170;
+            const byte ashTier0_5 = 145;
+
+            byte polvoB0 = MaterialId.MatDe(b0, EstadoMateria.Polvo);
+            byte calcinadoB0 = MaterialId.MatDe(b0, EstadoMateria.Calcinado);
+
+            u._fusionRaw[b0] = fusionB0;
+            u.Materials[polvoB0].meltsAt = fusionB0; // mantiene meltsAt (el mundo real) sincronizado con FusionRaw (la tabla que lee Crisol) -- regla 30/49 de CLAUDE.md.
+            u._calcinacionRaw[b0] = calcinacionB0;
+            u._umbralPersistenciaRaw[calcinadoB0] = techoCalcinadoB0;
+
+            // ---- Override 3: calcinado combustible garantizado (verificación, no cambio) ----
+            int baseCombustibleGarantizada = u.BaseCombustibleGarantizada;
+#if UNITY_EDITOR
+            UnityEngine.Debug.Assert(baseCombustibleGarantizada != b0,
+                "[ChaosAlchemy][SemillaCero] BaseCombustibleGarantizada coincide con SemillaCeroBaseIdx: la trampa del beat 4 (\"alimenta el brasero\") no tiene con qué dispararse -- recongelar SemillaCero con otra seed vecina.");
+            byte tierUnoDeB1 = u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado));
+            UnityEngine.Debug.Assert(tierUnoDeB1 >= techoCalcinadoB0,
+                "[ChaosAlchemy][SemillaCero] El combustible garantizado de esta seed no supera el techo de calcinación de la base 0: la trampa del beat 4 no se dispara -- recalibrar techoCalcinadoB0 o recongelar la seed.");
+#endif
+
+            // ---- Override 4: color celeste (Polvo + los 7 estados derivados) ----
+            var celeste = new Color32(100, 190, 230, 255);
+            u.Materials[polvoB0].baseColor = celeste;
+            u.Materials[polvoB0].colorJitter = 16; // mismo jitter que ConstruirPolvoBases da a toda base.
+            RecalcularEstadosDerivadosDeUnaBase(u, b0);
+
+            // ---- CENIZA COMBUSTIBLE TIER 0.5 (contrato §3, último punto) ----
+            // Ash se vuelve combustible SOLO en esta instancia -- ver el
+            // docblock de la clase de arriba. "Enciende mal pero enciende":
+            // combustReserva bajo (24 unidades a 8 ticks/unidad = 192 ticks
+            // = 6,4s, MENOS de un tercio de los 24s del Calcinado(b1) de esta
+            // misma seed) y calor/propagación modestos (residuo sucio de un
+            // fracaso, no un combustible limpio).
+            u._esCombustiblePorMaterial[MaterialId.Ash] = true;
+            u._tempCombustibleRawPorMaterial[MaterialId.Ash] = ashTier0_5;
+            var ashDef = u.Materials[MaterialId.Ash];
+            ashDef.flammable = true;
+            ashDef.ignitionTemp = ashTier0_5;
+            ashDef.burnsInto = MaterialId.Fire; // camino legado, sin efecto real mientras combustReserva>0 (ver MaterialDef.combustReserva).
+            ashDef.combustReserva = 24;
+            ashDef.combustPasoTicks = 8;
+            ashDef.combustCalorRaw = 10;    // menos que el Calcinado combustible de esta seed (18): "sube el fuego apenas por encima del propio".
+            ashDef.combustHumoPct = 20;     // ceniza ardiendo mal ensucia más que limpio.
+            ashDef.combustPropagacionPct = 10;
+            ashDef.combustLenguaPct = 15;
+            ashDef.combustResiduo = MaterialId.Empty; // ya es el residuo de un fracaso anterior: al agotarse, no deja nada más.
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Overrides aplicados: base0={b0} (extraccion={u.ExtraccionRaw(b0)}, calcinacion={u.CalcinacionRaw(b0)}, techoCalcinado={u.UmbralPersistenciaRaw(calcinadoB0)}, fusion={u.FusionRaw(b0)}), combustibleGarantizado=base{baseCombustibleGarantizada} (tier1={u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado))}), cenizaTier0_5={u.TempCombustibleRaw(MaterialId.Ash)}, ganadorGarantizado(sin tocar)={u.GanadorGarantizado}.");
+#endif
+        }
+
+        /// <summary>
+        /// Recalcula los 7 estados derivados (Fundido/Templado/Recocido/
+        /// Compacto/Ceramico/Calcinado/Solucion) de UNA base a partir del
+        /// color YA vigente de su Polvo -- MISMAS fórmulas que
+        /// <see cref="ConstruirEstadosDerivados"/> (deliberadamente
+        /// duplicadas: ese método es privado, corre una sola vez dentro de
+        /// <see cref="Create"/> y no puede reutilizarse tal cual tras un
+        /// override posterior sin recibir las tablas crudas otra vez). Solo
+        /// toca <c>baseColor</c>/<c>colorJitter</c> -- nada de patrón, borde,
+        /// densidad ni transición de fase: los overrides de <see cref="AplicarOverridesSemillaCero"/>
+        /// que sí tocan esos campos (FusionRaw/CalcinacionRaw/umbral del
+        /// Calcinado) ya se aplicaron aparte.
+        /// </summary>
+        private static void RecalcularEstadosDerivadosDeUnaBase(Universe u, int b)
+        {
+            Color32 tono = u.Materials[MaterialId.MatDe(b, EstadoMateria.Polvo)].baseColor;
+            Color.RGBToHSV(tono, out float h, out float s, out float v);
+
+            var fundido = u.Materials[MaterialId.MatDe(b, EstadoMateria.Fundido)];
+            Color32 cFundido = Color.HSVToRGB(h, 0.90f, 0.95f, true); cFundido.a = 255;
+            fundido.baseColor = cFundido; fundido.colorJitter = 10;
+
+            var templado = u.Materials[MaterialId.MatDe(b, EstadoMateria.Templado)];
+            templado.baseColor = LerpColor32(tono, new Color32(255, 255, 255, 255), 0.25f); templado.colorJitter = 8;
+
+            var recocido = u.Materials[MaterialId.MatDe(b, EstadoMateria.Recocido)];
+            recocido.baseColor = LerpColor32(tono, new Color32(128, 128, 128, 255), 0.20f); recocido.colorJitter = 10;
+
+            var compacto = u.Materials[MaterialId.MatDe(b, EstadoMateria.Compacto)];
+            compacto.baseColor = LerpColor32(tono, new Color32(0, 0, 0, 255), 0.30f); compacto.colorJitter = 6;
+
+            var ceramico = u.Materials[MaterialId.MatDe(b, EstadoMateria.Ceramico)];
+            Color32 cCeramico = Color.HSVToRGB(h, s * 0.35f, Mathf.Min(1f, v + 0.25f), true); cCeramico.a = 255;
+            ceramico.baseColor = cCeramico; ceramico.colorJitter = 8;
+
+            var calcinado = u.Materials[MaterialId.MatDe(b, EstadoMateria.Calcinado)];
+            calcinado.baseColor = LerpColor32(tono, new Color32(20, 18, 16, 255), 0.50f); calcinado.colorJitter = 14;
+
+            // Solucion: boilsAt/density NO se tocan (siguen atados al agua de
+            // esta seed, sin relación con el override de color) -- solo el tinte.
+            var solucion = u.Materials[MaterialId.MatDe(b, EstadoMateria.Solucion)];
+            Color32 waterColor = u.Materials[MaterialId.Water].baseColor;
+            solucion.baseColor = LerpColor32(waterColor, tono, 0.60f); solucion.colorJitter = 10;
         }
     }
 }

@@ -721,6 +721,36 @@ namespace Alkahest.Game
             ActiveOrders.Add(new Order(_nextOrderId++, descripcion, tipo, minCells, recompensa, minTempC, targetMat));
         }
 
+        // =================================================================
+        // (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) EL PEDIDO GUIADO.
+        // =================================================================
+        /// <summary>
+        /// En modo Semilla 0, <see cref="OrderSystem"/> NO genera pedidos procedurales:
+        /// <c>Game/SemillaCero.cs</c> (el director del arco) dicta la secuencia del
+        /// contrato §1 beat a beat, uno en uno, con sus textos EXACTOS -- este método es
+        /// esa vía. Reemplaza SIEMPRE el pedido activo entero (nunca se acumulan dos:
+        /// Semilla 0 enseña una sola pregunta/petición cada vez, mismo criterio que ya usa
+        /// <see cref="GenerateOrdersPersiste"/> para "LO QUE PERSISTE"), y usa
+        /// <see cref="OrderType.Guiado"/> por defecto para que
+        /// <see cref="RefreshDescripciones"/> nunca reescriba el texto del guion con la
+        /// plantilla genérica de <see cref="NamedMaterial"/> (ver el docblock de
+        /// <see cref="OrderType.Guiado"/> en Game/Order.cs). El llamante puede pasar otro
+        /// `tipo` (p. ej. <see cref="OrderType.Conduce"/>/<see cref="OrderType.AguantaCalor"/>
+        /// para las preguntas del banco de chispa/Ensayo, o
+        /// <see cref="OrderType.FlotaInsoluble"/> para la de la columna, contrato §1 beat 5)
+        /// cuando el pedido deba resolverse por la vía YA existente de esos tipos.
+        /// </summary>
+        public void EncolarPedidoGuiado(OrderType tipo, int minCells, int recompensa, string descripcion,
+            byte? targetMat = null, int? minTempC = null)
+        {
+            ActiveOrders.Clear();
+            AddOrder(tipo, minCells, recompensa, descripcion, minTempC, targetMat);
+            // (Semilla 0 no usa el arco de "LO QUE PERSISTE": _arcoPersisteIndex se queda
+            // como esté -- normalmente -1, nunca activado en este modo -- así que
+            // AvanzarArcoPersisteSiToca sigue siendo un no-op cuando este pedido se
+            // complete. La propia SemillaCero.cs sondea ActiveOrders para avanzar su beat.)
+        }
+
         /// <summary>
         /// Resultado de intentar entregar una celda en la Tolva (fix playtest 9).
         /// Antes esto era un bool: "encajó / no encajó (=chatarra, pagaba Favor
@@ -869,6 +899,12 @@ namespace Alkahest.Game
                     // Maestro (ver EnsayoMaestro.cs + OrderSystem.CompletarEnsayo),
                     // nunca vertiendo en la Tolva (contrato §6.1).
                     return false;
+
+                // (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) EL PEDIDO GUIADO: mismo
+                // criterio que NamedMaterial (matId exacto), ver el docblock de
+                // OrderType.Guiado en Game/Order.cs para por qué es un tipo aparte.
+                case OrderType.Guiado:
+                    return order.TargetMat.HasValue && matId == order.TargetMat.Value;
 
                 default:
                     return false;

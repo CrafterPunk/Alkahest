@@ -993,6 +993,34 @@ namespace Alkahest.Game
                     }
                     if (cima >= universe.CalcinacionRaw(baseIdx))
                     {
+                        // -----------------------------------------------------
+                        // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3
+                        // override 2 / DISENO_SEMILLA_CERO.md enmienda 2) LA
+                        // TRAMPA DEL BEAT 4: si el fuego SUPERA el techo de
+                        // persistencia real del Calcinado de esta base
+                        // (Universe.UmbralPersistenciaRaw, LA MISMA tabla que
+                        // ya usan el Ensayo y el solver -- no un número nuevo),
+                        // el resultado no es "calcinado a medio camino": es
+                        // CENIZA. Leído de la tabla, no de un `if` que compare
+                        // contra un ID de base concreto -- por eso esto NO
+                        // cambia nada en modo caótico (el gate es el flag, no
+                        // el material): en cualquier seed normal el hueco
+                        // entre CalcinacionRaw y ese umbral es ancho a
+                        // propósito (CalcinadoUmbral = FusionRaw+15..30, ver
+                        // Universe.SortearTablaPersistencia) y ningún
+                        // combustible de la tabla (165..190 raw) lo cruza
+                        // jamás; solo Semilla Cero estrecha esa banda a mano
+                        // para UNA base (Universe.AplicarOverridesSemillaCero).
+                        // -----------------------------------------------------
+                        if (AlkahestGameBootstrap.ModoSemillaCero
+                            && cima >= universe.UmbralPersistenciaRaw(MaterialId.MatDe(baseIdx, EstadoMateria.Calcinado)))
+                        {
+                            salida = MaterialId.Ash;
+                            condicion = CondicionCalor(); verbo = "calcinando"; // el jugador solo lo sabe al ver ceniza en la cubeta -- regla 54 de CLAUDE.md, "el fracaso es un experimento que salió con datos".
+                            objetivo = cima;
+                            return true;
+                        }
+
                         salida = MaterialId.MatDe(baseIdx, EstadoMateria.Calcinado);
                         condicion = CondicionCalor(); verbo = "calcinando";
                         // Se calcina POR DEBAJO de la fusión: si el fuego da de
@@ -1064,7 +1092,23 @@ namespace Alkahest.Game
             int baseIdx = MaterialId.BaseDe(salida);
             if (MaterialId.EstadoDe(salida) == EstadoMateria.Fundido)
                 return (byte)Mathf.Min(255, universe.SolidificaRaw(baseIdx) + MargenRecocido * 2);
-            return (byte)Mathf.Max(CellGrid.AmbientRaw, universe.FusionRaw(baseIdx) - 12);
+            byte reposo = (byte)Mathf.Max(CellGrid.AmbientRaw, universe.FusionRaw(baseIdx) - 12);
+            // (playtest 40, SEMILLA CERO) En toda seed NATURAL, CalcinadoUmbral
+            // = FusionRaw+15..30 por construcción del solver (contrato 4.2), así
+            // que `FusionRaw-12` queda SIEMPRE muy por debajo del techo de
+            // persistencia real del Calcinado y este segundo tope de abajo
+            // nunca muerde nada (Min no-op). Semilla Cero rompe esa relación a
+            // propósito para UNA base (banda de calcinación ESTRECHA, la
+            // trampa del beat 4, ver Universe.AplicarOverridesSemillaCero):
+            // sin este freno, un Calcinado recién salido de la hornada podría
+            // quedar en reposo POR ENCIMA de su propio techo y quemarse solo a
+            // Ash sin que el jugador tocara nada.
+            if (MaterialId.EstadoDe(salida) == EstadoMateria.Calcinado)
+            {
+                int techo = universe.UmbralPersistenciaRaw(salida) - 15;
+                if (techo < reposo) reposo = (byte)Mathf.Max(CellGrid.AmbientRaw, techo);
+            }
+            return reposo;
         }
 
         private void ActualizarObjetivoHornada()
@@ -1098,6 +1142,15 @@ namespace Alkahest.Game
             }
 
             if (convertidas > 0) Hornada.RegistrarOp("crisol", _hornadaEntrada, _hornadaSalida, _hornadaCondicion);
+
+            // (integración pt40, SEMILLA CERO) Si la hornada DESTRUYÓ la
+            // entrada a ceniza (la trampa del beat 4 -- y cualquier
+            // sobrecalcinado futuro), el testigo forense lo anota: esta
+            // transformación es de HORNADA, no de la CA, así que el canal
+            // Boil de SubstanceKnowledge.ApplyWitness jamás la ve. La cima
+            // real de la hornada es la temperatura que mató la muestra.
+            if (convertidas > 0 && _hornadaSalida == MaterialId.Ash && _conocimiento != null)
+                _conocimiento.RegistrarDestruccionPorHornada(_hornadaEntrada, _hornadaCima);
 
             // LA ALQUIMIA VISIBLE (tarea 2, encargo de Cesar: "evaporar
             // cosas; ver algo diluirse en agua"). "extrayendo" (Limo ->

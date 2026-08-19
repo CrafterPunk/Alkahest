@@ -240,6 +240,12 @@ namespace Alkahest.Game
                 return;
             }
 
+            AbrirVentanaPara(target);
+        }
+
+        /// <summary>Cola común de TryOpen: deja la ventana lista para `target` (nombre actual precargado, firma visual cacheada, foco pedido). Extraído para que <see cref="AbrirPorElMaestro"/> pueda reutilizarlo sin duplicar estas cinco líneas.</summary>
+        private void AbrirVentanaPara(byte target)
+        {
             _targetMat = target;
             string current = _knowledge != null ? _knowledge.NombreDe(_targetMat) : "???";
             _nameField = current == "???" ? "" : current;
@@ -247,6 +253,22 @@ namespace Alkahest.Game
             _open = true;
             _pedirFoco = true; // (playtest 31) el rito empieza con el cursor YA dentro del campo: nadie debería tener que hacer clic para escribir.
             UiStyles.EscribiendoTexto = true; // (fix playtest 10) ver doc de clase y de UiStyles.EscribiendoTexto.
+        }
+
+        /// <summary>
+        /// (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) EL GANCHO "PEDIDO POR EL
+        /// MAESTRO": abre el rito FORZADO sobre `matId`, sin pasar por ResolveTarget/el
+        /// cursor -- lo llama <c>Game/SemillaCero.cs</c> en el beat 3 ("No pienso seguir
+        /// diciendo... Ponle nombre.", contrato §1), cuando el personaje EXIGE el bautizo
+        /// en vez de esperar a que el jugador pulse T. No-op si ya está abierta (evita
+        /// reabrir sobre otro objetivo a media escritura) o si `matId` no necesita bautizo
+        /// (vocabulario de taller/ya bautizado -- no debería llamarse así, pero se defiende
+        /// igual, mismo criterio que el resto de esta clase).
+        /// </summary>
+        public void AbrirPorElMaestro(byte matId)
+        {
+            if (_open) return;
+            if (_knowledge != null && !_knowledge.EstaBautizado(matId)) AbrirVentanaPara(matId);
         }
 
         /// <summary>

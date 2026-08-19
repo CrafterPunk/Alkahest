@@ -10,6 +10,11 @@
 // para que la Columna pudiera implementar IMovible -- ver el bloque "OBRA
 // MOVIBLE" junto a ObraDelTaller).
 using Alkahest.Game;
+// (playtest 40, SEMILLA CERO) `using Alkahest;`: `TapiarSalasSemillaCero`/
+// `DestaparSala` reciben un `AlkahestSim` (API congelada, CONTRATO_SEMILLA.md
+// §3) -- vive en el namespace RAÍZ `Alkahest` (Assets/Alkahest/AlkahestSim.cs),
+// no en `Alkahest.Game` como el resto de lo que este archivo ya importaba.
+using Alkahest;
 
 namespace Alkahest.Sim
 {
@@ -1911,6 +1916,127 @@ namespace Alkahest.Sim
             return -1;
         }
 
+        // =====================================================================
+        // SEMILLA CERO -- TAPIADOS POR PREGUNTA (playtest 40,
+        // CONTRATO_SEMILLA.md §3, API CONGELADA -- el otro encargo de la ronda
+        // codea contra `TapiarSalasSemillaCero`/`DestaparSala` sin conocer el
+        // resto de este bloque).
+        // =====================================================================
+        // LA IDEA: en vez de duplicar a mano la aritmética de `Calcular()` de
+        // Prensa/ColumnaEnsayo/BancoChispa/EnsayoMaestro (cuatro archivos
+        // ajenos que podrían cambiar de forma sin avisar), se captura el rect
+        // EXACTO que cada uno ya registra en `ObraDelTaller` (bloque "OBRA
+        // MOVIBLE" arriba) justo al tallarse, en `BuildCuartoIntimo` (ver
+        // `RegistrarObraSemillaCero`, llamado ahí). Tapiar = rellenar de
+        // piedra TODO lo que dentro de ese rect siga siendo aire en el
+        // génesis (el hueco de lecho/bandeja/plinto/tanque -- lo que sea que
+        // cada TallarEnPlano dejara vacío), lo que convierte el propio marco
+        // de jambas+dintel/muros de la estación -- YA con forma de puerta,
+        // por diseño de la línea del taller, playtest 26 -- en una puerta
+        // condenada: se lee distinto de un tramo de corredor liso porque
+        // conserva la silueta de portal, sin inventar un material nuevo ni
+        // depender de sprites que aún no existen (decisión de M, documentada:
+        // ver el bloque de abajo sobre por qué las máquinas NO se spawnean).
+        // Las celdas que se tapiaron se recuerdan (no se recalculan) para que
+        // `DestaparSala` las borre UNA A UNA sin tocar el marco de piedra que
+        // ya estaba ahí desde el génesis.
+        //
+        // LAS MÁQUINAS TAPIADAS NO SPAWMEAN SUS SPRITES/FOCOS (decisión de M,
+        // ver el docblock de contrato §3): `Game/AlkahestGameBootstrap.cs` NO
+        // llama a `SpawnPrensa/SpawnColumnaEnsayo/SpawnBancoChispa/
+        // SpawnEnsayoMaestro` mientras la sala siga tapiada -- lee
+        // `SalaDestapada(n)` (más abajo) por polling barato en su propio
+        // Update(), el mismo patrón que ya usa para reintentar el spawn
+        // inicial. Así nunca hay una `MachineFocus.Registrar` ni una chapa
+        // "E — usar" para una máquina detrás del muro (lo que el contrato
+        // prohíbe explícitamente).
+        public const int SalaPrensa = 0, SalaColumna = 1, SalaChispa = 2, SalaEnsayo = 3;
+        private const int SalasSemillaCeroCount = 4;
+
+        private static readonly RectObra[] _obraSalaSemillaCero = new RectObra[SalasSemillaCeroCount];
+        private static readonly System.Collections.Generic.List<int>[] _celdasTapiadasSemillaCero =
+        {
+            new System.Collections.Generic.List<int>(96),
+            new System.Collections.Generic.List<int>(96),
+            new System.Collections.Generic.List<int>(96),
+            new System.Collections.Generic.List<int>(96),
+        };
+        private static readonly bool[] _salaDestapadaSemillaCero = new bool[SalasSemillaCeroCount];
+
+        /// <summary>Llamado justo tras cada `TallarEnPlano` de las cuatro estaciones tapiables en `BuildCuartoIntimo`: si esa llamada registró un rect nuevo en `ObraDelTaller` (siempre debería), lo recuerda para el bloque de Semilla Cero.</summary>
+        private static void RegistrarObraSemillaCero(int sala, int obraCountAntes)
+        {
+            _obraSalaSemillaCero[sala] = ObraDelTaller.Count > obraCountAntes
+                ? ObraDelTaller[obraCountAntes]
+                : new RectObra { X0 = 0, Y0 = 0, X1 = -1, Y1 = -1 }; // rect vacío/inválido -- defensivo, no debería pasar nunca (regla 51: que falle a la vista si pasa).
+        }
+
+        /// <summary>¿Sigue tapiada la sala `sala` (0=prensa,1=columna,2=chispa,3=ensayo)? Solo tiene sentido en modo Semilla Cero -- fuera de él, `TapiarSalasSemillaCero` nunca se llamó y esto siempre da `false`.</summary>
+        public static bool SalaDestapada(int sala) => sala >= 0 && sala < SalasSemillaCeroCount && _salaDestapadaSemillaCero[sala];
+
+        /// <summary>
+        /// API CONGELADA (CONTRATO_SEMILLA.md §3). Tapia con mampostería de
+        /// obra (indestructible al cincel: reutiliza EL MISMO rect que
+        /// `ObraDelTaller` ya protege, ver `EsObraDelTaller`) las cuatro
+        /// salas de Semilla Cero. Llamada UNA vez, en el génesis del mundo
+        /// (`Game/AlkahestSim.cs::CrearMundoInterno`, justo después de
+        /// `SimLevelBuilder.BuildCuartoIntimo`), antes de que exista ninguna
+        /// instancia de máquina.
+        /// </summary>
+        public static void TapiarSalasSemillaCero(AlkahestSim sim)
+        {
+            var grid = sim.Grid;
+            for (int sala = 0; sala < SalasSemillaCeroCount; sala++)
+            {
+                _salaDestapadaSemillaCero[sala] = false;
+                _celdasTapiadasSemillaCero[sala].Clear();
+                var r = _obraSalaSemillaCero[sala];
+                if (r.X1 < r.X0 || r.Y1 < r.Y0) continue; // rect no poblado -- ver RegistrarObraSemillaCero.
+                for (int y = r.Y0; y <= r.Y1; y++)
+                {
+                    for (int x = r.X0; x <= r.X1; x++)
+                    {
+                        if (!CellGrid.InBounds(x, y)) continue;
+                        // Solo lo que el TallarEnPlano de la estación dejó
+                        // vacío (el lecho/bandeja/plinto/tanque): el marco de
+                        // jambas+dintel/muros YA es piedra y no hace falta
+                        // tocarlo -- así DestaparSala puede devolver
+                        // exactamente estas celdas a aire sin arriesgarse a
+                        // borrar el marco que la propia estación talló.
+                        if (grid.GetMat(x, y) != MaterialId.Empty) continue;
+                        _celdasTapiadasSemillaCero[sala].Add(CellGrid.Idx(x, y));
+                        grid.SetCell(x, y, MaterialId.Stone);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// API CONGELADA (CONTRATO_SEMILLA.md §3). Destapa la sala `sala`
+        /// (0=prensa,1=columna,2=chispa,3=ensayo): borra el tapiado (solo las
+        /// celdas exactas que `TapiarSalasSemillaCero` rellenó, no el marco)
+        /// y despierta sus chunks -- el polvo de derrumbe lo regala
+        /// `Game/ParticulasFx.cs` solo, observando el material cambiar bajo
+        /// el visor (mismo mecanismo que cualquier otro cambio de bloque, sin
+        /// que este método tenga que saber que existe). Idempotente: una
+        /// segunda llamada sobre una sala ya destapada no hace nada.
+        /// </summary>
+        public static void DestaparSala(AlkahestSim sim, int sala)
+        {
+            if (sala < 0 || sala >= SalasSemillaCeroCount || _salaDestapadaSemillaCero[sala]) return;
+            var grid = sim.Grid;
+            var stepper = sim.Stepper;
+            uint tick = stepper != null ? stepper.Tick : 0u;
+            var celdas = _celdasTapiadasSemillaCero[sala];
+            for (int i = 0; i < celdas.Count; i++)
+            {
+                int idx = celdas[i];
+                grid.SetCell(idx, MaterialId.Empty);
+                grid.WakeChunk(idx % CellGrid.W, idx / CellGrid.W, tick);
+            }
+            _salaDestapadaSemillaCero[sala] = true;
+        }
+
         public static void BuildCuartoIntimo(CellGrid grid)
         {
             ObraDelTaller.Clear(); // (playtest 27) plano nuevo, registro nuevo -- ver el bloque OBRA DEL TALLER.
@@ -1975,7 +2101,18 @@ namespace Alkahest.Sim
             // escalinata (+6) y el atrio del Ensayo un peldaño arriba (+3).
             // Sus plataformas soberanas (aplanado huella+2) hacen el resto.
             Crisol.TallarEnPlano(grid, CrisolX, BaseYDeEstacion(CrisolX));
+            // (playtest 40, SEMILLA CERO) Capturamos el handle que cada
+            // TallarEnPlano acaba de registrar en ObraDelTaller (ver el
+            // bloque "OBRA MOVIBLE" más arriba: SIEMPRE registran su rect
+            // exacto ahí) comparando el tamaño de la lista antes/después --
+            // así SimLevelBuilder.TapiarSalasSemillaCero/DestaparSala pueden
+            // leer el rect EXACTO de cada estación sin duplicar a mano la
+            // aritmética de `Calcular()` de cuatro archivos ajenos (Prensa/
+            // ColumnaEnsayo/BancoChispa/EnsayoMaestro), que además podría
+            // desalinearse silenciosamente si esos archivos cambian de forma.
+            int obraAntesPrensa = ObraDelTaller.Count;
             Prensa.TallarEnPlano(grid, PrensaX, BaseYDeEstacion(PrensaX));
+            RegistrarObraSemillaCero(SalaPrensa, obraAntesPrensa);
             // (playtest 29, encargo C) EL TALLADO SE MUDÓ a Game/ColumnaEnsayo.cs
             // (`TallarEnPlano`, mismo patrón que Crisol/Prensa/BancoChispa/
             // EnsayoMaestro, regla 47): la Columna necesitaba un método
@@ -1985,9 +2122,15 @@ namespace Alkahest.Sim
             // BocaVuelo/MarcaPaso/TanqueAlto) SIGUEN viviendo aquí -- son el
             // plano, no el tallado -- exactamente igual que Crisol lee
             // `SimLevelBuilder.CrisolX` pero es dueño de `CamaraAncho`.
+            int obraAntesColumna = ObraDelTaller.Count;
             ColumnaEnsayo.TallarEnPlano(grid, ColumnaX0, BaseYDeEstacion(ColumnaX0)); // muros de PIEDRA (ya no Crystal) + abocinado + marcas de nivel.
+            RegistrarObraSemillaCero(SalaColumna, obraAntesColumna);
+            int obraAntesChispa = ObraDelTaller.Count;
             BancoChispa.TallarEnPlano(grid, BancoChispaX, BaseYDeEstacion(BancoChispaX));
+            RegistrarObraSemillaCero(SalaChispa, obraAntesChispa);
+            int obraAntesEnsayo = ObraDelTaller.Count;
             EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, BaseYDeEstacion(EnsayoPlintoX));
+            RegistrarObraSemillaCero(SalaEnsayo, obraAntesEnsayo);
 
             // (playtest 30, "LA ALQUIMIA VISIBLE") EL ALAMBIQUE: a diferencia
             // de las cinco de arriba, NACE COMO OBRA PENDIENTE (ver el

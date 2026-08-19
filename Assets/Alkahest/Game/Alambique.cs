@@ -232,6 +232,28 @@ namespace Alkahest.Game
             int handleExistente = SimLevelBuilder.HallarObraExacta(plintoX0, plintoY0, plintoX1, plintoY1);
             _handleObra = handleExistente >= 0 ? handleExistente : SimLevelBuilder.RegistrarObra(plintoX0, plintoY0, plintoX1, plintoY1);
             Mudanza.RegistrarMovible(this);
+
+            // =================================================================
+            // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3 "El vasito")
+            // =================================================================
+            // El alambique normal exige pagar 30 celdas de cerámico -- un
+            // material que el arco de Semilla Cero no enseña a fabricar hasta
+            // bien entrado el beat 5 (la Prensa, que lo compacta, sigue
+            // tapiada hasta la primera pregunta del jugador). El diseño pide
+            // que gotee "desde el minuto 0, sin intervención" (el anzuelo
+            // silencioso del final abierto, DISENO_SEMILLA_CERO.md enmienda
+            // 5: "desde el beat 2 el alambique ha estado goteando... sin que
+            // NADIE lo mencione jamás") -- así que en este modo se construye
+            // solo, de una vez, sin pasar por la obra pendiente ni por el
+            // rótulo "construible: N celdas de cerámico". El resto del
+            // aparato (destilado, vasito, rótulo) sigue siendo EXACTAMENTE el
+            // mismo código que en modo caótico: solo se salta el peaje de
+            // construcción.
+            if (AlkahestGameBootstrap.ModoSemillaCero)
+            {
+                _ceramicoAcumulado = CeramicoRequerido;
+                CompletarConstruccion();
+            }
         }
 
         private void OnDestroy()

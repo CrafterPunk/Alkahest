@@ -237,6 +237,82 @@ namespace Alkahest.Game
         private float _avisoBautizoHasta;
 
         // ---------------------------------------------------------------------------------
+        // (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) CONTADOR DE MANIPULACIONES: por
+        // sustancia, cuántas veces el jugador la ha tocado de verdad (aspirar/verter/
+        // hornada). Sin poder tocar Game/Flask.cs ni Game/Crisol.cs (archivos del OTRO
+        // encargo de esta misma ronda -- propiedad disjunta), la única superficie que esta
+        // clase puede sondear es el propio Flask ya inyectado (mismo Update/PollFlask de
+        // siempre): se aproxima por RÁFAGA DE ACTIVIDAD -- el conteo de un material en el
+        // frasco pasa de "quieto" a "cambiando" (aspirar lo sube, verter lo baja; una
+        // hornada, en la práctica, siempre queda enmarcada por un verter de entrada y un
+        // aspirar de salida), y se cuenta UNA manipulación por ráfaga, no una por cada
+        // sondeo de FlaskPollInterval que dure el gesto (si no, sostener el botón de
+        // aspirar 2s contaría 4 manipulaciones en vez de 1). DECISIÓN FUERA DE CONTRATO
+        // EXPLÍCITA (ver informe de la ronda): el contrato pide contar "hornada que la
+        // toca" por separado, pero toda hornada real queda enmarcada por un verter+aspirar
+        // que esta heurística ya cuenta, así que no hace falta un tercer contador.
+        // ---------------------------------------------------------------------------------
+        private const int ManipulacionesParaBautizo = 3;
+        private readonly int[] _flaskCountPrev = new int[MaterialId.Count];
+        private readonly bool[] _flaskCambiando = new bool[MaterialId.Count];
+        private readonly byte[] _manipulaciones = new byte[MaterialId.Count]; // byte de sobra: nadie llega a 255 manipulaciones antes de bautizar.
+
+        /// <summary>Manipulaciones contadas (ver doc arriba) para `matId`. Lo consume SemillaCero.cs para saber si "el rótulo T ya se ofrecía discreto" antes de que el beat 3 lo haga obligatorio (contrato §1).</summary>
+        public int ManipulacionesDe(byte matId) => matId < MaterialId.Count ? _manipulaciones[matId] : 0;
+
+        // ---------------------------------------------------------------------------------
+        // (Encargo G, enmienda 2 -- CLAUDE.md regla 54 / CONTRATO_SEMILLA.md §2) NOTA
+        // FORENSE: vale para TODO el juego, no solo Semilla 0 (excepción deliberada, ver
+        // contrato §4). Un bool por material: "¿se ha presenciado que termine en ceniza
+        // alguna vez?" -- lo consume SemillaCero.cs (beat 4) para disparar el comentario
+        // hablado del Maestro sobre la ceniza, sin tener que repetir la detección del
+        // evento Boil→Ash que ya hace ApplyWitness.
+        // ---------------------------------------------------------------------------------
+        private readonly bool[] _destruidoAAsh = new bool[MaterialId.Count];
+
+        /// <summary>¿Se ha presenciado que `matId` termine en ceniza (Boil con destino Ash) alguna vez esta partida? Ver ApplyWitness.</summary>
+        public bool FueDestruidoAAsh(byte matId) => matId < MaterialId.Count && _destruidoAAsh[matId];
+
+        /// <summary>
+        /// (integración pt40, SEMILLA CERO) El testigo forense para
+        /// destrucciones POR HORNADA: la trampa del beat 4
+        /// (Game/Crisol.DecidirHornada, Polvo sobrecalentado -&gt; Ash) es una
+        /// transformación de hornada, NO un Boil de la CA -- jamás pasa por
+        /// ApplyWitness. Sin este puente, ni la nota forense ni la línea del
+        /// Maestro se dispararían nunca (los dos encargos de la ronda
+        /// asumieron canales distintos; esta es la costura). Lo llama
+        /// Game/Crisol.CerrarHornada cuando la salida es Ash, con la cima
+        /// térmica REAL de esa hornada.
+        /// </summary>
+        public void RegistrarDestruccionPorHornada(byte matId, byte cimaRaw)
+        {
+            if (matId >= MaterialId.Count || matId == MaterialId.Empty) return;
+            if (_destruidoAAsh[matId]) return; // la nota se escribe UNA vez, igual que en ApplyWitness.
+            _destruidoAAsh[matId] = true;
+            int celsius = CellGrid.RawToC(cimaRaw);
+            int redondeado = Mathf.RoundToInt(celsius / 10f) * 10;
+            RegistrarObservacionPropiedad(matId, "cerca de ~" + redondeado + "° se destruye");
+        }
+
+        // -----------------------------------------------------------------
+        // (integración pt40, SEMILLA CERO) TESTIGO DE CONDUCTIVIDAD: el nivel
+        // máximo (0/1/2) que el jugador ha VISTO dictar a la lámpara del
+        // banco de chispa esta partida. Lo alimenta Game/BancoChispa.cs tras
+        // cada análisis; lo consume Game/SemillaCero.cs para completar la
+        // pregunta "¿Esto CONDUCE?" (beat 5.3) EN EL BANCO -- sin este
+        // testigo, ese pedido (OrderType.Conduce) solo lo completaba
+        // EnsayoMaestro, cuya sala sigue tapiada hasta el beat 5.4:
+        // interbloqueo duro detectado en la auditoría de integración.
+        // -----------------------------------------------------------------
+        private byte _maxConductividadObservada;
+        /// <summary>Nivel máximo de conductividad presenciado en el banco (0 = nunca vio conducir nada).</summary>
+        public byte MaxConductividadObservada => _maxConductividadObservada;
+        public void RegistrarConductividadObservada(byte nivel)
+        {
+            if (nivel > _maxConductividadObservada) _maxConductividadObservada = nivel;
+        }
+
+        // ---------------------------------------------------------------------------------
         // (playtest 32, encargo C) "ALGO NUEVO": Cesar, jugando el 32 --
         // "cuando descubro algo, debe salirme en pantalla la opción de bautizarlo, porque
         // si no no me entero". El globo de arriba (DrawAvisoBautizo) es discreto A
@@ -267,14 +343,45 @@ namespace Alkahest.Game
             _discovered[matId] = true;
             if (!NecesitaBautizo(matId)) return; // vocabulario de taller o ya tiene nombre (regla 13/17): nada que anunciar.
             if (_avisoBautizoMostrado[matId]) return; // ya se le ofreció bautizo por otra vía -- un solo aviso por material.
+
+            // (Encargo G, SEMILLA CERO, enmienda 1) "EL BAUTIZO SE GANA": en este modo el
+            // rito no se ofrece hasta la 3ª manipulación real de esta sustancia (ver
+            // _manipulaciones/ManipulacionesParaBautizo, contrato §1 beat 1→3). El
+            // descubrimiento SÍ se anuncia (el jugador tiene que enterarse de que pasó algo)
+            // pero SIN invitar a T todavía -- y SIN marcar _avisoBautizoMostrado, para que la
+            // invitación de verdad pueda salir más tarde, al llegar a la 3ª manipulación
+            // (ver ActualizarAvisoBautizo/DispararAvisoBautizoTrasLey). El modo caótico y el
+            // multi NO cambian: siguen ofreciendo el rito al instante, como desde playtest 10
+            // (excepción deliberada de la regla del contrato §4: solo nombre provisional y
+            // nota forense valen siempre; esto NO es ninguno de los dos).
+            if (AlkahestGameBootstrap.ModoSemillaCero && _manipulaciones[matId] < ManipulacionesParaBautizo)
+            {
+                EncolarLeyBanner(ConstruirTextoDescubrimientoSemillaCero(matId), matId, TituloDescubrimiento);
+                return;
+            }
+
             _avisoBautizoMostrado[matId] = true;
             EncolarLeyBanner(ConstruirTextoDescubrimiento(matId), matId, TituloDescubrimiento);
         }
 
         /// <summary>Texto del banner "ALGO NUEVO": describe por ORIGEN/EFECTO (RespaldoLey, regla 13/17 -- nunca la identidad interna de algo que el HUD sigue enseñando como "???"). Construido UNA vez al descubrir, nunca en OnGUI.</summary>
-        private static string ConstruirTextoDescubrimiento(byte matId)
+        private string ConstruirTextoDescubrimiento(byte matId)
         {
             return "Has descubierto " + RespaldoLey(matId) + ". Pulsa T para bautizarlo.";
+        }
+
+        /// <summary>
+        /// (Encargo G, SEMILLA CERO, enmienda 1) Texto del "ALGO NUEVO" cuando el bautizo
+        /// TODAVÍA no se ha ganado: nunca invita a pulsar T (contrato §1, beat 1: "Banner:
+        /// ALGO NUEVO — sedimento celeste, anotado en tu diario. (nombre provisional, NO se
+        /// abre el rito de bautizo)"). Solo tiene sentido para base×estado (lo único con
+        /// nombre provisional); para cualquier otra cosa cae al texto de siempre.
+        /// </summary>
+        private string ConstruirTextoDescubrimientoSemillaCero(byte matId)
+        {
+            string provisional = NombreProvisional(matId);
+            if (provisional == null) return ConstruirTextoDescubrimiento(matId);
+            return MayusculaInicial(provisional) + ", anotado en tu diario.";
         }
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
@@ -326,7 +433,10 @@ namespace Alkahest.Game
             if (MaterialId.EsBaseEstado(matId))
             {
                 string baseName = _baseName[MaterialId.BaseDe(matId)];
-                return string.IsNullOrEmpty(baseName) ? "???" : baseName;
+                // (Encargo G, enmienda 1) Antes "???" a secas: ahora el nombre provisional
+                // "estado+color" (ver NombreProvisional) mientras la base no tenga bautizo --
+                // vale para TODO el juego, ver el docblock de esa sección.
+                return string.IsNullOrEmpty(baseName) ? (NombreProvisional(matId) ?? "???") : baseName;
             }
             return _playerName[matId] ?? "???";
         }
@@ -381,6 +491,82 @@ namespace Alkahest.Game
             }
         }
 
+        // =================================================================
+        // (Encargo G, SEMILLA CERO, enmienda 1 -- CONTRATO_SEMILLA.md §2) NOMBRE
+        // PROVISIONAL: "estado + color percibido" ("sedimento celeste") para TODO lo
+        // innominado del retículo base×estado (playtest 25) mientras el jugador no lo haya
+        // bautizado. VALE PARA TODO EL JUEGO (modo caótico incluido -- excepción deliberada,
+        // ver contrato §4): es mejor que enseñar el devName crudo ("Base2Polvo", ver
+        // Sim/Universe.cs Create) o un "???" mudo en cualquier universo, no solo en Semilla
+        // 0. Los clásicos fuera de base-estado (Azoth/CrystalSeed/Crystal/Vivium/Slime/Acid)
+        // NO pasan por aquí -- "usan su nombre de siempre" (RespaldoLey/NombreLey, la
+        // descripción de origen/efecto de playtest 10/18 sigue intacta para esos seis).
+        // =================================================================
+
+        /// <summary>Palabra de estado del nombre provisional (tabla congelada del contrato). EstadoMateria es un enum cerrado de 8 valores, todos cubiertos.</summary>
+        private static string PalabraEstadoProvisional(EstadoMateria estado)
+        {
+            switch (estado)
+            {
+                case EstadoMateria.Polvo: return "sedimento";
+                case EstadoMateria.Fundido: return "colada";
+                case EstadoMateria.Templado: return "lágrima";
+                case EstadoMateria.Recocido: return "pan";
+                case EstadoMateria.Compacto: return "laja";
+                case EstadoMateria.Ceramico: return "loza";
+                case EstadoMateria.Calcinado: return "tueste";
+                case EstadoMateria.Solucion: return "tinte";
+                default: return "algo"; // defensivo, no debería alcanzarse (enum cerrado).
+            }
+        }
+
+        /// <summary>Tabla congelada de 12 colores nombrables (contrato §2) para el nombre provisional: el color PERCIBIDO más cercano por distancia RGB al baseColor real del material (que sí varía por semilla, ver Sim/Universe.cs SortearFirmasVisuales).</summary>
+        private static readonly (string nombre, byte r, byte g, byte b)[] _coloresProvisionales =
+        {
+            ("celeste",   110, 198, 232),
+            ("ámbar",     255, 179, 0),
+            ("carmesí",   200, 20, 55),
+            ("oliva",     128, 128, 0),
+            ("violeta",   138, 95, 191),
+            ("gris",      136, 136, 136),
+            ("dorado",    212, 175, 55),
+            ("cobrizo",   184, 115, 51),
+            ("esmeralda", 80, 200, 120),
+            ("turquesa",  64, 224, 208),
+            ("hueso",     227, 218, 201),
+            ("pardo",     139, 90, 43),
+        };
+
+        private static string ColorProvisionalMasCercano(Color32 c)
+        {
+            int mejorIdx = 0;
+            int mejorDist = int.MaxValue;
+            for (int i = 0; i < _coloresProvisionales.Length; i++)
+            {
+                var candidato = _coloresProvisionales[i];
+                int dr = c.r - candidato.r, dg = c.g - candidato.g, db = c.b - candidato.b;
+                int dist = dr * dr + dg * dg + db * db;
+                if (dist < mejorDist) { mejorDist = dist; mejorIdx = i; }
+            }
+            return _coloresProvisionales[mejorIdx].nombre;
+        }
+
+        /// <summary>
+        /// Nombre provisional "estado + color" (contrato §2, enmienda 1): SOLO para el
+        /// retículo base×estado (ver doc de la sección) -- null para cualquier otro matId
+        /// (los seis clásicos innominados, vocabulario de taller, o id inválido) y también
+        /// null si todavía no hay Universe (defensivo, mismo criterio que el resto de la
+        /// clase antes de Init).
+        /// </summary>
+        private string NombreProvisional(byte matId)
+        {
+            if (!MaterialId.EsBaseEstado(matId)) return null;
+            if (_sim == null || _sim.Universe == null) return null;
+            string estado = PalabraEstadoProvisional(MaterialId.EstadoDe(matId));
+            string color = ColorProvisionalMasCercano(_sim.Universe.Get(matId).baseColor);
+            return estado + " " + color;
+        }
+
         /// <summary>
         /// Sufijo fijo de estado (contrato §6.4: "(fundido)", "(cerámico)"...)
         /// -- SOLO cosmético, nunca se guarda en <see cref="_baseName"/> ni en
@@ -417,7 +603,10 @@ namespace Alkahest.Game
             if (MaterialId.EsBaseEstado(matId))
             {
                 string baseName = _baseName[MaterialId.BaseDe(matId)];
-                if (string.IsNullOrEmpty(baseName)) return "???";
+                // (Encargo G, enmienda 1) sin bautizo: nombre provisional "estado+color",
+                // que YA incluye la palabra de estado -- no se le añade además SufijoEstado
+                // encima (sería "sedimento celeste (en polvo)", redundante).
+                if (string.IsNullOrEmpty(baseName)) return NombreProvisional(matId) ?? "???";
                 return baseName + SufijoEstado(MaterialId.EstadoDe(matId));
             }
             string propio = _playerName[matId];
@@ -588,7 +777,7 @@ namespace Alkahest.Game
         /// criterio de origen/efecto: Crystal por CÓMO nace (del frío), Slime por lo que
         /// lo produce (neutralizar ácido), Acid por lo que se le ha visto hacer (disolver).
         /// </summary>
-        private static string RespaldoLey(byte matId)
+        private string RespaldoLey(byte matId)
         {
             switch (matId)
             {
@@ -599,7 +788,12 @@ namespace Alkahest.Game
                 case MaterialId.Crystal: return "la piedra que nace del frío";
                 case MaterialId.Slime: return "el poso que deja el ácido al apagarse";
                 case MaterialId.Acid: return "lo que disuelve lo que toca";
-                default: return NombreComun(matId) ?? "algo sin nombre todavía"; // vocabulario de taller (ya tiene nombre común) o id fuera de rango.
+                // (Encargo G, enmienda 1) base×estado: antes caía aquí y mostraba el genérico
+                // "algo sin nombre todavía" -- ahora el nombre provisional "estado+color", la
+                // misma mejora que NombreDe/NombreParaHud, para que "LEY DESCUBIERTA"/"ALGO
+                // NUEVO" hablen igual que el resto del HUD. (RespaldoLey pasó de static a
+                // instancia para poder leer _sim.Universe.Get(...).baseColor.)
+                default: return NombreComun(matId) ?? NombreProvisional(matId) ?? "algo sin nombre todavía"; // vocabulario de taller, base×estado provisional, o id fuera de rango.
             }
         }
 
@@ -748,6 +942,9 @@ namespace Alkahest.Game
             if (objetivo == MaterialId.Empty) return;
             if (!NecesitaBautizo(objetivo)) return;
             if (_avisoBautizoMostrado[objetivo]) return;
+            // (Encargo G, SEMILLA CERO, enmienda 1) mismo gate que MarcarDescubierto: "el
+            // bautizo se gana" -- ver el docblock de allí.
+            if (AlkahestGameBootstrap.ModoSemillaCero && _manipulaciones[objetivo] < ManipulacionesParaBautizo) return;
 
             _avisoBautizoMostrado[objetivo] = true;
             _avisoBautizoHasta = Time.time + AvisoBautizoDuracionSeg;
@@ -765,6 +962,8 @@ namespace Alkahest.Game
         {
             if (!NecesitaBautizo(matId)) return;
             if (_avisoBautizoMostrado[matId]) return;
+            // (Encargo G, SEMILLA CERO, enmienda 1) mismo gate, ver MarcarDescubierto.
+            if (AlkahestGameBootstrap.ModoSemillaCero && _manipulaciones[matId] < ManipulacionesParaBautizo) return;
 
             _avisoBautizoMostrado[matId] = true;
             _avisoBautizoHasta = Time.time + AvisoBautizoDuracionSeg;
@@ -780,8 +979,16 @@ namespace Alkahest.Game
 
             for (int m = 1; m < MaterialId.Count; m++)
             {
-                if (_discovered[m]) continue;
-                if (_flask.GetCount((byte)m) > 0) MarcarDescubierto((byte)m);
+                int c = _flask.GetCount((byte)m);
+                if (!_discovered[m] && c > 0) MarcarDescubierto((byte)m);
+
+                // (Encargo G, SEMILLA CERO) contador de manipulaciones -- ver el docblock
+                // largo junto a _manipulaciones: cuenta por RÁFAGA (quieto->cambiando), no
+                // una vez por sondeo mientras el gesto dura.
+                bool cambiando = c != _flaskCountPrev[m];
+                if (cambiando && !_flaskCambiando[m] && _manipulaciones[m] < byte.MaxValue) _manipulaciones[m]++;
+                _flaskCambiando[m] = cambiando;
+                _flaskCountPrev[m] = c;
             }
         }
 
@@ -848,14 +1055,14 @@ namespace Alkahest.Game
                 // consumiendo exactamente igual en ApplyWitness, Ley se despacha aparte
                 // porque lleva su propio dato (leyIndice) y no una WitnessFlag.
                 if (e.type == SimEventType.Ley) ApplyLey(e.leyIndice);
-                else ApplyWitness(e.type, e.matId);
+                else ApplyWitness(e.type, e.matId, e.x, e.y);
                 i = (i + 1) & (SimStepper.EventBufferSize - 1);
                 steps++;
             }
             _lastEventHead = head;
         }
 
-        private void ApplyWitness(SimEventType type, byte matId)
+        private void ApplyWitness(SimEventType type, byte matId, int x, int y)
         {
             if (matId >= MaterialId.Count) return;
 
@@ -872,6 +1079,33 @@ namespace Alkahest.Game
             }
 
             _witness[matId] |= flag;
+
+            // =============================================================
+            // (Encargo G, enmienda 2 -- CLAUDE.md regla 54, CONTRATO_SEMILLA.md §2)
+            // NOTA FORENSE: vale para TODO el juego (excepción deliberada, contrato §4).
+            // Boil es GENÉRICO (agua hirviendo a vapor también dispara este evento) --
+            // solo cuenta como "destrucción" cuando el destino real es Ash (def.boilsInto),
+            // y solo se anota si la sustancia ya era CONOCIDA (regla 54: "al presenciar la
+            // destrucción de una sustancia conocida"). matId aquí es el material FUENTE
+            // ANTES de transformarse (ver Sim/SimStepper.ApplyPhase, PushEvent(Boil, m, ...)
+            // se llama con la `m` original), así que la ficha que recibe la nota es la de lo
+            // que se destruyó, no la de la ceniza resultante.
+            // =============================================================
+            if (type == SimEventType.Boil && _discovered[matId] && _sim != null && _sim.Universe != null)
+            {
+                var def = _sim.Universe.Get(matId);
+                if (def.boilsInto == MaterialId.Ash)
+                {
+                    _destruidoAAsh[matId] = true;
+                    // Temperatura de LA CELDA en el momento del evento (no la ambiente
+                    // uniforme del taller, regla 31 -- lo que mató la muestra fue el calor
+                    // LOCAL), redondeada a decenas: el forense da un rango, no un dato de
+                    // laboratorio de precisión.
+                    int celsius = CellGrid.RawToC(_sim.SampleTempRaw(x, y));
+                    int redondeado = Mathf.RoundToInt(celsius / 10f) * 10;
+                    RegistrarObservacionPropiedad(matId, "cerca de ~" + redondeado + "° se destruye");
+                }
+            }
         }
 
         /// <summary>

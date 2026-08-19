@@ -76,8 +76,35 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class AlkahestGameBootstrap : MonoBehaviour
     {
+        // =====================================================================
+        // SEMILLA CERO (playtest 40, CONTRATO_SEMILLA.md §3). El flag estático
+        // congelado que decide TODO lo demás de esta ronda: la pantalla de
+        // entrada lo fija ANTES de cargar la escena (mismo patrón que
+        // `AlkahestSim.NextRunSeed`, se lee y se consume aquí, nunca se
+        // resetea solo -- quien entra "MODO CAÓTICO" o recarga sin pasar por
+        // el título de nuevo debe dejarlo en `false` explícitamente, ver
+        // `Game/DayCycle.cs`/la pantalla de título). `Game/AlkahestSim.cs` lo
+        // lee para elegir la seed y aplicar los overrides de `Universe`;
+        // este archivo lo lee para tapiar/destapar; `Game/Crisol.cs` lo lee
+        // para la trampa del beat 4. En MULTI (`TrySpawnRed`) NUNCA se toca:
+        // se queda en `false`, Semilla Cero no existe ahí (contrato §3).
+        // </summary>
+        public static bool ModoSemillaCero;
+
         private AlkahestSim _sim;
         private bool _spawned;
+
+        // (playtest 40, SEMILLA CERO) Referencias cacheadas para poder
+        // spawnear las cuatro estaciones tapiables MÁS TARDE, cuando el otro
+        // encargo (Game/SemillaCero.cs) llame a
+        // `Sim/SimLevelBuilder.DestaparSala` -- ver `PollDestapesSemillaCero`,
+        // sondeado desde `Update()` con el mismo criterio barato que el resto
+        // del proyecto (CLAUDE.md, "probes con acumulador"/"polling barato de
+        // estado público").
+        private Transform _playerSemillaCero;
+        private SubstanceKnowledge _knowledgeSemillaCero;
+        private OrderSystem _orderSystemSemillaCero;
+        private readonly bool[] _salaSpawneadaSemillaCero = new bool[4];
 
         // (M5 audio) Los cinco grifos, guardados aquí al crearlos en
         // SpawnDispensers: Audio/DirectorDeAudio.cs necesita sus referencias
@@ -102,7 +129,45 @@ namespace Alkahest.Game
 
         private void Update()
         {
-            if (!_spawned) TrySpawn();
+            if (!_spawned) { TrySpawn(); return; }
+            // (playtest 40, SEMILLA CERO) Cuatro comparaciones de bool por
+            // frame, cero allocs -- el mismo presupuesto que cualquier otro
+            // polling barato del proyecto. En caótico/multi `ModoSemillaCero`
+            // es `false` y esto no hace nada.
+            if (ModoSemillaCero) PollDestapesSemillaCero();
+        }
+
+        /// <summary>
+        /// (playtest 40, SEMILLA CERO) Spawnea la estación de la sala `n` la
+        /// PRIMERA vez que `Sim/SimLevelBuilder.SalaDestapada(n)` da `true`
+        /// -- lo dispara `Game/SemillaCero.cs` (el otro encargo) llamando a
+        /// `SimLevelBuilder.DestaparSala`, que solo toca el CellGrid; este
+        /// método es quien de verdad hace aparecer la máquina (sprites, foco
+        /// de interacción) que hasta ese momento ni siquiera existía como
+        /// GameObject -- ver el docblock de `TapiarSalasSemillaCero`.
+        /// </summary>
+        private void PollDestapesSemillaCero()
+        {
+            if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaPrensa))
+            {
+                SpawnPrensa(_playerSemillaCero);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] = true;
+            }
+            if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaColumna))
+            {
+                SpawnColumnaEnsayo(_playerSemillaCero, _knowledgeSemillaCero);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] = true;
+            }
+            if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaChispa] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaChispa))
+            {
+                SpawnBancoChispa(_playerSemillaCero, _knowledgeSemillaCero);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaChispa] = true;
+            }
+            if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaEnsayo] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaEnsayo))
+            {
+                SpawnEnsayoMaestro(_orderSystemSemillaCero, _playerSemillaCero);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaEnsayo] = true;
+            }
         }
 
         private void TrySpawn()
@@ -206,6 +271,18 @@ namespace Alkahest.Game
             SpawnJournalHud(knowledge);
             SpawnOrdersHud(orderSystem);
 
+            // (integración pt40, SEMILLA CERO) EL DIRECTOR DEL ARCO: solo en
+            // modo Semilla Cero (su Init además se auto-veta con
+            // SimSync.EnEscena: jamás en multi). Va DESPUÉS de
+            // knowledge/orderSystem (los escucha) y ANTES de que el jugador
+            // toque nada -- las cuatro máquinas tapiadas las spawnea
+            // PollDestapesSemillaCero cuando este director destape su sala.
+            if (ModoSemillaCero)
+            {
+                var semillaCero = new GameObject("SemillaCero").AddComponent<SemillaCero>();
+                semillaCero.Init(_sim, knowledge, orderSystem);
+            }
+
             // LAS TRES MÁQUINAS DE LO QUE PERSISTE (contrato §5.4): en las
             // constantes de SimLevelBuilder §4.5 (CrisolX/PrensaX/BancoChispaX,
             // suelo CuartoY0+2 -- las define el encargo A EN PARALELO, se
@@ -213,14 +290,45 @@ namespace Alkahest.Game
             // conocimiento (el Crisol y el Banco lo necesitan para las
             // condiciones/observaciones legibles del diario) y antes del ciclo
             // de jornadas.
-            SpawnCrisol(apprentice.transform, knowledge);
-            SpawnPrensa(apprentice.transform);
-            SpawnBancoChispa(apprentice.transform, knowledge);
+            // (playtest 40, SEMILLA CERO) Referencias cacheadas para el
+            // spawn TARDÍO de las cuatro estaciones tapiables -- ver
+            // `PollDestapesSemillaCero`. Se guardan aquí (ya existen las
+            // tres) da igual el modo: en caótico/multi nunca se leen.
+            _playerSemillaCero = apprentice.transform;
+            _knowledgeSemillaCero = knowledge;
+            _orderSystemSemillaCero = orderSystem;
+
+            SpawnCrisol(apprentice.transform, knowledge); // NUNCA tapiado (contrato §3: "el jugador nace junto a las fuentes y el crisol").
+            // (playtest 40, SEMILLA CERO) LAS CUATRO SALAS POR PREGUNTA: en
+            // modo Semilla Cero, con el mundo recién tapiado
+            // (`Sim/SimLevelBuilder.TapiarSalasSemillaCero`, llamado desde
+            // `Game/AlkahestSim.cs` antes de que este método corra),
+            // NINGUNA sala empieza destapada -- así que las cuatro se saltan
+            // aquí y `PollDestapesSemillaCero` las spawnea la primera vez que
+            // `Game/SemillaCero.cs` (el otro encargo) llame a
+            // `SimLevelBuilder.DestaparSala`. Decisión de M (ver el docblock
+            // de `TapiarSalasSemillaCero`): así nunca existe una
+            // `MachineFocus.Registrar` para una máquina detrás del muro, ni
+            // una chapa "E — usar" que se vea a través del tapiado.
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaPrensa))
+            {
+                SpawnPrensa(apprentice.transform);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] = true;
+            }
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaChispa))
+            {
+                SpawnBancoChispa(apprentice.transform, knowledge);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaChispa] = true;
+            }
             // (playtest 27, mandato 5) La COLUMNA por fin tiene clase propia
             // (Game/ColumnaEnsayo.cs): su mampostería la sigue tallando el
             // plano, pero su vidrio, sus zunchos y su VERBO ("observar")
             // necesitaban un MonoBehaviour que los dibujara.
-            SpawnColumnaEnsayo(apprentice.transform, knowledge);
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaColumna))
+            {
+                SpawnColumnaEnsayo(apprentice.transform, knowledge);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] = true;
+            }
             // (playtest 30, "LA ALQUIMIA VISIBLE", tarea 3) EL ALAMBIQUE:
             // primer instrumento del taller que el jugador FABRICA con
             // materiales -- ver Game/Alambique.cs. Junto al resto de la línea
@@ -282,7 +390,14 @@ namespace Alkahest.Game
             // (`SimLevelBuilder.EnsayoPlintoX`, la lee la propia clase). Antes
             // del ciclo de jornadas, mismo criterio que el resto de este
             // método.
-            SpawnEnsayoMaestro(orderSystem, apprentice.transform);
+            // (playtest 40, SEMILLA CERO) El atrio del Ensayo es la cuarta
+            // sala tapiable -- mismo criterio que Prensa/Chispa/Columna más
+            // arriba.
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaEnsayo))
+            {
+                SpawnEnsayoMaestro(orderSystem, apprentice.transform);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaEnsayo] = true;
+            }
 
             SpawnDayCycle(orderSystem, knowledge, supplies, hints);
 

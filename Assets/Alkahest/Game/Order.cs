@@ -52,6 +52,23 @@ namespace Alkahest.Game
         /// "el cómo, por escrito", no una sustancia concreta.
         /// </summary>
         Procedimiento,
+
+        // =================================================================
+        // (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) EL PEDIDO GUIADO.
+        // =================================================================
+        /// <summary>
+        /// La celda es exactamente <see cref="Order.TargetMat"/> (idéntico criterio de
+        /// coincidencia que <see cref="NamedMaterial"/>: matId == TargetMat.Value) pero
+        /// SIN pasar por <see cref="OrderSystem.RefreshDescripciones"/> -- ese método solo
+        /// recalcula Grows/CrystalSolid/NamedMaterial al rebautizar, y los pedidos de
+        /// Semilla 0 llevan su texto EXACTO del guion (contrato §1), que
+        /// <c>Game/SemillaCero.cs</c> construye y refresca él mismo cuando hace falta (p.
+        /// ej. justo al bautizar, en el beat 3) -- dejar que el refresco automático lo
+        /// pisara reescribiría la frase del Maestro con la plantilla genérica
+        /// "Trae N celdas de lo que llamas...". Solo lo genera
+        /// <see cref="OrderSystem.EncolarPedidoGuiado"/>, nunca la generación procedural.
+        /// </summary>
+        Guiado,
     }
 
     /// <summary>

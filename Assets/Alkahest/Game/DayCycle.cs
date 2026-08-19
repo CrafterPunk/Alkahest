@@ -654,7 +654,9 @@ namespace Alkahest.Game
         {
             DrawFullscreenDim();
             UiStyles.Preparar();
-            var interior = AbrirPanel(480f, 320f);
+            // (playtest 40, SEMILLA CERO) 320 -> 380: el panel gana el botón
+            // principal nuevo + su filete separador -- ver el bloque de abajo.
+            var interior = AbrirPanel(480f, 380f);
 
             // (playtest 31, TIPOGRAFÍA = ALMA) El título es lo PRIMERO que ve
             // quien enciende el juego. Es una capital lapidaria (Cinzel) con
@@ -677,14 +679,39 @@ namespace Alkahest.Game
                 UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
             GUILayout.Label("Todo lo que existe desciende del limo.", UiStyles.Subtitulo);
 
-            GUILayout.Space(UiStyles.S(16f));
+            // =================================================================
+            // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3) DOS MODOS DE
+            // ENTRADA. El principal es el arco de autor ("SEMILLA CERO — tu
+            // primer taller"): seed congelada (Universe.SemillaCero) + el flag
+            // `AlkahestGameBootstrap.ModoSemillaCero` en `true`, que el resto
+            // del mundo (Universe/SimLevelBuilder/Crisol/Game/SemillaCero.cs)
+            // lee para tapiar salas, aplicar los overrides de autor y dirigir
+            // el arco de beats. Debajo, INTACTO, el camino de siempre (campo
+            // de seed + botón), ahora etiquetado "MODO CAÓTICO" y con el flag
+            // explícitamente en `false` -- el modo de siempre NO CAMBIA DE
+            // COMPORTAMIENTO (regla dura del contrato): solo cambió el texto
+            // del botón y el flag que deja apagado.
+            // =================================================================
+            GUILayout.Space(UiStyles.S(18f));
+            if (GUILayout.Button("SEMILLA CERO — tu primer taller", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
+            {
+                AlkahestGameBootstrap.ModoSemillaCero = true;
+                RestartRun((int)Universe.SemillaCero);
+            }
+
+            GUILayout.Space(UiStyles.S(14f));
+            var fileteModos = GUILayoutUtility.GetRect(10f, UiStyles.S(8f));
+            if (Event.current.type == EventType.Repaint)
+                UiStyles.FileteRombo(interior.width * 0.5f, fileteModos.y + fileteModos.height * 0.5f, interior.width * 0.4f, UiStyles.LatonOscuro);
+
             GUILayout.Label("Seed (vacía = aleatoria):", UiStyles.CuerpoTenue);
             _seedField = GUILayout.TextField(_seedField, 12, UiStyles.Campo);
 
-            GUILayout.Space(UiStyles.S(12f));
+            GUILayout.Space(UiStyles.S(10f));
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Entrar al taller", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            if (GUILayout.Button("MODO CAÓTICO — entrar con esta semilla", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
             {
+                AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun(ParseSeedField());
             }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
@@ -1028,6 +1055,13 @@ namespace Alkahest.Game
             }
             if (GUILayout.Button("Nuevo universo", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))
             {
+                // (integración pt40, SEMILLA CERO) "Nuevo universo" = seed
+                // sorteada = el arco de autor ya no aplica: se apaga el modo
+                // aquí para que la partida nueva sea CAÓTICO limpio (sin
+                // tapiados de un guion que no va a correr). "Reintentar
+                // mismo universo" NO lo toca a propósito: misma seed = el
+                // arco entero se puede volver a jugar.
+                AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun(null);
             }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))

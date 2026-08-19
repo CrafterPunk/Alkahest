@@ -2,6 +2,15 @@ using System;
 using UnityEngine;
 using Alkahest.Sim;
 using Alkahest.Net;
+// (playtest 40, SEMILLA CERO) `using Alkahest.Game;`: este es el ÚNICO sitio
+// del proyecto donde se crea el Universe/CellGrid de una partida, así que es
+// donde tiene que decidirse si aplicar los overrides de autor y tapiar las
+// salas -- ver CrearMundoInterno. `AlkahestGameBootstrap.ModoSemillaCero` no
+// tenía otro archivo natural donde vivir esta lectura: ninguno de los dos
+// encargos de CONTRATO_SEMILLA.md lista Game/AlkahestSim.cs explícitamente,
+// pero es el punto de integración obligado (documentado en el informe de la
+// ronda como decisión fuera de contrato).
+using Alkahest.Game;
 
 namespace Alkahest
 {
@@ -188,6 +197,14 @@ namespace Alkahest
             }
 
             _universe = Universe.Create(seed);
+            // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3) La pasada de
+            // overrides de autor corre AQUÍ, justo después de la generación
+            // normal, antes de construir plano ni stepper -- así todo lo que
+            // lee `_universe` después (el plano, las máquinas, el diario) ya
+            // ve el universo final. Nunca en el espejo (Semilla Cero es solo
+            // de la escena de un jugador, ver Game/SemillaCero.cs) ni cuando
+            // el flag está apagado (caótico/multi intactos).
+            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero) Universe.AplicarOverridesSemillaCero(_universe);
             _grid = new CellGrid();
             // (playtest 21, EL PIVOT) La partida arranca en el CUARTO ÍNTIMO,
             // no en el taller clásico -- "el cuarto íntimo pasa a ser EL
@@ -199,6 +216,13 @@ namespace Alkahest
             // clásico vuelva a excavarse de verdad en vez de generarse de
             // fábrica ya abierto.
             SimLevelBuilder.BuildCuartoIntimo(_grid);
+            // (playtest 40, SEMILLA CERO) Tapiado de las cuatro salas por
+            // pregunta -- API CONGELADA (SimLevelBuilder.TapiarSalasSemillaCero,
+            // ver su docblock). Después de BuildCuartoIntimo (necesita que las
+            // cinco estaciones ya hayan tallado su mampostería y registrado su
+            // rect en ObraDelTaller) y antes de crear el stepper/renderer (no
+            // hace falta ninguno de los dos: solo escribe CellGrid).
+            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero) SimLevelBuilder.TapiarSalasSemillaCero(this);
 
             // EL ESPEJO NO TIENE STEPPER. No es que esté pausado: NO EXISTE.
             // Es la garantía estructural de que un invitado no puede simular

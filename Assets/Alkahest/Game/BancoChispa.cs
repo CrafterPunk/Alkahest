@@ -440,6 +440,11 @@ namespace Alkahest.Game
 
             string observacion = conductividad >= 1 ? "encendió la lámpara" : "la lámpara ni parpadeó";
             if (_conocimiento != null) _conocimiento.RegistrarObservacionPropiedad(dominanteMat, observacion);
+            // (integración pt40, SEMILLA CERO) El testigo de conductividad:
+            // Game/SemillaCero.cs completa "¿Esto CONDUCE?" cuando la lámpara
+            // dictó sentencia AQUÍ (la sala del Ensayo sigue tapiada en ese
+            // beat). Global e inocuo fuera de Semilla 0: solo un máximo.
+            if (_conocimiento != null) _conocimiento.RegistrarConductividadObservada(conductividad);
         }
 
         // =================================================================

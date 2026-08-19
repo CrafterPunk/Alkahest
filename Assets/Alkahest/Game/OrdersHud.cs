@@ -79,6 +79,18 @@ namespace Alkahest.Game
         /// <summary>(playtest 23) Lo que enseña el panel cuando aún no existe ningún encargo -- en el pivot no los hay hasta cavar hasta la Tolva. Cero strings por frame: es const.</summary>
         private const string TextoSinEncargos = "(nadie os ha oído todavía -- la Tolva del Maestro sigue sellada tras la roca, hacia la derecha)";
 
+        /// <summary>
+        /// (Encargo G, SEMILLA CERO, contrato §1 beat 6) EL PANEL VACÍO ES EL FINAL
+        /// ABIERTO: la frase de arriba habla de una Tolva sellada tras roca que no existe
+        /// en este modo, y contradiría el silencio deliberado del beat 6 ("sin encargo
+        /// nuevo, panel de encargos vacío" -- no "todavía no me habéis encontrado"). Este
+        /// modo también pasa por aquí en el breve hueco entre beats (p. ej. mientras el
+        /// Maestro exige el nombre, antes de que SemillaCero encole el pedido con nombre).
+        /// </summary>
+        private const string TextoSinEncargosSemillaCero = "(nada por ahora)";
+
+        private static string TextoVacio => AlkahestGameBootstrap.ModoSemillaCero ? TextoSinEncargosSemillaCero : TextoSinEncargos;
+
         private const string TituloColapsado = "ENCARGOS  ·  O expande";
         private const string TituloExpandido = "ENCARGOS  ·  O pliega";
 
@@ -211,6 +223,11 @@ namespace Alkahest.Game
                 case OrderType.Cold: color = UiStyles.Frio; glifo = "C"; break;
                 case OrderType.Grows: color = UiStyles.Exito; glifo = "V"; break;
                 case OrderType.CrystalSolid: color = UiStyles.Oro; glifo = "X"; break;
+                // (Encargo G, SEMILLA CERO) el pedido guiado es una PREGUNTA del Maestro,
+                // no una entrega genérica -- glifo propio en vez de caer al "N" de
+                // NamedMaterial (regla 48 de CLAUDE.md: un estado nuevo necesita un verbo
+                // visible propio).
+                case OrderType.Guiado: color = UiStyles.Oro; glifo = "?"; break;
                 default: color = UiStyles.Texto; glifo = "N"; break; // NamedMaterial.
             }
         }
@@ -277,7 +294,7 @@ namespace Alkahest.Game
             // se mide (y dibuja, ver abajo) una línea que lo DICE, en vez de
             // callar -- regla 43: lo indistinguible de "no pasó nada" no
             // ocurrió.
-            if (orders.Count == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior) + gapFila;
+            if (orders.Count == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoVacio, interior) + gapFila;
             alto += pad - (orders.Count > 0 ? gapFila : 0f); // el último encargo ya dejó el aire de abajo: no duplicarlo.
 
             var panel = new Rect(Screen.width - ancho - margen, margen, ancho, alto);
@@ -303,8 +320,8 @@ namespace Alkahest.Game
             // (playtest 23) Cero encargos: decirlo. Ver el comentario de la medición.
             if (orders.Count == 0)
             {
-                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior);
-                GUI.Label(new Rect(x, y, interior, altoTexto), TextoSinEncargos, UiStyles.CuerpoTenue);
+                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoVacio, interior);
+                GUI.Label(new Rect(x, y, interior, altoTexto), TextoVacio, UiStyles.CuerpoTenue);
                 y += altoTexto + gapFila;
             }
 

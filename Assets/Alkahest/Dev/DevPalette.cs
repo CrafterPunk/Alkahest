@@ -31,6 +31,10 @@ namespace Alkahest.Dev
         private const int WindowId = 837465;
 
         private AlkahestSim _sim;
+        // (integración pt40) cache del director de Semilla Cero para la
+        // línea de autonomía del panel -- ver su uso en DrawWindow.
+        private SemillaCero _semillaCero;
+        private float _semillaCeroBusqueda;
         private bool _visible;
         /// <summary>Abierta = el ratón pinta materiales; el Frasco debe ignorar sus clics.</summary>
         public static bool IsOpen { get; private set; }
@@ -229,6 +233,23 @@ namespace Alkahest.Dev
             GUILayout.Label($"FPS: {1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f):F0}   Sim: {_sim.Stepper.LastStepMs:F2} ms");
             GUILayout.Label($"Chunks activos: {_sim.Stepper.ActiveChunks}/{CellGrid.ChunksX * CellGrid.ChunksY}   Celdas activas: {_sim.Stepper.ActiveCells}");
             GUILayout.Label($"Seed: {_sim.Universe.Seed}   Tick: {_sim.Stepper.Tick}");
+
+            // (integración pt40, SEMILLA CERO) LA MÉTRICA REINA a la vista
+            // del dev: acciones del jugador DESPUÉS del final abierto
+            // (contrato SEMILLA §1 beat 6). El lookup se cachea y solo se
+            // reintenta cada ~2s mientras no haya director (jamás
+            // FindAnyObjectByType por frame).
+            if (_semillaCero == null && AlkahestGameBootstrap.ModoSemillaCero)
+            {
+                _semillaCeroBusqueda -= Time.unscaledDeltaTime;
+                if (_semillaCeroBusqueda <= 0f)
+                {
+                    _semillaCero = FindAnyObjectByType<SemillaCero>();
+                    _semillaCeroBusqueda = 2f;
+                }
+            }
+            if (_semillaCero != null)
+                GUILayout.Label($"Autonomía (post-final abierto): {_semillaCero.AccionesPostFinalAbierto} acciones");
 
             GUILayout.Space(6);
             var mats = _sim.Universe.Materials;

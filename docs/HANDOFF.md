@@ -2769,3 +2769,61 @@ real es mucho mayor.
 con las lenguas reales (recortable); Freeze/Crystallize/Grow/Dissolve aún sin partícula propia;
 el invitado no recibe eventos (sin stepper) — sus ráfagas episódicas salen solo de la
 observación continua.
+
+---
+
+## Playtest 40 → SEMILLA CERO (la primera sesión como experiencia de autor)
+
+El GO tras subir el 39: construir DISENO_SEMILLA_CERO.md (las cinco enmiendas) sobre las capas
+del motor. Contrato congelado en docs/CONTRATO_SEMILLA.md — que ahora es LA FUENTE ÚNICA del
+arco beat a beat (el detalle v1 vivía en la conversación pre-compactación). Dos encargos Sonnet
+paralelos (G=guion, M=mundo), integrados y auditados por Fable.
+
+**EL ARCO (Game/SemillaCero.cs, director de beats, solo escena un jugador)**: milagro (primera
+hornada a fuego propio, banner con nombre provisional) → "Tráeme 25 de ese... 'sedimento
+celeste' tuyo" → "No pienso seguir diciendo 'sedimento celeste'. Ponle nombre." (NamingUi
+forzado por el personaje) → el tostado con TRAMPA (banda de calcinación estrecha, el brasero
+tier1 se pasa → ceniza + nota forense + "la ceniza también arde, mal, pero arde" → el reintento
+se alimenta CON esa ceniza, tier 0.5 = 145 raw) → cuatro preguntas que destapan salas ("¿Puedes
+hacerlo MÁS DURO?"/prensa, "¿Por qué esto queda ENCIMA?"/columna, "¿Esto CONDUCE?"/chispa,
+"¿DE VERDAD aguanta?"/ensayo) → final abierto ("No necesito nada más por hoy. ...Pero queda
+limo.") con el vasito del alambique lleno (gotea desde el minuto 0, nadie lo menciona) y el
+CONTADOR DE AUTONOMÍA (log por acción + resumen por minuto + línea en F3): la métrica reina.
+
+**EL MUNDO (encargo M)**: `Universe.SemillaCero = 777002u` (777001 descartada: ganador y
+combustible colisionaban en la misma base) + `AplicarOverridesSemillaCero()` post-generación:
+extracción base0 a 100 (tier0=120 siempre alcanza, competidores clampeados), banda de
+calcinación estrecha 130..170 con sobrecalentamiento→Ash (vía DecidirHornada por tabla, gateado
+al modo — el caótico jamás lo ve), color celeste en cascada a los 7 estados derivados, ceniza
+combustible tier 0.5 (145 raw, reserva corta). Tapiados de obra sobre las 4 salas (huella
+dinámica desde ObraDelTaller, jambas intactas = puerta condenada) con API congelada
+`TapiarSalasSemillaCero`/`DestaparSala(sim, 0..3)`; las máquinas tapiadas NO spawnean hasta el
+destape (PollDestapesSemillaCero en Bootstrap — cero chapas/glow a través del muro por
+construcción). Pantalla de entrada: "SEMILLA CERO — tu primer taller" / seed + "MODO CAÓTICO".
+Alambique auto-construido en Semilla 0. NOMBRE PROVISIONAL global (estado+color: "sedimento
+celeste", tabla de 8 estados × 12 colores por distancia RGB) y NOTA FORENSE global ("cerca de
+~N° se destruye"): las dos excepciones deliberadas que mejoran también el caótico.
+
+**LO QUE LA AUDITORÍA DE INTEGRACIÓN CAZÓ (la costura entre encargos)**: (1) INTERBLOQUEO DURO
+en "¿Esto CONDUCE?": el pedido OrderType.Conduce solo lo completaba EnsayoMaestro — cuya sala
+sigue tapiada hasta el beat siguiente. Arreglo: testigo MaxConductividadObservada
+(BancoChispa→SubstanceKnowledge) y el director completa el pedido cuando la lámpara dicta
+sentencia EN EL BANCO. (2) EL TESTIGO FORENSE NUNCA DISPARABA: G lo escuchaba por eventos Boil
+de la CA, pero la trampa real es una HORNADA (Crisol.DecidirHornada) que jamás emite Boil —
+puente nuevo RegistrarDestruccionPorHornada llamado desde CerrarHornada con la cima real, y el
+director vigila el POLVO (la entrada destruida), no el calcinado. (3) El salto escondido del
+beat 5.2 (nada de base0 flota; la respuesta es EXTRAER base1, banda 122) cubierto con un consejo
+nuevo ("El limo guarda MÁS de una arena..."). (4) "Nuevo universo" del EndScreen apaga
+ModoSemillaCero (reintentar mismo universo lo conserva: el arco se puede rejugar).
+
+**LA ARITMÉTICA DEL ARCO, VERIFICADA CON DIAGNÓSTICOS HEADLESS (seed 777002)**: b0 calcinado
+CONDUCE pleno (nivel 2 — el jugador ya carga la respuesta cuando llega la pregunta de la
+chispa); b1 polvo FLOTA insoluble (dens 19 < agua 36, banda 122 — la pregunta de la columna
+obliga a descubrir la segunda arena); TempEnsayo=177: b0 calcinado (umbral 170) MUERE en el
+ensayo — el círculo forense se cierra — y b1 calcinado (umbral 188) pasa... solo con fuego
+medido de ceniza (145), porque el tier1 (185) FUNDE b1 (fusión 160): la lección del beat 4
+reaparece sola en el beat 5.4. Nada de esto es casualidad: es la seed congelada tras medirla.
+
+**Deudas**: el contador de manipulaciones aproxima por ráfagas del frasco (sin tocar
+Flask/Crisol); Freeze/Crystallize sin partícula propia (heredada del 39); el playtest con la
+gente de la primera prueba (medir minuto 1 + autonomía) es el paso 3 del orden acordado.

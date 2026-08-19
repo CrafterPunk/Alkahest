@@ -130,6 +130,34 @@ namespace Alkahest.Game
             "Los encargos usarán el nombre que le pongas a cada cosa.",
         };
 
+        // =================================================================
+        // (Encargo G, SEMILLA CERO, CONTRATO_SEMILLA.md §2) CONSEJOS CURADOS: en este
+        // modo, 5-6 líneas alineadas a los BEATS del arco (§1) sustituyen a las 12
+        // generales -- la primera es literalmente el consejo del beat 1. El sistema en sí
+        // (12s por consejo, N para saltar, H para ocultar, releer en el diario vía
+        // PistasMostradas) NO cambia -- solo cambia QUÉ lista carga, en
+        // ReiniciarParaJornada. El modo caótico y el multi no cambian (contrato §4):
+        // siguen con PistasJornada1/2/3 de siempre.
+        // =================================================================
+        private static readonly string[] PistasSemillaCero =
+        {
+            // (beat 1, literal del contrato) el único consejo en pantalla del milagro.
+            "El caño turbio gotea LIMO PRIMORDIAL: sírvete (E) y viértelo en la boca del crisol.",
+            "Enciende el crisol con E: su fuego propio ya basta para la primera hornada.",
+            "Recoge el resultado con el frasco antes de pedir la próxima hornada.",
+            // (beat 4) la misma sugerencia que dispara la trampa del tostado -- no la
+            // desactiva, la ENSEÑA: el fracaso coreografiado enseña más que acertar a la
+            // primera (contrato §1 beat 4/diseño enmienda 2).
+            "Con el brasero alimentado, el fuego sube: puedes tostar lo que ya sacaste.",
+            // (integración pt40, beat 5.2) el salto escondido del arco: la pregunta de
+            // la columna ("¿por qué esto queda ENCIMA?") se responde con una arena que
+            // el jugador AÚN no tiene -- este consejo apunta a la escalera de
+            // extracción sin resolverla ("las que se resisten": ni cuál ni cuántas).
+            "El limo guarda MÁS de una arena: con el fuego más alto suelta las que se resisten.",
+            "Pulsa T para bautizar cuando el Maestro te lo pida -- el libro (J) guarda lo que aprendas.",
+            "Si algo se destruye, no desaparece del todo: revisa su ficha en el libro (J).",
+        };
+
         private string[] _pistas = PistasJornada1;
         private float _segundosPista = SegundosPorPistaJornada1;
         private float _duracion;
@@ -194,7 +222,11 @@ namespace Alkahest.Game
         /// </summary>
         public void ReiniciarParaJornada(int dia)
         {
-            _pistas = dia >= 3 ? PistasJornada3 : (dia == 2 ? PistasJornada2 : PistasJornada1);
+            // (Encargo G, SEMILLA CERO) la lista curada manda SIEMPRE en este modo, sin
+            // importar `dia` -- Semilla 0 no tiene jornada 2/3 (mismo patrón que "LO QUE
+            // PERSISTE": AlkahestGameBootstrap.TrySpawnRed solo llama ReiniciarParaJornada(1)).
+            _pistas = AlkahestGameBootstrap.ModoSemillaCero ? PistasSemillaCero
+                : dia >= 3 ? PistasJornada3 : (dia == 2 ? PistasJornada2 : PistasJornada1);
             _segundosPista = dia == 1 ? SegundosPorPistaJornada1 : SegundosPorPistaOtras;
             // (fix playtest 10) La duración total SALE del número de pistas x su tiempo de
             // lectura fijo -- ya no al revés (una duración fija repartida entre "las que
