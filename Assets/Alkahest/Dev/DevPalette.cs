@@ -278,6 +278,11 @@ namespace Alkahest.Dev
             GUILayout.Label($"Radio de pincel: {Mathf.RoundToInt(_brushRadius)}");
             _brushRadius = GUILayout.HorizontalSlider(_brushRadius, 1f, 10f);
 
+            // (playtest 44) La capa decorativa de partículas quedó APAGADA por
+            // pedido de Cesar (ver Game/ParticulasFx.cs, flag Activas) -- este
+            // toggle dev existe para poder compararla con ojos sin recompilar.
+            ParticulasFx.Activas = GUILayout.Toggle(ParticulasFx.Activas, " partículas decorativas (apagadas por defecto, pt44)");
+
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button(Time.timeScale > 0f ? "Pause (P)" : "Play (P)")) TogglePause();

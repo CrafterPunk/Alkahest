@@ -290,7 +290,11 @@ namespace Alkahest.Game
             // Se ignora el input (no se "congela" en seco): la velocidad ya acumulada decae
             // con la MISMA física de siempre unas líneas más abajo, así que el personaje
             // frena con naturalidad en vez de detenerse en un frame.
-            if (kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
+            // (integración pt46) Y lo mismo con el ÁLBUM a pantalla completa
+            // (AlbumReal.Abierto) -- mismo motivo, misma física de frenado:
+            // deuda anotada por la ronda visual del álbum (las flechas movían
+            // al aprendiz detrás del velo mientras pasabas de página).
+            if (kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto)
             {
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) input.x -= 1f;
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) input.x += 1f;

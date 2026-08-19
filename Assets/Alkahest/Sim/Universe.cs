@@ -3001,8 +3001,169 @@ namespace Alkahest.Sim
         // <see cref="SemillaCeroBaseIdx"/>), no el resultado del solver de
         // persistencia -- ese solver sigue garantizando SU PROPIA promesa
         // (algo sobrevive al Ensayo) sin que este método la toque.
-        /// <summary>La base que Semilla Cero designa como "el sedimento celeste" del beat 1 -- ver el docblock de <see cref="AplicarOverridesSemillaCero"/> para el porqué de la designación explícita (no es GanadorGarantizado ni BaseCombustibleGarantizada de esta seed).</summary>
+        /// <summary>La base que Semilla Cero designa como "la arena de sílice" del beat 1 (antes "el sedimento celeste": ver el override 4 de <see cref="AplicarOverridesSemillaCero"/>, ronda "LA QUÍMICA CON NOMBRE REAL") -- ver el docblock de ese método para el porqué de la designación explícita (no es GanadorGarantizado ni BaseCombustibleGarantizada de esta seed).</summary>
         public const int SemillaCeroBaseIdx = 0;
+
+        // ===================================================================
+        // (Encargo Q, ronda "LA QUÍMICA CON NOMBRE REAL", docs/DISENO_QUIMICA_REAL.md
+        // §2) IDENTIDAD REAL: nombre + mini-reseña de trivia real, copiados VERBATIM
+        // de la tabla canónica del diseño (cero parafraseo) para cada material del
+        // arco de Semilla Cero -- las 5 bases × 8 estados de la seed congelada
+        // 777002 (arena/arcilla/caliza/veta vegetal/sal, mismo mapeo baseIdx 0..4
+        // que designa <see cref="SemillaCeroBaseIdx"/>) más los 9 "clásicos" del
+        // arco (agua/vapor/hielo/fuego/humo/ceniza/brasa/limo/piedra).
+        //
+        // Tabla ESTÁTICA (no depende de ninguna instancia de Universe): la seed de
+        // Semilla Cero está CONGELADA, así que qué baseIdx es "arena" o "sal" es un
+        // dato FIJO del diseño para ESTA seed concreta, no algo que varíe entre
+        // Create()s. Fuera de Semilla Cero (universo caótico) estos mismos matId de
+        // base×estado NO tienen este significado -- el caótico sortea sus propias
+        // propiedades por baseIdx y nunca llama a AplicarOverridesSemillaCero, así
+        // que la tabla de abajo describe la seed 777002 y solo ella. Por eso los
+        // consumidores (Game/SubstanceKnowledge.cs, Game/AlbumReal.cs del Encargo A)
+        // tienen que consultarla SOLO bajo AlkahestGameBootstrap.ModoSemillaCero --
+        // esta API no se autoprotege, es responsabilidad del llamante (documentado,
+        // no impuesto: TieneIdentidadReal es una tabla pura, no consulta el modo).
+        //
+        // API CONGELADA para el Encargo A del álbum (§3 del diseño), que compila
+        // contra ella EN PARALELO sin ver esta implementación todavía:
+        // TieneIdentidadReal/NombreReal/ResenaReal. Strings CONSTANTES construidas
+        // UNA vez en el inicializador estático -- nunca por frame, nunca
+        // concatenadas (regla dura del proyecto: cero allocs por frame).
+        // ===================================================================
+
+        /// <summary>Nombre real + mini-reseña de trivia de un material (docs/DISENO_QUIMICA_REAL.md §2). Struct de solo lectura, nunca mutado tras <see cref="ConstruirIdentidadReal"/>.</summary>
+        public readonly struct IdentidadReal
+        {
+            public readonly string Nombre;
+            public readonly string Resena;
+            public IdentidadReal(string nombre, string resena) { Nombre = nombre; Resena = resena; }
+        }
+
+        private static readonly IdentidadReal[] _identidadReal = ConstruirIdentidadReal();
+
+        /// <summary>Construye la tabla de identidad UNA vez (inicializador estático) -- ver el bloque de comentarios de arriba para el porqué de cada decisión. Copiada VERBATIM de docs/DISENO_QUIMICA_REAL.md §2.</summary>
+        private static IdentidadReal[] ConstruirIdentidadReal()
+        {
+            var tabla = new IdentidadReal[MaterialId.Count];
+
+            // ---- Clásicos del arco (mismo trato) ----
+            tabla[MaterialId.Stone] = new IdentidadReal("roca madre", "El hueso del mundo. El cincel la talla; las estaciones la respetan.");
+            tabla[MaterialId.Water] = new IdentidadReal("agua", "El disolvente universal. Todo lo que este taller hace, lo hace con ella o contra ella.");
+            tabla[MaterialId.Steam] = new IdentidadReal("vapor", "Agua con prisa. Atrápalo en frío y vuelve — eso hace el alambique.");
+            tabla[MaterialId.Fire] = new IdentidadReal("fuego", "No es cosa: es proceso. Come combustible y aire.");
+            tabla[MaterialId.Smoke] = new IdentidadReal("humo", "Lo que el fuego no alcanzó a comer. Tizna lo que toca.");
+            tabla[MaterialId.Ash] = new IdentidadReal("ceniza", "El mineral que la planta juntó en vida. Mal combustible, buen dato.");
+            tabla[MaterialId.Ice] = new IdentidadReal("hielo", "Agua ordenada en cristal. Flota sobre sí misma: rareza que permite la vida bajo los lagos.");
+            tabla[MaterialId.Limo] = new IdentidadReal("lodo de cantera", "Agua y montaña molida: arena, arcilla, caliza, veta vegetal y sal, en suspensión. Todo lo demás sale de aquí — el calor los separa a cada uno a su temperatura.");
+            tabla[MaterialId.Brasa] = new IdentidadReal("brasa", "Fuego en reposo. Sopla o alimenta, y vuelve.");
+
+            // ---- base0 = ARENA (la dócil; extracción 100 — el milagro del beat 1) ----
+            tabla[MaterialId.MatDe(0, EstadoMateria.Polvo)] = new IdentidadReal("arena de sílice", "Cuarzo molido por eras. De aquí nace el vidrio: los fenicios lo descubrieron en fogatas sobre playa.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Fundido)] = new IdentidadReal("vidrio fundido", "A ~1700° la arena pierde su forma de cristal y fluye. Naranja de horno, dócil como miel.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Templado)] = new IdentidadReal("vidrio", "Enfriado rápido queda duro y frágil: el vidrio de tus ventanas. La prensa lo revienta — pruébalo.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Recocido)] = new IdentidadReal("vidrio recocido", "Enfriado con calma, pierde tensiones: los talleres reales lo hacen para poder cortarlo.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Compacto)] = new IdentidadReal("arenisca", "Arena prensada: la piedra de las catedrales. El tiempo la hace en milenios; tu prensa, en un gesto.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Ceramico)] = new IdentidadReal("vitrocerámica", "Cocida tras compactar: resiste el fuego que fundiría al vidrio común. Placas de cocina, naves.");
+            tabla[MaterialId.MatDe(0, EstadoMateria.Calcinado)] = new IdentidadReal("arena tostada", "El calor la oscurece y seca. Paso previo al fundido en los hornos reales.");
+            // Solucion: SIN ENTRADA a propósito (docs/DISENO_QUIMICA_REAL.md §2: "la
+            // arena no se disuelve — sin entrada; su lección es la columna: SEDIMENTA").
+            // El elemento por defecto del arreglo (Nombre==null) hace que
+            // TieneIdentidadReal devuelva false para este matId, tal como pide el diseño.
+
+            // ---- base1 = ARCILLA (flota fina en agua; extracción 122 — la 2ª arena) ----
+            tabla[MaterialId.MatDe(1, EstadoMateria.Polvo)] = new IdentidadReal("arcilla", "Roca molida por el agua durante eras. Húmeda es plástica: toda la alfarería humana empieza aquí.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Fundido)] = new IdentidadReal("barro vitrificado", "Pocas veces se funde del todo: los alfareros la vitrifican justo antes.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Templado)] = new IdentidadReal("gres", "Cocción con enfriado brusco: duro, algo frágil. Vajilla de mesa.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Recocido)] = new IdentidadReal("bizcocho", "Primera cocción suave del alfarero: poroso, listo para esmaltar o compactar.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Compacto)] = new IdentidadReal("adobe", "Arcilla prensada y secada: el ladrillo más viejo del mundo. Media humanidad vive entre adobes.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Ceramico)] = new IdentidadReal("cerámica", "Compactada y cocida a fuego pleno: terracota noble. Resiste el fuego, la prensa y los siglos.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Calcinado)] = new IdentidadReal("ladrillo molido", "Arcilla quemada: ya no vuelve a ser plástica jamás. La 'chamota' de los ceramistas.");
+            tabla[MaterialId.MatDe(1, EstadoMateria.Solucion)] = new IdentidadReal("barbotina", "Arcilla disuelta en agua: la 'crema' con la que los alfareros pegan piezas.");
+
+            // ---- base2 = CALIZA (extracción 132) ----
+            tabla[MaterialId.MatDe(2, EstadoMateria.Polvo)] = new IdentidadReal("caliza molida", "Esqueletos marinos de hace millones de años. La roca de la que sale la cal y el cemento.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Fundido)] = new IdentidadReal("caliza fundida", "Solo un fuego brutal la funde; antes prefiere volverse cal.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Templado)] = new IdentidadReal("caliche", "Costra dura de cal y arena. Suelos enteros del desierto son esto.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Recocido)] = new IdentidadReal("cal apagada", "Cal reposada con calma: la pasta que une muros desde Roma.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Compacto)] = new IdentidadReal("mármol joven", "Caliza comprimida: dale eras y presión y tendrás mármol. Tu prensa hace trampa.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Ceramico)] = new IdentidadReal("clínker", "Caliza cocida a lo bruto: el corazón del cemento moderno.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Calcinado)] = new IdentidadReal("cal viva", "Caliza quemada que SUELTA su aire antiguo. Con agua reacciona caliente: respétala.");
+            tabla[MaterialId.MatDe(2, EstadoMateria.Solucion)] = new IdentidadReal("agua de cal", "Cal disuelta: se usaba para encalar casas y curar aguas.");
+
+            // ---- base3 = VETA VEGETAL (el combustible garantizado; extracción 95) ----
+            tabla[MaterialId.MatDe(3, EstadoMateria.Polvo)] = new IdentidadReal("turba", "Materia vegetal a medio camino de ser carbón. Arde mal, pero arde — y abona.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Fundido)] = new IdentidadReal("brea", "Alquitrán vegetal fundido: con esto se sellaban los barcos.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Templado)] = new IdentidadReal("resina dura", "Brea enfriada de golpe: quebradiza y ámbar. El ámbar real es resina con paciencia.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Recocido)] = new IdentidadReal("brea dócil", "Enfriada despacio queda maleable: masilla de calafate.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Compacto)] = new IdentidadReal("briqueta", "Turba prensada: el combustible de las estufas pobres de Europa entera.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Ceramico)] = new IdentidadReal("carbón coquizado", "Cocido sin aire hasta ser casi puro carbono: el coque que funde el acero del mundo.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Calcinado)] = new IdentidadReal("carbón vegetal", "Madera quemada sin aire: EL combustible del alquimista. Arde caliente y parejo.");
+            tabla[MaterialId.MatDe(3, EstadoMateria.Solucion)] = new IdentidadReal("licor pardo", "Taninos vegetales disueltos: con esto se curtía el cuero.");
+
+            // ---- base4 = SAL (extracción 154 — la última en soltar) ----
+            tabla[MaterialId.MatDe(4, EstadoMateria.Polvo)] = new IdentidadReal("sal de roca", "Mar antiguo evaporado. Valió como moneda: de ahí viene 'salario'.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Fundido)] = new IdentidadReal("sal fundida", "Líquida a ~800°: las plantas solares la usan para guardar calor. Y CONDUCE.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Templado)] = new IdentidadReal("sal vítrea", "Enfriada de golpe queda cristal frágil que revienta a la prensa.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Recocido)] = new IdentidadReal("sal recristalizada", "Cristales grandes y ordenados, como la flor de sal.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Compacto)] = new IdentidadReal("halita", "Sal prensada en roca: hay minas-catedral excavadas en ella (Wieliczka).");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Ceramico)] = new IdentidadReal("bloque salino", "Sal cocida y dura: los bloques que se dan a lamer al ganado.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Calcinado)] = new IdentidadReal("sal tostada", "Seca y quebradiza; los cocineros la tuestan para ahumarla.");
+            tabla[MaterialId.MatDe(4, EstadoMateria.Solucion)] = new IdentidadReal("salmuera", "Sal disuelta: el mar en un frasco. CONDUCE la electricidad — la lámpara lo delata.");
+
+            return tabla;
+        }
+
+        /// <summary>True si `matId` tiene identidad real de tabla (docs/DISENO_QUIMICA_REAL.md §2) -- false para la arena disuelta (sin entrada, ver ConstruirIdentidadReal) y para cualquier matId fuera de la tabla. API CONGELADA para el Encargo A del álbum: no consulta el modo de juego, es responsabilidad del llamante restringirse a Semilla Cero (ver el bloque de comentarios de arriba).</summary>
+        public static bool TieneIdentidadReal(byte matId) => matId < _identidadReal.Length && _identidadReal[matId].Nombre != null;
+
+        /// <summary>Nombre real VERBATIM de la tabla, o null si `matId` no tiene identidad (ver <see cref="TieneIdentidadReal"/>). API CONGELADA para el Encargo A.</summary>
+        public static string NombreReal(byte matId) => TieneIdentidadReal(matId) ? _identidadReal[matId].Nombre : null;
+
+        /// <summary>Mini-reseña de trivia VERBATIM de la tabla, o null si `matId` no tiene identidad (ver <see cref="TieneIdentidadReal"/>). API CONGELADA para el Encargo A.</summary>
+        public static string ResenaReal(byte matId) => TieneIdentidadReal(matId) ? _identidadReal[matId].Resena : null;
+
+        // ===================================================================
+        // (Encargo Q) COLORES REALES DE LA TABLA -- aplicados por
+        // AplicarOverridesSemillaCero (override 4). Alpha 0 = sin entrada
+        // (arena.Solucion, la única, mismo motivo que en ConstruirIdentidadReal):
+        // NO se sobreescribe, se deja el color que le tocó al sorteo normal de
+        // esta seed. Jitter por estado: mismos valores que usaba
+        // ConstruirEstadosDerivados para el sorteo normal (16/10/8/10/6/8/14/10
+        // para Polvo/Fundido/Templado/Recocido/Compacto/Ceramico/Calcinado/Solucion)
+        // -- el diseño no especifica jitter, así que se mantiene la textura ya
+        // calibrada, solo cambia el TONO.
+        // ===================================================================
+        private static readonly Color32[,] _coloresRealesPorBaseEstado = new Color32[MaterialId.BasesCount, 8]
+        {
+            { // base0 ARENA
+                new Color32(194, 178, 128, 255), new Color32(255, 150, 40, 255), new Color32(170, 215, 220, 255),
+                new Color32(185, 210, 190, 255), new Color32(168, 140, 105, 255), new Color32(200, 196, 182, 255),
+                new Color32(150, 120, 82, 255), default,
+            },
+            { // base1 ARCILLA
+                new Color32(176, 110, 84, 255), new Color32(230, 120, 60, 255), new Color32(146, 120, 110, 255),
+                new Color32(205, 160, 120, 255), new Color32(155, 118, 86, 255), new Color32(188, 86, 60, 255),
+                new Color32(170, 84, 58, 255), new Color32(150, 105, 88, 255),
+            },
+            { // base2 CALIZA
+                new Color32(205, 200, 188, 255), new Color32(250, 190, 120, 255), new Color32(196, 190, 172, 255),
+                new Color32(222, 218, 205, 255), new Color32(214, 210, 200, 255), new Color32(150, 145, 138, 255),
+                new Color32(235, 232, 222, 255), new Color32(210, 212, 200, 255),
+            },
+            { // base3 VETA VEGETAL
+                new Color32(92, 72, 50, 255), new Color32(60, 45, 32, 255), new Color32(120, 84, 40, 255),
+                new Color32(96, 70, 44, 255), new Color32(70, 58, 44, 255), new Color32(58, 56, 58, 255),
+                new Color32(44, 40, 38, 255), new Color32(88, 66, 48, 255),
+            },
+            { // base4 SAL
+                new Color32(238, 236, 230, 255), new Color32(255, 200, 110, 255), new Color32(226, 224, 214, 255),
+                new Color32(240, 238, 228, 255), new Color32(222, 218, 206, 255), new Color32(206, 200, 186, 255),
+                new Color32(216, 208, 190, 255), new Color32(198, 210, 206, 255),
+            },
+        };
+
+        private static readonly byte[] _jitterPorEstado = { 16, 10, 8, 10, 6, 8, 14, 10 };
 
         /// <summary>
         /// Aplica los cuatro overrides del contrato §3 sobre un Universe ya
@@ -3045,14 +3206,23 @@ namespace Alkahest.Sim
         ///    trampa del override 2. Se deja un Assert de solo-editor por si
         ///    una futura seed recongelada rompiera esta separación en
         ///    silencio.
-        /// 4. COLOR CELESTE: el Polvo de <see cref="SemillaCeroBaseIdx"/> se
-        ///    retiñe a una familia celeste clara y los 7 estados derivados se
-        ///    recalculan con LAS MISMAS fórmulas de <see cref="ConstruirEstadosDerivados"/>
-        ///    (duplicadas aquí a propósito -- ese método es privado y corre
-        ///    una sola vez dentro de Create(), antes de que exista este
-        ///    override) para que Templado/Compacto/Calcinado/etc. de esta
-        ///    base sigan leyéndose como la MISMA sustancia en todos los
-        ///    beats, no solo el Polvo del beat 1.
+        /// 4. COLORES REALES DE LA TABLA (Encargo Q, ronda "LA QUÍMICA CON NOMBRE
+        ///    REAL", docs/DISENO_QUIMICA_REAL.md §2): las CINCO bases (no solo
+        ///    <see cref="SemillaCeroBaseIdx"/>) se tiñen, estado a estado, con
+        ///    <see cref="_coloresRealesPorBaseEstado"/> -- el color REAL de cada
+        ///    variante ("arena de sílice", "vidrio", "arenisca"...), copiado
+        ///    VERBATIM de la tabla del diseño. ANTES (playtest 40) solo la base0
+        ///    se retiñía a un celeste inventado (100,190,230) y los 7 estados
+        ///    derivados se recalculaban con las fórmulas HSV de
+        ///    <see cref="ConstruirEstadosDerivados"/> (el método que las duplicaba,
+        ///    <c>RecalcularEstadosDerivadosDeUnaBase</c>, se RETIRA en esta ronda:
+        ///    ya no hace falta derivar un color por fórmula cuando el diseño da un
+        ///    color EXPLÍCITO por estado). La arena (base0) YA NO es celeste: ese
+        ///    retinte era un placeholder de la Semilla Cero original; el pivote de
+        ///    "nombre real" lo sustituye por el color auténtico de la arena de
+        ///    sílice, (194,178,128). Única excepción: la Solucion de base0 no
+        ///    tiene entrada en la tabla ("la arena no se disuelve") y se deja con
+        ///    el color que le tocó al sorteo normal de esta seed.
         ///
         /// ADEMÁS (fuera de la numeración 1-4 pero exigido por el contrato,
         /// "Ceniza combustible tier 0.5"): <see cref="MaterialId.Ash"/> se
@@ -3114,11 +3284,21 @@ namespace Alkahest.Sim
                 "[ChaosAlchemy][SemillaCero] El combustible garantizado de esta seed no supera el techo de calcinación de la base 0: la trampa del beat 4 no se dispara -- recalibrar techoCalcinadoB0 o recongelar la seed.");
 #endif
 
-            // ---- Override 4: color celeste (Polvo + los 7 estados derivados) ----
-            var celeste = new Color32(100, 190, 230, 255);
-            u.Materials[polvoB0].baseColor = celeste;
-            u.Materials[polvoB0].colorJitter = 16; // mismo jitter que ConstruirPolvoBases da a toda base.
-            RecalcularEstadosDerivadosDeUnaBase(u, b0);
+            // ---- Override 4: colores reales de la tabla (las CINCO bases) ----
+            // Ver el docblock de arriba y el bloque de comentarios junto a
+            // _coloresRealesPorBaseEstado: alpha 0 = sin entrada (solo
+            // arena.Solucion), se deja el color natural del sorteo de esta seed.
+            for (int b = 0; b < MaterialId.BasesCount; b++)
+            {
+                for (int e = 0; e < 8; e++)
+                {
+                    Color32 real = _coloresRealesPorBaseEstado[b, e];
+                    if (real.a == 0) continue;
+                    byte id = MaterialId.MatDe(b, (EstadoMateria)e);
+                    u.Materials[id].baseColor = real;
+                    u.Materials[id].colorJitter = _jitterPorEstado[e];
+                }
+            }
 
             // ---- CENIZA COMBUSTIBLE TIER 0.5 (contrato §3, último punto) ----
             // Ash se vuelve combustible SOLO en esta instancia -- ver el
@@ -3146,49 +3326,13 @@ namespace Alkahest.Sim
 #endif
         }
 
-        /// <summary>
-        /// Recalcula los 7 estados derivados (Fundido/Templado/Recocido/
-        /// Compacto/Ceramico/Calcinado/Solucion) de UNA base a partir del
-        /// color YA vigente de su Polvo -- MISMAS fórmulas que
-        /// <see cref="ConstruirEstadosDerivados"/> (deliberadamente
-        /// duplicadas: ese método es privado, corre una sola vez dentro de
-        /// <see cref="Create"/> y no puede reutilizarse tal cual tras un
-        /// override posterior sin recibir las tablas crudas otra vez). Solo
-        /// toca <c>baseColor</c>/<c>colorJitter</c> -- nada de patrón, borde,
-        /// densidad ni transición de fase: los overrides de <see cref="AplicarOverridesSemillaCero"/>
-        /// que sí tocan esos campos (FusionRaw/CalcinacionRaw/umbral del
-        /// Calcinado) ya se aplicaron aparte.
-        /// </summary>
-        private static void RecalcularEstadosDerivadosDeUnaBase(Universe u, int b)
-        {
-            Color32 tono = u.Materials[MaterialId.MatDe(b, EstadoMateria.Polvo)].baseColor;
-            Color.RGBToHSV(tono, out float h, out float s, out float v);
-
-            var fundido = u.Materials[MaterialId.MatDe(b, EstadoMateria.Fundido)];
-            Color32 cFundido = Color.HSVToRGB(h, 0.90f, 0.95f, true); cFundido.a = 255;
-            fundido.baseColor = cFundido; fundido.colorJitter = 10;
-
-            var templado = u.Materials[MaterialId.MatDe(b, EstadoMateria.Templado)];
-            templado.baseColor = LerpColor32(tono, new Color32(255, 255, 255, 255), 0.25f); templado.colorJitter = 8;
-
-            var recocido = u.Materials[MaterialId.MatDe(b, EstadoMateria.Recocido)];
-            recocido.baseColor = LerpColor32(tono, new Color32(128, 128, 128, 255), 0.20f); recocido.colorJitter = 10;
-
-            var compacto = u.Materials[MaterialId.MatDe(b, EstadoMateria.Compacto)];
-            compacto.baseColor = LerpColor32(tono, new Color32(0, 0, 0, 255), 0.30f); compacto.colorJitter = 6;
-
-            var ceramico = u.Materials[MaterialId.MatDe(b, EstadoMateria.Ceramico)];
-            Color32 cCeramico = Color.HSVToRGB(h, s * 0.35f, Mathf.Min(1f, v + 0.25f), true); cCeramico.a = 255;
-            ceramico.baseColor = cCeramico; ceramico.colorJitter = 8;
-
-            var calcinado = u.Materials[MaterialId.MatDe(b, EstadoMateria.Calcinado)];
-            calcinado.baseColor = LerpColor32(tono, new Color32(20, 18, 16, 255), 0.50f); calcinado.colorJitter = 14;
-
-            // Solucion: boilsAt/density NO se tocan (siguen atados al agua de
-            // esta seed, sin relación con el override de color) -- solo el tinte.
-            var solucion = u.Materials[MaterialId.MatDe(b, EstadoMateria.Solucion)];
-            Color32 waterColor = u.Materials[MaterialId.Water].baseColor;
-            solucion.baseColor = LerpColor32(waterColor, tono, 0.60f); solucion.colorJitter = 10;
-        }
+        // (Encargo Q) `RecalcularEstadosDerivadosDeUnaBase` -- que duplicaba las
+        // fórmulas HSV de ConstruirEstadosDerivados para recolorear una base tras
+        // el override de Polvo -- se RETIRA en esta ronda: ver el override 4 de
+        // AplicarOverridesSemillaCero arriba. Ya no hace falta derivar un color
+        // por fórmula cuando la tabla real (_coloresRealesPorBaseEstado) da un
+        // color EXPLÍCITO por estado, copiado VERBATIM del diseño -- inventar uno
+        // por fórmula habría contradicho la propia tabla que se supone que se está
+        // aplicando. No reimplantar sin releer docs/DISENO_QUIMICA_REAL.md §2.
     }
 }

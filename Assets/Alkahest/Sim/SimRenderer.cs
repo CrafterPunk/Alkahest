@@ -801,8 +801,18 @@ namespace Alkahest.Sim
                     }
                     else if (juntoALiquido)
                     {
-                        int v = pat + PatinaMojadoIncremento;
-                        _grid.patina[idx] = (byte)(v > PatinaMojadoTecho ? PatinaMojadoTecho : v);
+                        // (playtest 44, pedido directo de Cesar) EL MOJADO SE
+                        // APAGA: "eso de que el agua moje la superficie está
+                        // raro, parece que se va a filtrar pero no se filtra
+                        // -- de momento evitarlo". Tenía razón: oscurecer la
+                        // piedra junto al líquido PROMETE una filtración que
+                        // la sim no hace -- pátina mintiendo sobre física. El
+                        // tizne (fuego/humo) se queda: ese sí cuenta una
+                        // historia verdadera. Su idea del goteo-que-se-seca
+                        // queda anotada en HANDOFF para cuando haya
+                        // filtración real. (regla 15: rama conservada)
+                        // int v = pat + PatinaMojadoIncremento;
+                        // _grid.patina[idx] = (byte)(v > PatinaMojadoTecho ? PatinaMojadoTecho : v);
                     }
                     else if (pat > 0)
                     {

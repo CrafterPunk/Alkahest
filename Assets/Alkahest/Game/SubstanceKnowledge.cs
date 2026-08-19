@@ -328,19 +328,54 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         private const string TituloDescubrimiento = "ALGO NUEVO";
 
+        // ---------------------------------------------------------------------------------
+        // (Encargo Q, LA QUÍMICA CON NOMBRE REAL, docs/DISENO_QUIMICA_REAL.md §3) EVENTO
+        // "AL DESCUBRIR": API CONGELADA para el Encargo A del álbum
+        // (Game/AlbumReal.cs, JournalHud.cs -- compilan contra esta firma EN PARALELO sin
+        // ver esta implementación). Se dispara EXCLUSIVAMENTE desde
+        // <see cref="MarcarDescubierto"/> (el punto único de entrada de esta clase para la
+        // transición false-&gt;true de `_discovered`), y SOLO en esa transición -- nunca en
+        // Bautizar (que puede marcar `_discovered` directo como efecto colateral de
+        // nombrar, un camino documentado aparte, ver el docblock de MarcarDescubierto) ni
+        // reenviado en cada frame que el material siga descubierto. Estático porque el
+        // álbum es un panel global sin referencia directa a la instancia de
+        // SubstanceKnowledge del sim activo -- mismo criterio que otros eventos globales
+        // del proyecto (ninguno hasta ahora, este es el primero: si aparece un segundo
+        // caso, considerar si sigue mereciendo la pena o si conviene una instancia).
+        // ---------------------------------------------------------------------------------
+        /// <summary>Se dispara una vez por matId, la primera vez que pasa a estar descubierto (ver <see cref="MarcarDescubierto"/>). API CONGELADA para el Encargo A del álbum.</summary>
+        public static event System.Action<byte> AlDescubrir;
+
         /// <summary>
         /// ÚNICO punto de entrada para poner `_discovered[matId]` a true desde fuera de
         /// <see cref="Bautizar"/> (que ya lo hace como efecto colateral de nombrar, sin
         /// invitación posible: si lo acabas de bautizar no hace falta invitarte a
         /// bautizarlo). Detecta la TRANSICIÓN false-&gt;true -- sin ella no hay "momento
-        /// de descubrir" que anunciar -- y si el material es innominado y todavía no se
-        /// le ha ofrecido bautizo por ninguna vía, encola "ALGO NUEVO".
+        /// de descubrir" que anunciar -- dispara <see cref="AlDescubrir"/> siempre que la
+        /// transición ocurre, y si el material es innominado y todavía no se le ha
+        /// ofrecido bautizo por ninguna vía, encola "ALGO NUEVO".
         /// </summary>
         private void MarcarDescubierto(byte matId)
         {
             if (matId == MaterialId.Empty || matId >= MaterialId.Count) return;
             if (_discovered[matId]) return; // ya lo sabíamos -- sin transición no hay nada que anunciar.
             _discovered[matId] = true;
+            AlDescubrir?.Invoke(matId); // (Encargo Q) API congelada para el álbum -- SIEMPRE en la transición, antes de cualquier `return` de abajo (incluida la identidad real, que ya no pasa por NecesitaBautizo).
+
+            // (Encargo Q, LA QUÍMICA CON NOMBRE REAL) IDENTIDAD REAL: en Semilla Cero,
+            // cualquier matId con identidad (Universe.TieneIdentidadReal) sigue
+            // sonando "ALGO NUEVO" (el jugador tiene que enterarse de que pasó algo)
+            // pero YA NUNCA invita a bautizar -- el Maestro ya enseña el nombre real
+            // (beat 3, Game/SemillaCero.cs) y NecesitaBautizo(matId) es false para
+            // estos matId en Semilla Cero (ver su docblock): el camino de siempre
+            // ("if (!NecesitaBautizo) return") se saltaría el anuncio entero si no se
+            // maneja aparte, así que este branch va ANTES de esa comprobación.
+            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId))
+            {
+                EncolarLeyBanner(ConstruirTextoDescubrimientoSemillaCero(matId), matId, TituloDescubrimiento);
+                return;
+            }
+
             if (!NecesitaBautizo(matId)) return; // vocabulario de taller o ya tiene nombre (regla 13/17): nada que anunciar.
             if (_avisoBautizoMostrado[matId]) return; // ya se le ofreció bautizo por otra vía -- un solo aviso por material.
 
@@ -353,7 +388,11 @@ namespace Alkahest.Game
             // (ver ActualizarAvisoBautizo/DispararAvisoBautizoTrasLey). El modo caótico y el
             // multi NO cambian: siguen ofreciendo el rito al instante, como desde playtest 10
             // (excepción deliberada de la regla del contrato §4: solo nombre provisional y
-            // nota forense valen siempre; esto NO es ninguno de los dos).
+            // nota forense valen siempre; esto NO es ninguno de los dos). En Semilla Cero
+            // esta rama solo puede alcanzarla lo que NO tiene identidad real (los seis
+            // clásicos innominados: Slime/Azoth/CrystalSeed/Crystal/Vivium/Acid) -- el
+            // retículo base×estado SIEMPRE tiene identidad en la seed 777002, así que
+            // nunca llega hasta aquí en Semilla Cero.
             if (AlkahestGameBootstrap.ModoSemillaCero && _manipulaciones[matId] < ManipulacionesParaBautizo)
             {
                 EncolarLeyBanner(ConstruirTextoDescubrimientoSemillaCero(matId), matId, TituloDescubrimiento);
@@ -371,17 +410,21 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (Encargo G, SEMILLA CERO, enmienda 1) Texto del "ALGO NUEVO" cuando el bautizo
-        /// TODAVÍA no se ha ganado: nunca invita a pulsar T (contrato §1, beat 1: "Banner:
-        /// ALGO NUEVO — sedimento celeste, anotado en tu diario. (nombre provisional, NO se
-        /// abre el rito de bautizo)"). Solo tiene sentido para base×estado (lo único con
-        /// nombre provisional); para cualquier otra cosa cae al texto de siempre.
+        /// (Encargo G, SEMILLA CERO, enmienda 1; Encargo Q amplía) Texto del "ALGO
+        /// NUEVO" cuando NO hace falta bautizar (nunca invita a pulsar T): con
+        /// identidad real (Encargo Q, el caso normal de la seed 777002) usa el
+        /// NOMBRE REAL -- "ALGO NUEVO — arena de sílice, anotado en tu diario."; sin
+        /// identidad (los seis clásicos innominados, o el bautizo aún no ganado por
+        /// manipulaciones, contrato §1 beat 1) cae al nombre PROVISIONAL
+        /// "estado+color" de siempre ("sedimento celeste"). Solo tiene sentido para
+        /// lo que tiene alguno de los dos; para cualquier otra cosa cae al texto de
+        /// siempre (ConstruirTextoDescubrimiento).
         /// </summary>
         private string ConstruirTextoDescubrimientoSemillaCero(byte matId)
         {
-            string provisional = NombreProvisional(matId);
-            if (provisional == null) return ConstruirTextoDescubrimiento(matId);
-            return MayusculaInicial(provisional) + ", anotado en tu diario.";
+            string nombre = Universe.TieneIdentidadReal(matId) ? Universe.NombreReal(matId) : NombreProvisional(matId);
+            if (nombre == null) return ConstruirTextoDescubrimiento(matId);
+            return MayusculaInicial(nombre) + ", anotado en tu diario.";
         }
 
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
@@ -430,6 +473,24 @@ namespace Alkahest.Game
         public string NombreDe(byte matId)
         {
             if (matId >= MaterialId.Count) return "???";
+
+            // (Encargo Q, LA QUÍMICA CON NOMBRE REAL, docs/DISENO_QUIMICA_REAL.md §2/§4)
+            // En Semilla Cero, cualquier matId con identidad real
+            // (Universe.TieneIdentidadReal) usa SIEMPRE su nombre real -- nada de
+            // nombre provisional ("sedimento celeste") ni de bautizo del jugador para
+            // estos materiales: el Maestro ya enseña el nombre real (beat 3, ver
+            // Game/SemillaCero.cs) y NecesitaBautizo ya devuelve false para ellos (ver
+            // su docblock más abajo). Cubre tanto el retículo base×estado
+            // (arena/arcilla/caliza/veta/sal) como los "clásicos" del arco
+            // (agua/vapor/hielo/fuego/humo/ceniza/brasa/limo/piedra) -- para estos
+            // últimos coincide con NombreComun salvo Stone ("piedra" -> "roca madre",
+            // el pivote de identidad real también renombra la arquitectura del taller
+            // en Semilla Cero). En caótico (o si el matId no tiene identidad -- la
+            // arena disuelta, sin entrada en la tabla) el flujo de siempre sigue
+            // intacto, sin cambios.
+            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId))
+                return Universe.NombreReal(matId);
+
             if (MaterialId.EsBaseEstado(matId))
             {
                 string baseName = _baseName[MaterialId.BaseDe(matId)];
@@ -600,6 +661,15 @@ namespace Alkahest.Game
         public string NombreParaHud(byte matId)
         {
             if (matId >= MaterialId.Count) return "???";
+
+            // (Encargo Q) mismo criterio que NombreDe (ver su docblock): identidad
+            // real gana siempre en Semilla Cero. Sin SufijoEstado encima -- el nombre
+            // real YA distingue "arena de sílice" de "vidrio" de "arenisca"; añadir
+            // "(fundido)" sería redundante, la tabla ya lo dice mejor que un sufijo
+            // genérico.
+            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId))
+                return Universe.NombreReal(matId);
+
             if (MaterialId.EsBaseEstado(matId))
             {
                 string baseName = _baseName[MaterialId.BaseDe(matId)];
@@ -638,6 +708,12 @@ namespace Alkahest.Game
         {
             if (matId == MaterialId.Empty || matId >= MaterialId.Count) return false;
             if (NombreComun(matId) != null) return false;
+            // (Encargo Q, LA QUÍMICA CON NOMBRE REAL) En Semilla Cero, cualquier matId
+            // con identidad real YA tiene nombre -- el Maestro lo enseña (beat 3, ver
+            // Game/SemillaCero.cs), nunca hace falta el rito de T. Sin este gate,
+            // MarcarDescubierto seguiría invitando a bautizar "arena de sílice" como
+            // si fuera lo innominado de siempre.
+            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId)) return false;
             // (playtest 25) Una base×estado necesita bautizo si su BASE
             // sigue sin nombre -- consultar _playerName[matId] aquí (como
             // antes de esta ronda) siempre daría "vacío" para estos ids,
@@ -748,6 +824,14 @@ namespace Alkahest.Game
         private string NombreLey(byte matId, string respaldo)
         {
             if (matId >= MaterialId.Count) return respaldo;
+            // (Encargo Q, DECISIÓN FUERA DE CONTRATO EXPLÍCITA: no estaba en la letra
+            // del encargo, pero sin este gate el texto de "LEY DESCUBIERTA" seguiría
+            // diciendo el nombre PROVISIONAL ("sedimento celeste") de una base×estado
+            // ya identificada mientras el diario/el banner de descubrimiento ya
+            // hablan con el nombre real -- una inconsistencia visible dentro del
+            // mismo archivo/mecanismo que NombreDe/NombreParaHud ya corrigen. Mismo
+            // criterio, mismo gate.)
+            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId)) return Universe.NombreReal(matId);
             string propio = _playerName[matId];
             if (!string.IsNullOrEmpty(propio)) return propio;
             return NombreComun(matId) ?? respaldo;
@@ -1286,6 +1370,12 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
+            // (integración pt46) Con la FICHA-VITRINA del álbum abierta, este
+            // banner "ALGO NUEVO" no compite (en caótico ambos podían convivir
+            // en el mismo tercio de pantalla -- deuda anotada por la ronda
+            // visual del álbum). El banner no se pierde: su reloj corre por
+            // cola y reaparece el siguiente si aún le queda tiempo.
+            if (AlbumReal.Abierto) return; // (Abierto ya cubre árbol Y ficha-vitrina: ver AlbumReal, `Abierto = _visible || _fichaAbierta`).
 
             // (playtest 32, encargo C) "ALGO NUEVO" respeta EscribiendoTexto
             // (el resto de banners de esta cola no lo hacía, y no hay motivo

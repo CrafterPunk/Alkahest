@@ -2958,3 +2958,141 @@ cerrojo de mudanza no consultado por el uso remoto (ventana de carrera mínima);
 vivo las constantes del audio espejo (elegidas sin oído); el acoplamiento por nombre de las
 voces de grifo. LA PRUEBA REAL es de Cesar con su amigo — checklist en los informes de ambos
 encargos, resumida en el mensaje de entrega.
+
+---
+
+## Playtest 44 → LA FÍSICA HONESTA (ronda nocturna autónoma 1/2)
+
+Mandato de Cesar antes de dormir: partículas baratas FUERA, mojado FUERA, física realista
+"digna de mirar" (calentamiento que se propaga de a pocos), las placas de calor/frío DE VUELTA
+y más realistas, termómetros en °C para validar. Contrato docs/CONTRATO_TERMICA.md; dos
+encargos paralelos (T=térmica, I=instrumentos/arco) + kill-switches de Fable.
+
+**KILL-SWITCHES**: ParticulasFx.Activas=false por defecto (código íntegro, regla 15; toggle en
+el panel F3 para compararla con ojos); pátina MOJADO apagada (prometía una filtración que la
+sim no hace — la idea del goteo-que-se-seca de Cesar queda anotada aquí para cuando haya
+filtración real); el tizne se queda.
+
+**ENCARGO T**: `Sim.EmisionTermica` (física compartida de placas: falloff + empuje por
+diferencia estilo Newton + COLLAR de 15 filas que devuelve el borde a ambiente — sin él la
+difusión sin radio de corte saturaba el cuarto entero, medido en corrida de 3000 ticks);
+`AlkahestSim.InyectarTemperatura` (disciplina Paint, la deuda del docblock saldada); HELANDO
+recalibrada -80°→-26°C (bajo el modelo Newton la ventaja de HELANDO sobre FRESCA es emergente,
+ya no necesita un target brutal); ambas placas con IMaquinaUsableRemota. CONVERSIÓN POR
+FRENTES en el crisol: las celdas convierten individualmente al alcanzar su banda con umbral
+por fila (probé sesgo de empuje por fila y NO separa — la rampa es lenta; el umbral sí),
+margen como FRACCIÓN de (cima-ambiente) (un margen fijo daba <60 ticks con cima alta — cazado
+barriendo TODO el rango de cimas 120-190); CerrarHornada queda como garantía de rezagados,
+RegistrarOp una vez al cierre. Salts 557/563. MEDIDO headless: hervir a 3 celdas de ARDIENTE
+6-8 ticks; congelar a 3 de HELANDO 22-87 ticks (peor seed); gradiente a 12 celdas ≤2°C;
+frente de hornada 66 ticks el peor caso (margen fino ~10%, docblock avisa qué lo invalida).
+Banco: +0.9..3.8% estable (los dos picos >5% fueron jitter del sandbox — re-run bajo umbral).
+
+**ENCARGO I**: Game/Termometro.cs — tecla G = modo termómetro (readout vivo en °C junto al
+cursor; clic pincha hasta 3 SONDAS FIFO con etiqueta viva a ~4Hz y acento por temperatura;
+clic der. quita; las sondas persisten fuera del modo; frasco/cincel exclusos en modo; invitado
+multi marca "—", la temp no se replica). Placas en el mundo: CALOR en la zona húmeda junto a
+las pilas, FRÍA en la alcoba de la columna; en los tres modos, con réplicas (tipos 11/12) y E
+remoto. SEMILLA CERO: la placa de calor desde el beat 1; beat nuevo del FRÍO entre chispa y
+ensayo — "¿Y si lo ENFRÍAS?" → quinta sala destapable (arrays a 5, verificado) + pedido
+"Tráeme HIELO — apúrate, que el frío no espera a nadie" (8 de Ice) con línea de fracaso
+edge-trigger si se derrite en el camino.
+
+**VERIFICADO CON OJOS (editor de Cesar, madrugada)**: compila (1 warning CS0162 en Crisol —
+micro-deuda); termómetro vivo ("20°" ambiente en cursor), sondas pinchadas con etiquetas;
+placa fría: chapa "HELANDO -26° · más rápido", sonda EN placa -26°, a 2 celdas -4°, lejos 20°
+— EL GRADIENTE EXISTE y es empinado (el fix del "frío que inundaba"); material vertido encima
+se asienta/congela en segundos. Escena MULTI genera y el panel pt42 se ve sano.
+
+**Deudas**: CS0162 Crisol(1387); hervir/frente verificados solo headless (números arriba) —
+verificación in-game de la hornada por frentes pendiente de la mañana; SIM_NOTES.md repite
+"Empty no difunde" que es falso (flag de T); el sandbox se reseteó DOS veces esta ronda —
+recuperación regla 6b desde el disco de Cesar funcionó (staging inverso de los 17 archivos).
+
+---
+
+## Playtest 45 → LA QUÍMICA CON NOMBRE REAL (ronda nocturna 2/2: el álbum de figuritas)
+
+Mandato de Cesar (mensaje de madrugada): materiales con su MEJOR REFERENTE REAL, árbol de
+figuritas coleccionable, indicador pulsante al descubrir + el menú bonito con nombre real y
+mini reseña de trivia — "muchos saben intrínsecamente cómo hacer vidrio o cerámica: que usen
+ese conocimiento; con esto restamos dificultad, que es el camino". Documento rector
+docs/DISENO_QUIMICA_REAL.md con LA TABLA CANÓNICA (48 identidades: 5 bases × estados + 9
+clásicos, cada una con nombre/color RGB/reseña de 2 líneas — verbatim al código).
+
+**LA TESIS**: el retículo YA fabricaba cosas reales — solo las llamábamos Base2Calcinado. El
+pivote es un CONTRATO DE IDENTIDAD sobre la seed 777002: arena de sílice→vidrio,
+arcilla→cerámica, caliza→cal viva, VETA VEGETAL→carbón vegetal (el combustible garantizado ES
+carbón ahora — mejor que dárselo hecho), sal→salmuera-que-conduce. El limo se queda con nombre
+honesto: LODO DE CANTERA (lodo mineral real del que todo se separa por temperatura). El modo
+CAÓTICO conserva íntegro el sistema anónimo/provisional/bautizo.
+
+**ENCARGO Q (identidad)**: Universe con tabla estática IdentidadReal (TieneIdentidadReal/
+NombreReal/ResenaReal) + colores reales aplicados en cascada a las CINCO bases en los
+overrides de Semilla Cero (la arena ya no es celeste: 194,178,128); SubstanceKnowledge devuelve
+nombres reales en Semilla Cero (gana a provisional y bautizo; NecesitaBautizo=false ahí; ficha
+del diario abre con la reseña; extendido a NombreLey para no mezclar "sedimento celeste" con
+"arena de sílice"); evento estático AlDescubrir en MarcarDescubierto (API del álbum). BEAT 3
+REESCRITO: el Maestro ya no exige inventar nombre — enseña el real ("Eso es ARENA DE SÍLICE,
+aprendiz. Apúntalo.") y el arco entero hereda los nombres reales gratis ("Tráeme 25 de ese...
+'arena de sílice' tuyo").
+
+**ENCARGO A (el álbum)**: Game/AlbumReal.cs — tecla B y quinta pestaña del diario: árbol de
+figuritas (columnas por familia, filas por estado, derivado del grafo REAL de Universe pero
+dibujando solo las aristas-verbo de cabecera: el verbo es la pista, jamás la receta), siluetas
+grises "?" → swatch real + nombre al descubrir, progreso N/M (40 fijo; arena-Solución queda
+"?" para siempre — verdad legítima del universo), fila de clásicos siempre revelada. EL
+MOMENTO: AlDescubrir → cola FIFO + MEDALLÓN dorado latiendo junto a encargos → B abre la
+FICHA-VITRINA (lenguaje visual de NamingUi: marco, latón, Cinzel dorado) con swatch, NOMBRE
+REAL, reseña y "Anotado en tu álbum" (encadena la cola). Hover sobre figurita revelada relee
+la reseña. En caótico el álbum existe con nombres provisionales y "aún por estudiar".
+
+**Deudas**: NombreComun(Stone) directo en StorageRack/Dispenser/FlaskHud/OrderSystem sigue
+diciendo "piedra" (fuera de alcance de Q); el rótulo del grifo dice "LIMO PRIMORDIAL" (marca
+del juego — la ficha dice "lodo de cantera"; decisión estética, revisable); hit-box del
+medallón copia constantes de OrdersHud; el menú de inicio/volumen (bloque 3 prometido) NO se
+construyó — la noche se invirtió en física+química, que era la prioridad del mandato.
+
+---
+
+## Playtest 46 → EL ÁLBUM DIGNO DEL BAUTIZO + EL INFORME DE REALIDAD
+
+Cesar con su café: pidió adueñarse de las físicas (informe grande) y tres arreglos de UI del
+álbum estrenado anoche. Además jugó MODO CAÓTICO creyendo que era Semilla Cero (su captura de
+"TINTE GRIS" + seed aleatoria en consola) — el arco entero vive tras el botón SEMILLA CERO.
+
+**EL INFORME (docs/INFORME_REALIDAD.md — el documento de decisión)**: auditoría de verdad de
+las 48 identidades (69% ★★★, 23% ★★, 8% ★ con renames propuestos: sal vítrea→"sal de
+estampido", mármol joven→"caliza prensada", clínker→exigir caliza+arcilla, resina dura/brea
+dócil a revisar); el modelo generativo (máquinas = operaciones unitarias reales; las 5
+familias = los 5 pilares neolítico→Roma, un oficio real por familia); RECETAS CRUZADAS
+dormidas (mortero, cemento honesto, hormigón, vidrio verde de ceniza, lejía, esmalte: +8
+materiales estrella SIN bases ni máquinas nuevas); el principio TODO CAMINO DA ALGO
+(transformación | mezcla con nombre | LEY NEGATIVA anotada — matriz material×operación ~350
+celdas como encargo futuro); ranking de expansión (1º recetas cruzadas, 2º MENA/metalurgia,
+3º electrólisis del banco, 4º fermentación+tonel); ley editorial: "se puede simplificar la
+realidad; jamás contradecirla" — la confesión elegante como blindaje ante críticas.
+
+**RONDA VISUAL OPUS (con ojos en el PC real, 2 despliegues verificados jugando)**: el
+solapamiento reportado NO era ninguna de las dos hipótesis del encargo — eran DOS causas
+vistas en pantalla: (a) álbum y ficha no excluyentes (velo 0.90 dejaba leer el árbol debajo);
+(b) los verbos del árbol centrados en el mismo punto con Overflow ("fundirprensacalcinardisolver").
+Arreglos: exclusión mutua + velo 0.94 + verbos anclados al hijo con Clip. EL LIBRITO (46x54,
+sprite por código: cuero, lomo de latón con nervios, canto de vitela, rombo dorado que late —
+late la LUZ, no el tamaño; numerito de latón si hay cola) reemplaza al medallón "horrible".
+LA FICHA calcada de la anatomía de NamingUi (pad, filete rombo, Cinzel dorado, FirmaVisual
+real del material de muestra, alto CALCULADO) con contador de ráfaga "1 de N" desde 2. EL
+ÁLBUM CON PÁGINAS: 6 dobles páginas (una familia por página: vitrinas de latón a la izquierda,
+árbol de verbos de ESA familia a la derecha; clásicos con página propia), navegación del libro
+real + ←→, progreso por familia y total. Deuda de método anotada: en el PC de Cesar el Input
+System no ve clics sintéticos del ratón — los descubrimientos de prueba se dispararon por el
+MCP de Unity (AplicarDescubrimientoRemoto), que además permitió ráfagas de 2/3/5.
+
+**INTEGRACIÓN FABLE**: las dos deudas de una línea de Opus saldadas — ApprenticeController no
+mueve al aprendiz con el álbum abierto (mismo trato que JournalHud) y el banner "ALGO NUEVO"
+de SubstanceKnowledge cede el paso cuando AlbumReal.Abierto (cubre árbol y ficha). Compilado
+regla 53: 0 errores.
+
+**PRÓXIMA RONDA (a decisión de Cesar tras el informe)**: Fase A propuesta — renames de la
+auditoría + matriz anti-"nada" + recetas cruzadas + (pendiente del mandato nocturno) menú de
+inicio con volumen.

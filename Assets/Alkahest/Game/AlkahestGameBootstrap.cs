@@ -104,7 +104,11 @@ namespace Alkahest.Game
         private Transform _playerSemillaCero;
         private SubstanceKnowledge _knowledgeSemillaCero;
         private OrderSystem _orderSystemSemillaCero;
-        private readonly bool[] _salaSpawneadaSemillaCero = new bool[4];
+        // (CONTRATO_TERMICA.md §3b/§3c, ENCARGO I) De 4 a 5: la quinta
+        // entrada es `SimLevelBuilder.SalaFria` (la alcoba del ChillStone),
+        // que se destapa con el beat del frío de Game/SemillaCero.cs -- el
+        // mismo mecanismo de las otras cuatro, sin tocar el patrón.
+        private readonly bool[] _salaSpawneadaSemillaCero = new bool[5];
 
         // (M5 audio) Los cinco grifos, guardados aquí al crearlos en
         // SpawnDispensers: Audio/DirectorDeAudio.cs necesita sus referencias
@@ -168,6 +172,16 @@ namespace Alkahest.Game
                 SpawnEnsayoMaestro(_orderSystemSemillaCero, _playerSemillaCero);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaEnsayo] = true;
             }
+            // (CONTRATO_TERMICA.md §3c) LA ALCOBA FRÍA: el beat del frío de
+            // Game/SemillaCero.cs (entre PreguntaChispa y PreguntaEnsayo)
+            // llama a `SimLevelBuilder.DestaparSala(SalaFria)` cuando el
+            // Maestro pregunta "¿Y si lo ENFRÍAS?" -- este poll la spawnea la
+            // primera vez que eso ocurre, igual que las otras cuatro salas.
+            if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaFria))
+            {
+                SpawnChillStone(_playerSemillaCero);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] = true;
+            }
         }
 
         private void TrySpawn()
@@ -192,15 +206,18 @@ namespace Alkahest.Game
             var flask = apprentice.GetComponent<Flask>();
             var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
 
-            // (playtest 21, EL PIVOT) LA MAQUINARIA DEL TALLER CLÁSICO SE
-            // SALTA, NO SE BORRA -- ver el docblock de la clase. Placas
-            // ígneas, piedra gélida, grifos y estante no tienen sitio en el
-            // cuarto íntimo (SimLevelBuilder.BuildCuartoIntimo no excava
-            // hueco para ninguno de los cuatro): sus métodos siguen
-            // definidos más abajo, intactos, para cuando el jugador excave
-            // hasta el taller enterrado.
-            //   SpawnHeatPlates(apprentice.transform);
-            //   SpawnChillStone(apprentice.transform);
+            // (playtest 21, EL PIVOT -- historia) LA MAQUINARIA DEL TALLER
+            // CLÁSICO se saltó entera aquí en su día: placas ígneas, piedra
+            // gélida, grifos y estante no tenían sitio en el cuarto íntimo
+            // recién excavado. Grifos (SpawnCanoBasico) y estante
+            // (SpawnStorageRack) ya volvieron en rondas posteriores, con
+            // sitio NUEVO propio -- ver más abajo. Placas ígnea y gélida son
+            // las DOS ÚLTIMAS piezas de esa lista sin des-bifurcar: vuelven
+            // ahora (CONTRATO_TERMICA.md §3b, playtest 44), también con
+            // sitio nuevo (ver SpawnHeatPlates/SpawnChillStone) -- la llamada
+            // vive más abajo, junto a Crisol/las cuatro salas tapiables
+            // (misma zona del método, mismo criterio de "des-bifurcar sin
+            // reordenar el resto").
 
             var orderSystem = SpawnOrderSystem(knowledge);
             // (playtest 21) SpawnDispensers ENTERO se saltaba aquí -- los cinco
@@ -269,6 +286,7 @@ namespace Alkahest.Game
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
+            SpawnAlbumReal(knowledge);
             SpawnOrdersHud(orderSystem);
 
             // (integración pt40, SEMILLA CERO) EL DIRECTOR DEL ARCO: solo en
@@ -299,6 +317,13 @@ namespace Alkahest.Game
             _orderSystemSemillaCero = orderSystem;
 
             SpawnCrisol(apprentice.transform, knowledge); // NUNCA tapiado (contrato §3: "el jugador nace junto a las fuentes y el crisol").
+
+            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LA PLACA ÍGNEA: vuelve a
+            // llamarse tras quedar comentada desde pt21/25 (regla 15
+            // cumplida en su docblock). NUNCA tapiada, igual que el Crisol
+            // -- Cesar, textual: "podemos iniciar con la placa de calor
+            // también" (en Semilla Cero, desde el beat 1).
+            SpawnHeatPlates(apprentice.transform);
             // (playtest 40, SEMILLA CERO) LAS CUATRO SALAS POR PREGUNTA: en
             // modo Semilla Cero, con el mundo recién tapiado
             // (`Sim/SimLevelBuilder.TapiarSalasSemillaCero`, llamado desde
@@ -328,6 +353,18 @@ namespace Alkahest.Game
             {
                 SpawnColumnaEnsayo(apprentice.transform, knowledge);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] = true;
+            }
+            // (CONTRATO_TERMICA.md §3b/§3c, ENCARGO I) LA ALCOBA FRÍA
+            // (ChillStone): quinta sala tapiable, en la misma familia que la
+            // Columna (ambas viven en la zona "de instrumentos" del taller).
+            // En Semilla Cero solo aparece cuando Game/SemillaCero.cs destape
+            // `SalaFria` (el beat del frío, entre PreguntaChispa y
+            // PreguntaEnsayo); en caótico/multi, desde el arranque como el
+            // resto.
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaFria))
+            {
+                SpawnChillStone(apprentice.transform);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] = true;
             }
             // (playtest 30, "LA ALQUIMIA VISIBLE", tarea 3) EL ALAMBIQUE:
             // primer instrumento del taller que el jugador FABRICA con
@@ -471,6 +508,16 @@ namespace Alkahest.Game
             var flask = avatarLocal.GetComponent<Flask>();
             var knowledge = avatarLocal.GetComponent<SubstanceKnowledge>();
 
+            // (CONTRATO_TERMICA.md §3a, ENCARGO I) EL TERMÓMETRO EN LOS DOS
+            // LADOS: mismo componente, mismo Init(_sim) -- en el anfitrión
+            // `_sim.Stepper` existe y lee grados reales; en el invitado
+            // `_sim` es el espejo (`AlkahestSim.ModoEspejo`/`Stepper == null`)
+            // y el propio Termometro decide mostrar "—" (contrato: "solo el
+            // anfitrión mide, por ahora") en vez de mentir con datos locales
+            // que aquí no existen (la temperatura NO se replica, solo mat).
+            var termometro = avatarLocal.gameObject.AddComponent<Termometro>();
+            termometro.Init(_sim);
+
             if (!anfitrion)
             {
                 // (fix Cesar playtest 36, EL CAMINO DEL INVITADO) ANTES el
@@ -496,6 +543,7 @@ namespace Alkahest.Game
                 hintsInvitado.ReiniciarParaJornada(1);
                 SpawnNamingUi(flask, knowledge);
                 SpawnJournalHud(knowledge);
+                SpawnAlbumReal(knowledge); // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL) el invitado también descubre -- vía SaberSync/SubstanceKnowledge.AplicarDescubrimientoRemoto, que dispara AlDescubrir igual que un descubrimiento local.
                 SpawnOrdersHud(null);
 
                 // (playtest 43, LA PARIDAD VIVA, ENCARGO A) EL INVITADO OYE:
@@ -546,12 +594,21 @@ namespace Alkahest.Game
 
             SpawnNamingUi(flask, knowledge);
             SpawnJournalHud(knowledge);
+            SpawnAlbumReal(knowledge);
             SpawnOrdersHud(orderSystem);
 
             SpawnCrisol(apprentice.transform, knowledge);
             SpawnPrensa(apprentice.transform);
             SpawnBancoChispa(apprentice.transform, knowledge);
             SpawnColumnaEnsayo(apprentice.transform, knowledge);
+            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS, TAMBIÉN EN
+            // MULTI: "en el taller de un jugador Y en el multi (anfitrión),
+            // con réplicas para invitados" -- Semilla Cero NO existe en esta
+            // escena (ver el docblock de esta clase, punto 3, y
+            // `ModoSemillaCero` arriba), así que las dos nacen sin condición,
+            // igual que el resto de esta lista.
+            SpawnHeatPlates(apprentice.transform);
+            SpawnChillStone(apprentice.transform);
 
             var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
             SpawnEnsayoMaestro(orderSystem, apprentice.transform);
@@ -619,6 +676,15 @@ namespace Alkahest.Game
             var mudanza = go.AddComponent<Mudanza>();
             mudanza.Init(_sim);
 
+            // (CONTRATO_TERMICA.md §3a, ENCARGO I) EL TERMÓMETRO: cuarta
+            // herramienta, mismo patrón que Cincel/Mudanza -- mismo
+            // GameObject, mismo Init(sim), se alterna con G y mientras está
+            // inactivo no dibuja nada (ver Game/Termometro.cs). Las sondas
+            // plantadas SÍ persisten fuera del modo (instrumentos, no un
+            // overlay), así que el componente sigue vivo siempre.
+            var termometro = go.AddComponent<Termometro>();
+            termometro.Init(_sim);
+
             // El conocimiento se crea ANTES que el HUD: el HUD del frasco lo
             // necesita para mostrar el nombre que el jugador le puso a cada
             // sustancia (o el nombre común) en vez del devName interno.
@@ -632,89 +698,68 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// Una placa ígnea bajo cada una de las dos cubas de CULTIVO (playtest
-        /// 15: SIN CAMBIOS de fondo -- VatAX0/VatBX0 ya viven dentro de
-        /// SimLevelBuilder.CultivoX0..X1, es la propia BuildCultivo la que las
-        /// coloca ahí). Coordenadas 100% dinámicas (VatInteriorX0/X1 por cuba),
-        /// así que el rediseño del plano no exige tocar nada aquí -- exactamente
-        /// donde tienen que estar: es donde se cría el Vivium.
-        /// (playtest 17: aquí decía además "Y donde el clima ya nace templado
-        /// (CultivoAmbientRaw), así que la placa solo tiene que EMPUJAR desde
-        /// ese punto de partida en vez de pelear contra un ambiente frío como
-        /// haría en LABORATORIO/ENTREGA". ESO YA NO ES CIERTO: el clima por
-        /// zona se retiró y el mundo entero nace a CellGrid.AmbientRaw, 20°C
-        /// -- ver el docblock de SimLevelBuilder. La placa ahora empuja desde
-        /// los mismos 20°C aquí que en cualquier otro sitio, que era justo el
-        /// objetivo: que la ventaja la dé el APARATO, no la casilla. Coste
-        /// medido: 6°C más de salto sobre una banda de crecimiento que empieza
-        /// en ~30°C y que los 26°C de CULTIVO no alcanzaban de todos modos.)
-        /// Se mantienen CENTRADAS en cada
-        /// cuba (FootprintFraction de HeatPlate.Init ya las recorta al 40% del
-        /// interior recibido) -- no hay razón de diseño para descentrarlas: la
-        /// cuba es simétrica y la placa debe calentar su centro.
+        /// HISTORIA (playtest 4-17, taller CLÁSICO, hoy enterrado): dos
+        /// placas, una bajo cada cuba de CULTIVO (VatA/VatB), CENTRADAS
+        /// (FootprintFraction de HeatPlate.Init las recorta al 40% del
+        /// interior). Esas coordenadas (VatInteriorX0/X1, VatPlateRow) SIGUEN
+        /// existiendo en Sim/SimLevelBuilder.cs -- el taller clásico no se ha
+        /// borrado, solo dejó de construirse (ver el docblock de esta clase,
+        /// "EL CUARTO ÍNTIMO") -- pero ya NO son el sitio: se llegará a ellas
+        /// el día en que el jugador excave hasta el taller enterrado, no hoy.
+        ///
+        /// SITIO ACTUAL (CONTRATO_TERMICA.md §3b, playtest 44): UNA sola
+        /// placa (antes eran dos, una por cuba de un taller que ya no se
+        /// construye -- decisión fuera de contrato, documentada: 1 placa
+        /// basta para el cuarto íntimo, que solo tiene una zona húmeda), bajo
+        /// la Pila de AGUA de la estación de fuentes -- "hervir agua es su
+        /// primer uso natural" (contrato, textual). Reutiliza el suelo YA
+        /// TALLADO por Game/Pila.cs (<see cref="SimLevelBuilder.PilaPlanes"/>[0]
+        /// -- índice 0 es la del agua, ver el orden de ese array) en vez de
+        /// tallar nada nuevo: el suelo de la pila (2 filas, `Muro`) más el
+        /// suelo general del cuarto (`WallThickness`=3 filas, Y=136..138,
+        /// bajo `PilaBaseY`=138) suman 3 filas sólidas justo donde
+        /// HeatPlate.RecalcularCentro las necesita (`plateRow - WallThickness
+        /// + 1`) -- comprobado a mano, no a ojo (regla 39 de CLAUDE.md): CERO
+        /// carving nuevo hace falta en SimLevelBuilder para este sitio.
         /// </summary>
         private void SpawnHeatPlates(Transform player)
         {
-            SpawnOneHeatPlate(player, 0, SimLevelBuilder.VatAX0);
-            SpawnOneHeatPlate(player, 1, SimLevelBuilder.VatBX0);
-        }
-
-        private void SpawnOneHeatPlate(Transform player, int indice, int vatX0)
-        {
-            var go = new GameObject($"HeatPlate_{indice}");
+            var pilaAgua = SimLevelBuilder.PilaPlanes[0]; // [0]=agua, [1]=limo -- ver SimLevelBuilder.PilaPlanes.
+            var go = new GameObject("HeatPlate_PilaAgua");
             var plate = go.AddComponent<HeatPlate>();
             plate.Init(_sim, player,
-                SimLevelBuilder.VatInteriorX0(vatX0),
-                SimLevelBuilder.VatInteriorX1(vatX0),
-                SimLevelBuilder.VatPlateRow);
+                pilaAgua.X0 + pilaAgua.Muro,
+                pilaAgua.X0 + pilaAgua.Ancho - 1 - pilaAgua.Muro,
+                pilaAgua.Y0 + pilaAgua.Muro - 1);
         }
 
         /// <summary>
-        /// La piedra gélida vive bajo la bandeja fría del estante superior, EN
-        /// LABORATORIO -- decisión tomada y no cambiada en el playtest 15 tras
-        /// comprobar el SÓTANO explícitamente (el encargo lo pedía):
+        /// HISTORIA (playtest 4-17, taller CLÁSICO, hoy enterrado): la piedra
+        /// gélida vivía bajo la bandeja fría del estante superior de
+        /// LABORATORIO (ChillTrayInteriorX0/X1, ChillPlateRow), decisión
+        /// tomada tras descartar el SÓTANO explícitamente (sin cubeta con
+        /// paredes, Azoth/CrystalSeed se habrían derramado fuera del alcance
+        /// térmico). Esas constantes SIGUEN existiendo en
+        /// Sim/SimLevelBuilder.cs para cuando se excave hasta ese taller.
         ///
-        /// (playtest 17: el argumento de abajo empezaba por "el SÓTANO nace
-        /// frío de verdad (SotanoAmbientRaw ~4°C) y sería el sitio gratis para
-        /// cristalizar". Esa premisa YA NO EXISTE -- el clima por zona se
-        /// retiró y el sótano nace a los mismos 20°C que el resto, ver el
-        /// docblock de SimLevelBuilder. La conclusión NO cambia, y de hecho se
-        /// refuerza: si ni siquiera queda el frío gratis, menos razón todavía
-        /// para mover el aparato a una sala sin cubeta. El razonamiento
-        /// geométrico completo se conserva porque sigue siendo el motivo real:)
-        ///
-        /// El SÓTANO sería, si tuviera clima frío, el sitio "gratis" para
-        /// cristalizar -- PERO SimLevelBuilder.BuildSotano solo levanta una
-        /// PLATAFORMA MACIZA bajo el pozo (SotanoPlinthX0..X1, construida con
-        /// DrawSolidRect: un bloque SIN PAREDES), no una cubeta como
-        /// ChillTray/las cubas de Cultivo (esas sí usan DrawUShape: paredes +
-        /// suelo). CrystalSeed es Powder (cae, se puede desparramar) y Azoth es
-        /// Liquid (fluye libremente): vertidos sobre una losa plana sin muros,
-        /// en medio de una sala abierta por los cuatro costados, se saldrían
-        /// del alcance de la piedra (3 filas de empuje térmico, FilaEmpujePct)
-        /// en cuanto tocaran el borde de la plataforma -- Azoth en particular
-        /// no tiene NADA que lo retenga y se derramaría de inmediato fuera de
-        /// la zona fría, justo donde SÍ hace falta para que la reacción
-        /// Azoth+CrystalSeed->Crystal ocurra. SimLevelBuilder no expone ninguna
-        /// cubeta en el sótano y es de solo lectura en este encargo, así que
-        /// mover el aparato ahí rompería la mecánica que debería facilitar en
-        /// vez de mejorarla. Se queda en LABORATORIO, en ChillTray (SÍ es una
-        /// cubeta con paredes, ver SimLevelBuilder.BuildLaboratorio) -- y
-        /// FRESCA/HELANDO (ChillStone.cs) ya se calibran por seed para cruzar
-        /// los umbrales de congelación/cristalización con margen de sobra
-        /// desde CUALQUIER ambiente de partida, así que el coste real es solo
-        /// "unos ticks más para llegar", no "no llega". El sótano queda como
-        /// destino de una FASE FUTURA (backlog: "taller movible", CLAUDE.md)
-        /// para cuando SimLevelBuilder pueda darle una cubeta propia.
+        /// SITIO ACTUAL (CONTRATO_TERMICA.md §3b, playtest 44): "la FRÍA en
+        /// la alcoba de la columna, la zona más 'de instrumentos' del
+        /// taller" -- ver el bloque de constantes junto a
+        /// <see cref="SimLevelBuilder.AlcobaFriaX0"/> para el porqué exacto
+        /// del sitio (el hueco "columna|chispa", a la misma cota que sus dos
+        /// vecinas) y la decisión documentada de tallar solo dos muretes de
+        /// contención en vez de una "U" completa (el hueco disponible son 8
+        /// celdas exactas, el mínimo que exige el propio recorte
+        /// FootprintFraction de ChillStone.Init).
         /// </summary>
         private void SpawnChillStone(Transform player)
         {
-            var go = new GameObject("ChillStone_Bandeja");
+            var go = new GameObject("ChillStone_AlcobaFria");
             var stone = go.AddComponent<ChillStone>();
             stone.Init(_sim, player,
-                SimLevelBuilder.ChillTrayInteriorX0,
-                SimLevelBuilder.ChillTrayInteriorX1,
-                SimLevelBuilder.ChillPlateRow);
+                SimLevelBuilder.AlcobaFriaX0,
+                SimLevelBuilder.AlcobaFriaX1,
+                SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.AlcobaFriaX0));
         }
 
         /// <summary>
@@ -921,6 +966,14 @@ namespace Alkahest.Game
             var go = new GameObject("JournalHud");
             var journal = go.AddComponent<JournalHud>();
             journal.Init(_sim, knowledge);
+        }
+
+        /// <summary>(ENCARGO A, LA QUÍMICA CON NOMBRE REAL) El árbol de figuritas: mismo criterio de inyección que NamingUi/JournalHud, siempre junto a ellos (los tres leen el mismo SubstanceKnowledge del avatar). Spawneado en los TRES sitios de esta clase que ya llaman a SpawnJournalHud(knowledge) -- el invitado también descubre vía SaberSync, así que también necesita su propio álbum local.</summary>
+        private void SpawnAlbumReal(SubstanceKnowledge knowledge)
+        {
+            var go = new GameObject("AlbumReal");
+            var album = go.AddComponent<AlbumReal>();
+            album.Init(_sim, knowledge);
         }
 
         private void SpawnOrdersHud(OrderSystem orderSystem)

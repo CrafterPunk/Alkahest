@@ -664,6 +664,35 @@ namespace Alkahest
             }
         }
 
+        /// <summary>
+        /// (playtest 44, CONTRATO_TERMICA §2b) Escribe la temperatura de UNA
+        /// celda SIN tocar su material -- el camino de la SIM que faltaba: el
+        /// docblock de HeatPlate/ChillStone anotaba desde el playtest 4 la
+        /// deuda de escribir <c>_sim.Grid.temp[]</c> a mano en vez de pasar
+        /// por una API dedicada. Misma disciplina que <see cref="Paint"/>/
+        /// <see cref="PaintCell"/>: no escribe sobre el borde del mundo (el
+        /// marco de Stone es inmutable) y despierta el chunk afectado. A
+        /// diferencia de <see cref="PaintCell"/> (que SÍ cambia el material)
+        /// esto NUNCA toca <c>mat</c> -- es para quien EMPUJA calor/frío hacia
+        /// materia que ya existe (las placas), nunca para crear materia.
+        ///
+        /// NO se reenvía al anfitrión en modo espejo (a diferencia de
+        /// Paint/PaintCell/PaintStable/PaintRect): la temperatura NO viaja
+        /// por la red hoy (ver <see cref="AplicarChunkRemoto"/>, "temp[] no
+        /// se sincroniza en el POC") y las placas solo existen/corren en el
+        /// ANFITRIÓN (regla del contrato de esta ronda) -- ModoEspejo nunca
+        /// llama a este método en la práctica, así que no hay nada que
+        /// predecir localmente ni que reenviar.
+        /// </summary>
+        public void InyectarTemperatura(int x, int y, byte tempRaw)
+        {
+            if (_grid == null) return;
+            if (x <= 0 || x >= CellGrid.W - 1 || y <= 0 || y >= CellGrid.H - 1) return;
+            int idx = CellGrid.Idx(x, y);
+            _grid.temp[idx] = tempRaw;
+            _grid.WakeChunk(x, y, TickActual);
+        }
+
         public Vector2Int WorldToCell(Vector3 worldPos)
         {
             int cx = Mathf.FloorToInt(worldPos.x / SimRenderer.CellWorldSize);

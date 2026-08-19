@@ -194,6 +194,13 @@ namespace Alkahest.Net
                 case MaquinariaSprites.TipoEnsayoMaestro:
                 case MaquinariaSprites.TipoDispenser:
                 case (byte)MaquinaSync.TipoMaquina.Alambique:
+                // (CONTRATO_TERMICA.md §1, ENCARGO I) Las dos placas SÍ
+                // implementan IMaquinaUsableRemota del lado de T (§1 del
+                // contrato: "T implementa IMaquinaUsableRemota... en ambas
+                // placas") -- E remoto funciona igual que en las cinco
+                // estaciones originales.
+                case MaquinariaSprites.TipoPlacaCalor:
+                case MaquinariaSprites.TipoPlacaFria:
                     return true;
                 default:
                     return false;
@@ -527,6 +534,9 @@ namespace Alkahest.Net
                 case (byte)MaquinaSync.TipoMaquina.Rack: return "el estante de redomas";
                 case (byte)MaquinaSync.TipoMaquina.Alambique: return "el alambique";
                 case (byte)MaquinaSync.TipoMaquina.Pila: return "la pila";
+                // (CONTRATO_TERMICA.md §3b, ENCARGO I)
+                case MaquinariaSprites.TipoPlacaCalor: return "la placa de calor";
+                case MaquinariaSprites.TipoPlacaFria: return "la placa fría";
                 default: return "aparato";
             }
         }

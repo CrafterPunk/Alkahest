@@ -92,10 +92,16 @@ namespace Alkahest.Game
         // (SUSTANCIAS) -- mezclarla en cualquiera de las otras tres habría sido tan ruidoso
         // como forzarla donde no encaja, y el contrato pide "sección CONSEJOS", no "más
         // filas en una sección que ya existe".
-        private enum Seccion { Leyes = 0, Sustancias = 1, Procedimientos = 2, Consejos = 3 }
+        // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL, docs/DISENO_QUIMICA_REAL.md §3) ÁLBUM se
+        // añade como QUINTA pestaña, mismo criterio que CONSEJOS (playtest 26): "el árbol de
+        // figuritas" es una cosa categóricamente distinta de un catálogo de fichas
+        // (SUSTANCIAS) -- reutiliza el DIBUJO de Game/AlbumReal.cs (DibujarArbol, método
+        // estático sin estado propio) en vez de encajarlo en la maqueta de Entrada/columnas
+        // que sirve a las otras cuatro secciones, que pagina texto y esta es una figura.
+        private enum Seccion { Leyes = 0, Sustancias = 1, Procedimientos = 2, Consejos = 3, Album = 4 }
 
         /// <summary>Número de pestañas del libro -- único sitio que hay que tocar si algún día se añade/quita una sección (DrawCabecera y el ancho de cada tab lo derivan de aquí).</summary>
-        private const int SeccionCount = 4;
+        private const int SeccionCount = 5;
 
         // (playtest 18) Coincide a propósito con Sim/Universe.MaxLeyes ("El
         // diario ya reserva este tamaño", ver el doc de esa constante en el
@@ -376,7 +382,7 @@ namespace Alkahest.Game
         private static readonly Color _papelBorde = new Color(0.58f, 0.47f, 0.30f, 0.42f);
         private static readonly Color _lomo = new Color(0.07f, 0.055f, 0.048f, 1f);
 
-        private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS", "CONSEJOS" };
+        private static readonly string[] _tituloSeccion = { "LEYES", "SUSTANCIAS", "PROCEDIMIENTOS", "CONSEJOS", "ÁLBUM" };
 
         // (playtest 18) TextoVacioLeyes queda como fallback puramente DEFENSIVO: con el
         // criterio de huecos (ver ConstruirLeyesDesdeUniverso/ActualizarCache) la sección
@@ -487,7 +493,14 @@ namespace Alkahest.Game
             var kb = Keyboard.current;
             if (kb != null)
             {
-                if (kb.jKey.wasPressedThisFrame)
+                // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL) EXCLUSIÓN RECÍPROCA con
+                // Game/AlbumReal.cs (regla 37 de CLAUDE.md, "la exclusión es SIMÉTRICA o
+                // no sirve"): J SIEMPRE puede CERRAR el diario (si ya estaba abierto), pero
+                // no lo ABRE mientras el árbol a pantalla completa o su ficha-vitrina estén
+                // encima -- B ya ofrece la MISMA información (la pestaña ÁLBUM la reutiliza,
+                // ver DrawBook) y abrir los dos HUD a la vez competiría por GUI.depth sin
+                // ganar nada. AlbumReal.Update ya cede el paso simétrico con !JournalHud.Abierto.
+                if (kb.jKey.wasPressedThisFrame && (_visible || !AlbumReal.Abierto))
                 {
                     _visible = !_visible;
                     if (_visible) _pagina = 0; // recién abierto: siempre la primera página de la sección actual.
@@ -607,11 +620,41 @@ namespace Alkahest.Game
             UiStyles.Panel(paginaDer, _papel, _papelBorde);
             DrawLomo(new Rect(paginaIzq.xMax, paginas.y, anchoLomo, paginas.height));
 
-            // Orden de llamada importa: DrawContenido calcula _pageCount y
-            // acota _pagina para la sección visible ANTES de que DrawPie los
-            // lea. El orden VISUAL (pie abajo del todo) no depende de esto,
-            // cada uno dibuja en su propio rect sin solaparse.
-            DrawContenido(paginaIzq, paginaDer);
+            // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL) ÁLBUM NO USA LA MAQUETA DE
+            // COLUMNAS DE TEXTO: las otras cuatro secciones paginan `Entrada[]` (título +
+            // detalle + adornos), y una figurita no es una entrada de texto -- pero SÍ usa
+            // las dos hojas y SÍ pagina.
+            //
+            // (playtest 46) LO QUE CAMBIA RESPECTO A LA VERSIÓN ANTERIOR, y por qué (regla
+            // 15 de CLAUDE.md): antes esta rama dibujaba UN lienzo continuo por encima del
+            // lomo con las 5 familias a la vez y forzaba `_pageCount = 1` ("página única").
+            // El argumento era que el árbol es una figura y las figuras no paginan; el
+            // veredicto de Cesar jugando fue el contrario ("no tiene que caber todo en una
+            // hoja: tienes PÁGINAS, como un álbum"), y al verlo en pantalla se le daba la
+            // razón sola: las cinco familias apretadas dejaban cajas de 30 px, el lomo
+            // partía en dos a la familia del medio y los verbos se imprimían unos encima de
+            // otros. Ahora el álbum entrega UNA FAMILIA POR DOBLE PÁGINA
+            // (AlbumReal.DibujarPaginaDoble: figuritas a la izquierda, árbol de verbos a la
+            // derecha) y declara su número de páginas, así que la paginación REAL del libro
+            // -- los botones "< anterior / siguiente >" de DrawPie y las teclas Re Pág /
+            // Av Pág de Update -- funciona aquí sin una sola línea de código nueva.
+            if (_seccion == Seccion.Album)
+            {
+                float padPagina = UiStyles.S(16f);
+                var colIzq = new Rect(paginaIzq.x + padPagina, paginaIzq.y + padPagina, paginaIzq.width - padPagina * 2f, paginaIzq.height - padPagina * 2f);
+                var colDer = new Rect(paginaDer.x + padPagina, paginaDer.y + padPagina, paginaDer.width - padPagina * 2f, paginaDer.height - padPagina * 2f);
+                _pageCount = AlbumReal.PaginasTotales;
+                _pagina = Mathf.Clamp(_pagina, 0, _pageCount - 1); // igual que DrawContenido: acotar ANTES de dibujar y ANTES de que DrawPie lo lea.
+                AlbumReal.DibujarPaginaDoble(colIzq, colDer, _sim, _knowledge, _pagina);
+            }
+            else
+            {
+                // Orden de llamada importa: DrawContenido calcula _pageCount y
+                // acota _pagina para la sección visible ANTES de que DrawPie los
+                // lea. El orden VISUAL (pie abajo del todo) no depende de esto,
+                // cada uno dibuja en su propio rect sin solaparse.
+                DrawContenido(paginaIzq, paginaDer);
+            }
             DrawPie(pie);
         }
 

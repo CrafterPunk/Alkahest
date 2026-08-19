@@ -154,7 +154,18 @@ namespace Alkahest.Game
             // el jugador AÚN no tiene -- este consejo apunta a la escalera de
             // extracción sin resolverla ("las que se resisten": ni cuál ni cuántas).
             "El limo guarda MÁS de una arena: con el fuego más alto suelta las que se resisten.",
+            // (CONTRATO_TERMICA.md §3c, ENCARGO I, playtest 44) EL CONSEJO DEL FRÍO:
+            // completa la pareja con el consejo del beat 4 (línea de arriba, "el fuego
+            // sube") -- mismo lenguaje de "un paso ejecutable", ahora con la mitad
+            // fría de la idea "temperatura". Menciona G (Game/Termometro.cs, mismo
+            // encargo) de pasada: la sonda es cómo el jugador VALIDA que ya se
+            // congeló sin adivinar, sin convertir esto en dos consejos.
+            "Congela agua sobre la placa fría (E) -- pincha una sonda (G) para ver el grado exacto.",
+            "Con el hielo ya listo, corre a la Tolva: el frío no espera, se derrite si te demoras.",
             "Pulsa T para bautizar cuando el Maestro te lo pida -- el libro (J) guarda lo que aprendas.",
+            // (ENCARGO A, LA QUÍMICA CON NOMBRE REAL, docs/DISENO_QUIMICA_REAL.md §3) EL
+            // ÁLBUM: consejo nuevo pedido por el encargo, sobre Game/AlbumReal.cs (tecla B).
+            "Cada cosa nueva queda en tu álbum (B): el árbol te dice qué falta por crear.",
             "Si algo se destruye, no desaparece del todo: revisa su ficha en el libro (J).",
         };
 

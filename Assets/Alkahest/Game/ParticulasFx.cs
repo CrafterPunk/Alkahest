@@ -297,9 +297,44 @@ namespace Alkahest.Game
             transform.position = Vector3.zero;
         }
 
+        // =================================================================
+        // (playtest 44, pedido directo de Cesar) LA CAPA ENTERA, APAGADA POR
+        // DEFECTO: "de momento desactiva las partículas baratas que generas
+        // por encima... es difícil calcular qué harán animaciones baratas
+        // sin máquinas definidas al 100%. Dependamos únicamente de las
+        // animaciones que generan las partículas del algoritmo tipo Noita."
+        // El código se queda ÍNTEGRO (regla 15): cuando las máquinas estén
+        // definidas al 100%, esta capa vuelve con un flag. Reactivable en
+        // caliente desde la paleta dev (F3) para compararla con ojos.
+        // =================================================================
+        public static bool Activas = false;
+        private bool _overlayLimpio;
+
         private void Update()
         {
             if (_grid == null || _universe == null) return;
+
+            // Capa apagada: borra lo que quedara pintado UNA vez y duerme.
+            if (!Activas)
+            {
+                if (!_overlayLimpio)
+                {
+                    for (int i = 0; i < _dirtyPrevCount; i++) _pixels[_dirtyPrev[i]] = default;
+                    for (int i = 0; i < _dirtyCurrCount; i++) _pixels[_dirtyCurr[i]] = default;
+                    if (_dirtyPrevCount > 0 || _dirtyCurrCount > 0)
+                    {
+                        _texture.SetPixels32(_pixels);
+                        _texture.Apply(false);
+                    }
+                    _dirtyPrevCount = 0;
+                    _dirtyCurrCount = 0;
+                    _cursorEventosFx = ulong.MaxValue; // se re-engancha al reactivar (LeerEventosDesde lo clampa solo).
+                    _overlayLimpio = true;
+                }
+                return;
+            }
+            _overlayLimpio = false;
+
             if (_mainCam == null) _mainCam = Camera.main;
 
             // Clamp del dt: un hitch grande (carga de escena, GC spike) no

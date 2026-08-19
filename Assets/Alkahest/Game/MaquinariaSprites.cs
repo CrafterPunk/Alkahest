@@ -2369,6 +2369,14 @@ namespace Alkahest.Game
         public const byte TipoPila = 10;
 
         /// <summary>
+        /// (CONTRATO_TERMICA.md §1/§3b, ENCARGO I) LAS DOS PLACAS: valores
+        /// CONGELADOS por el contrato entre encargos (11/12 EXACTOS, mismos
+        /// que <c>Net.MaquinaSync.TipoMaquina.PlacaCalor/PlacaFria</c>).
+        /// </summary>
+        public const byte TipoPlacaCalor = 11;
+        public const byte TipoPlacaFria = 12;
+
+        /// <summary>
         /// UNA sola pieza representativa por tipo de estación, escalada
         /// EXACTA a <paramref name="tamanoMundo"/> vía <see cref="CrearCapa"/>
         /// (que reescala cualquier sprite ya generado al hueco de mundo que
@@ -2429,6 +2437,17 @@ namespace Alkahest.Game
                 case TipoEnsayoMaestro: pieza = Dosel(10, 6); break;
                 case TipoDispenser: pieza = CanoGrifo(); break;
                 case TipoAnclaje: pieza = CuadradoAnclaje(); break;
+                // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS: se
+                // reutiliza la MISMA fábrica de sprites que ya usan las
+                // máquinas reales (Game/HeatPlate.cs::BuildVisuals /
+                // Game/ChillStone.cs::BuildVisuals, encargo T) -- el chasis
+                // metálico basta como silueta reconocible de UNA pieza
+                // (mismo criterio de fidelidad reducida que el resto de esta
+                // familia); la fría usa el bloque gélido en vez de los
+                // cristales sueltos porque como pieza ÚNICA se lee mejor a
+                // escala de réplica (más superficie, menos "puntitos").
+                case TipoPlacaCalor: pieza = ChasisPlaca(10); break;
+                case TipoPlacaFria: pieza = BloqueGelido(10); break;
                 // red de seguridad: tipo desconocido -> Solido() SIEMPRE
                 // tintado de carboncillo (ver ColorCarboncilloReplica) -- nunca el
                 // blanco de fábrica de Solido(), que es justo el bug que

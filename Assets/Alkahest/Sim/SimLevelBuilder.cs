@@ -1599,6 +1599,55 @@ namespace Alkahest.Sim
         /// </summary>
         public const int EnsayoPlintoX = 362; // (playtest 34) NO SE MUEVE: sigue casado con la Tolva en el extremo derecho, tal y como pidió Cesar.
 
+        // =================================================================
+        // (CONTRATO_TERMICA.md §3b, ENCARGO I, playtest 44) LA ALCOBA FRÍA:
+        // el sitio de la piedra gélida (Game/ChillStone.cs, encargo T EN
+        // PARALELO -- aquí SOLO se talla el suelo+contención; la máquina la
+        // instancia Game/AlkahestGameBootstrap.cs con las coordenadas de
+        // abajo, invocando ChillStone.Init tal cual, sin tocar ese archivo).
+        // =================================================================
+        // SITIO ELEGIDO (mandato de Cesar vía contrato: "la FRÍA en la
+        // alcoba de la columna, la zona más 'de instrumentos' del taller"):
+        // el hueco "columna|chispa" de LA ARQUITECTURA DEL CUARTO (ver el
+        // bloque "AHORA TODO ES LINEAL" más abajo) -- 281..288 (8 celdas),
+        // el ÚNICO tramo de suelo libre entre las dos estaciones de
+        // OBSERVAR. `ColumnaX0`=260 + `ColumnaAncho`=19 + `ColumnaBocaVuelo`=2
+        // da un huella exterior real de la Columna 258..280 (comprobado
+        // contra su propia `Huella.OutX0/OutX1`, no contra el comentario
+        // histórico "(23)" que quedó desalineado del ancho real -- regla 39
+        // de CLAUDE.md); `BancoChispaX`=302 con huella documentada 289..315.
+        // La pilastra que decora ese hueco (X=284, ver `PilastraColumnas`)
+        // CUELGA del techo y no toca el suelo (todas terminan en y&gt;=240,
+        // muy por encima de esta bandeja) -- cero colisión.
+        //
+        // POR QUÉ AQUÍ Y NO PEGADO AL FUSTE: la Columna necesita su interior
+        // libre para el tanque de densidad (`ColumnaTanqueAlto`) y ya está
+        // registrada como Obra -- superponer aquí encima habría significado
+        // dos aparatos dibujándose en el mismo hueco. Un paso a la derecha,
+        // A LA MISMA COTA (`BaseYDeEstacion(AlcobaFriaX0)` = 144, igual que
+        // Columna/Chispa) es literalmente "la alcoba de la columna": el
+        // sitio donde el jugador YA está mirando de cerca al observar.
+        //
+        // DECISIÓN FUERA DE CONTRATO, DOCUMENTADA -- SOLO DOS MURETES, NO UN
+        // DrawUShape COMPLETO: el hueco disponible son 8 celdas exactas. Una
+        // "U" con el mismo `PilaMuroGrosor`=2 de las fuentes dejaría solo 4
+        // de interior, por debajo del mínimo de 8 que
+        // HeatPlate/ChillStone.Init exige tras su propio recorte
+        // `FootprintFraction`=0.4 (`Mathf.Max(8, ...)`, ver esos archivos).
+        // Con SOLO dos muretes de 1 celda (uno a cada lado, sin muro de PIE
+        // separado del colchón de suelo) el interior efectivo es el hueco
+        // ENTERO -- encaje EXACTO con ese mínimo (margen=0), sin desbordar
+        // ni hacia la Columna ni hacia la Chispa.
+        public const int AlcobaFriaX0 = 281; // primera columna libre tras la Columna (huella real hasta 280).
+        public const int AlcobaFriaAncho = 8; // hasta 288, un margen antes de que empiece BancoChispa (huella real desde 289).
+        public const int AlcobaFriaX1 = AlcobaFriaX0 + AlcobaFriaAncho - 1; // 288
+        /// <summary>Alto de los dos muretes de contención por encima del suelo (celdas) -- bandeja pequeña, suficiente para que lo vertido no se desparrame de inmediato hacia los vecinos.</summary>
+        public const int AlcobaFriaMuroAlto = 8;
+        /// <summary>Mismo criterio visual que `PlataformaProfundidad` de las 5 estaciones (Crisol/Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro, cada una en su propio Game/*.cs): colchón de piedra bajo el suelo para que no quede un escalón raro contra los vecinos.</summary>
+        private const int AlcobaFriaProfundidad = 6;
+        /// <summary>Mismo criterio que `PlataformaMargen` de esas 5 estaciones.</summary>
+        private const int AlcobaFriaMargen = 2;
+
         /// <summary>
         /// EL ALAMBIQUE (playtest 30, "LA ALQUIMIA VISIBLE" -- encargo de
         /// Cesar: "que el vapor se pueda ATRAPAR"). DECISIÓN: misma X que el
@@ -1950,8 +1999,15 @@ namespace Alkahest.Sim
         // inicial. Así nunca hay una `MachineFocus.Registrar` ni una chapa
         // "E — usar" para una máquina detrás del muro (lo que el contrato
         // prohíbe explícitamente).
-        public const int SalaPrensa = 0, SalaColumna = 1, SalaChispa = 2, SalaEnsayo = 3;
-        private const int SalasSemillaCeroCount = 4;
+        // (CONTRATO_TERMICA.md §3c, ENCARGO I, playtest 44) SalaFria=4: QUINTA
+        // sala tapiable, EXTENSIÓN de la API congelada de CONTRATO_SEMILLA.md
+        // -- ninguna firma existente cambia (TapiarSalasSemillaCero/
+        // DestaparSala/SalaDestapada siguen recibiendo lo mismo de siempre),
+        // solo se suma un índice válido más al mismo mecanismo. El beat del
+        // FRÍO (Game/SemillaCero.cs) la destapa exactamente como las otras
+        // cuatro destapan la suya.
+        public const int SalaPrensa = 0, SalaColumna = 1, SalaChispa = 2, SalaEnsayo = 3, SalaFria = 4;
+        private const int SalasSemillaCeroCount = 5;
 
         private static readonly RectObra[] _obraSalaSemillaCero = new RectObra[SalasSemillaCeroCount];
         private static readonly System.Collections.Generic.List<int>[] _celdasTapiadasSemillaCero =
@@ -1960,6 +2016,7 @@ namespace Alkahest.Sim
             new System.Collections.Generic.List<int>(96),
             new System.Collections.Generic.List<int>(96),
             new System.Collections.Generic.List<int>(96),
+            new System.Collections.Generic.List<int>(24), // (SalaFria) la alcoba fría es mucho más pequeña que las otras cuatro -- capacidad inicial menor, el List crece solo si hiciera falta.
         };
         private static readonly bool[] _salaDestapadaSemillaCero = new bool[SalasSemillaCeroCount];
 
@@ -1971,14 +2028,15 @@ namespace Alkahest.Sim
                 : new RectObra { X0 = 0, Y0 = 0, X1 = -1, Y1 = -1 }; // rect vacío/inválido -- defensivo, no debería pasar nunca (regla 51: que falle a la vista si pasa).
         }
 
-        /// <summary>¿Sigue tapiada la sala `sala` (0=prensa,1=columna,2=chispa,3=ensayo)? Solo tiene sentido en modo Semilla Cero -- fuera de él, `TapiarSalasSemillaCero` nunca se llamó y esto siempre da `false`.</summary>
+        /// <summary>¿Sigue tapiada la sala `sala` (0=prensa,1=columna,2=chispa,3=ensayo,4=fría)? Solo tiene sentido en modo Semilla Cero -- fuera de él, `TapiarSalasSemillaCero` nunca se llamó y esto siempre da `false`.</summary>
         public static bool SalaDestapada(int sala) => sala >= 0 && sala < SalasSemillaCeroCount && _salaDestapadaSemillaCero[sala];
 
         /// <summary>
         /// API CONGELADA (CONTRATO_SEMILLA.md §3). Tapia con mampostería de
         /// obra (indestructible al cincel: reutiliza EL MISMO rect que
-        /// `ObraDelTaller` ya protege, ver `EsObraDelTaller`) las cuatro
-        /// salas de Semilla Cero. Llamada UNA vez, en el génesis del mundo
+        /// `ObraDelTaller` ya protege, ver `EsObraDelTaller`) las cinco
+        /// salas de Semilla Cero (CONTRATO_TERMICA.md §3c sumó la quinta,
+        /// SalaFria). Llamada UNA vez, en el génesis del mundo
         /// (`Game/AlkahestSim.cs::CrearMundoInterno`, justo después de
         /// `SimLevelBuilder.BuildCuartoIntimo`), antes de que exista ninguna
         /// instancia de máquina.
@@ -2013,7 +2071,7 @@ namespace Alkahest.Sim
 
         /// <summary>
         /// API CONGELADA (CONTRATO_SEMILLA.md §3). Destapa la sala `sala`
-        /// (0=prensa,1=columna,2=chispa,3=ensayo): borra el tapiado (solo las
+        /// (0=prensa,1=columna,2=chispa,3=ensayo,4=fría): borra el tapiado (solo las
         /// celdas exactas que `TapiarSalasSemillaCero` rellenó, no el marco)
         /// y despierta sus chunks -- el polvo de derrumbe lo regala
         /// `Game/ParticulasFx.cs` solo, observando el material cambiar bajo
@@ -2128,6 +2186,13 @@ namespace Alkahest.Sim
             int obraAntesChispa = ObraDelTaller.Count;
             BancoChispa.TallarEnPlano(grid, BancoChispaX, BaseYDeEstacion(BancoChispaX));
             RegistrarObraSemillaCero(SalaChispa, obraAntesChispa);
+            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LA ALCOBA FRÍA: mismo
+            // patrón que las cuatro de arriba (talla + registra su handle de
+            // Semilla Cero) para que Game/ChillStone.cs (encargo T) tenga
+            // dónde vivir sin que este archivo conozca esa clase.
+            int obraAntesFria = ObraDelTaller.Count;
+            BuildAlcobaFria(grid);
+            RegistrarObraSemillaCero(SalaFria, obraAntesFria);
             int obraAntesEnsayo = ObraDelTaller.Count;
             EnsayoMaestro.TallarEnPlano(grid, EnsayoPlintoX, BaseYDeEstacion(EnsayoPlintoX));
             RegistrarObraSemillaCero(SalaEnsayo, obraAntesEnsayo);
@@ -2248,6 +2313,47 @@ namespace Alkahest.Sim
             // bug de handle huérfano que ya describe Game/Alambique.cs).
             RegistrarObra(MensulaLimoX0, CuartoY0, MensulaLimoX1, MensulaLimoTopY);
             RegistrarObra(MensulaAguaX0, CuartoY0, MensulaAguaX1, MensulaAguaTopY);
+        }
+
+        /// <summary>
+        /// (CONTRATO_TERMICA.md §3b, ENCARGO I) LA ALCOBA FRÍA: suelo +
+        /// muretes de contención donde vive la piedra gélida
+        /// (Game/ChillStone.cs, archivo del encargo T -- aquí SOLO se talla
+        /// el sitio, ver el bloque de constantes junto a
+        /// <see cref="AlcobaFriaX0"/> para el porqué exacto del sitio y de
+        /// "solo dos muretes, no una U completa"). Registrado como Obra
+        /// (anticincel) igual que cualquier estación -- sin clase propia con
+        /// su propio <c>TallarEnPlano</c> porque no hay ninguna: ChillStone
+        /// no talla su propia mampostería (a diferencia de Crisol/Prensa/
+        /// BancoChispa/ColumnaEnsayo/EnsayoMaestro/Pila), así que este
+        /// archivo hace el trabajo entero, como ya hace con
+        /// <see cref="BuildCuartoFloor"/>/<see cref="CarvePasilloTolva"/>.
+        /// </summary>
+        private static void BuildAlcobaFria(CellGrid grid)
+        {
+            int baseY = BaseYDeEstacion(AlcobaFriaX0); // 144 -- misma cota que Columna/Chispa, ver doc de las constantes.
+
+            // Colchón bajo el suelo, con margen a los lados -- mismo
+            // criterio visual que las 5 estaciones (AplanarPlataforma en
+            // cada Game/*.cs), reescrito aquí en pequeño porque esta
+            // "estación" no tiene clase propia: vive entera en el plano.
+            int xC0 = AlcobaFriaX0 - AlcobaFriaMargen;
+            int xC1 = AlcobaFriaX1 + AlcobaFriaMargen;
+            for (int x = xC0; x <= xC1; x++)
+                for (int y = baseY - AlcobaFriaProfundidad; y <= baseY; y++)
+                    if (CellGrid.InBounds(x, y)) grid.SetCell(x, y, MaterialId.Stone);
+
+            // Muretes de contención de 1 celda a cada lado (no una "U"
+            // completa -- ver decisión documentada junto a las constantes):
+            // el interior entre ambos (AlcobaFriaX0+1..AlcobaFriaX1-1) queda
+            // vacío, listo para recibir agua/hielo.
+            for (int y = baseY + 1; y <= baseY + AlcobaFriaMuroAlto; y++)
+            {
+                if (CellGrid.InBounds(AlcobaFriaX0, y)) grid.SetCell(AlcobaFriaX0, y, MaterialId.Stone);
+                if (CellGrid.InBounds(AlcobaFriaX1, y)) grid.SetCell(AlcobaFriaX1, y, MaterialId.Stone);
+            }
+
+            RegistrarObra(AlcobaFriaX0, baseY - AlcobaFriaProfundidad, AlcobaFriaX1, baseY + AlcobaFriaMuroAlto);
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>

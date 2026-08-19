@@ -2787,4 +2787,116 @@ namespace Alkahest.Sim
             }
         }
     }
+
+    /// <summary>
+    /// FÍSICA COMPARTIDA DE LA EMISIÓN DE PLACA/PIEDRA (playtest 44, ronda LA
+    /// FÍSICA HONESTA, docs/CONTRATO_TERMICA.md §2b). Antes cada aparato
+    /// (Game/HeatPlate.cs, Game/ChillStone.cs) escribía <c>_sim.Grid.temp[]</c>
+    /// a mano con un PERFIL FIJO por fila (<c>FilaEmpujePct</c>, un array
+    /// {100,45,15} calibrado a ojo en el fix del playtest 14) y un paso FIJO
+    /// por tick (nunca se frenaba solo al acercarse al objetivo). El contrato
+    /// pide dos cosas nuevas a la vez: DECAIMIENTO POR DISTANCIA continuo (no
+    /// un rect de 3 filas) y EMPUJE POR DIFERENCIA -- Newton de juguete,
+    /// <c>dT ∝ (objetivo-actual)</c>, que se autofrena según se acerca al
+    /// objetivo en vez de pasarse de largo y clampear.
+    ///
+    /// MEDIDO CON UN ARNÉS HEADLESS (Tools~/BenchSim, ver el informe de la
+    /// ronda) antes de fijar estas constantes, no a ojo:
+    ///  - Un <see cref="Falloff100"/> cuadrático + Newton con piso de 1 raw
+    ///    (redondeo hacia arriba, `Math.Ceiling`) SATURA el footprint entero
+    ///    al objetivo tarde o temprano sea cual sea K -- el piso de 1
+    ///    garantiza que ninguna fila se quede a medias, así que HELANDO
+    ///    (objetivo mucho más cerca de ambiente que ARDIENTE) satura RÁPIDO y
+    ///    mantiene esa frontera fija durante más tiempo, filtrando 36-38°C a
+    ///    12 celdas por difusión pura -- muy por encima del ±10°C del
+    ///    contrato, y de forma casi INDEPENDIENTE de <see cref="RadioFilas"/>
+    ///    o de K (medido en un barrido de ambos).
+    ///  - Sustituir el piso de 1 por un EMPUJE FRACCIONARIO CON JITTER
+    ///    DETERMINISTA (parte entera cada tick + la parte fraccionaria
+    ///    decidida por <see cref="XorShift.FromCell"/>, valor ESPERADO
+    ///    exactamente K·falloff·diff, sin piso ni sesgo) retrasa la fuga pero
+    ///    NO LA ELIMINA: dado tiempo suficiente, CUALQUIER frontera sostenida
+    ///    -- por pequeña que sea -- acaba empapando la grilla entera, porque
+    ///    <see cref="DiffuseTemperature"/> no tiene un radio de corte: un
+    ///    residuo de 1 raw viaja indefinidamente mientras el tirón hacia
+    ///    ambiente (±1 cada ~32 ticks) no lo alcance. Confirmado dejando
+    ///    correr el arnés 3000 ticks (100s): la grilla entera converge al
+    ///    objetivo de la placa. Es una propiedad de <c>DiffuseTemperature</c>
+    ///    (regla 9 de CLAUDE.md: NO se toca esa función en este encargo), no
+    ///    un defecto de esta clase.
+    ///  - La solución que sí mide dentro de presupuesto: un COLLAR de filas
+    ///    justo DETRÁS del footprint (<see cref="CollarFilas"/>) que tira
+    ///    ACTIVAMENTE hacia ambiente (<see cref="PasoCollar"/>, más fuerte
+    ///    que el tirón pasivo de DiffuseTemperature) -- contiene la fuga de
+    ///    largo alcance sin tocar la función de difusión compartida. Con
+    ///    <see cref="RadioFilas"/>=5, K=0.05, <see cref="CollarFilas"/>=15,
+    ///    <see cref="CollarStepRaw"/>=3: agua a 3 celdas hierve en 6-14 ticks
+    ///    y congela en 16-87 ticks (según semilla, siempre ≤180), y la fuga a
+    ///    12 celdas queda en 0-2°C (criterio ≤10°C) -- verificado en las
+    ///    semillas 12345, 10 (peor <c>boilsAt</c>) y 51 (peor
+    ///    <c>freezesAt</c>) de 500 sondeadas. Números completos en el
+    ///    informe de la ronda.
+    ///
+    /// DECISIÓN FUERA DE CONTRATO: el contrato pedía "decaimiento por
+    /// distancia + empuje por diferencia", no un collar -- se añade porque,
+    /// medido, ningún par (RadioFilas, K) del modelo pedido basta por sí solo
+    /// para cumplir el ±10°C a 12 celdas del propio contrato dada la difusión
+    /// compartida tal y como existe hoy. Queda documentado aquí y en el
+    /// informe de la ronda.
+    /// </summary>
+    public static class EmisionTermica
+    {
+        /// <summary>Filas de empuje DIRECTO (footprint) sobre el aparato. Fila 0 = adyacente.</summary>
+        public const int RadioFilas = 5;
+        /// <summary>Coeficiente de Newton: empuje esperado = K · falloff(fila) · |objetivo-actual|.</summary>
+        public const double NewtonK = 0.05;
+        /// <summary>Filas del collar de contención MÁS ALLÁ del footprint (ver doc de la clase).</summary>
+        public const int CollarFilas = 15;
+        /// <summary>Empuje del collar hacia ambiente, en raw/tick (más agresivo que el tirón pasivo de DiffuseTemperature).</summary>
+        public const int CollarStepRaw = 3;
+
+        /// <summary>Sal de <see cref="XorShift.FromCell"/> para el jitter del empuje fraccionario -- grep-verificada libre (las usadas en el proyecto llegaban hasta 553 antes de esta ronda).</summary>
+        private const uint SalEmpujeTermico = 557;
+
+        /// <summary>Decaimiento cuadrático con la distancia, en 0..100 (porcentaje). Fila 0 = 100, fila RadioFilas = 0.</summary>
+        public static int Falloff100(int fila)
+        {
+            if (fila < 0 || fila >= RadioFilas) return 0;
+            double f = (double)(RadioFilas - fila) / RadioFilas;
+            return (int)Math.Round(f * f * 100.0);
+        }
+
+        /// <summary>
+        /// Delta a sumar a <paramref name="cur"/> (puede ser 0) para UNA celda
+        /// del footprint, en la fila <paramref name="fila"/> (0=adyacente).
+        /// Newton de juguete con empuje fraccionario: la parte entera de
+        /// K·falloff·|diff| se aplica siempre, la fraccionaria se decide con
+        /// <see cref="XorShift.FromCell"/> (valor esperado exacto, sin sesgo,
+        /// nunca se estanca). Nunca sobrepasa el objetivo.
+        /// </summary>
+        public static int PasoFootprint(int cur, int target, int fila, uint tick, int x, int y)
+        {
+            int diff = target - cur;
+            if (diff == 0) return 0;
+            int fall = Falloff100(fila);
+            if (fall <= 0) return 0;
+            double magF = NewtonK * fall / 100.0 * Math.Abs(diff);
+            int intPart = (int)Math.Floor(magF);
+            int fracPct = (int)Math.Round((magF - intPart) * 100.0);
+            var rng = XorShift.FromCell(tick, x, y, SalEmpujeTermico);
+            int m = intPart + (rng.ChancePercent(fracPct) ? 1 : 0);
+            if (m > Math.Abs(diff)) m = Math.Abs(diff);
+            if (m <= 0) return 0;
+            return diff > 0 ? m : -m;
+        }
+
+        /// <summary>Delta a sumar a <paramref name="cur"/> para UNA celda del COLLAR (ver doc de la clase) -- tira hacia ambiente, nunca hacia el objetivo de la placa.</summary>
+        public static int PasoCollar(int cur)
+        {
+            int diff = CellGrid.AmbientRaw - cur;
+            if (diff == 0) return 0;
+            int m = Math.Min(Math.Abs(diff), CollarStepRaw);
+            return diff > 0 ? m : -m;
+        }
+    }
 }

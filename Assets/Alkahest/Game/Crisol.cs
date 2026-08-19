@@ -122,6 +122,25 @@ namespace Alkahest.Game
     /// (<see cref="MaquinariaSprites.LabioBoca"/>) más las guías de latón que
     /// forran la rampa. Las estaciones que reciben DEPOSITANDO (prensa,
     /// chispa, ensayo) no llevan embudo ninguno.
+    ///
+    /// =====================================================================
+    /// CONVERSIÓN POR FRENTES (playtest 44, LA FÍSICA HONESTA,
+    /// docs/CONTRATO_TERMICA.md §2a)
+    /// =====================================================================
+    /// Hasta esta ronda, la cámara entera convertía de golpe en
+    /// <see cref="CerrarHornada"/> al agotarse <see cref="HornadaSegundos"/>:
+    /// diez segundos de rescoldo/burbujas subiendo y ni una sola celda
+    /// cambiando de material hasta el chasquido final. Ahora
+    /// <see cref="ProcessConversionFrente"/> convierte celda a celda, TICK A
+    /// TICK, con un umbral que depende de la fila de distancia al hogar --
+    /// el "tostado" se ve subir desde el fondo del puchero hacia la boca a lo
+    /// largo de toda la pasada (ver el docblock de ese método para el
+    /// mecanismo completo). <see cref="CerrarHornada"/> se queda como
+    /// GARANTÍA final (stragglers), no como el único punto de conversión, y
+    /// el testigo forense (<see cref="Hornada.RegistrarOp"/>) sigue
+    /// disparando EXACTAMENTE UNA vez, al cierre, con el total acumulado del
+    /// frente entero -- el contrato de qué ve <see cref="Hornada"/> no
+    /// cambia, solo cuándo (y cómo de gradual) llega la materia a ese total.
     /// </summary>
     public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
@@ -212,6 +231,89 @@ namespace Alkahest.Game
         private const int MargenRecocido = 3;
         /// <summary>Margen por debajo del umbral del mundo al que se clampea la rampa durante <see cref="FraccionConTecho"/>.</summary>
         private const int MargenTecho = 2;
+
+        // -----------------------------------------------------------------
+        // CONVERSIÓN POR FRENTES (playtest 44, LA FÍSICA HONESTA,
+        // docs/CONTRATO_TERMICA.md §2a): la hornada dejaba de VERSE mientras
+        // corría -- toda la cámara convertía de golpe en CerrarHornada, sin
+        // que ninguna celda cambiara de material durante los 10s previos.
+        // Ver el docblock de <see cref="ProcessConversionFrente"/> para el
+        // mecanismo completo (por qué es un umbral por FILA y no un empuje
+        // por fila -- se modeló primero el empuje y no separaba nada, la
+        // rampa compartida es demasiado lenta para que un sesgo de empuje
+        // produzca distancia visible entre filas en 300 ticks).
+        // -----------------------------------------------------------------
+        /// <summary>
+        /// FRACCIÓN de <c>(cima-ambiente)</c> que la fila más próxima al
+        /// hogar (fila 0, y=_camY0) se ahorra frente a la CIMA real:
+        /// convierte en cuanto la rampa compartida cruza
+        /// <c>cima - MargenFrenteFraccion*(cima-ambiente)</c>, mientras que
+        /// la fila más lejana (junto a la boca) exige la cima exacta -- que
+        /// solo se libera en el último <see cref="FraccionConTecho"/>..1 de
+        /// la hornada.
+        ///
+        /// FRACCIÓN, NO UN RAW FIJO -- ESTO YA SE PROBÓ MAL UNA VEZ (modelado
+        /// numérico de la rampa real, no a ojo): un margen fijo de 25 raw daba
+        /// ~69 ticks de separación con <c>cima</c>=120 (el rescoldo propio,
+        /// <see cref="Universe.CrisolTier0Raw"/>) pero se hundía a ~56 con
+        /// <c>cima</c>=190 (el mejor combustible sorteable, ver
+        /// <c>Universe.TempCombustibleRawBase</c>, 165..190) -- la rampa
+        /// cubre el MISMO número de ticks (0..264) sea cual sea el rango de
+        /// temperatura, así que a más rango, más raw por tick, y un margen
+        /// fijo se cruza antes en términos de TICKS cuanto más caliente sea
+        /// la hornada -- justo lo contrario de "el mismo espectáculo en toda
+        /// hornada". Con el margen como FRACCIÓN del rango real, la
+        /// separación medida se queda estable entre ~58 y ~89 ticks en todo
+        /// el rango practicable de <c>cima</c> del juego (120 sin
+        /// combustible; 165..190 con el mejor; ~100..155 en Recocido, ver
+        /// <c>Universe.SolidificaRaw</c>) -- SIEMPRE por encima del piso de
+        /// 60 que exige el contrato, con margen para el jitter del
+        /// muestreo/probabilidad de abajo. NO válido si <c>cima</c> cayera a
+        /// menos de ~15-20 raw por encima de ambiente (degenera a spread≈0,
+        /// ver el modelo): no ocurre hoy -- el objetivo mínimo real es
+        /// Recocido en su peor seed, <c>SolidificaRaw+MargenRecocido</c> ≈
+        /// 103, 33 raw por encima de <see cref="CellGrid.AmbientRaw"/> --
+        /// pero queda anotado por si una ronda futura introduce una hornada
+        /// de objetivo casi-ambiente.
+        /// </summary>
+        private const float MargenFrenteFraccion = 0.25f;
+        /// <summary>
+        /// Máscara de muestreo barato: solo se comprueba 1 de cada 4 celdas
+        /// por tick (<c>(x+y+tick)&MuestreoMascara == 0</c>), el mismo patrón
+        /// de "muestreo por tablero" que <see cref="Sim.SimStepper"/> usa
+        /// para difusión/morfología -- una hornada llena (117 celdas) no
+        /// necesita mirar las 117 cada uno de los 300 ticks para que el
+        /// frente se vea avanzar con fluidez.
+        /// </summary>
+        private const int MuestreoMascara = 3;
+        /// <summary>
+        /// Probabilidad de convertir una celda muestreada que YA cruzó su
+        /// umbral de fila, no 100%: da un chisporroteo irregular en vez de un
+        /// barrido geométrico perfecto (más "se está cocinando" que "un
+        /// escáner"). <see cref="CerrarHornada"/> sigue de garantía: ninguna
+        /// celda se queda sin convertir por mala suerte de este dado.
+        /// </summary>
+        private const int ProbabilidadConversionPct = 55;
+        /// <summary>
+        /// Salt propia de <see cref="XorShift.FromCell"/> para el frente de
+        /// conversión -- 563 para no colisionar con ninguna de las
+        /// CONSTANTES fijas que ya usan Sim/SimStepper.cs (1, 2, 5, 9, 13,
+        /// 17, 42, 77, 88, 91, 205, 237, 239, 503, 509, 521, 523, 547, 549,
+        /// 551, 553, 557) ni con <see cref="SalVaporCrisol"/> (241) de este
+        /// mismo archivo -- verificado con grep antes de fijar el número.
+        /// </summary>
+        private const uint SalFrenteHornada = 563;
+        /// <summary>
+        /// Total de celdas convertidas por <see cref="ProcessConversionFrente"/>
+        /// DURANTE la hornada en curso, acumulado tick a tick. Se resetea en
+        /// <see cref="IntentarEncender"/> (una hornada nueva, un contador
+        /// nuevo) y <see cref="CerrarHornada"/> le SUMA las stragglers de su
+        /// propia pasada de garantía antes de usarlo para el witness forense
+        /// (<see cref="Hornada.RegistrarOp"/>) y el vapor -- el jugador ve
+        /// UN solo número al final, el mismo total que vería si el frente no
+        /// existiera, solo que ahora ha llegado ahí VIÉNDOSE avanzar.
+        /// </summary>
+        private int _hornadaConvertidasAcumulado;
 
         // -----------------------------------------------------------------
         // LA ALQUIMIA VISIBLE (playtest 30, encargo de Cesar: "el mejor
@@ -773,6 +875,12 @@ namespace Alkahest.Game
                 {
                     _hornadaT += TickDt;
                     ActualizarObjetivoHornada();
+                    // (playtest 44, §2a) El frente corre TICK A TICK, no solo
+                    // al cierre -- necesita ver el _targetRaw YA actualizado
+                    // de esta pasada (ActualizarObjetivoHornada de arriba) y
+                    // EmpujarTemperatura de abajo aplicado sobre la MISMA
+                    // temperatura que acaba de leer, así que va entre las dos.
+                    ProcessConversionFrente();
                     if (_hornadaT >= HornadaSegundos) CerrarHornada();
                 }
                 EmpujarTemperatura();
@@ -961,6 +1069,7 @@ namespace Alkahest.Game
             _hornadaCima = objetivo;
             _hornadaTecho = TechoSeguroPara(universe, _hornadaEntrada, objetivo);
             _hornadaT = 0f;
+            _hornadaConvertidasAcumulado = 0; // (playtest 44) una hornada nueva, un contador de frente nuevo.
             _fase = Fase.Corriendo;
 
             // El combustible se gasta AL ENCENDER: una celda, una pasada.
@@ -1228,11 +1337,94 @@ namespace Alkahest.Game
             _targetRaw = t < FraccionConTecho ? (byte)Mathf.Min(objetivoLibre, techo) : cima;
         }
 
+        /// <summary>
+        /// (playtest 44, §2a del contrato) CONVERSIÓN POR FRENTES: mientras
+        /// corre la hornada, las celdas de la cámara convierten
+        /// INDIVIDUALMENTE en cuanto su fila cruza su propio umbral, no todas
+        /// de golpe al cierre. Fila 0 = adyacente al hogar (<see cref="
+        /// _camY0"/>, donde vive el calor de verdad); fila
+        /// <c>CamaraAlto-1</c> = junto a la boca, la más lejos. El umbral de
+        /// cada fila es un punto por debajo de <see cref="_hornadaCima"/>
+        /// (ver <see cref="MargenFrenteFraccion"/>): la fila 0 lo cruza pronto (la
+        /// rampa compartida de <see cref="ActualizarObjetivoHornada"/> llega
+        /// ahí sin pelear con el techo de seguridad), la última fila exige la
+        /// CIMA exacta, que solo se libera en el tramo final de la hornada
+        /// (más allá de <see cref="FraccionConTecho"/>) -- el resultado es
+        /// que el "tostado" se ve subir desde el fondo del puchero hacia
+        /// arriba a lo largo de toda la pasada, no un chasquido al final.
+        ///
+        /// POR QUÉ UN UMBRAL POR FILA Y NO UN EMPUJE POR FILA: se modeló
+        /// primero dar a cada fila su propio ritmo de EMPUJE (como hacen
+        /// HeatPlate/ChillStone con <see cref="Sim.EmisionTermica"/>) y no
+        /// separaba nada -- la rampa de la hornada sube ~0.36 raw/tick,
+        /// demasiado lento para que cualquier diferencial de empuje
+        /// razonable produzca más que ruido de redondeo entre filas en 300
+        /// ticks; o las filas convergían todas a la vez, o alguna nunca
+        /// llegaba. <see cref="EmpujarTemperatura"/> se queda SIN sesgo por
+        /// fila a propósito (todas las celdas persiguen el mismo
+        /// <see cref="_targetRaw"/>): es el UMBRAL de conversión, no la
+        /// velocidad de calentar, el que decide en qué tick cruza cada fila.
+        ///
+        /// Muestreo barato y determinista (regla de oro de CLAUDE.md): solo
+        /// 1 de cada 4 celdas se comprueba por tick (<see cref="
+        /// MuestreoMascara"/>, patrón <c>(x+y+tick)&mascara</c>, el mismo
+        /// truco de "tablero" que ya usa <see cref="Sim.SimStepper"/> para
+        /// difusión), y de las muestreadas que ya cruzaron su umbral solo
+        /// convierte <see cref="ProbabilidadConversionPct"/>% (salt propia
+        /// <see cref="SalFrenteHornada"/>) -- sin esto el frente avanzaría en
+        /// un barrido geométrico perfecto en vez de un chisporroteo. Cero
+        /// asignaciones: <c>XorShift</c> es struct, el bucle es el mismo
+        /// doble-for barato que <see cref="EmpujarTemperatura"/>.
+        ///
+        /// <see cref="CerrarHornada"/> sigue siendo la GARANTÍA: cualquier
+        /// celda que no haya cruzado a tiempo (mala suerte del dado, o
+        /// simplemente estar en el filo del umbral cuando se acaban los 300
+        /// ticks) se convierte ahí, de golpe -- el jugador NUNCA ve una
+        /// hornada "atascada" con materia sin convertir en la cubeta.
+        /// </summary>
+        private void ProcessConversionFrente()
+        {
+            if (CamaraAlto <= 1) return; // guarda: con una sola fila no hay frente que trazar (division por cero más abajo).
+            var grid = _sim.Grid;
+            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+
+            // Margen como FRACCIÓN del rango real (cima-ambiente), no un raw
+            // fijo -- ver el docblock de MargenFrenteFraccion para el porqué
+            // (un raw fijo se hunde por debajo del piso de 60 ticks con
+            // hornadas calientes). Mathf.Max(0,...) es defensivo: si algún
+            // día una hornada tuviera objetivo por debajo de ambiente (no
+            // ocurre hoy), el margen se queda en 0 en vez de negativo.
+            int rango = Mathf.Max(0, _hornadaCima - CellGrid.AmbientRaw);
+
+            for (int y = _camY0; y <= _camY1; y++)
+            {
+                int fila = y - _camY0; // 0 = adyacente al hogar.
+                float fracFila = (float)fila / (CamaraAlto - 1); // 0 en el hogar, 1 en la boca.
+                int umbral = _hornadaCima - Mathf.RoundToInt(MargenFrenteFraccion * rango * (1f - fracFila));
+
+                for (int x = _camX0; x <= _camX1; x++)
+                {
+                    if (((x + y + (int)tick) & MuestreoMascara) != 0) continue; // muestreo barato: 1 de cada 4 celdas por tick.
+
+                    int idx = CellGrid.Idx(x, y);
+                    if (grid.GetMat(idx) != _hornadaEntrada) continue;
+                    if (grid.temp[idx] < umbral) continue; // esta fila aún no llegó a SU umbral.
+
+                    var rng = XorShift.FromCell(tick, x, y, SalFrenteHornada);
+                    if (!rng.ChancePercent(ProbabilidadConversionPct)) continue; // chisporroteo, no barrido perfecto.
+
+                    grid.SetCell(idx, _hornadaSalida, resetAux: false);
+                    grid.WakeChunk(x, y, tick);
+                    _hornadaConvertidasAcumulado++;
+                }
+            }
+        }
+
         private void CerrarHornada()
         {
             var grid = _sim.Grid;
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
-            int convertidas = 0;
+            int stragglers = 0;
 
             for (int y = _camY0; y <= _camY1; y++)
             {
@@ -1242,9 +1434,23 @@ namespace Alkahest.Game
                     if (grid.GetMat(idx) != _hornadaEntrada) continue;
                     grid.SetCell(idx, _hornadaSalida, resetAux: false);
                     grid.WakeChunk(x, y, tick);
-                    convertidas++;
+                    stragglers++;
                 }
             }
+
+            // (playtest 44, §2a) CerrarHornada ya NO es la única fuente de
+            // conversiones: ProcessConversionFrente lleva convirtiendo desde
+            // el principio de la pasada. Esta barrida final es la GARANTÍA
+            // (cualquier celda que quedó por debajo de su umbral de fila, o
+            // que el dado de ProbabilidadConversionPct no tocó a tiempo) --
+            // `stragglers` cuenta SOLO lo que esta pasada convierte de más;
+            // el total real de la hornada es el acumulado del frente MÁS
+            // estas rezagadas, y es ESE total el que ve el resto del método
+            // (testigo forense, vapor, destrucción por hornada) -- exactamente
+            // el mismo número que veía el jugador antes de esta ronda, solo
+            // que ahora una parte ya se vio convertir en vivo.
+            _hornadaConvertidasAcumulado += stragglers;
+            int convertidas = _hornadaConvertidasAcumulado;
 
             if (convertidas > 0) Hornada.RegistrarOp("crisol", _hornadaEntrada, _hornadaSalida, _hornadaCondicion);
 
@@ -1318,11 +1524,27 @@ namespace Alkahest.Game
         }
 
         /// <summary>Empuja la temperatura de la cámara hacia <see cref="_targetRaw"/>. Con `_targetRaw` a 0 (REPOSO) no toca NADA: sin ese silencio no habría "una transformación por hornada".</summary>
+        /// <summary>
+        /// (playtest 44, escritura migrada a <see cref="AlkahestSim.
+        /// InyectarTemperatura"/>, Paint discipline) Empuja la temperatura de
+        /// la cámara hacia <see cref="_targetRaw"/> con paso FIJO
+        /// (<see cref="TempStepPerTick"/>), SIN sesgo por fila -- a
+        /// diferencia de HeatPlate/ChillStone, aquí NO hace falta el modelo
+        /// de <see cref="Sim.EmisionTermica"/>: el crisol es una cámara
+        /// SELLADA por los cuatro costados (mampostería, ver
+        /// <see cref="TallarEnPlano"/>), no un footprint irradiando a campo
+        /// abierto, así que no hay fuga de largo alcance que contener con un
+        /// collar. El paso fijo (en vez de Newton) es DELIBERADO: es lo que
+        /// hace que todas las celdas persigan el MISMO <c>_targetRaw</c> casi
+        /// en fase, para que sea el UMBRAL por fila de
+        /// <see cref="ProcessConversionFrente"/> -- no la velocidad de
+        /// calentar -- quien decida el orden del frente (ver el docblock de
+        /// ese método).
+        /// </summary>
         private void EmpujarTemperatura()
         {
             if (_targetRaw == 0) return;
             var grid = _sim.Grid;
-            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
             int target = _targetRaw;
 
             for (int y = _camY0; y <= _camY1; y++)
@@ -1334,8 +1556,7 @@ namespace Alkahest.Game
                     if (grid.GetMat(idx) == MaterialId.Empty) continue; // el aire no se calienta: lo que arde es la carga.
                     int cur = grid.temp[idx];
                     int next = cur < target ? Mathf.Min(target, cur + TempStepPerTick) : Mathf.Max(target, cur - TempStepPerTick);
-                    grid.temp[idx] = (byte)next;
-                    grid.WakeChunk(x, y, tick);
+                    _sim.InyectarTemperatura(x, y, (byte)next);
                 }
             }
         }

@@ -106,6 +106,16 @@ namespace Alkahest.Net
             Rack = 8,
             Alambique = 9,
             Pila = 10,
+
+            // (CONTRATO_TERMICA.md §1/§3b, ENCARGO I) LAS DOS PLACAS: valores
+            // CONGELADOS por el contrato entre encargos (11/12 EXACTOS, T los
+            // usa desde su propio archivo para saber qué EstadoVivoBits
+            // corresponden a cada una -- ver el docblock de EntradaMaquina).
+            // Ambas SÍ implementan IMaquinaUsableRemota (a diferencia de
+            // Rack/Alambique/Pila): E remoto funciona igual que en las cinco
+            // estaciones originales.
+            PlacaCalor = 11,
+            PlacaFria = 12,
         }
 
         /// <summary>Instancia única en la escena (mismo patrón que SimSync/AprendizNet).</summary>
@@ -392,11 +402,22 @@ namespace Alkahest.Net
             var estantes = FindObjectsByType<StorageRack>();
             var alambiques = FindObjectsByType<Alambique>();
             var pilas = FindObjectsByType<Pila>();
+            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS: en MULTI
+            // (única escena donde corre este archivo) las crea
+            // AlkahestGameBootstrap.TrySpawnRed sin condición de Semilla Cero
+            // (esa escena nunca la activa, ver el docblock de esa clase) --
+            // así que, a diferencia de las cinco estaciones tapiables de
+            // Semilla Cero (que NO existen en esta escena), siempre hay
+            // exactamente 1 de cada, mismo criterio de longitud fija que
+            // alambiques/estantes.
+            var placasCalor = FindObjectsByType<HeatPlate>();
+            var placasFrias = FindObjectsByType<ChillStone>();
 
             if (crisoles.Length < 1 || prensas.Length < 1 || chispas.Length < 1 ||
                 columnas.Length < 1 || ensayos.Length < 1 || grifos.Length < 2 ||
                 baldas.Length < 1 || anclajes.Length < 1 ||
-                estantes.Length < 1 || alambiques.Length < 1 || pilas.Length < 2)
+                estantes.Length < 1 || alambiques.Length < 1 || pilas.Length < 2 ||
+                placasCalor.Length < 1 || placasFrias.Length < 1)
             {
                 return; // el taller del anfitrión sigue a mitad de construir -- se reintenta el próximo Update.
             }
@@ -413,6 +434,8 @@ namespace Alkahest.Net
             AgregarTipo(TipoMaquina.Rack, estantes);
             AgregarTipo(TipoMaquina.Alambique, alambiques);
             AgregarTipo(TipoMaquina.Pila, pilas);
+            AgregarTipo(TipoMaquina.PlacaCalor, placasCalor);
+            AgregarTipo(TipoMaquina.PlacaFria, placasFrias);
 
             PublicarRegistroInicial();
             _escaneado = true;

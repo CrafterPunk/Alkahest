@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -92,8 +93,9 @@ namespace Alkahest.Game
     ///  proporcional a la distancia), esa celda tarda MUCHO MÁS en volver a
     ///  descongelarse si se apaga la piedra o se aleja del aparato. HELANDO es
     ///  la opción de urgencia con una factura después; FRESCA es la opción
-    ///  cómoda para el uso diario. Ver <see cref="TempStepHelando"/>/
-    ///  <see cref="TempStepFresca"/> y el rótulo de estado en OnGUI, que ahora
+    ///  cómoda para el uso diario. Ver <c>TempStepHelando</c>/
+    ///  <c>TempStepFresca</c> (RETIRADOS en el playtest 44, ver más abajo) y
+    ///  el rótulo de estado en OnGUI, que ahora
     ///  insinúa esta diferencia ("· más rápido").
     ///
     /// -----------------------------------------------------------------------
@@ -105,8 +107,8 @@ namespace Alkahest.Game
     /// QUITADO. En su lugar el empuje de temperatura por tick DECAE con la
     /// distancia a la piedra en vez de ser uniforme y cortarse de golpe:
     /// fila adyacente al 100% del empuje, cada fila siguiente más débil (ver
-    /// <see cref="FilaEmpujePct"/> para los números viejos/nuevos y la
-    /// distancia medida al grifo de agua -- SEGUNDA pasada de este mismo
+    /// <c>FilaEmpujePct</c> (RETIRADO en el playtest 44) para los números
+    /// viejos/nuevos y la distancia medida al grifo de agua -- SEGUNDA pasada de este mismo
     /// playtest 14: la primera dejó 5 filas, demasiado alcance total una vez
     /// se deja la difusión trabajar minutos seguidos; recortado a 3 filas
     /// con caída más agresiva). Suelo de 1 raw/tick para que la fila más
@@ -270,10 +272,38 @@ namespace Alkahest.Game
     /// entrégala — el Frasco ahora conserva el frío, ver Game/Flask.cs) y
     /// "cristal" (azoth + semilla de cristal en FRÍO, ver Universe.Create).
     ///
-    /// LIMITACIÓN: igual que HeatPlate, escribe _sim.Grid.temp[] directamente.
-    /// TODO(ChaosAlchemy): canalizar por una API del sim de cara a netcode.
+    /// ---------------------------------------------------------------------
+    /// LA FÍSICA HONESTA (playtest 44, ronda nocturna, docs/CONTRATO_TERMICA.md
+    /// §2b) -- REHECHA LA EMISIÓN ENTERA, HELANDO RECALIBRADA
+    /// ---------------------------------------------------------------------
+    /// Mandato de Cesar: *"antes el frío irradiaba mucho y el calor
+    /// poquito"*. El <c>FilaEmpujePct</c>/<c>TempStepFresca</c>/
+    /// <c>TempStepHelando</c> del fix playtest 14 SE RETIRAN (ver el docblock
+    /// de "RETIRADO playtest 44" anclado más abajo): el empuje pasa a vivir
+    /// en <see cref="Sim.EmisionTermica"/> (Sim/SimStepper.cs), COMPARTIDO al
+    /// 100% con <see cref="HeatPlate"/> -- misma función, mismas constantes.
+    /// FRESCA sigue calibrada por seed (ver "FRESCA" arriba, sin cambios: el
+    /// contrato solo pide rebalancear el EXTREMO). <c>HelandoRaw</c> se
+    /// recalibra de raw 20 (-80 °C) a <c>CellGrid.CToRaw(-25)</c> (raw 47,
+    /// -26 °C real por el redondeo entero de la conversión) -- el motivo NO
+    /// es que -80 °C fuera "demasiado", es que el modelo Newton+falloff ya NO
+    /// depende del DESTINO final para decidir la VELOCIDAD (a diferencia del
+    /// paso fijo del fix playtest 14, donde <c>TempStepHelando</c> era la
+    /// única palanca de "más rápido"): el empuje ahora se autorregula por la
+    /// DIFERENCIA actual contra el objetivo, así que un destino menos extremo
+    /// llega EXACTAMENTE igual de rápido a la banda de congelación/
+    /// cristalización (el umbral real que importa, ver "PIEDRA HELADA..."
+    /// arriba) sin dejar la celda 100 raw por debajo de ambiente, que era lo
+    /// que obligaba al hold larguísimo de recuperación. La velocidad de
+    /// verdad ahora es SIMÉTRICA con ARDIENTE (mismo <see cref="Sim.
+    /// EmisionTermica.NewtonK"/>, mismo <see cref="Sim.EmisionTermica.
+    /// RadioFilas"/>) -- medido: ambas hierven/congelan agua a 3 celdas en
+    /// menos de 6 s (180 ticks), ver Sim.EmisionTermica para los números
+    /// exactos. Escrituras migradas a
+    /// <see cref="AlkahestSim.InyectarTemperatura"/> (Paint discipline,
+    /// cierra la deuda que este mismo docblock anotaba desde el playtest 4).
     /// </summary>
-    public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva, IMovible
+    public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
         private enum State { Off = 0, Fresca = 1, Helando = 2 }
 
@@ -282,59 +312,42 @@ namespace Alkahest.Game
         /// <summary>Radio de interacción con E (ESCALA COMPARTIDA con Dispenser/HeatPlate, ver ambos archivos).</summary>
         private const float ProximityRange = 3.2f;
 
-        private const byte HelandoRaw = 20; // ~-80 °C, extremo garantizado (ver doc de la clase, fix playtest 14).
-
-        /// <summary>Empuje por tick de FRESCA: moderado, el mismo valor que usaba el único estado antes del playtest 13.</summary>
-        private const int TempStepFresca = 5;
         /// <summary>
-        /// (fix playtest 14) Empuje por tick de HELANDO: más del doble que
-        /// FRESCA. Mismo destino final (<see cref="HelandoRaw"/>) que siempre
-        /// tuvo, pero al empujar más fuerte por tick cruza el umbral de
-        /// congelación/cristalización en MENOS ticks -- es la razón de ser de
-        /// HELANDO ahora que FRESCA ya cubre "lo alcanza" (ver doc de clase).
+        /// (RECALIBRADA playtest 44, docs/CONTRATO_TERMICA.md §2b, ver doc de
+        /// clase "LA FÍSICA HONESTA") ~-26 °C real (el redondeo entero de
+        /// <see cref="CellGrid.CToRaw"/> hace que "-25" pedido por el contrato
+        /// caiga en raw 47 = -26 °C). Antes raw 20 (-80 °C) -- ver el
+        /// docblock RETIRADO más abajo para el porqué del cambio.
         /// </summary>
-        private const int TempStepHelando = 12;
+        private const byte HelandoRaw = 47;
 
         /// <summary>
-        /// (fix playtest 14, SEGUNDA pasada: "el frío sigue llegando al
-        /// grifo") Perfil de caída del empuje térmico por fila de distancia
-        /// al aparato, en PORCENTAJE del empuje base del estado activo
-        /// (<see cref="TempStepFresca"/>/<see cref="TempStepHelando"/>).
-        /// Índice 0 = fila adyacente (100%, máximo empuje), cada índice
-        /// siguiente una fila más lejos y más débil; la longitud del array ES
-        /// el número de filas afectadas.
-        ///
-        /// NÚMEROS VIEJOS Y NUEVOS (medido contra Sim/SimLevelBuilder.cs, no
-        /// tocado): la primera pasada de este mismo playtest 14 sustituyó el
-        /// corte plano original (3 filas al 100%) por <c>{100,60,35,20,10}</c>
-        /// -- 5 filas, más "moderado alrededor" pero también MÁS LARGO que
-        /// las 3 originales, y el jugador reportó que el frío seguía
-        /// notándose donde no debería. Distancia real medida entre la fila
-        /// más cercana al grifo de AGUA que toca este aparato (x=39..84,
-        /// y=91) y la boquilla del grifo (Dispenser: <c>TapMountX(8) +
-        /// SpoutOffsetCells(5)=13</c>, <c>TapFirstY(62) - SpoutDropCells(2)
-        /// =60</c>): dx=39-13=26, dy=91-60=31, euclídea ≈40.5 celdas, manhattan
-        /// 57 -- ya lejísimos incluso con el perfil de 5 filas (que solo
-        /// llega a y=95, todavía a 35+ celdas de cualquier punto del grifo).
-        /// La influencia NUNCA tocó el grifo por vecindad directa (no hay
-        /// ninguna celda no-Empty que conecte la bandeja fría, en x=36..87,
-        /// con el pilar de grifos, en x=1..8 -- 27 columnas de aire vacío de
-        /// por medio a esa altura) -- pero SimStepper.DiffuseTemperature
-        /// (regla 9, NO TOCADO) no tiene un tope de alcance, así que cuanta
-        /// más energía térmica se inyecte en total por tick, más lejos se
-        /// nota su rastro con el tiempo. Recortado a <c>{100,45,15}</c> --
-        /// SOLO 3 filas (antes 5) y caída más agresiva: suma total del
-        /// perfil baja de 225 a 160 (-29%), y la fila más lejana pasa de
-        /// y+5 (10%) a y+3 (15%), casi la mitad de profundidad. Con esto la
-        /// influencia es inequívocamente LOCAL: se queda pegada a la bandeja,
-        /// nunca se extiende lo bastante ni dura lo bastante activa como para
-        /// que la difusión la arrastre 40 celdas más allá. Mismo criterio
-        /// aplicado IGUAL en HeatPlate.cs (mismo array duplicado a
-        /// propósito, mismos números viejo/nuevo, misma medición contra el
-        /// grifo -- ver esa clase para la distancia medida allí, mayor
-        /// todavía por estar la placa ígnea más lejos del banco de grifos).
+        /// (RETIRADO playtest 44, regla 15 de CLAUDE.md -- no se borra en
+        /// silencio) Hasta esta ronda, el empuje térmico de FRESCA/HELANDO
+        /// vivía en TRES piezas: paso base por estado (<c>TempStepFresca=5</c>,
+        /// <c>TempStepHelando=12</c> -- el "más del doble" que le daba a
+        /// HELANDO su única razón de ser tras el fix playtest 14, ver "PIEDRA
+        /// HELADA PARECE NO TENER USO" arriba) escalado por un perfil de
+        /// PORCENTAJES fijo por fila (<c>FilaEmpujePct = {100,45,15}</c>,
+        /// calibrado a ojo en el fix playtest 14 contra la distancia al
+        /// grifo, MISMO array que HeatPlate.cs). El paso nunca se frenaba
+        /// solo: empujaba a ritmo constante hasta CLAMPEAR contra el
+        /// objetivo. El contrato de esta ronda pide un modelo físico de
+        /// verdad (decaimiento continuo + empuje proporcional a la
+        /// diferencia, Newton de juguete) compartido EXACTAMENTE con
+        /// <see cref="HeatPlate"/> -- ahora vive en
+        /// <see cref="Sim.EmisionTermica"/> (Sim/SimStepper.cs), con las
+        /// mediciones que llevaron a las constantes finales en su propio
+        /// docblock. Con el modelo nuevo, "HELANDO empuja más fuerte que
+        /// FRESCA" ya NO hace falta como palanca de velocidad aparte: el
+        /// empuje por diferencia hace que CUALQUIER objetivo más lejos de
+        /// ambiente se acerque más rápido en términos absolutos de forma
+        /// automática (mismo <see cref="Sim.EmisionTermica.NewtonK"/> para
+        /// los dos estados) -- la velocidad relativa HELANDO&gt;FRESCA se
+        /// conserva SOLA, como propiedad emergente del modelo, no como un
+        /// paso hardcodeado distinto. Ver <see cref="ApplyColdTick"/>.
         /// </summary>
-        private static readonly int[] FilaEmpujePct = { 100, 45, 15 };
+        private const int RetiradoVerDocArriba = 0; // ancla del docblock de arriba a un miembro real (regla 15: no se borra en silencio, pero tampoco se deja un XML doc huérfano sin destino).
 
         /// <summary>
         /// (fix playtest 13) Margen de fiabilidad, en raw, entre FRESCA y el
@@ -654,55 +667,59 @@ namespace Alkahest.Game
 
         private byte TargetRaw() => _state == State.Helando ? HelandoRaw : _frescaRaw;
 
-        /// <summary>Empuje BASE por tick del estado activo, antes de aplicar el perfil de caída por fila (fix playtest 14, ver <see cref="FilaEmpujePct"/>).</summary>
-        private int TempStepBase() => _state == State.Helando ? TempStepHelando : TempStepFresca;
-
         /// <summary>
-        /// (fix playtest 14) Empuja la temperatura de las filas por encima del
-        /// aparato hacia <see cref="TargetRaw"/>, con un empuje por tick que
-        /// DECAE con la distancia a la piedra en vez de ser uniforme (ver
-        /// <see cref="FilaEmpujePct"/> y el bloque de doc de la clase). El
-        /// suelo de <c>Mathf.Max(1, ...)</c> garantiza que ninguna fila del
-        /// perfil quede completamente inerte por redondeo entero a 0.
+        /// (playtest 44, LA FÍSICA HONESTA) Empuja la temperatura de las
+        /// filas por encima de la piedra hacia <see cref="TargetRaw"/> con el
+        /// modelo COMPARTIDO de <see cref="Sim.EmisionTermica"/> (mismo
+        /// código que <see cref="HeatPlate.ApplyHeatTick"/>, ver su docblock
+        /// para las mediciones): footprint con caída cuadrática por distancia
+        /// + empuje por diferencia (Newton de juguete) en las primeras
+        /// <see cref="Sim.EmisionTermica.RadioFilas"/> filas, y COLLAR de
+        /// contención (<see cref="Sim.EmisionTermica.PasoCollar"/>) en las
+        /// <see cref="Sim.EmisionTermica.CollarFilas"/> filas siguientes para
+        /// cumplir el ±10°C a 12 celdas del contrato. Escribe por
+        /// <see cref="AlkahestSim.InyectarTemperatura"/> (Paint discipline).
         /// </summary>
         private void ApplyColdTick()
         {
             byte target = TargetRaw();
-            int stepBase = TempStepBase();
             var grid = _sim.Grid;
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+            int filasTotal = EmisionTermica.RadioFilas + EmisionTermica.CollarFilas;
 
             for (int x = _cellX0; x <= _cellX1; x++)
             {
-                for (int fila = 0; fila < FilaEmpujePct.Length; fila++)
+                for (int fila = 0; fila < filasTotal; fila++)
                 {
                     int y = _plateRow + fila + 1;
                     if (!CellGrid.InBounds(x, y)) continue;
                     int idx = CellGrid.Idx(x, y);
-                    int step = Mathf.Max(1, stepBase * FilaEmpujePct[fila] / 100);
                     int cur = grid.temp[idx];
-                    int next = cur > target ? Mathf.Max(target, cur - step) : Mathf.Min(target, cur + step);
-                    grid.temp[idx] = (byte)next;
-                    grid.WakeChunk(x, y, tick);
+                    int delta = fila < EmisionTermica.RadioFilas
+                        ? EmisionTermica.PasoFootprint(cur, target, fila, tick, x, y)
+                        : EmisionTermica.PasoCollar(cur);
+                    if (delta == 0) continue;
+                    int next = Mathf.Clamp(cur + delta, 0, 255);
+                    _sim.InyectarTemperatura(x, y, (byte)next);
                 }
             }
         }
 
         /// <summary>
-        /// (fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN") Tras
-        /// apagarse, sujeta SOLO la fila adyacente (índice 0 del perfil)
-        /// hacia <see cref="_lastActiveTarget"/> con un empuje mínimo
+        /// (fix playtest 14, ver doc de clase "ORDEN DE RECUPERACIÓN"; escritura
+        /// migrada a <see cref="AlkahestSim.InyectarTemperatura"/> en el
+        /// playtest 44) Tras apagarse, sujeta SOLO la fila adyacente hacia
+        /// <see cref="_lastActiveTarget"/> con un empuje mínimo
         /// (<see cref="HoldStepRaw"/>) durante <see cref="_holdTicksRestantes"/>
         /// ticks más. El clamp es el mismo patrón que <see cref="ApplyColdTick"/>:
         /// nunca deja pasar el objetivo, así que esto no sigue enfriando la
-        /// celda más allá de donde ya estaba, solo la MANTIENE mientras las
-        /// filas 1 y 2 (que no se tocan aquí) ya están volviendo a ambiente
+        /// celda más allá de donde ya estaba, solo la MANTIENE mientras el
+        /// resto del footprint (no tocado aquí) ya está volviendo a ambiente
         /// libremente por SimStepper.DiffuseTemperature.
         /// </summary>
         private void ApplyHoldTick()
         {
             var grid = _sim.Grid;
-            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
             int y = _plateRow + 1; // solo la fila adyacente.
 
             for (int x = _cellX0; x <= _cellX1; x++)
@@ -713,9 +730,32 @@ namespace Alkahest.Game
                 int next = cur > _lastActiveTarget
                     ? Mathf.Max(_lastActiveTarget, cur - HoldStepRaw)
                     : Mathf.Min(_lastActiveTarget, cur + HoldStepRaw);
-                grid.temp[idx] = (byte)next;
-                grid.WakeChunk(x, y, tick);
+                _sim.InyectarTemperatura(x, y, (byte)next);
             }
+        }
+
+        // ---------------------------------------------------------------
+        // IMaquinaUsableRemota (playtest 44, docs/CONTRATO_TERMICA.md §1/§2b,
+        // API congelada por el contrato de paridad playtest 43): UsarPorRed
+        // ejecuta EXACTAMENTE lo mismo que la E local -- literalmente
+        // CycleState(). EstadoVivoRed: Trabajando para cualquier estado
+        // activo (Fresca o Helando), LuzPlena SOLO para Helando -- el
+        // extremo de verdad, simétrico a FuegoEncendido/Ardiente de
+        // HeatPlate (bit distinto, ver EstadoVivoBits: LuzPlena es el bit
+        // que el contrato reservó para el extremo de ESTE aparato).
+        // ---------------------------------------------------------------
+        bool IMaquinaUsableRemota.UsarPorRed()
+        {
+            CycleState();
+            return true;
+        }
+
+        byte IMaquinaUsableRemota.EstadoVivoRed()
+        {
+            byte b = 0;
+            if (_state != State.Off) b |= EstadoVivoBits.Trabajando;
+            if (_state == State.Helando) b |= EstadoVivoBits.LuzPlena;
+            return b;
         }
 
         private void UpdateVisualTint()

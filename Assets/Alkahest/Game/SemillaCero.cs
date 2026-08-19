@@ -34,11 +34,21 @@ namespace Alkahest.Game
     ///     semillaCero.Init(_sim, knowledge, orderSystem);
     /// }
     /// </code>
-    /// Deliberadamente NO necesita una referencia a <see cref="NamingUi"/> ni a
-    /// <see cref="Flask"/> por Init: las resuelve solo, con el mismo patrón defensivo
-    /// de reintento en Update que ya usa <c>AlkahestGameBootstrap.Start/Update</c> para
+    /// Deliberadamente NO necesita una referencia a <see cref="Flask"/> por Init: la
+    /// resuelve solo si algún día hiciera falta, con el mismo patrón defensivo de
+    /// reintento en Update que ya usa <c>AlkahestGameBootstrap.Start/Update</c> para
     /// encontrar <see cref="AlkahestSim"/> -- así el orden de creación entre sistemas
     /// nunca puede romper este enganche.
+    ///
+    /// (Encargo Q, ronda "LA QUÍMICA CON NOMBRE REAL") IDEA DESCARTADA -- YA NO
+    /// depende de <see cref="NamingUi"/> en absoluto: el beat 3 forzaba antes su
+    /// apertura (<c>AbrirPorElMaestro</c>) para exigir un rito de bautizo. Con
+    /// <see cref="Game.SubstanceKnowledge.NombreDe"/> devolviendo el nombre REAL
+    /// para todo matId con identidad (<see cref="Alkahest.Sim.Universe.TieneIdentidadReal"/>)
+    /// en Semilla Cero, el beat 3 pasó de "exigir que inventes un nombre" a "el
+    /// Maestro te enseña el nombre real" -- una línea hablada, sin campo de texto,
+    /// sin abrir ningún panel. Ver <see cref="EntrarNombreSeGana"/>. No reimplantar
+    /// el forzado de NamingUi aquí sin releer docs/DISENO_QUIMICA_REAL.md §4.
     ///
     /// PEDIDOS SCRIPTADOS: en vez de <see cref="OrderSystem"/> generando nada por su
     /// cuenta, esta clase encola UN pedido activo cada vez
@@ -60,9 +70,14 @@ namespace Alkahest.Game
         {
             /// <summary>Beat 1: esperando la primera hornada a fuego propio (sale la primera arena).</summary>
             Milagro,
-            /// <summary>Beat 2: "Tráeme 25 de ese... 'X' tuyo" -- con el nombre PROVISIONAL.</summary>
+            /// <summary>Beat 2: "Tráeme 25 de ese... 'X' tuyo" -- con el nombre REAL (Encargo Q; antes provisional).</summary>
             PrimeraPeticion,
-            /// <summary>Beat 3: "Ponle nombre" (rito forzado) y, ya bautizado, el pedido continúa (15 más).</summary>
+            /// <summary>
+            /// (Encargo Q, REESCRITO) Beat 3: el Maestro ENSEÑA el nombre real ("Eso es
+            /// ARENA DE SÍLICE, aprendiz. Apúntalo.") -- ya no un rito de bautizo
+            /// forzado; el pedido continúa AL INSTANTE con el nombre real (15 más). Ver
+            /// <see cref="EntrarNombreSeGana"/>.
+            /// </summary>
             NombreSeGana,
             /// <summary>Beat 4: "más tostado" -- la trampa de la banda de calcinación estrecha, ceniza, nota forense, reintento.</summary>
             FracasoTostado,
@@ -72,6 +87,15 @@ namespace Alkahest.Game
             PreguntaColumna,
             /// <summary>Beat 5.3: "¿Esto CONDUCE?" -- destapa el banco de chispa.</summary>
             PreguntaChispa,
+            /// <summary>
+            /// (CONTRATO_TERMICA.md §3c, ENCARGO I, playtest 44) Beat 5.3½:
+            /// "Todo lo tuestas. ¿Y si lo ENFRÍAS?" -- destapa la alcoba fría
+            /// (SimLevelBuilder.SalaFria). Idea TEMPERATURA-FRÍA: completa la
+            /// idea "temperatura" con su mitad fría (enmienda 4, "las 4+1").
+            /// Nace ENTRE PreguntaChispa y PreguntaEnsayo por mandato textual
+            /// del contrato -- el orden de las demás preguntas no cambia.
+            /// </summary>
+            PreguntaFrio,
             /// <summary>Beat 5.4: "¿DE VERDAD aguanta?" -- destapa el Ensayo, cierra el círculo del beat 4.</summary>
             PreguntaEnsayo,
             /// <summary>Beat 6: "No necesito nada más por hoy... Pero queda limo." Panel vacío. Solo queda contar la autonomía.</summary>
@@ -85,6 +109,8 @@ namespace Alkahest.Game
         private const int SalaColumna = 1;
         private const int SalaChispa = 2;
         private const int SalaEnsayo = 3;
+        /// <summary>(CONTRATO_TERMICA.md §3c) Quinta sala, sumada por el ENCARGO I este round -- mismo valor que <see cref="SimLevelBuilder.SalaFria"/>.</summary>
+        private const int SalaFria = 4;
 
         // -----------------------------------------------------------------
         // CANTIDADES Y RECOMPENSAS DEL ARCO. El contrato fija el número exacto SOLO
@@ -100,6 +126,9 @@ namespace Alkahest.Game
         private const int Beat5CantidadColumna = 10;
         private const int Beat5Recompensa = 20;
         private const int Beat5RecompensaEnsayo = 25;
+        /// <summary>(CONTRATO_TERMICA.md §3c) Cantidad EXACTA fijada por el contrato ("cantidad 8"); recompensa por orden de magnitud con sus hermanas Prensa/Columna (mismo tipo de pedido: Guiado, se resuelve en la Tolva).</summary>
+        private const int Beat5CantidadFrio = 8;
+        private const int Beat5RecompensaFrio = 20;
 
         /// <summary>Cadencia de sondeo de TODA la máquina de estados (discovery/pedidos/autonomía) -- nunca por frame.</summary>
         private const float SondeoSeg = 0.4f;
@@ -107,8 +136,10 @@ namespace Alkahest.Game
         private AlkahestSim _sim;
         private SubstanceKnowledge _knowledge;
         private OrderSystem _orders;
-        private NamingUi _namingUi;
-        private bool _forzarNamingUiPendiente;
+        // (Encargo Q) `_namingUi`/`_forzarNamingUiPendiente` RETIRADOS: vivían aquí
+        // solo para forzar la apertura de NamingUi en la transición beat 2→3 (ver el
+        // docblock de la clase). El beat 3 reescrito ya no abre ningún panel -- el
+        // Maestro enseña el nombre real con una línea hablada (MaestroDice), nada más.
 
         private Beat _beat = Beat.Milagro;
         /// <summary>La sustancia del arco entero: el Polvo (estado natal) de la base que ganó el solver de M, fijada en cuanto se descubre (beat 1 → 2).</summary>
@@ -116,10 +147,18 @@ namespace Alkahest.Game
         private int _baseIdx;
         private byte _calcinadoPrincipal = MaterialId.Empty;
         private byte _compactoPrincipal = MaterialId.Empty;
-        /// <summary>Beat 3 tiene dos fases (exigir nombre -&gt; continuar con el nombre puesto); ver SondeoNombreSeGana.</summary>
-        private bool _nombreFaseB;
         /// <summary>Edge-trigger: el comentario del Maestro sobre la ceniza solo se dice una vez por partida.</summary>
         private bool _cenizaComentada;
+
+        // -----------------------------------------------------------------
+        // (CONTRATO_TERMICA.md §3c, ENCARGO I) BEAT DEL FRÍO: rastreo del
+        // hielo derretido -- ver el docblock de SondeoDerretidoHielo para el
+        // porqué de la heurística (no hay SimEventType de fusión hoy).
+        // -----------------------------------------------------------------
+        /// <summary>Edge-trigger: la línea de "se te derritió" solo se dice una vez por partida, igual que la ceniza del beat 4.</summary>
+        private bool _derretidoComentado;
+        private int _hieloEnZonaFriaAntes;
+        private int _progresoPedidoFrioAntes;
 
         private float _sondeoAcc;
 
@@ -178,16 +217,6 @@ namespace Alkahest.Game
             if (_sim == null || _knowledge == null || _orders == null) return; // gate de escena, o Init aún no llamado.
             if (DayCycle.InputLocked) return;
 
-            // Mismo patrón defensivo de reintento por Update que usa
-            // AlkahestGameBootstrap para encontrar su AlkahestSim: NamingUi puede
-            // spawnearse en otro frame que este componente.
-            if (_namingUi == null) _namingUi = FindAnyObjectByType<NamingUi>();
-            if (_forzarNamingUiPendiente && _namingUi != null)
-            {
-                _forzarNamingUiPendiente = false;
-                _namingUi.AbrirPorElMaestro(_sustanciaPrincipal);
-            }
-
             _sondeoAcc += Time.deltaTime;
             if (_sondeoAcc < SondeoSeg) return;
             _sondeoAcc -= SondeoSeg;
@@ -203,6 +232,7 @@ namespace Alkahest.Game
                 case Beat.PreguntaPrensa: SondeoPreguntaPrensa(); break;
                 case Beat.PreguntaColumna: SondeoPreguntaColumna(); break;
                 case Beat.PreguntaChispa: SondeoPreguntaChispa(); break;
+                case Beat.PreguntaFrio: SondeoPreguntaFrio(); break;
                 case Beat.PreguntaEnsayo: SondeoPreguntaEnsayo(); break;
                 case Beat.FinalAbierto: break; // nada más que hacer -- SondeoAutonomia ya corrió arriba.
             }
@@ -261,39 +291,36 @@ namespace Alkahest.Game
         private void SondeoPrimeraPeticion()
         {
             if (!PedidoActivoCompletado()) return;
-
-            _beat = Beat.NombreSeGana;
-            _nombreFaseB = false;
-            string nombre = _knowledge.NombreDe(_sustanciaPrincipal);
-            MaestroDice("No pienso seguir diciendo \"" + nombre + "\". Ponle nombre.", 6f);
-
-            // (Paralelo del contrato §1 beat 3): si el jugador YA manipuló la sustancia
-            // 3+ veces, el rótulo "T -- bautizar" discreto ya se le venía ofreciendo (ver
-            // SubstanceKnowledge.ManipulacionesParaBautizo) -- este beat lo hace
-            // OBLIGATORIO con teatro de todas formas, forzando el rito.
-            if (_namingUi != null) _namingUi.AbrirPorElMaestro(_sustanciaPrincipal);
-            else _forzarNamingUiPendiente = true;
-
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 2→3: el nombre se gana -- exige bautizo de \"" + nombre + "\".");
+            EntrarNombreSeGana();
         }
 
         // =================================================================
-        // BEAT 3 — EL NOMBRE SE GANA (dos fases: exigir, luego continuar).
+        // BEAT 3 — EL NOMBRE SE GANA (Encargo Q, LA QUÍMICA CON NOMBRE REAL:
+        // REESCRITO, docs/DISENO_QUIMICA_REAL.md §4: "el Maestro ya no exige
+        // inventar un nombre -- te enseña el real"). ANTES (playtest 40): dos
+        // fases -- exigir el rito de bautizo (forzando NamingUi) y ESPERAR a
+        // que <c>EstaBautizado</c> se vuelva true antes de poder continuar el
+        // pedido. AHORA: con <see cref="SubstanceKnowledge.NombreDe"/> ya
+        // devolviendo el nombre REAL (<see cref="Alkahest.Sim.Universe.TieneIdentidadReal"/>)
+        // y <c>NecesitaBautizo</c> siendo false para ese mismo matId en
+        // Semilla Cero (ver el docblock de esa clase), no hay NADA que
+        // esperar: el nombre YA está puesto, así que una sola fase basta --
+        // el Maestro dice la línea y el pedido se encola en el mismo
+        // instante, sin abrir ningún panel.
         // =================================================================
+        private void EntrarNombreSeGana()
+        {
+            _beat = Beat.NombreSeGana;
+            string nombre = _knowledge.NombreDe(_sustanciaPrincipal); // ya el nombre REAL (Encargo Q).
+            MaestroDice("Eso es " + nombre.ToUpperInvariant() + ", aprendiz. Apúntalo.", 6f);
+
+            string texto = "Ahora que sabes cómo se llama: tráeme " + Beat3Cantidad + " de tu \"" + nombre + "\".";
+            _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat3Cantidad, Beat3Recompensa, texto, targetMat: _sustanciaPrincipal);
+            Debug.Log("[ChaosAlchemy][SemillaCero] beat 2→3: el Maestro enseña el nombre real (\"" + nombre + "\") -- el pedido continúa: " + texto);
+        }
+
         private void SondeoNombreSeGana()
         {
-            if (!_nombreFaseB)
-            {
-                if (!_knowledge.EstaBautizado(_sustanciaPrincipal)) return; // sigue esperando el rito (T sigue funcionando aunque el forzado se cerrara).
-
-                _nombreFaseB = true;
-                string nombre = _knowledge.NombreDe(_sustanciaPrincipal);
-                string texto = "Ahora que ya tiene nombre: tráeme " + Beat3Cantidad + " de tu \"" + nombre + "\".";
-                _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat3Cantidad, Beat3Recompensa, texto, targetMat: _sustanciaPrincipal);
-                Debug.Log("[ChaosAlchemy][SemillaCero] beat 3: bautizado \"" + nombre + "\" -- el pedido continúa: " + texto);
-                return;
-            }
-
             if (!PedidoActivoCompletado()) return;
             EntrarFracasoTostado();
         }
@@ -336,7 +363,9 @@ namespace Alkahest.Game
         }
 
         // =================================================================
-        // BEAT 5 — LAS CUATRO PREGUNTAS (comprensión mayor).
+        // BEAT 5 — LAS PREGUNTAS (comprensión mayor). Eran cuatro; el
+        // CONTRATO_TERMICA.md §3c (playtest 44, ENCARGO I) suma una quinta
+        // ("¿Y si lo ENFRÍAS?") entre Chispa y Ensayo -- ver EntrarPreguntaFrio.
         // =================================================================
         private void EntrarPreguntaPrensa()
         {
@@ -402,7 +431,109 @@ namespace Alkahest.Game
                     _knowledge.MaxConductividadObservada == 2 ? 2f : 1f);
 
             if (!PedidoActivoCompletado()) return;
+            EntrarPreguntaFrio();
+        }
+
+        // =================================================================
+        // (CONTRATO_TERMICA.md §3c, ENCARGO I, playtest 44) BEAT 5.3½ — LA
+        // PREGUNTA DEL FRÍO. Entre PreguntaChispa y PreguntaEnsayo por
+        // mandato textual del contrato: "esto COMPLETA la idea 'temperatura'
+        // con su mitad fría" (enmienda 4, las 4+1).
+        // =================================================================
+        private void EntrarPreguntaFrio()
+        {
+            _beat = Beat.PreguntaFrio;
+            SimLevelBuilder.DestaparSala(_sim, SalaFria);
+
+            // (decisión de I) El sitio elegido para la alcoba fría
+            // (Sim/SimLevelBuilder.cs, constantes AlcobaFria*) es una QUINTA
+            // sala propia, tallada en frío desde el arranque (como las otras
+            // cuatro) y tapiada hasta este momento -- nunca reutiliza una
+            // sala YA abierta, así que el caso "obra tallada en caliente +
+            // aviso" que contempla el contrato (§3c, "si su sitio queda en
+            // sala ya abierta") NO aplica aquí: no hace falta ese camino.
+            SondeoDerretidoHielo(); // arranca el rastreo desde cero -- ver su docblock.
+            _derretidoComentado = false;
+
+            MaestroDice("Todo lo tuestas. ¿Y si lo ENFRÍAS?", 6f);
+            _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat5CantidadFrio, Beat5RecompensaFrio,
+                "Tráeme HIELO — y apúrate, que el frío no espera a nadie.", targetMat: MaterialId.Ice);
+            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.3→5.3½: se destapa la alcoba fría -- idea TEMPERATURA-FRÍA (completa la mitad caliente del beat 4).");
+        }
+
+        private void SondeoPreguntaFrio()
+        {
+            SondeoDerretidoHielo();
+
+            if (!PedidoActivoCompletado()) return;
             EntrarPreguntaEnsayo();
+        }
+
+        /// <summary>
+        /// APROXIMACIÓN DOCUMENTADA (decisión de I, fuera de contrato
+        /// estricto): no existe hoy un <see cref="Alkahest.Sim.SimEventType"/>
+        /// para la fusión (<c>Sim/SimStepper.cs::ApplyPhase</c>, rama
+        /// <c>meltsAt</c>, transforma la celda con <c>Transform(idx,
+        /// def.meltsInto)</c> SIN pasar por <c>PushEvent</c> -- a diferencia
+        /// de Freeze/Boil, que sí lo hacen; ver ese archivo, del ENCARGO T
+        /// este round y fuera de mi alcance) así que
+        /// <see cref="SubstanceKnowledge"/> no tiene forma de "presenciar" un
+        /// derretido como sí presencia la ceniza
+        /// (<see cref="SubstanceKnowledge.FueDestruidoAAsh"/>). Se aproxima
+        /// contando el hielo (<see cref="MaterialId.Ice"/>) presente en la
+        /// alcoba fría (<see cref="SimLevelBuilder.AlcobaFriaX0"/>/X1, zona
+        /// pequeña y acotada -- nunca un barrido del mapa entero) cada
+        /// sondeo (0.4s, jamás por frame): si la cantidad BAJA sin que el
+        /// pedido activo haya recibido progreso nuevo en la misma ventana,
+        /// la explicación con diferencia más probable es que se derritió
+        /// solo (la única otra forma de que baje es que el propio jugador lo
+        /// aspire -- y aspirarlo SÍ mueve el progreso del pedido). Falso
+        /// positivo posible pero improbable (p.ej. tallar el hielo con el
+        /// Cincel y tirarlo sin entregarlo) -- aceptable para una línea de
+        /// sabor en un beat scriptado. DEUDA para Fable: mover esto a un
+        /// <c>SimEventType.Melt</c> real + <c>WitnessFlags</c> propio en una
+        /// ronda con <c>Sim/SimStepper.cs</c>/<c>Game/SubstanceKnowledge.cs</c>
+        /// en alcance de este encargo.
+        /// </summary>
+        private void SondeoDerretidoHielo()
+        {
+            int hieloAhora = ContarHieloEnZonaFria();
+            int progresoAhora = _orders.ActiveOrders.Count > 0 ? _orders.ActiveOrders[0].Progreso : 0;
+
+            if (!_derretidoComentado && _hieloEnZonaFriaAntes > 0 &&
+                hieloAhora < _hieloEnZonaFriaAntes && progresoAhora == _progresoPedidoFrioAntes)
+            {
+                _derretidoComentado = true;
+                // (contrato §3c, textual) "el Maestro NO se burla dos veces igual: una línea... edge-trigger como la ceniza del beat 4".
+                MaestroDice("...se te derritió. El frío es paciencia Y PRISA.", 7f);
+                Debug.Log("[ChaosAlchemy][SemillaCero] beat frío: el hielo se derritió antes de llegar a la Tolva -- el Maestro comenta, una sola vez.");
+            }
+
+            _hieloEnZonaFriaAntes = hieloAhora;
+            _progresoPedidoFrioAntes = progresoAhora;
+        }
+
+        /// <summary>Barrido ACOTADO (nunca el mapa entero) del interior de la alcoba fría -- ver el docblock de <see cref="SondeoDerretidoHielo"/>. ~6x8 celdas, sondeado a 2.5Hz: coste despreciable frente al resto de esta clase.</summary>
+        private int ContarHieloEnZonaFria()
+        {
+            if (_sim == null || _sim.Grid == null) return 0;
+
+            int baseY = SimLevelBuilder.BaseYDeEstacion(SimLevelBuilder.AlcobaFriaX0);
+            int x0 = SimLevelBuilder.AlcobaFriaX0 + 1;
+            int x1 = SimLevelBuilder.AlcobaFriaX1 - 1;
+            int y0 = baseY + 1;
+            int y1 = baseY + SimLevelBuilder.AlcobaFriaMuroAlto;
+
+            var grid = _sim.Grid;
+            int n = 0;
+            for (int y = y0; y <= y1; y++)
+            {
+                for (int x = x0; x <= x1; x++)
+                {
+                    if (CellGrid.InBounds(x, y) && grid.GetMat(x, y) == MaterialId.Ice) n++;
+                }
+            }
+            return n;
         }
 
         private void EntrarPreguntaEnsayo()
