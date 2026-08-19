@@ -300,7 +300,13 @@ namespace Alkahest.Dev
                 byte matId = grid.GetMat(idx);
                 var def = _sim.Universe.Get(matId);
                 int c = CellGrid.RawToC(grid.temp[idx]);
-                GUILayout.Label($"Celda ({_hoverCell.x},{_hoverCell.y}): {def.devName} [id {matId}]  {c}°C  aux={grid.aux[idx]}");
+                // (playtest 43, diagnóstico del "bedrock que no se puede
+                // quitar") El sufijo "· OBRA" delata que la celda está
+                // dentro de un rect de SimLevelBuilder.ObraDelTaller (lo que
+                // el cincel respeta): si un "resto imborrable" NO lo lleva,
+                // la causa es otra y este dato lo dice al instante.
+                string obra = SimLevelBuilder.EsObraDelTaller(_hoverCell.x, _hoverCell.y) ? "  · OBRA" : "";
+                GUILayout.Label($"Celda ({_hoverCell.x},{_hoverCell.y}): {def.devName} [id {matId}]  {c}°C  aux={grid.aux[idx]}{obra}");
             }
             else
             {

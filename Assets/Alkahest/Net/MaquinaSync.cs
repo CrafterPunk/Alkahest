@@ -145,6 +145,18 @@ namespace Alkahest.Net
             public float tamanoX;
             public float tamanoY;
 
+            /// <summary>
+            /// (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §1/§2b) EL ESTADO
+            /// VIVO replicado -- bits en <see cref="EstadoVivoBits"/>. Solo
+            /// tiene sentido para las 7 estaciones que implementan
+            /// <see cref="IMaquinaUsableRemota"/> (Balda/Anclaje/Rack/Pila se
+            /// quedan siempre en 0, ver <see cref="SondearEstadoVivo"/>).
+            /// Escrito SOLO por el servidor, igual que el resto de la
+            /// entrada -- el sondeo (<see cref="SondearEstadoVivo"/>) es el
+            /// único escritor.
+            /// </summary>
+            public byte estadoVivo;
+
             public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
             {
                 serializer.SerializeValue(ref tipo);
@@ -155,12 +167,33 @@ namespace Alkahest.Net
                 serializer.SerializeValue(ref centroY);
                 serializer.SerializeValue(ref tamanoX);
                 serializer.SerializeValue(ref tamanoY);
+                serializer.SerializeValue(ref estadoVivo);
             }
 
             public bool Equals(EntradaMaquina o) =>
                 tipo == o.tipo && indice == o.indice && anclaX == o.anclaX && anclaY == o.anclaY &&
-                centroX == o.centroX && centroY == o.centroY && tamanoX == o.tamanoX && tamanoY == o.tamanoY;
+                centroX == o.centroX && centroY == o.centroY && tamanoX == o.tamanoX && tamanoY == o.tamanoY &&
+                estadoVivo == o.estadoVivo;
         }
+
+        /// <summary>
+        /// (ENCARGO N, playtest 43) Evento estático disparado EN AMBOS LADOS
+        /// cuando cambia el <see cref="EntradaMaquina.estadoVivo"/> de una
+        /// entrada del registro -- API congelada del contrato §1, la
+        /// consume el ENCARGO A (audio del invitado) para disparar sus
+        /// one-shots en las transiciones. En el anfitrión lo dispara
+        /// <see cref="SondearEstadoVivo"/> justo al escribir el
+        /// `NetworkList`; en el cliente lo dispara
+        /// <see cref="MaquinaReplica.ActualizarDesdeRegistro"/> vía
+        /// <see cref="NotificarCambioEstado"/> (un evento solo se puede
+        /// invocar desde dentro de la clase que lo declara -- este método
+        /// `internal` es la puerta para el otro archivo de este mismo
+        /// encargo, mismo ensamblado, ver Alkahest.Runtime.asmdef).
+        /// </summary>
+        public static event System.Action<byte, byte, byte, byte> AlCambiarEstadoMaquina;
+
+        internal static void NotificarCambioEstado(byte tipo, byte indice, byte antes, byte ahora) =>
+            AlCambiarEstadoMaquina?.Invoke(tipo, indice, antes, ahora);
 
         /// <summary>
         /// DUDA-API (única de este archivo, en el mismo espíritu que
@@ -220,6 +253,19 @@ namespace Alkahest.Net
 
         private const float IntervaloSondeoSeg = 0.5f;
         private float _acumuladorSondeo;
+
+        /// <summary>
+        /// (ENCARGO N, playtest 43) Sondeo del ESTADO VIVO -- ~4Hz, el
+        /// contrato §2b pide "jamás por frame" y da la cadencia exacta.
+        /// Acumulador PROPIO, independiente del de posición (0.5s): el
+        /// estado vivo (hornada en curso, brasero ardiendo...) cambia mucho
+        /// más rápido que la posición de un aparato (que solo cambia por
+        /// mudanza), así que compartir un único acumulador habría forzado a
+        /// elegir entre "posición lenta y de sobra" o "estado a 2Hz", y
+        /// ninguna de las dos cadencias es la que pide cada dato.
+        /// </summary>
+        private const float IntervaloEstadoSeg = 0.25f;
+        private float _acumuladorEstado;
 
         // ---- CLIENTE: las réplicas ------------------------------------------
 
@@ -286,10 +332,22 @@ namespace Alkahest.Net
                 return; // hasta que el escaneo tenga éxito no hay nada que sondear.
             }
 
+            // (ENCARGO N, playtest 43) DOS acumuladores INDEPENDIENTES -- ver
+            // el docblock de _acumuladorEstado para el porqué de no compartir
+            // uno solo con la posición.
             _acumuladorSondeo += Time.deltaTime;
-            if (_acumuladorSondeo < IntervaloSondeoSeg) return;
-            _acumuladorSondeo -= IntervaloSondeoSeg; // resta, no reset a 0: evita deriva si un frame tarda más que el intervalo.
-            SondearCambiosDePosicion();
+            if (_acumuladorSondeo >= IntervaloSondeoSeg)
+            {
+                _acumuladorSondeo -= IntervaloSondeoSeg; // resta, no reset a 0: evita deriva si un frame tarda más que el intervalo.
+                SondearCambiosDePosicion();
+            }
+
+            _acumuladorEstado += Time.deltaTime;
+            if (_acumuladorEstado >= IntervaloEstadoSeg)
+            {
+                _acumuladorEstado -= IntervaloEstadoSeg;
+                SondearEstadoVivo();
+            }
         }
 
         // =================================================================
@@ -395,12 +453,23 @@ namespace Alkahest.Net
             _bloqueos.Clear();
             for (int i = 0; i < _fuentes.Count; i++)
             {
-                _registro.Add(ConstruirEntrada(_fuentes[i]));
+                _registro.Add(ConstruirEntrada(_fuentes[i], 0)); // estadoVivo=0: el primer sondeo (SondearEstadoVivo) lo pone al día en ≤0.25s.
                 _bloqueos.Add(SinBloqueo); // nace libre -- ver el docblock de _bloqueos.
             }
         }
 
-        private static EntradaMaquina ConstruirEntrada(Fuente f)
+        /// <summary>
+        /// (ENCARGO N, playtest 43) `estadoVivo` viaja como parámetro EXPLÍCITO
+        /// en vez de leerse de `f` porque <see cref="Fuente"/> no lo guarda
+        /// (el estado vivo no participa del sondeo de POSICIÓN, ver
+        /// <see cref="SondearEstadoVivo"/>, que es quien de verdad lo escribe)
+        /// -- los llamantes que reconstruyen una entrada por un cambio de
+        /// posición (<see cref="SondearCambiosDePosicion"/>,
+        /// <see cref="SolicitarMudanzaRpc"/>) tienen que PRESERVAR el último
+        /// estado conocido pasándolo aquí, o una mudanza borraría en silencio
+        /// "hornada en curso" del registro replicado.
+        /// </summary>
+        private static EntradaMaquina ConstruirEntrada(Fuente f, byte estadoVivo)
         {
             var ancla = f.movible.AnclaCelda;
             var centro = f.movible.CentroMundo;
@@ -415,7 +484,56 @@ namespace Alkahest.Net
                 centroY = centro.y,
                 tamanoX = tamano.x,
                 tamanoY = tamano.y,
+                estadoVivo = estadoVivo,
             };
+        }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43) ANFITRIÓN: sondeo del ESTADO VIVO (~4Hz,
+        // acumulador -- ver IntervaloEstadoSeg). Solo escribe al registro
+        // cuando el byte CAMBIA (regla dura del contrato §2b): un
+        // NetworkList.Value gratis en el caso común (nada cambió) es la
+        // misma disciplina que ya usa SondearCambiosDePosicion.
+        // =================================================================
+        private void SondearEstadoVivo()
+        {
+            for (int i = 0; i < _fuentes.Count && i < _registro.Count; i++)
+            {
+                // Balda/Anclaje/Rack/Pila (mobiliario, no de las 7 del
+                // contrato) no implementan la interfaz -- se quedan en 0
+                // para siempre, sin coste: un solo `as` por fuente, no una
+                // lista aparte que mantener en paralelo.
+                if (!(_fuentes[i].movible is IMaquinaUsableRemota usable)) continue;
+
+                byte antes = _registro[i].estadoVivo;
+                byte ahora = usable.EstadoVivoRed();
+                if (ahora == antes) continue;
+
+                var entrada = _registro[i];
+                entrada.estadoVivo = ahora;
+                _registro[i] = entrada; // dispara NetworkList.Value -> réplicas del invitado.
+
+                NotificarCambioEstado(entrada.tipo, entrada.indice, antes, ahora); // §1: EN AMBOS LADOS -- este es el lado anfitrión.
+            }
+        }
+
+        /// <summary>
+        /// (ENCARGO N, playtest 43) Lectura pública del estado vivo -- API
+        /// congelada del contrato §1, "válido en los dos lados". En el
+        /// anfitrión lee directamente del registro que él mismo escribe; en
+        /// el invitado lee la copia replicada por el NetworkList -- el mismo
+        /// código sirve para ambos porque <see cref="_registro"/> es legible
+        /// (readPerm Everyone) en los dos.
+        /// </summary>
+        public static bool TryGetEstado(byte tipo, byte indice, out byte estado)
+        {
+            estado = 0;
+            var s = Instancia;
+            if (s == null || !s.IsSpawned) return false;
+            int i = s.BuscarIndiceRegistro(tipo, indice);
+            if (i < 0 || i >= s._registro.Count) return false;
+            estado = s._registro[i].estadoVivo;
+            return true;
         }
 
         // =================================================================
@@ -435,7 +553,8 @@ namespace Alkahest.Net
                 f.anclaAnterior = anclaActual;
                 _fuentes[i] = f; // struct: hay que reescribir el elemento de la lista.
 
-                if (i < _registro.Count) _registro[i] = ConstruirEntrada(f); // dispara la réplica en todos los clientes.
+                // (ENCARGO N) preserva el estadoVivo ya conocido -- este sondeo es de POSICIÓN, no de estado.
+                if (i < _registro.Count) _registro[i] = ConstruirEntrada(f, _registro[i].estadoVivo); // dispara la réplica en todos los clientes.
             }
         }
 
@@ -498,7 +617,8 @@ namespace Alkahest.Net
             // como una réplica rota, no como una réplica lenta.
             f.anclaAnterior = anclaCandidata;
             _fuentes[i] = f;
-            if (i < _registro.Count) _registro[i] = ConstruirEntrada(f);
+            // (ENCARGO N) preserva el estadoVivo ya conocido -- una mudanza no cierra ninguna hornada en curso.
+            if (i < _registro.Count) _registro[i] = ConstruirEntrada(f, _registro[i].estadoVivo);
         }
 
         private int BuscarFuente(byte tipo, byte indice)
@@ -551,6 +671,90 @@ namespace Alkahest.Net
             var s = Instancia;
             if (s == null || !s.IsSpawned || s.IsServer) return;
             s.SolicitarMudanzaRpc(tipo, indice, (ushort)Mathf.Clamp(nuevaAncla.x, 0, ushort.MaxValue), (ushort)Mathf.Clamp(nuevaAncla.y, 0, ushort.MaxValue), s.NetworkManager.LocalClientId);
+        }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a) E REMOTO: EL
+        // INVITADO PIDE USAR UNA MÁQUINA
+        // =================================================================
+
+        /// <summary>
+        /// Radio de validación de cordura del servidor -- "generoso, anti-
+        /// teleuso, no precisión de píxel" (contrato §2a). Bastante por
+        /// encima de cualquier `RangoFoco` real de las siete estaciones
+        /// (2.6..4.0 celdas, ver sus archivos de Game/): esto no reemplaza el
+        /// filtro de foco del invitado (que ya solo deja pulsar E cerca, ver
+        /// MaquinaReplica), solo descarta el caso "un cliente llama al Rpc a
+        /// mano sin estar ni remotamente cerca" -- un margen de sobra evita
+        /// falsos rechazos mientras el avatar remoto todavía converge por
+        /// Lerp (ver AprendizNet) o si la réplica local iba unos frames por
+        /// delante de la posición real replicada del propio invitado.
+        /// </summary>
+        private const float RadioUsoRemotoCeldas = 14f;
+
+        /// <summary>
+        /// El invitado pide ejecutar el E de la máquina (tipo,indice). Mismo
+        /// idioma Rpc que <see cref="SolicitarMudanzaRpc"/>
+        /// (InvokePermission=Everyone: el dueño de este objeto de escena es
+        /// el servidor). Autoridad completa del lado del servidor:
+        /// <see cref="BuscarFuente"/> encuentra la máquina REAL, se valida la
+        /// cercanía del avatar solicitante (anti-teleuso) y solo entonces se
+        /// invoca <see cref="IMaquinaUsableRemota.UsarPorRed"/> -- exactamente
+        /// la misma acción que dispararía el E local de esa máquina, sin el
+        /// chequeo de proximidad del ANFITRIÓN (que no aplica aquí, ver el
+        /// docblock de <see cref="IMaquinaUsableRemota"/>).
+        /// </summary>
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        private void SolicitarUsoServerRpc(byte tipo, byte indice, ulong clienteId)
+        {
+            if (!IsServer) return;
+
+            int i = BuscarFuente(tipo, indice);
+            if (i < 0) return;
+
+            if (!(_fuentes[i].movible is IMaquinaUsableRemota usable)) return; // tipo sin gancho remoto (mobiliario): nada que hacer.
+
+            if (!AvatarCercaDe(clienteId, _fuentes[i].movible.CentroMundo, RadioUsoRemotoCeldas)) return;
+
+            usable.UsarPorRed(); // el resultado (true/false) no viaja de vuelta: el propio estadoVivo replicado (§2b) y la chapa del invitado ya cuentan qué pasó, sin un segundo camino de red para un simple "no procedía".
+        }
+
+        /// <summary>
+        /// ¿El avatar de `clienteId` está a ≤`radioCeldas` de `centroMundo`?
+        /// <see cref="AprendizNet.Todos"/> es el mismo registro que ya usa
+        /// Net/SimSync.cs para su propia pasada de prioridad por avatar (ver
+        /// `ChunkCercaDeAlgunAvatar`) -- mismo criterio de "cerca de quién",
+        /// aquí filtrado a UN avatar concreto en vez de "cualquiera". Un
+        /// `clienteId` que no resuelve a ningún avatar vivo (desconexión a
+        /// mitad de vuelo) rechaza por precaución: sin avatar no hay cordura
+        /// que validar.
+        /// </summary>
+        private static bool AvatarCercaDe(ulong clienteId, Vector3 centroMundo, float radioCeldas)
+        {
+            var avatares = AprendizNet.Todos;
+            for (int i = 0; i < avatares.Count; i++)
+            {
+                var a = avatares[i];
+                if (a == null || a.OwnerClientId != clienteId) continue;
+                float celda = SimRenderer.CellWorldSize;
+                float distCeldas = Vector3.Distance(a.transform.position, centroMundo) / celda;
+                return distCeldas <= radioCeldas;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Wrapper público estático para <see cref="MaquinaReplica"/> (mismo
+        /// patrón que <see cref="PedirMudanza"/>: un MonoBehaviour normal no
+        /// puede invocar un [Rpc] directamente). El anfitrión nunca lo llama
+        /// (no tiene réplicas, tiene las máquinas reales con su propio E
+        /// local).
+        /// </summary>
+        public static void PedirUso(byte tipo, byte indice)
+        {
+            var s = Instancia;
+            if (s == null || !s.IsSpawned || s.IsServer) return;
+            s.SolicitarUsoServerRpc(tipo, indice, s.NetworkManager.LocalClientId);
         }
 
         // =================================================================

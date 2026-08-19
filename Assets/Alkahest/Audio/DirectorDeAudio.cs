@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
 using Alkahest.Game;
+using Alkahest.Net;
 
 namespace Alkahest.Audio
 {
@@ -67,6 +68,72 @@ namespace Alkahest.Audio
     ///    de "fin de jornada 1/2" (ambas cruzan DayEnd), que es justo lo que
     ///    queremos: una campana de cierre cada vez.
     ///
+    /// =====================================================================
+    /// MODO ESPEJO (playtest 43, CONTRATO_PARIDAD.md §3a, ENCARGO A):
+    /// EL INVITADO NO TIENE STEPPER -- NO OYE CON EVENTOS, OYE CON LOS OJOS
+    /// =====================================================================
+    /// El invitado de la escena MULTI (`Net/SimSync.cs`) lleva un ESPEJO de
+    /// la sim: mismo `CellGrid`, pero `AlkahestSim.Stepper == null` (nadie
+    /// corre el autómata ahí). Sin stepper no hay ring de eventos
+    /// (`SimStepper.Events`), así que <see cref="ConsumirEventosSim"/>
+    /// (Ignición/Cristalización/Congelación) se queda mudo en el invitado --
+    /// eso YA pasaba antes de esta ronda y sigue igual, documentado, no es
+    /// nuevo. Lo que SÍ es nuevo es un camino alternativo, gateado por
+    /// <see cref="_modoEspejo"/> (= `Stepper == null`, calculado UNA vez en
+    /// <see cref="Init"/>, nunca en el anfitrión/un jugador):
+    ///  · FUEGO/VAPOR "CERCANOS": en vez de sondas fijas repartidas por TODO
+    ///    el mundo (lo que hace <see cref="SondearFuego"/> para el
+    ///    anfitrión -- una intensidad GLOBAL, "hay fuego en algún lado"), el
+    ///    espejo cuenta celdas de verdad DENTRO DE UNA VENTANA alrededor del
+    ///    oyente (<see cref="SondearGrillaEspejo"/>, acumulador ~4Hz,
+    ///    ventana calculada del mismo modo que
+    ///    <c>Game/ParticulasFx.ComputeVentanaSondeo</c> -- "mismo espíritu",
+    ///    ver el encargo). Alimenta los MISMOS buses que ya existen
+    ///    (<see cref="_intensidadFuegoObjetivo"/> -&gt; <see cref="_fuenteFuego"/>
+    ///    con <see cref="SintetizadorSfx.FuegoBucle"/>) más uno NUEVO para
+    ///    el vapor (<see cref="_fuenteVapor"/>, reutilizando el timbre de
+    ///    <see cref="SintetizadorSfx.GrifoGas"/> como "siseo" -- el mismo
+    ///    clip, otra fuente de intensidad, tal como pide el encargo). Por
+    ///    eso <see cref="SondearFuego"/> (el sondeo GLOBAL del anfitrión) se
+    ///    salta explícitamente cuando <see cref="_modoEspejo"/> es true: si
+    ///    los dos corrieran a la vez, un incendio lejano en la otra punta
+    ///    del taller encendería el crepitar del invitado aunque no tuviera
+    ///    NADA cerca -- justo lo contrario de "cercano al oyente" que pide
+    ///    el encargo.
+    ///  · CHAPOTEO AMBIENTAL: dentro de la misma ventana, celdas de
+    ///    arquetipo Líquido con <c>touchedTick</c> reciente (mismo criterio
+    ///    de "actividad reciente" que <c>Game/ParticulasFx.VentanaTicksRecientes</c>)
+    ///    disparan el one-shot de <see cref="SintetizadorSfx.Verter"/> con
+    ///    el limitador de ritmo de siempre -- es SONIDO AMBIENTAL de
+    ///    cualquier líquido moviéndose cerca (el propio, el de otro
+    ///    jugador, o el que cae de un grifo), NO el mismo camino que
+    ///    <see cref="ActualizarPollerFrasco"/> (que sigue existiendo tal
+    ///    cual y ya cubre "mi propio frasco" en los dos lados, host e
+    ///    invitado, porque `Flask.Total` es local a cada avatar).
+    ///  · VOCES DE GRIFO SIN <c>Dispenser</c>: el invitado no tiene los
+    ///    `Dispenser` reales (viven solo en el anfitrión), así que
+    ///    <see cref="ConstruirVocesGrifo"/> recibe `dispensers=null` y
+    ///    <see cref="_grifos"/> queda vacío -- en su lugar,
+    ///    <see cref="IntentarEscanearGrifosEspejo"/> ancla una voz de bucle
+    ///    a cada <see cref="Net.MaquinaReplica"/> de tipo grifo del registro
+    ///    replicado de <see cref="Net.MaquinaSync"/>, y
+    ///    <see cref="SondearGrifosEspejo"/> la enciende/apaga con el bit
+    ///    Sirviendo de <see cref="Net.MaquinaSync.TryGetEstado"/> (API
+    ///    congelada, CONTRATO_PARIDAD.md §1). Los dos grifos de la escena
+    ///    MULTI (agua/limo, ver `Game/AlkahestGameBootstrap.TrySpawnRed`)
+    ///    son Liquid: se usa siempre <see cref="SintetizadorSfx.GrifoLiquido"/>
+    ///    (decisión fuera de contrato, ver el informe de la ronda -- el
+    ///    invitado no tiene forma de leer qué material emite cada grifo sin
+    ///    tocar `Net/MaquinaSync.cs`, fuera de propiedad de este encargo).
+    ///  · ONE-SHOTS DE MÁQUINA: <see cref="Net.MaquinaSync.AlCambiarEstadoMaquina"/>
+    ///    (API congelada §1, dispara EN AMBOS LADOS) se escucha siempre
+    ///    (suscribir en singleplayer es inofensivo: el evento nunca dispara
+    ///    sin un `MaquinaSync` de verdad en la escena), pero el handler
+    ///    (<see cref="AlCambiarEstadoMaquinaHandler"/>) se corta con
+    ///    `SimSync.EsServidor` -- el anfitrión NO duplica: sus máquinas
+    ///    reales siguen sonando por el camino de eventos de sim de siempre
+    ///    (Ignición/Cristalización/Congelación), y el comportamiento
+    ///    perceptible del anfitrión/un jugador no cambia ni un byte.
     /// =====================================================================
     /// LIMITACIÓN DE RITMO
     /// =====================================================================
@@ -180,6 +247,66 @@ namespace Alkahest.Audio
         // volumen por distancia al aprendiz.
         private const float GrifoRadioAudible = 7f;
 
+        // ===================================================================
+        // MODO ESPEJO (playtest 43, CONTRATO_PARIDAD.md §3a) -- ver el
+        // apartado del docblock de la clase. Todo lo de aquí abajo SOLO se
+        // usa cuando _modoEspejo es true (invitado de la escena MULTI); en
+        // el anfitrión/un jugador estas constantes existen pero nunca se
+        // leen -- cero coste, cero comportamiento nuevo.
+        // ===================================================================
+
+        /// <summary>Acumulador de la observación de la grilla replicada: ~4Hz pedido por el encargo (más lento que IntervaloSondeo=12Hz del anfitrión porque aquí cada tick escanea una VENTANA de celdas de verdad, no un puñado de sondas).</summary>
+        private const float IntervaloSondeoEspejo = 1f / 4f;
+
+        /// <summary>
+        /// Colchón en celdas alrededor del viewport de la cámara -- MISMO
+        /// valor y MISMO criterio que <c>Game/ParticulasFx.VentanaMargenCeldas</c>
+        /// ("mismo espíritu que ParticulasFx.cs", encargo): la ventana se
+        /// deriva del tamaño real de pantalla (orthographicSize/aspect), no
+        /// de un radio inventado, así que crece o encoge sola si la cámara
+        /// hace zoom. Peor caso acotado por el propio mundo: como mucho
+        /// CellGrid.W*CellGrid.H = 221.184 lecturas de array cada 250ms
+        /// (~885K lecturas/seg), sin ninguna asignación -- trivial frente al
+        /// coste ya aceptado por Net/SimSync.cs (864 comparaciones de chunk
+        /// a 15Hz tras este mismo encargo, ver el informe) o
+        /// Net/MaquinaSync.cs (su propio sondeo de posición).
+        /// </summary>
+        private const int VentanaMargenCeldasEspejo = 20;
+
+        /// <summary>Ventana de "actividad reciente" para el chapoteo ambiental -- mismo criterio que Game/ParticulasFx.VentanaTicksRecientes, valor algo más corto porque aquí no hace falta cazar el instante exacto de aterrizaje, solo "hay líquido moviéndose por aquí".</summary>
+        private const uint VentanaTicksRecientesEspejo = 8;
+
+        /// <summary>
+        /// Saturación de la ventana de fuego DEL ESPEJO: a diferencia de
+        /// <see cref="SaturacionFuego"/> (sondas probabilísticas sobre el
+        /// mundo entero), aquí se cuentan celdas de Fire REALES dentro de la
+        /// ventana -- un brasero normal del Crisol satura con pocas celdas.
+        /// VALOR DE DISEÑO, no medido en playtest real (Cesar no ha podido
+        /// probar esta ronda con Unity abierto): queda como deuda de
+        /// calibración, ver el informe.
+        /// </summary>
+        private const float SaturacionFuegoEspejo = 10f;
+
+        /// <summary>Volumen de diseño del bucle de vapor (siseo) del espejo -- deliberadamente por debajo de VolFuegoMax: es un acento ambiental, no un protagonista. Mismo presupuesto de mezcla que el resto de bucles (ver la nota de arriba de la clase).</summary>
+        private const float VolVaporMaxEspejo = 0.30f;
+        private const float SaturacionVaporEspejo = 14f; // valor de diseño, misma nota de calibración que SaturacionFuegoEspejo.
+        private const float PisoAudibleVaporEspejo = 0.30f;
+        private const float LiberacionVaporSeg = 1.6f;
+
+        /// <summary>Prefijo EXACTO que MaquinaSync.CrearOActualizarReplica pone al GameObject de cada réplica de grifo ("MaquinaReplica_Dispenser_N", ver Net/MaquinaSync.cs). Acoplamiento aceptado y documentado -- mismo espíritu que la réplica de la geometría privada de Dispenser dos bloques más arriba: si el nombre cambiara algún día, este grifo del invitado simplemente se queda mudo, nada revienta.</summary>
+        private const string PrefijoNombreGrifoReplica = "MaquinaReplica_Dispenser_";
+
+        // Bits de EntradaMaquina.estadoVivo -- API CONGELADA, CONTRATO_PARIDAD.md
+        // §1 (la define y las escribe el Encargo N en Net/MaquinaSync.cs; este
+        // archivo solo las LEE). Replicadas aquí como literales porque el
+        // contrato las describe por número de bit, no por una constante
+        // pública ya existente -- mismo criterio de acoplamiento documentado
+        // que el resto de esta sección.
+        private const byte BitEstadoTrabajando = 1 << 0;
+        private const byte BitEstadoResultadoListo = 1 << 2;
+        private const byte BitEstadoSirviendo = 1 << 3;
+        private const byte BitEstadoLuzPlena = 1 << 4;
+
         // -----------------------------------------------------------------
         // Referencias inyectadas (ver Init).
         // -----------------------------------------------------------------
@@ -222,6 +349,35 @@ namespace Alkahest.Audio
         private int[] _sondaY;
         private float _intensidadFuegoObjetivo;
         private float _intensidadFuegoSuavizada;
+
+        // -------------------------------------------------------------
+        // MODO ESPEJO (playtest 43) -- ver el docblock de la clase.
+        // -------------------------------------------------------------
+        /// <summary>True SOLO en el invitado de la escena MULTI (Stepper == null), calculado UNA vez en Init. En el anfitrión/un jugador se queda en false para siempre y ningún método de esta sección se llama nunca.</summary>
+        private bool _modoEspejo;
+        private float _acumuladorEspejo;
+        private Camera _camEspejo; // cacheada como Camera.main, mismo patrón que ParticulasFx -- se refresca sola si viniera null.
+
+        private AudioSource _fuenteVapor; // bucle de "siseo" del vapor cercano, timbre GrifoGas reutilizado (ver doc de clase).
+        private float _intensidadVaporObjetivo;
+        private float _intensidadVaporSuavizada;
+        private Limitador _limChapoteoEspejo;
+
+        // One-shots de máquina en el invitado (MaquinaSync.AlCambiarEstadoMaquina).
+        private Limitador _limMaquinaTrabaja;
+        private Limitador _limMaquinaLista;
+        private Limitador _limMaquinaLuz;
+
+        private struct VozGrifoEspejo
+        {
+            public MaquinaReplica replica;
+            public byte indice; // (tipo, indice) que pide MaquinaSync.TryGetEstado -- tipo siempre Dispenser aquí.
+            public AudioSource fuente;
+            public bool objetivoSirviendo;
+            public float volumenSuavizado;
+        }
+        private VozGrifoEspejo[] _grifosEspejo;
+        private bool _grifosEspejoEscaneados;
 
         // -----------------------------------------------------------------
         // Estado de los "pollers" (comparar con el frame/sondeo anterior).
@@ -312,6 +468,27 @@ namespace Alkahest.Audio
             ConstruirVocesGrifo(dispensers);
             ConstruirSondasFuego();
 
+            // (playtest 43, MODO ESPEJO) Gate único: Stepper == null SOLO es
+            // true en el invitado de la escena MULTI (Net/SimSync.cs ya lo
+            // garantiza -- el mundo del anfitrión y del un-jugador siempre
+            // crean un SimStepper real antes de que AlkahestGameBootstrap
+            // llegue a spawnear este director, ver el informe de la ronda).
+            // Calculado UNA vez aquí: ni el anfitrión ni un jugador vuelven
+            // a evaluarlo jamás.
+            _modoEspejo = sim.Stepper == null;
+            if (_modoEspejo)
+            {
+                _fuenteVapor = CrearFuenteBucle("Bucle_VaporEspejo", SintetizadorSfx.GrifoGas);
+            }
+
+            // (playtest 43) Los one-shots de máquina se escuchan SIEMPRE
+            // (barato, estático, inofensivo sin un MaquinaSync real en la
+            // escena) -- el filtro real está en el propio handler, que se
+            // corta con SimSync.EsServidor para no duplicar en el
+            // anfitrión (ver doc de clase). Suscribir aquí y no antes: hace
+            // falta que SistemaActivo ya haya pasado el corte de arriba.
+            MaquinaSync.AlCambiarEstadoMaquina += AlCambiarEstadoMaquinaHandler;
+
             // Línea base: evita disparar sonidos "de bienvenida" falsos si el
             // jugador ya llevaba algo bautizado/completado al crear el
             // director (no debería pasar en el flujo normal, pero es gratis
@@ -322,6 +499,20 @@ namespace Alkahest.Audio
             _entradaBloqueadaAnterior = DayCycle.InputLocked;
         }
 #pragma warning restore 0162
+
+        /// <summary>
+        /// (playtest 43) Simétrico a la suscripción de Init: un evento
+        /// ESTÁTICO acumularía un handler muerto por cada recarga de escena
+        /// (DayCycle recarga entera la escena entre jornadas/partidas) si
+        /// nadie se desuscribiera -- mismo tipo de fuga que ya evita
+        /// MachineFocus.Limpiar() en AlkahestGameBootstrap, aquí resuelta a
+        /// nivel de instancia. Desuscribir un handler que nunca se
+        /// suscribió (SistemaActivo=false) es un no-op seguro en C#.
+        /// </summary>
+        private void OnDestroy()
+        {
+            MaquinaSync.AlCambiarEstadoMaquina -= AlCambiarEstadoMaquinaHandler;
+        }
 
         /// <summary>El AudioListener normalmente vive en Camera.main (SimRenderer ya la configura); si por lo que sea no hay ninguno, se añade uno defensivamente. Nada debe petar si tampoco hay cámara.</summary>
         private void EnsureListener()
@@ -456,12 +647,37 @@ namespace Alkahest.Audio
             if (_acumuladorSondeo >= IntervaloSondeo)
             {
                 _acumuladorSondeo -= IntervaloSondeo;
-                SondearFuego();
-                SondearGrifos();
+                // (playtest 43, MODO ESPEJO) En el invitado el fuego lo
+                // sondea SondearGrillaEspejo (ventana local, ~4Hz, más
+                // abajo) -- el sondeo GLOBAL de sondas fijas no distingue
+                // "cerca del oyente" y pisaría esa intensidad local con
+                // actividad de fuego en la otra punta del taller. Ver el
+                // docblock de la clase, apartado MODO ESPEJO.
+                if (!_modoEspejo) SondearFuego();
+                SondearGrifos(); // no-op en el invitado: _grifos queda vacío (dispensers=null, ver Init).
                 SondearTolva();
             }
             ActualizarBucleFuego();
             ActualizarBuclesGrifo();
+
+            // (playtest 43, MODO ESPEJO) Ver doc de clase. Todo este bloque
+            // es cero coste en el anfitrión/un jugador: _modoEspejo se
+            // queda en false para siempre y el `if` de fuera lo salta
+            // entero, una sola comparación de bool por frame.
+            if (_modoEspejo)
+            {
+                if (!_grifosEspejoEscaneados) IntentarEscanearGrifosEspejo();
+
+                _acumuladorEspejo += Time.deltaTime;
+                if (_acumuladorEspejo >= IntervaloSondeoEspejo)
+                {
+                    _acumuladorEspejo -= IntervaloSondeoEspejo;
+                    SondearGrillaEspejo();
+                    SondearGrifosEspejo();
+                }
+                ActualizarBucleVapor();
+                ActualizarBuclesGrifoEspejo();
+            }
 
             ConsumirEventosSim();
         }
@@ -682,6 +898,243 @@ namespace Alkahest.Audio
                 g.volumenSuavizado = Mathf.MoveTowards(g.volumenSuavizado, objetivo, Time.deltaTime * 3f);
                 g.fuente.volume = g.volumenSuavizado * VolGrifoBase * FactorBucles;
             }
+        }
+
+        // ===================================================================
+        // MODO ESPEJO (playtest 43, CONTRATO_PARIDAD.md §3a) -- ver el
+        // docblock de la clase para el porqué de cada pieza. Todo lo de
+        // aquí abajo SOLO lo llama Update() cuando _modoEspejo es true.
+        // ===================================================================
+
+        /// <summary>
+        /// Ventana de celdas alrededor de la cámara actual (+margen),
+        /// clampada al mundo -- COPIA DEL MISMO CÁLCULO que
+        /// Game/ParticulasFx.ComputeVentanaSondeo (el encargo pide
+        /// explícitamente "mismo espíritu que ParticulasFx"): se deriva del
+        /// viewport real (orthographicSize/aspect), no de un radio fijo
+        /// inventado, así que un zoom de la cámara ajusta la ventana solo.
+        /// Sin cámara (no debería pasar tras EnsureListener, pero por si
+        /// acaso) se cae al mundo entero -- el clamp de más abajo lo hace
+        /// seguro de todos modos.
+        /// </summary>
+        private void ComputeVentanaEspejo(out int x0, out int y0, out int x1, out int y1)
+        {
+            if (_camEspejo == null) _camEspejo = Camera.main;
+            if (_camEspejo == null)
+            {
+                x0 = 0; y0 = 0; x1 = CellGrid.W; y1 = CellGrid.H;
+                return;
+            }
+
+            float halfH = _camEspejo.orthographicSize;
+            float halfW = halfH * (_camEspejo.aspect > 0.01f ? _camEspejo.aspect : 16f / 9f);
+            Vector3 p = _camEspejo.transform.position;
+            float celda = SimRenderer.CellWorldSize;
+
+            x0 = Mathf.Clamp(Mathf.FloorToInt((p.x - halfW) / celda) - VentanaMargenCeldasEspejo, 0, CellGrid.W);
+            x1 = Mathf.Clamp(Mathf.CeilToInt((p.x + halfW) / celda) + VentanaMargenCeldasEspejo, 0, CellGrid.W);
+            y0 = Mathf.Clamp(Mathf.FloorToInt((p.y - halfH) / celda) - VentanaMargenCeldasEspejo, 0, CellGrid.H);
+            y1 = Mathf.Clamp(Mathf.CeilToInt((p.y + halfH) / celda) + VentanaMargenCeldasEspejo, 0, CellGrid.H);
+        }
+
+        /// <summary>
+        /// EL CORAZÓN DEL MODO ESPEJO: una sola pasada (~4Hz, ver
+        /// IntervaloSondeoEspejo) sobre la ventana de <see cref="ComputeVentanaEspejo"/>
+        /// contando Fire/Steam/líquido-activo de verdad -- sin sondas
+        /// probabilísticas (el anfitrión las necesita porque sondea el
+        /// mundo ENTERO cada vez; aquí la ventana ya es pequeña, así que
+        /// contar cada celda es barato, ver el peor caso documentado junto
+        /// a VentanaMargenCeldasEspejo). Alimenta fuego/vapor con el MISMO
+        /// patrón ataque-instantáneo/liberación-lenta que SondearFuego (para
+        /// que un incendio real "esté vivo" en vez de parpadear entre
+        /// sondeos), y dispara el chapoteo ambiental directamente como
+        /// one-shot limitado.
+        /// </summary>
+        private void SondearGrillaEspejo()
+        {
+            if (_sim == null || _sim.Grid == null || _sim.Universe == null || _jugador == null) return;
+
+            ComputeVentanaEspejo(out int x0, out int y0, out int x1, out int y1);
+            if (x1 <= x0 || y1 <= y0) return;
+
+            var grid = _sim.Grid;
+            uint tickActual = _sim.TickEspejo; // el espejo no tiene Stepper.Tick -- este es su reloj (ver AlkahestSim.TickEspejo).
+            uint tickCorte = tickActual > VentanaTicksRecientesEspejo ? tickActual - VentanaTicksRecientesEspejo : 0;
+
+            int fuego = 0, vapor = 0, liquidoReciente = 0;
+            for (int y = y0; y < y1; y++)
+            {
+                int fila = y * CellGrid.W;
+                for (int x = x0; x < x1; x++)
+                {
+                    int idx = fila + x;
+                    byte m = grid.mat[idx];
+                    if (m == MaterialId.Empty) continue;
+                    if (m == MaterialId.Fire) { fuego++; continue; }
+                    if (m == MaterialId.Steam) { vapor++; continue; }
+                    if (grid.touchedTick[idx] < tickCorte) continue;
+                    if (_sim.Universe.Get(m).archetype == MaterialArchetype.Liquid) liquidoReciente++;
+                }
+            }
+
+            // Fuego cercano: mismo ataque/liberación que SondearFuego (ver su
+            // doc), saturación recalibrada porque aquí se cuentan celdas
+            // reales, no sondas.
+            if (fuego > 0)
+            {
+                float golpe = PisoAudibleFuego + (1f - PisoAudibleFuego) * Mathf.Clamp01(fuego / SaturacionFuegoEspejo);
+                _intensidadFuegoObjetivo = Mathf.Max(_intensidadFuegoObjetivo, golpe);
+            }
+            else
+            {
+                _intensidadFuegoObjetivo = Mathf.MoveTowards(_intensidadFuegoObjetivo, 0f, IntervaloSondeoEspejo / LiberacionFuegoSeg);
+            }
+
+            // Vapor denso: mismo patrón, bus propio (_fuenteVapor).
+            if (vapor > 0)
+            {
+                float golpe = PisoAudibleVaporEspejo + (1f - PisoAudibleVaporEspejo) * Mathf.Clamp01(vapor / SaturacionVaporEspejo);
+                _intensidadVaporObjetivo = Mathf.Max(_intensidadVaporObjetivo, golpe);
+            }
+            else
+            {
+                _intensidadVaporObjetivo = Mathf.MoveTowards(_intensidadVaporObjetivo, 0f, IntervaloSondeoEspejo / LiberacionVaporSeg);
+            }
+
+            // Chapoteo ambiental: cualquier líquido con actividad reciente
+            // cerca del oyente -- volumen crece un poco con la cantidad de
+            // celdas activas, siempre dentro del limitador de ritmo (nunca
+            // una ametralladora aunque medio taller esté vertiendo a la
+            // vez).
+            if (liquidoReciente > 0)
+            {
+                float volumen = Mathf.Clamp01(0.14f + liquidoReciente * 0.004f);
+                DispararLimitado(ref _limChapoteoEspejo, SintetizadorSfx.Verter, 2.5f, volumen);
+            }
+        }
+
+        private void ActualizarBucleVapor()
+        {
+            if (_fuenteVapor == null) return;
+            _intensidadVaporSuavizada = Mathf.MoveTowards(_intensidadVaporSuavizada, _intensidadVaporObjetivo, Time.deltaTime * 0.9f);
+            _fuenteVapor.volume = VolVaporMaxEspejo * _intensidadVaporSuavizada * FactorBucles;
+        }
+
+        /// <summary>
+        /// Bootstrap único (mismo criterio que MaquinaSync.IntentarEscanear):
+        /// se reintenta cada Update hasta encontrar al menos una réplica de
+        /// grifo, y a partir de ahí nunca vuelve a llamar a
+        /// FindObjectsByType -- las réplicas de MaquinaSync solo CRECEN una
+        /// vez al arrancar la sesión (nunca se destruyen), así que una sola
+        /// pasada exitosa basta para toda la partida.
+        /// </summary>
+        private void IntentarEscanearGrifosEspejo()
+        {
+            var replicas = FindObjectsByType<MaquinaReplica>();
+            if (replicas == null || replicas.Length == 0) return; // el registro replicado aún no llegó -- reintenta el próximo Update.
+
+            int contados = 0;
+            for (int i = 0; i < replicas.Length; i++)
+            {
+                if (replicas[i] != null && replicas[i].name.StartsWith(PrefijoNombreGrifoReplica)) contados++;
+            }
+            if (contados == 0) return; // llegaron réplicas de otras máquinas, pero ningún grifo todavía -- reintenta.
+
+            _grifosEspejo = new VozGrifoEspejo[contados];
+            int w = 0;
+            for (int i = 0; i < replicas.Length; i++)
+            {
+                var r = replicas[i];
+                if (r == null || !r.name.StartsWith(PrefijoNombreGrifoReplica)) continue;
+
+                byte indice = 0;
+                int guion = r.name.LastIndexOf('_');
+                if (guion >= 0) byte.TryParse(r.name.Substring(guion + 1), out indice);
+
+                var fuente = CrearFuenteBucle("Bucle_GrifoEspejo_" + w, SintetizadorSfx.GrifoLiquido);
+                _grifosEspejo[w] = new VozGrifoEspejo
+                {
+                    replica = r,
+                    indice = indice,
+                    fuente = fuente,
+                    objetivoSirviendo = false,
+                    volumenSuavizado = 0f,
+                };
+                w++;
+            }
+
+            _grifosEspejoEscaneados = true;
+        }
+
+        /// <summary>Enciende/apaga cada voz de grifo del espejo según el bit Sirviendo del registro (API congelada, §1). ~4Hz -- mismo acumulador que SondearGrillaEspejo.</summary>
+        private void SondearGrifosEspejo()
+        {
+            if (_grifosEspejo == null) return;
+            for (int i = 0; i < _grifosEspejo.Length; i++)
+            {
+                ref var g = ref _grifosEspejo[i];
+                if (g.replica == null) { g.objetivoSirviendo = false; continue; }
+
+                bool sirviendo = false;
+                if (MaquinaSync.TryGetEstado((byte)MaquinaSync.TipoMaquina.Dispenser, g.indice, out byte estado))
+                {
+                    sirviendo = (estado & BitEstadoSirviendo) != 0;
+                }
+                g.objetivoSirviendo = sirviendo;
+            }
+        }
+
+        /// <summary>Suavizado + caída por distancia de las voces de grifo del espejo, cada frame -- mismo patrón exacto que ActualizarBuclesGrifo (el gemelo del anfitrión), leyendo MaquinaReplica.CentroMundo en vez de Dispenser.transform.position.</summary>
+        private void ActualizarBuclesGrifoEspejo()
+        {
+            if (_grifosEspejo == null) return;
+            for (int i = 0; i < _grifosEspejo.Length; i++)
+            {
+                ref var g = ref _grifosEspejo[i];
+                if (g.fuente == null) continue;
+
+                float volumenPorDistancia = 1f;
+                if (_jugador != null && g.replica != null)
+                {
+                    float d = Vector3.Distance(_jugador.position, g.replica.CentroMundo);
+                    float t = Mathf.Clamp01(1f - d / GrifoRadioAudible);
+                    volumenPorDistancia = t * t;
+                }
+
+                float objetivo = g.objetivoSirviendo ? volumenPorDistancia : 0f;
+                g.volumenSuavizado = Mathf.MoveTowards(g.volumenSuavizado, objetivo, Time.deltaTime * 3f);
+                g.fuente.volume = g.volumenSuavizado * VolGrifoBase * FactorBucles;
+            }
+        }
+
+        /// <summary>
+        /// One-shots de máquina EN EL INVITADO (encargo, §3a último punto).
+        /// Suscrito siempre (ver Init/OnDestroy); el corte real está aquí:
+        /// SimSync.EsServidor == true (el anfitrión) sale sin sonar nada --
+        /// sus máquinas reales ya suenan por el camino de eventos de sim de
+        /// siempre, y el encargo prohíbe explícitamente duplicar ahí. Los
+        /// tres flancos de subida (nunca de bajada: "acaba de pasar algo",
+        /// no "dejó de pasar") reutilizan one-shots YA EXISTENTES -- el
+        /// encargo no autoriza clips nuevos:
+        ///   Trabajando   -&gt; Ignicion            ("algo se pone en marcha")
+        ///   ResultadoListo -&gt; EncargoCompletado  ("ven a recoger", mismo timbre que un pedido cumplido)
+        ///   LuzPlena     -&gt; CristalizarCongelar  ("algo se resuelve/asienta", el dictamen de la lámpara)
+        /// FuegoEncendido (bit1) no dispara nada aquí a propósito: ya lo
+        /// cubre el crepitar continuo de <see cref="SondearGrillaEspejo"/>
+        /// en cuanto el brasero prenda celdas de Fire de verdad -- un
+        /// one-shot adicional en el mismo instante sería redundante.
+        /// </summary>
+        private void AlCambiarEstadoMaquinaHandler(byte tipo, byte indice, byte antes, byte ahora)
+        {
+            if (SimSync.EsServidor) return; // el anfitrión no duplica -- ver doc de clase, MODO ESPEJO.
+
+            bool empezoTrabajar = (ahora & BitEstadoTrabajando) != 0 && (antes & BitEstadoTrabajando) == 0;
+            bool resultadoListo = (ahora & BitEstadoResultadoListo) != 0 && (antes & BitEstadoResultadoListo) == 0;
+            bool luzDictamina = (ahora & BitEstadoLuzPlena) != 0 && (antes & BitEstadoLuzPlena) == 0;
+
+            if (empezoTrabajar) DispararLimitado(ref _limMaquinaTrabaja, SintetizadorSfx.Ignicion, 3f, 0.22f);
+            if (resultadoListo) DispararLimitado(ref _limMaquinaLista, SintetizadorSfx.EncargoCompletado, 3f, 0.24f);
+            if (luzDictamina) DispararLimitado(ref _limMaquinaLuz, SintetizadorSfx.CristalizarCongelar, 3f, 0.20f);
         }
 
         /// <summary>

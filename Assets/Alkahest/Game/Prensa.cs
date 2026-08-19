@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -63,7 +64,7 @@ namespace Alkahest.Game
     /// E baja la mandíbula en 0.5s y aplica <see cref="Universe.Prensa"/>
     /// celda a celda -- Compactar/Reventar/Escupir/Resistir/Nada.
     /// </summary>
-    public sealed class Prensa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class Prensa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         private enum State { Arriba, Bajando, Cooldown }
 
@@ -391,12 +392,9 @@ namespace Alkahest.Game
             SondearLecho();
 
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada()
-                && _state == State.Arriba)
+                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
-                _state = State.Bajando;
-                _stateTimer = 0f;
-                MachineFocus.RegistrarUsoE();
+                if (IntentarPrensar()) MachineFocus.RegistrarUsoE();
             }
 
             _stateTimer += Time.deltaTime;
@@ -444,6 +442,31 @@ namespace Alkahest.Game
         }
 
         private bool EstaEnfocada() => MachineFocus.EsFoco(this, _player);
+
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E. Antes de
+        /// este encargo la transición de estado vivía INLINE dentro de
+        /// `Update()` (junto al chequeo `EstaEnfocada()`) -- se extrae aquí,
+        /// sin cambiar NADA de lo que hacía, para que
+        /// <see cref="UsarPorRed"/> pueda llamar exactamente lo mismo que el
+        /// E local sin la proximidad DEL ANFITRIÓN (ver el docblock de
+        /// <see cref="Alkahest.Net.IMaquinaUsableRemota"/>).
+        /// </summary>
+        private bool IntentarPrensar()
+        {
+            if (_state != State.Arriba) return false; // ya está prensando o en cooldown: E no hace nada.
+            _state = State.Bajando;
+            _stateTimer = 0f;
+            return true;
+        }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+        bool IMaquinaUsableRemota.UsarPorRed() => IntentarPrensar();
+
+        /// <summary>La Prensa no tiene brasero ni resultado "reposando" (el aparato es instantáneo: baja, prensa, sube) -- solo Trabajando tiene sentido aquí.</summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed() => _state != State.Arriba ? EstadoVivoBits.Trabajando : (byte)0;
 
         // -----------------------------------------------------------------
         // APLICAR (mecánica SIN CAMBIOS respecto al playtest 25/26).

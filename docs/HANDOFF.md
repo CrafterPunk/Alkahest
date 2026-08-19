@@ -2905,3 +2905,56 @@ diagnóstico fino. Nunca más "puedes jugar" encima de "algo falló".
 
 Recordatorio de prueba de dos ventanas: UNA ventana ANFITRIÓN en local, la SEGUNDA siempre
 UNIRME en local. Para el exe: rehacer la build (menú Alkahest → 4) para que lleve este fix.
+
+---
+
+## Playtest 43 → LA PARIDAD VIVA (el invitado usa, ve, oye — y el frasco fluye)
+
+Primera prueba real con un amigo: "al absorber y soltar lo percibimos lageado; mi amigo no
+podía abrir los grifos, activar las máquinas, escuchar el sonido ni ver las animaciones."
+Contrato docs/CONTRATO_PARIDAD.md con el diagnóstico hecho antes de encargar: las réplicas
+eran visuales por diseño (nada respondía a E), el registro replicado no llevaba estado vivo
+(estatuas), el DirectorDeAudio ni se spawneaba en el invitado (y su consumo de eventos muere
+sin Stepper), y la difusión de chunks corría toda a ~5Hz. Dos encargos paralelos con API
+congelada entre ellos (protocolo pt40 — esta vez N terminó antes y A compiló sin transitorios).
+
+**ENCARGO N (nervios)**: interfaz nueva Net/MaquinaUsableRemota.cs (UsarPorRed/EstadoVivoRed +
+bits congelados: Trabajando/FuegoEncendido/ResultadoListo/Sirviendo/LuzPlena); las 7 máquinas
+la implementan extrayendo el cuerpo de su E local a un método compartido (Dispenser movió sus
+MachineFocus.RegistrarUsoE al call-site para preservar el criterio "solo cuenta si abrió de
+verdad"). MaquinaSync: estadoVivo en EntradaMaquina (preservado en los 3 call-sites de
+mudanza), sondeo anfitrión 4Hz solo-si-cambió, TryGetEstado + evento AlCambiarEstadoMaquina en
+ambos lados, SolicitarUsoServerRpc con validación server-side (avatar a ≤14 celdas del
+CentroMundo real — medido contra la geometría: el foco nunca queda a >8). MaquinaReplica:
+"E — usar" con arbitraje local del más cercano, animación por bits componiendo sobre su único
+SpriteRenderer (Trabajando latido → FuegoEncendido cálido → LuzPlena frío → ResultadoListo
+destello, aplicado último por urgencia) y segunda línea de chapa con textos fijos del cliente.
+Decisiones marcadas: ColumnaEnsayo siempre estado 0 (acción instantánea), Alambique reutiliza
+ResultadoListo para "hay destilado en el matraz".
+
+**ENCARGO A (sentidos)**: DirectorDeAudio se spawnea en la rama invitado (OrderSystem null →
+sin stingers, documentado) y gana MODO ESPEJO (gate Stepper==null): el ambiente sale de
+OBSERVAR la grilla replicada en la ventana de cámara (mismo patrón que ParticulasFx) a 4Hz —
+Fire→crepitar, líquido activo→chapoteo, Steam→siseo (clip GrifoGas reutilizado); el sondeo
+global del anfitrión se corta en espejo (si no, un incendio lejano sonaría cerca). Voces de
+grifo ancladas a las réplicas por nombre (deuda: acoplamiento por string, degrada a mudo) y
+encendidas por el bit Sirviendo; one-shots por transición de estado gateados !EsServidor.
+FRASCO: la pasada de prioridad (≤60 celdas de avatar) pasa de 6 a 2 ticks (~15Hz), el resto
+queda a 5Hz; peor caso realista ~155 KB/s por cliente (techo teórico igual al preexistente).
+Flask.cs NO tocado: medido, su lote ya vacía en cada LateUpdate — el cuello era solo la vuelta.
+
+**BONUS (reporte nuevo de Cesar a mitad de ronda: "restos de bedrock que no se pueden quitar,
+muy esporádicamente", el amigo jugando solo)**: hipótesis principal = celdas de ObraDelTaller
+que se leen como piedra normal (jambas/marcos/banda del hogar) y el cincel las rechazaba EN
+SILENCIO. Instrumentado en vez de parchear a ciegas: (1) el cincel ahora AVISA ("es obra del
+taller — no cede al cincel; las estaciones se mueven con V") por el canal Avisar de siempre;
+(2) el hover del F3 añade el sufijo "· OBRA" cuando la celda está en un rect protegido. Si el
+reporte se repite SIN el aviso y SIN el sufijo, la causa es otra y sabremos exactamente dónde
+mirar. Auditados de paso los ciclos handle/reclamo de obra (génesis→Init→mudanza): coherentes.
+
+**Deudas**: réplica de una sola pieza (la animación se compone en un tinte — capas por zona en
+ronda futura con MaquinariaSprites); rangoFoco replicado para paridad exacta de alcance;
+cerrojo de mudanza no consultado por el uso remoto (ventana de carrera mínima); calibrar en
+vivo las constantes del audio espejo (elegidas sin oído); el acoplamiento por nombre de las
+voces de grifo. LA PRUEBA REAL es de Cesar con su amigo — checklist en los informes de ambos
+encargos, resumida en el mensaje de entrega.

@@ -498,8 +498,26 @@ namespace Alkahest.Game
                 SpawnJournalHud(knowledge);
                 SpawnOrdersHud(null);
 
+                // (playtest 43, LA PARIDAD VIVA, ENCARGO A) EL INVITADO OYE:
+                // antes esta rama terminaba sin director de audio (§0.3 del
+                // contrato -- "SpawnDirectorDeAudio solo se llama en las
+                // ramas de anfitrión/un jugador"). orderSystem=null (sin
+                // encargos locales aquí -- OrdersHud ya cae a su rama
+                // read-only replicada dos líneas arriba, y DirectorDeAudio
+                // ya tolera orderSystem null: sin stingers de "encargo
+                // completado" para el invitado, documentado en el informe
+                // de la ronda). _dispensers NUNCA se asigna en esta rama
+                // (los Dispenser reales solo existen en el anfitrión) y
+                // queda en su valor por defecto null -- SpawnDirectorDeAudio
+                // ya lo pasa tal cual a Init, que ya tolera dispensers=null
+                // (ConstruirVocesGrifo, ver Audio/DirectorDeAudio.cs) desde
+                // antes de esta ronda. El MODO ESPEJO del propio director
+                // (Stepper == null, ver su docblock) es lo que sustituye a
+                // los Dispenser/eventos de sim que aquí faltan.
+                SpawnDirectorDeAudio(null, knowledge, flask, apprentice.transform);
+
                 _spawned = true;
-                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar + menús (diario/bautizo/pistas/encargos replicados). Las máquinas y la sim las lleva el anfitrión.");
+                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar + menús (diario/bautizo/pistas/encargos replicados) + audio (modo espejo). Las máquinas y la sim las lleva el anfitrión.");
                 return;
             }
 

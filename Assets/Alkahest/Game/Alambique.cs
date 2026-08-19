@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -90,7 +91,7 @@ namespace Alkahest.Game
     /// física — mismo criterio que separa forma visual de hueco real en
     /// Crisol (VueloCuerpo).
     /// </summary>
-    public sealed class Alambique : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class Alambique : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
@@ -472,7 +473,7 @@ namespace Alkahest.Game
                     && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
                 {
                     IntentarConstruir();
-                    MachineFocus.RegistrarUsoE();
+                    MachineFocus.RegistrarUsoE(); // (ENCARGO N) sin cambios: cuenta como uso aunque falte cerámico -- ver el docblock de IntentarConstruir.
                 }
 
                 ActualizarGhost();
@@ -534,15 +535,46 @@ namespace Alkahest.Game
             }
         }
 
-        private void IntentarConstruir()
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E -- sin
+        /// cambios de lógica, solo la firma pasa de `void` a `bool`. El
+        /// gate "solo mientras ObraPendiente" vive en `Update()` (el E ni
+        /// se comprueba en <see cref="Fase.Construido"/>, y `MachineFocus.Olvidar`
+        /// se llama en <see cref="CompletarConstruccion"/> así que un
+        /// invitado tampoco vería nunca "E — usar" sobre un alambique ya
+        /// construido, ver <see cref="MaquinaReplica.EsUsableRemota"/> más
+        /// el estado del arbitraje) -- <see cref="UsarPorRed"/> replica ese
+        /// mismo gate explícitamente, no confía solo en que la réplica no
+        /// lo ofrezca.
+        /// </summary>
+        private bool IntentarConstruir()
         {
             if (_ceramicoAcumulado < CeramicoRequerido)
             {
                 Rotular("faltan " + (CeramicoRequerido - _ceramicoAcumulado) + " celdas de cerámico", UiStyles.Aviso);
-                return;
+                return false;
             }
             CompletarConstruccion();
+            return true;
         }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+        bool IMaquinaUsableRemota.UsarPorRed() => _fase == Fase.ObraPendiente && IntentarConstruir();
+
+        /// <summary>
+        /// (DECISIÓN fuera de contrato, documentada en el informe de la
+        /// ronda) El Alambique no calza limpio en Trabajando/FuegoEncendido/
+        /// ResultadoListo: destila SIEMPRE, en silencio, sin un "en curso"
+        /// que anunciar. Se reutiliza <see cref="EstadoVivoBits.ResultadoListo"/>
+        /// para "hay agua destilada esperando en el matraz" -- es la lectura
+        /// más cercana a "algo REPOSA en la cubeta esperando recogida" (§1)
+        /// que tiene este aparato, y así la réplica del invitado también
+        /// destella "ven a recoger" cuando el matraz tiene algo.
+        /// </summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed() =>
+            _fase == Fase.Construido && _aguaAcumuladaVista > 0 ? EstadoVivoBits.ResultadoListo : (byte)0;
 
         private void CompletarConstruccion()
         {

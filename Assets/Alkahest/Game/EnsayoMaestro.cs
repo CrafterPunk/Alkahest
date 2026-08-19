@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -45,7 +46,7 @@ namespace Alkahest.Game
     /// se busca con <c>FindAnyObjectByType</c> (regla 1 de CLAUDE.md), mismo
     /// patrón perezoso que DeliveryChute.
     /// </summary>
-    public sealed class EnsayoMaestro : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class EnsayoMaestro : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         // -----------------------------------------------------------------
         // GEOMETRÍA (playtest 27). Públicas: las lee Sim/SimLevelBuilder.cs.
@@ -528,7 +529,7 @@ namespace Alkahest.Game
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
                 TryEnsayo();
-                MachineFocus.RegistrarUsoE();
+                MachineFocus.RegistrarUsoE(); // (ENCARGO N) sin cambios: cuenta como uso aunque no haya pedido activo -- ver el docblock de TryEnsayo.
             }
         }
 
@@ -598,25 +599,33 @@ namespace Alkahest.Game
             }
         }
 
-        private void TryEnsayo()
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E -- sin
+        /// cambios de lógica, solo la firma pasa de `void` a `bool`. El
+        /// chequeo "mientras calienta, E no dispara otro ensayo" vive en
+        /// `Update()` (con un `return` que ni siquiera llega a comprobar el
+        /// teclado), así que ese caso lo replica <see cref="UsarPorRed"/>
+        /// aparte (ver su docblock) en vez de duplicarse aquí dentro.
+        /// </summary>
+        private bool TryEnsayo()
         {
             Order objetivo = BuscarOrdenEnsayoActiva();
             if (objetivo == null)
             {
                 Rotular("no hay ningún pedido de calor o chispa activo ahora mismo", UiStyles.TextoTenue);
-                return;
+                return false;
             }
 
             if (!MuestraDominante(out byte matId, out int n0) || n0 == 0)
             {
                 Rotular("presenta una muestra en la bandeja antes de pulsar E", UiStyles.Aviso);
-                return;
+                return false;
             }
 
             if (objetivo.Tipo == OrderType.Conduce)
             {
                 EvaluarConduce(matId);
-                return;
+                return true;
             }
 
             _calentandoDominante = matId;
@@ -624,7 +633,24 @@ namespace Alkahest.Game
             _calentandoHasta = Time.time + RampSeconds;
             _fase = Fase.Calentando;
             Rotular("calentando la muestra al rojo del crisol...", UiStyles.Aviso);
+            return true;
         }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+
+        /// <summary>
+        /// `Update()` ni siquiera comprueba el teclado mientras
+        /// <see cref="Fase.Calentando"/> corre ("mientras se calienta, E no
+        /// dispara otro ensayo encima") -- ese mismo silencio se replica
+        /// aquí ANTES de llamar a <see cref="TryEnsayo"/>, o un invitado
+        /// podría reiniciar un calentamiento en curso que el anfitrión jamás
+        /// permitiría.
+        /// </summary>
+        bool IMaquinaUsableRemota.UsarPorRed() => _fase != Fase.Calentando && TryEnsayo();
+
+        byte IMaquinaUsableRemota.EstadoVivoRed() => _fase == Fase.Calentando ? EstadoVivoBits.Trabajando : (byte)0;
 
         private Order BuscarOrdenEnsayoActiva()
         {

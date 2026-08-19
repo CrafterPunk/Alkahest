@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -39,7 +40,7 @@ namespace Alkahest.Game
     /// NADA. Es el único aparato de análisis puro del laboratorio: no
     /// transforma, revela.
     /// </summary>
-    public sealed class BancoChispa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class BancoChispa : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         /// <summary>3.2 -&gt; 3.4: el banco mide 27 celdas y hay que poder atenderlo desde cualquiera de sus dos electrodos.</summary>
         private const float ProximityRange = 3.4f;
@@ -364,7 +365,7 @@ namespace Alkahest.Game
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
                 Analizar();
-                MachineFocus.RegistrarUsoE();
+                MachineFocus.RegistrarUsoE(); // (ENCARGO N) el E local SIEMPRE cuenta como "uso enseñado" aunque la bandeja esté vacía -- sin cambios de este encargo, ver el docblock de Analizar.
             }
 
             if (_brilloRestante > 0f)
@@ -397,11 +398,21 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         // ANÁLISIS PURO (sin cambios de mecánica).
         // -----------------------------------------------------------------
-        private void Analizar()
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E -- sin
+        /// cambios de lógica, solo la firma pasa de `void` a `bool` (el
+        /// proximity check de `EstaEnfocada()` vive en `Update()`, fuera de
+        /// este método, así que no había nada que extraer). Devuelve true
+        /// incluso cuando la bandeja está vacía: el análisis "sí ocurrió"
+        /// (hay un resultado que mostrar, "deja una muestra"), solo que no
+        /// hay muestra que leer -- distinto de "no procedía" (ver
+        /// <see cref="Alkahest.Net.IMaquinaUsableRemota"/>).
+        /// </summary>
+        private bool Analizar()
         {
             var universe = _sim.Universe;
             var grid = _sim.Grid;
-            if (universe == null || grid == null) return;
+            if (universe == null || grid == null) return false;
 
             byte dominanteMat = MaterialId.Empty;
             int dominanteCount = 0;
@@ -424,7 +435,7 @@ namespace Alkahest.Game
                 _ultimaConductividad = 0;
                 _chapaResultado = "deja una muestra en la bandeja";
                 _brilloRestante = BrilloDuracion;
-                return;
+                return true;
             }
 
             byte conductividad = universe.Conductividad(dominanteMat);
@@ -445,6 +456,28 @@ namespace Alkahest.Game
             // dictó sentencia AQUÍ (la sala del Ensayo sigue tapiada en ese
             // beat). Global e inocuo fuera de Semilla 0: solo un máximo.
             if (_conocimiento != null) _conocimiento.RegistrarConductividadObservada(conductividad);
+            return true;
+        }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+        bool IMaquinaUsableRemota.UsarPorRed() => Analizar();
+
+        /// <summary>
+        /// bit4 LuzPlena (contrato §1: "lámpara del banco dictaminando") =
+        /// brillo pleno (conductividad 2) AHORA MISMO (mientras dura
+        /// <see cref="_brilloRestante"/>); Trabajando cubre el mismo lapso
+        /// que <see cref="_pulsoTrabajo"/> ya usa localmente -- el aparato es
+        /// instantáneo, pero el teatro (arco + lámpara) dura
+        /// <see cref="BrilloDuracion"/> segundos, y ESO es lo que "trabaja".
+        /// </summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed()
+        {
+            byte b = 0;
+            if (_brilloRestante > 0f) b |= EstadoVivoBits.Trabajando;
+            if (_brilloRestante > 0f && _ultimaConductividad == 2) b |= EstadoVivoBits.LuzPlena;
+            return b;
         }
 
         // =================================================================

@@ -324,7 +324,24 @@ namespace Alkahest.Game
                         // SimLevelBuilder.ObraDelTaller y aquí se respetan --
                         // el mundo entero sigue siendo tallable, los aparatos
                         // no (para moverlos ya existe la mudanza, tecla V).
-                        if (SimLevelBuilder.EsObraDelTaller(x, y)) continue;
+                        if (SimLevelBuilder.EsObraDelTaller(x, y))
+                        {
+                            // (playtest 43, reporte del amigo de Cesar:
+                            // "restos de bedrock que no puedo quitar, muy
+                            // esporádicamente") El rechazo por obra era MUDO
+                            // -- jambas, marcos y la banda del hogar de una
+                            // estación se leen como piedra normal, y una
+                            // celda protegida entre piedra tallable parece un
+                            // BUG de bedrock, no una regla. Ahora el cincel
+                            // lo DICE (canal Avisar de siempre; el propio
+                            // Avisar ya reemplaza el texto anterior, así que
+                            // insistir no lo apila). Si el reporte se repite
+                            // SIN este aviso en pantalla, la causa es otra y
+                            // el diagnóstico F3 (Dev/DevPalette, sufijo
+                            // "· OBRA" del hover) dirá si el rect existe.
+                            if (_flask != null) _flask.Avisar("es obra del taller — no cede al cincel (las estaciones se mueven con V)");
+                            continue;
+                        }
 
                         _sim.Paint(x, y, 0, MaterialId.Empty);
                         budget--;

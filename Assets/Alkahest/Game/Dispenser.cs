@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -70,7 +71,7 @@ namespace Alkahest.Game
     /// Gota son hijos con localPosition relativo, así que se arrastran
     /// solos con él).
     /// </summary>
-    public sealed class Dispenser : MonoBehaviour, IMaquinaInteractiva, IMovible
+    public sealed class Dispenser : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
@@ -573,7 +574,11 @@ namespace Alkahest.Game
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocado())
             {
-                ToggleRequested();
+                // (ENCARGO N) RegistrarUsoE() SOLO en éxito (abrir/cerrar de
+                // verdad) -- mismo criterio que antes, ahora expresado por el
+                // valor de retorno de ToggleRequested en vez de las llamadas
+                // que vivían dentro de ella (ver su docblock).
+                if (ToggleRequested()) MachineFocus.RegistrarUsoE();
             }
 
             if (_insufficientFavorTimer > 0f) _insufficientFavorTimer -= Time.deltaTime;
@@ -614,40 +619,57 @@ namespace Alkahest.Game
             _halo.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, _haloAlfaActual);
         }
 
-        private void ToggleRequested()
+        /// <summary>
+        /// (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2 -- "el amigo de
+        /// Cesar no podía abrir los grifos") EL HANDLER COMPARTIDO DE E: sin
+        /// cambios de lógica, solo la firma pasa de `void` a `bool`
+        /// (`MachineFocus.RegistrarUsoE()` se movió al llamante de
+        /// `Update()`, que es SOLO local -- ver el docblock de
+        /// <see cref="Alkahest.Net.IMaquinaUsableRemota"/>: el árbitro de
+        /// foco del anfitrión no aplica en la vía remota). Con
+        /// <c>_racionCeldas &gt; 0</c> este mismo toggle es exactamente "sirve
+        /// UNA ración y se cierra solo" -- <see cref="EmitTick"/> ya apaga
+        /// `_on` sola al agotar la ración (ver LA RACIÓN, playtest 26); este
+        /// método solo decide si el chorro EMPIEZA, nunca cuánto dura.
+        /// </summary>
+        private bool ToggleRequested()
         {
             if (Bloqueado)
             {
                 _bloqueoAvisoTimer = InsufficientFavorFlashSeconds;
-                return;
+                return false;
             }
 
             if (_on)
             {
                 _on = false;
                 _rebosando = false;
-                // (restaurado playtest 7) Cuenta como "uso enseñado" de la E:
-                // apagar el grifo es una acción con efecto, igual que encenderlo.
-                MachineFocus.RegistrarUsoE();
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> OFF");
-                return;
+                return true;
             }
 
             if (TryPayActivationCost())
             {
                 _on = true;
                 _emitidasEstaApertura = 0; // (playtest 26, LA RACIÓN) ración nueva por apertura -- ver el docblock de _racionCeldas.
-                MachineFocus.RegistrarUsoE();
                 Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> ON (coste {favorCostPerActivation} Favor).");
+                return true;
             }
-            else
-            {
-                // (restaurado playtest 7) NO se registra uso: un intento
-                // fallido por falta de Favor no enseña nada sobre cómo usar la E.
-                _insufficientFavorTimer = InsufficientFavorFlashSeconds;
-                Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName}: sin Favor suficiente ({favorCostPerActivation} requerido).");
-            }
+
+            // (restaurado playtest 7) NO se registra uso: un intento
+            // fallido por falta de Favor no enseña nada sobre cómo usar la E.
+            _insufficientFavorTimer = InsufficientFavorFlashSeconds;
+            Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName}: sin Favor suficiente ({favorCostPerActivation} requerido).");
+            return false;
         }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+        bool IMaquinaUsableRemota.UsarPorRed() => ToggleRequested();
+
+        /// <summary>bit3 Sirviendo (contrato §1: "grifo abierto") -- literal <see cref="_on"/>.</summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed() => _on ? EstadoVivoBits.Sirviendo : (byte)0;
 
         private bool TryPayActivationCost()
         {

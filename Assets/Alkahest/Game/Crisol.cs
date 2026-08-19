@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -122,7 +123,7 @@ namespace Alkahest.Game
     /// forran la rampa. Las estaciones que reciben DEPOSITANDO (prensa,
     /// chispa, ensayo) no llevan embudo ninguno.
     /// </summary>
-    public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class Crisol : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 3;
@@ -915,16 +916,27 @@ namespace Alkahest.Game
         // =================================================================
         // ENCENDER UNA HORNADA
         // =================================================================
-        private void IntentarEncender()
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E: este método
+        /// YA era el cuerpo del E local -- `Update()` solo comprueba
+        /// `EstaEnfocada()` (proximidad DEL ANFITRIÓN) ANTES de llamarlo, así
+        /// que no había nada que extraer para reutilizarlo tal cual desde
+        /// <see cref="UsarPorRed"/> (ver el docblock de
+        /// <see cref="Alkahest.Net.IMaquinaUsableRemota"/>: esa proximidad no
+        /// aplica en la vía remota). Único cambio de este encargo: la firma
+        /// pasa de `void` a `bool` para poder devolver "no procedía" sin
+        /// tocar ninguna de las ramas existentes.
+        /// </summary>
+        private bool IntentarEncender()
         {
-            if (_fase == Fase.Corriendo) return; // ya está trabajando: E no hace nada (y el rótulo lo dice).
+            if (_fase == Fase.Corriendo) return false; // ya está trabajando: E no hace nada (y el rótulo lo dice).
             var universe = _sim.Universe;
-            if (universe == null) return;
+            if (universe == null) return false;
 
             if (!_camaraTieneAlgo || _dominanteCamara == MaterialId.Empty)
             {
                 Rotular("la cámara está vacía · vierte algo dentro", UiStyles.TextoTenue);
-                return;
+                return false;
             }
 
             // Temperatura DISPONIBLE en esta pasada: el rescoldo propio si el
@@ -939,7 +951,7 @@ namespace Alkahest.Game
                     out byte salida, out string condicion, out string verbo, out byte objetivo))
             {
                 Rotular("este fuego no le hace nada · prueba otro combustible", UiStyles.Aviso);
-                return;
+                return false;
             }
 
             _hornadaEntrada = _dominanteCamara;
@@ -958,6 +970,31 @@ namespace Alkahest.Game
                 _cestoArdiendo = true;
             }
             Rotular(null, UiStyles.Aviso);
+            return true;
+        }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+
+        /// <summary>UsarPorRed ejecuta EXACTAMENTE la acción del E local -- ver el docblock de <see cref="IntentarEncender"/>.</summary>
+        bool IMaquinaUsableRemota.UsarPorRed() => IntentarEncender();
+
+        /// <summary>
+        /// Empaqueta el estado que el Crisol YA tiene (nada nuevo que
+        /// calcular, contrato §2b: "el estado ya existe internamente, solo
+        /// empaquétalo"). Combina hornada activa, brasero con llama/brasas y
+        /// resultado reposando -- los tres bits pueden estar activos a la
+        /// vez (una hornada alimentada con el brasero ardiendo) o ninguno
+        /// (reposo frío).
+        /// </summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed()
+        {
+            byte b = 0;
+            if (_fase == Fase.Corriendo) b |= EstadoVivoBits.Trabajando;
+            if (_cestoArdiendo) b |= EstadoVivoBits.FuegoEncendido;
+            if (_fase == Fase.Lista) b |= EstadoVivoBits.ResultadoListo;
+            return b;
         }
 
         /// <summary>

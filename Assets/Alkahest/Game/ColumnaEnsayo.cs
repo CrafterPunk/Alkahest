@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Alkahest.Net;
 using Alkahest.Sim;
 
 namespace Alkahest.Game
@@ -68,7 +69,7 @@ namespace Alkahest.Game
     /// el tallado, y regla 47 pide UNA fuente de verdad para las coordenadas,
     /// no que cada método que las use tenga que vivir en el mismo archivo.
     /// </summary>
-    public sealed class ColumnaEnsayo : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina
+    public sealed class ColumnaEnsayo : MonoBehaviour, IMaquinaInteractiva, IMovibleAnclaEsquina, IMaquinaUsableRemota
     {
         /// <summary>Entre el fondo del taller (-10) y el sprite de la simulación (-5): ver el punto 3 del docblock.</summary>
         private const int OrdenVidrio = -7;
@@ -538,7 +539,7 @@ namespace Alkahest.Game
                 && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
             {
                 Observar();
-                MachineFocus.RegistrarUsoE();
+                MachineFocus.RegistrarUsoE(); // (ENCARGO N) sin cambios: observar siempre "cuenta", incluso vacía -- ver el docblock de Observar.
             }
 
             if (_destelloTanque != null) _destelloTanque.color = new Color(0.85f, 1f, 0.95f, _acuse.Alfa);
@@ -598,7 +599,15 @@ namespace Alkahest.Game
         /// esconde -- y aun así la frase sirve, porque lo que enseña es el
         /// ORDEN, no la identidad).
         /// </summary>
-        private void Observar()
+        /// <summary>
+        /// (ENCARGO N, playtest 43) EL HANDLER COMPARTIDO DE E -- sin
+        /// cambios de lógica, solo la firma pasa de `void` a `bool` (el
+        /// proximity check vive en `Update()`, fuera de este método). La
+        /// Columna SIEMPRE "procede" (leer, aunque esté vacía, es su verbo
+        /// -- ver el propio texto de "la columna está vacía"), así que
+        /// devuelve true incondicionalmente.
+        /// </summary>
+        private bool Observar()
         {
             var grid = _sim.Grid;
             var sb = new System.Text.StringBuilder(64);
@@ -637,7 +646,22 @@ namespace Alkahest.Game
                     ? "por ahora una sola capa (" + sb + ") · agrega otra cosa y E de nuevo: te digo cuál queda encima"
                     : "de arriba abajo: " + sb);
             _lecturaHasta = Time.time + RotuloSeg;
+            return true;
         }
+
+        // =================================================================
+        // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2a/§2b) EL GANCHO REMOTO
+        // =================================================================
+        bool IMaquinaUsableRemota.UsarPorRed() => Observar();
+
+        /// <summary>
+        /// La Columna no tiene ningún proceso "en curso" ni resultado que
+        /// reposa: `Observar()` es instantáneo (lee y ya) -- DECISIÓN
+        /// explícita, documentada en el informe de la ronda: sin bits que
+        /// empaquetar, devuelve 0 siempre (la réplica del invitado no anima
+        /// nada especial para esta estación).
+        /// </summary>
+        byte IMaquinaUsableRemota.EstadoVivoRed() => 0;
 
         private void OnGUI()
         {

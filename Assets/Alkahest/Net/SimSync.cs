@@ -81,8 +81,32 @@ namespace Alkahest.Net
 
         // ---- Cadencia y presupuesto ------------------------------------
 
-        /// <summary>Ticks de simulación entre difusiones. 6 a 30 Hz = ~5 envíos por segundo.</summary>
+        /// <summary>Ticks de simulación entre difusiones DEL RESTO DEL MUNDO (sin avatar cerca). 6 a 30 Hz = ~5 envíos por segundo. SIN CAMBIOS respecto al playtest 36.</summary>
         private const int TicksPorDifusion = 6;
+
+        /// <summary>
+        /// (playtest 43, LA PARIDAD VIVA, CONTRATO_PARIDAD.md §3b, "EL FRASCO
+        /// FLUIDO") Ticks de simulación entre difusiones DE LA ZONA
+        /// PRIORITARIA (chunks sucios a ≤<see cref="RadioPrioridadCeldas"/>
+        /// de CUALQUIER avatar, ver <see cref="ChunkCercaDeAlgunAvatar"/> y
+        /// <see cref="DifundirChunksSucios"/>). 2 a 30 Hz = ~15 envíos por
+        /// segundo -- 3x más rápido que el resto del mundo, que sigue a
+        /// <see cref="TicksPorDifusion"/> SIN CAMBIOS: el diagnóstico del
+        /// contrato (§0.4) medía hasta ~200ms de retardo VISUAL sobre el RTT
+        /// en todo lo que el invitado vierte/aspira porque la única cadencia
+        /// que existía era esta (a 5Hz, ~200ms entre difusiones); triplicar
+        /// SOLO la zona donde de verdad hay alguien mirando baja ese peor
+        /// caso a ~66ms de cadencia (el resto del retardo es RTT puro, que
+        /// es justo lo que pide el encargo: "verter y ver el chorro caer
+        /// AHÍ, con retardo de red puro (~RTT + 66ms), no de cadencia").
+        /// PRESUPUESTO (ver el informe de la ronda para el cálculo completo):
+        /// <see cref="MaxBytesCarga"/> y <see cref="MaxChunksPorDifusion"/>
+        /// NO CAMBIAN -- los chunks prioritarios son pocos por construcción
+        /// (un puñado de chunks sucios cerca de cada avatar, no el mundo
+        /// entero), así que triplicar SOLO su cadencia no dispara el pico
+        /// por mensaje, solo la frecuencia con la que ese puñado se manda.
+        /// </summary>
+        private const int TicksPorDifusionPrioridad = 2;
 
         /// <summary>
         /// Techo de chunks por difusión. Con agua corriendo por medio taller
@@ -143,8 +167,15 @@ namespace Alkahest.Net
         /// <summary>Dónde arrancó el último barrido de chunks sucios (reparto justo bajo el techo de <see cref="MaxChunksPorDifusion"/>).</summary>
         private int _cursorBarrido;
 
-        /// <summary>Tick de sim en el que se difundió por última vez.</summary>
-        private uint _tickUltimaDifusion;
+        /// <summary>
+        /// (playtest 43) Tick de sim en el que se difundió por última vez
+        /// CADA pasada -- ahora dos cadencias independientes (ver
+        /// <see cref="TicksPorDifusionPrioridad"/>/<see cref="TicksPorDifusion"/>),
+        /// así que hace falta un reloj propio por pasada: la prioritaria
+        /// puede disparar 2-3 veces por cada vez que dispara la del resto.
+        /// </summary>
+        private uint _tickUltimaDifusionPrioridad;
+        private uint _tickUltimaDifusionResto;
         private bool _difundidoAlgunaVez;
 
         /// <summary>Carga útil en construcción (servidor). Preasignada una vez: cero allocs gestionadas en el camino caliente del sync.</summary>
@@ -326,6 +357,16 @@ namespace Alkahest.Net
             base.OnNetworkDespawn();
         }
 
+        /// <summary>
+        /// (playtest 43) DOS CADENCIAS INDEPENDIENTES en vez de una: la
+        /// pasada prioritaria (ver <see cref="TicksPorDifusionPrioridad"/>)
+        /// puede estar "debida" en un tick en el que la del resto todavía
+        /// no lo está, y viceversa nunca pasa (6 es múltiplo de 2, así que
+        /// cada vez que el resto toca, la prioritaria también). Se calculan
+        /// los dos booleanos y se le pasan a <see cref="DifundirChunksSucios"/>,
+        /// que decide QUÉ pasadas ejecutar esta llamada -- si ninguna de las
+        /// dos toca, se sale sin ni siquiera mirar la sim.
+        /// </summary>
         private void Update()
         {
             if (!IsSpawned || _sim == null) return;
@@ -335,13 +376,35 @@ namespace Alkahest.Net
             if (stepper == null) return;
 
             uint tick = stepper.Tick;
-            if (_difundidoAlgunaVez && tick - _tickUltimaDifusion < TicksPorDifusion) return;
+
+            bool prioridadDebida = !_difundidoAlgunaVez || tick - _tickUltimaDifusionPrioridad >= TicksPorDifusionPrioridad;
+            bool restoDebido = !_difundidoAlgunaVez || tick - _tickUltimaDifusionResto >= TicksPorDifusion;
+            if (!prioridadDebida && !restoDebido) return;
 
             _difundidoAlgunaVez = true;
-            _tickUltimaDifusion = tick;
-            DifundirChunksSucios();
+            if (prioridadDebida) _tickUltimaDifusionPrioridad = tick;
+            if (restoDebido) _tickUltimaDifusionResto = tick;
+
+            DifundirChunksSucios(prioridadDebida, restoDebido);
         }
 
+        /// <summary>
+        /// (playtest 43, CONTRATO_PARIDAD.md §3b, "medir el camino del
+        /// verter del invitado") MEDIDO, NO TOCADO: este lote se vacía en
+        /// CADA <c>LateUpdate</c>, es decir, hasta una vez por FRAME de
+        /// render del cliente (típicamente 60+ Hz) -- NO espera a acumularse
+        /// varios ticks de sim (30Hz) como sí hace la difusión de chunks del
+        /// servidor. Un invitado que empieza a aspirar/verter manda su
+        /// primer <see cref="SolicitarPinturaServerRpc"/> en el frame
+        /// siguiente al gesto (≤~16ms a 60fps), muy por debajo del ≤2 ticks
+        /// (~66ms) que pedía el encargo como techo si hubiera que bajarlo --
+        /// así que <c>Game/Flask.cs</c> NO SE TOCÓ en esta ronda (fuera de
+        /// alcance salvo que la medición lo pidiera, y no lo pide): el cuello
+        /// de botella que describía el diagnóstico (§0.4) vivía ENTERO en la
+        /// difusión de vuelta del servidor (la que sí se acelera arriba,
+        /// <see cref="TicksPorDifusionPrioridad"/>), no en este camino de
+        /// ida.
+        /// </summary>
         private void LateUpdate()
         {
             // El lote de pintura se vacía en LateUpdate (no en Update) para
@@ -392,8 +455,19 @@ namespace Alkahest.Net
         /// de presupuesto -- así lo lejano de TODOS los avatares nunca se
         /// queda esperando para siempre, solo cede el turno cuando hay
         /// actividad cerca de alguien.
+        ///
+        /// (playtest 43, LA PARIDAD VIVA) Las dos pasadas ahora tienen
+        /// CADENCIAS INDEPENDIENTES (<see cref="TicksPorDifusionPrioridad"/>
+        /// = 2 ticks/~15Hz vs <see cref="TicksPorDifusion"/> = 6 ticks/~5Hz,
+        /// ver <see cref="Update"/>): `incluirPrioridad`/`incluirResto`
+        /// dicen cuál de las dos toca ESTA llamada. El presupuesto
+        /// (<see cref="MaxChunksPorDifusion"/>) sigue siendo UNO SOLO
+        /// compartido entre las dos cuando coinciden en el mismo tick (igual
+        /// que antes de esta ronda: la prioritaria consume primero, la del
+        /// resto se queda con lo que sobre) -- sin cambios de presupuesto,
+        /// solo de frecuencia, tal como pide el contrato §3b.
         /// </summary>
-        private void DifundirChunksSucios()
+        private void DifundirChunksSucios(bool incluirPrioridad, bool incluirResto)
         {
             var grid = _sim.Grid;
             if (grid == null) return;
@@ -418,13 +492,19 @@ namespace Alkahest.Net
             // PASADA 1: prioridad por avatar (ver el docblock de arriba). No
             // toca `_cursorBarrido` -- es un barrido aparte, siempre desde el
             // índice 0, que solo importa MIENTRAS haya presupuesto libre.
-            for (int ci = 0; ci < total && enviadosEstaPasada < MaxChunksPorDifusion; ci++)
+            // (playtest 43) Gateada por `incluirPrioridad`: en un tick en el
+            // que solo toca la cadencia rápida, esta es la ÚNICA pasada que
+            // corre.
+            if (incluirPrioridad)
             {
-                if (grid.chunkTouchedTick[ci] == _ultimoTickEnviado[ci]) continue;
-                if (!ChunkCercaDeAlgunAvatar(ci)) continue;
-                if (IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje))
+                for (int ci = 0; ci < total && enviadosEstaPasada < MaxChunksPorDifusion; ci++)
                 {
-                    enviadosEstaPasada++;
+                    if (grid.chunkTouchedTick[ci] == _ultimoTickEnviado[ci]) continue;
+                    if (!ChunkCercaDeAlgunAvatar(ci)) continue;
+                    if (IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje))
+                    {
+                        enviadosEstaPasada++;
+                    }
                 }
             }
 
@@ -433,21 +513,29 @@ namespace Alkahest.Net
             // `_cursorBarrido` se mueve DENTRO del bucle (para dejar apuntado
             // dónde seguir la próxima vez) y usarlo también como origen del
             // recorrido haría que el barrido se saltara chunks.
-            int inicio = _cursorBarrido;
-
-            for (int paso = 0; paso < total && enviadosEstaPasada < MaxChunksPorDifusion; paso++)
+            // (playtest 43) Gateada por `incluirResto`: en los ticks
+            // "intermedios" (solo la cadencia prioritaria tocaba) esta
+            // pasada NO corre -- el barrido circular sigue avanzando a sus
+            // 6 ticks de siempre, sin acelerar (el contrato solo pide
+            // acelerar la zona cercana a un avatar).
+            if (incluirResto)
             {
-                int ci = inicio + paso;
-                if (ci >= total) ci -= total;
+                int inicio = _cursorBarrido;
 
-                // Ya sucio-y-mandado por la pasada 1 (o ya limpio): el mismo
-                // chequeo de siempre lo descarta sin duplicar el envío,
-                // porque la pasada 1 ya actualizó `_ultimoTickEnviado`.
-                if (!IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje)) continue;
+                for (int paso = 0; paso < total && enviadosEstaPasada < MaxChunksPorDifusion; paso++)
+                {
+                    int ci = inicio + paso;
+                    if (ci >= total) ci -= total;
 
-                enviadosEstaPasada++;
-                _cursorBarrido = ci + 1;
-                if (_cursorBarrido >= total) _cursorBarrido = 0;
+                    // Ya sucio-y-mandado por la pasada 1 (o ya limpio): el mismo
+                    // chequeo de siempre lo descarta sin duplicar el envío,
+                    // porque la pasada 1 ya actualizó `_ultimoTickEnviado`.
+                    if (!IntentarCodificarChunk(grid, ci, ref longitud, ref chunksEnMensaje)) continue;
+
+                    enviadosEstaPasada++;
+                    _cursorBarrido = ci + 1;
+                    if (_cursorBarrido >= total) _cursorBarrido = 0;
+                }
             }
 
             if (chunksEnMensaje > 0)
