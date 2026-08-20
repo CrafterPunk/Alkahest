@@ -78,16 +78,24 @@ namespace Alkahest.Game
     {
         // =====================================================================
         // SEMILLA CERO (playtest 40, CONTRATO_SEMILLA.md §3). El flag estático
-        // congelado que decide TODO lo demás de esta ronda: la pantalla de
-        // entrada lo fija ANTES de cargar la escena (mismo patrón que
-        // `AlkahestSim.NextRunSeed`, se lee y se consume aquí, nunca se
-        // resetea solo -- quien entra "MODO CAÓTICO" o recarga sin pasar por
-        // el título de nuevo debe dejarlo en `false` explícitamente, ver
-        // `Game/DayCycle.cs`/la pantalla de título). `Game/AlkahestSim.cs` lo
-        // lee para elegir la seed y aplicar los overrides de `Universe`;
-        // este archivo lo lee para tapiar/destapar; `Game/Crisol.cs` lo lee
-        // para la trampa del beat 4. En MULTI (`TrySpawnRed`) NUNCA se toca:
-        // se queda en `false`, Semilla Cero no existe ahí (contrato §3).
+        // que decide gran parte de esta ronda: la pantalla de entrada lo fija
+        // ANTES de cargar la escena (mismo patrón que `AlkahestSim.NextRunSeed`,
+        // se lee y se consume aquí, nunca se resetea solo -- quien entra "MODO
+        // CAÓTICO" o recarga sin pasar por el título de nuevo debe dejarlo en
+        // `false` explícitamente, ver `Game/DayCycle.cs`/la pantalla de
+        // título). `Game/AlkahestSim.cs` lo lee para elegir la seed y aplicar
+        // los overrides de `Universe`; este archivo lo lee para tapiar/
+        // destapar; `Game/Crisol.cs` lo lee para la trampa del beat 4.
+        //
+        // (playtest 50, SEMILLA CERO COMPARTIDA; ENMENDADO playtest 52, CO-OP
+        // GUIADO) YA NO es "en MULTI nunca se toca": desde el playtest 50 el
+        // lobby (`Net/TallerSesionHud.cs`) puede ponerlo en `true` también en
+        // la escena MULTI, replicado al invitado por `Net/SimSync.cs` (que lo
+        // resetea a `false` en `OnNetworkDespawn`, anti-fuga). Esta ronda
+        // suma que, cuando es `true` en multi, `TrySpawnRed` instancia
+        // `Game/SemillaCero.cs` EN EL ANFITRIÓN (nunca en el invitado, ver el
+        // gate de esa clase) -- el arco guiado deja de ser exclusivo del modo
+        // un jugador.
         // </summary>
         public static bool ModoSemillaCero;
 
@@ -147,11 +155,26 @@ namespace Alkahest.Game
         private void Update()
         {
             if (!_spawned) { TrySpawn(); return; }
-            // (playtest 40, SEMILLA CERO) Cuatro comparaciones de bool por
-            // frame, cero allocs -- el mismo presupuesto que cualquier otro
-            // polling barato del proyecto. En caótico/multi `ModoSemillaCero`
-            // es `false` y esto no hace nada.
-            if (ModoSemillaCero) PollDestapesSemillaCero();
+            // (playtest 40, SEMILLA CERO; ENMENDADO playtest 52, CO-OP GUIADO)
+            // Comparaciones de bool por frame, cero allocs -- el mismo
+            // presupuesto que cualquier otro polling barato del proyecto. En
+            // caótico (`ModoSemillaCero` false) esto no hace nada, sea cual
+            // sea la escena. `!SimSync.EnEscena` cubre el modo un jugador
+            // (siempre "anfitrión" de su propia partida, donde este poll
+            // SIGUE haciendo el spawn tardío real, sin cambios); `SimSync.EsServidor`
+            // cubre el anfitrión del multi -- ahí, con la costura de
+            // Net/MaquinaSync.cs documentada en TrySpawnRed (las seis
+            // estaciones ya nacieron todas de una), esta llamada es hoy un
+            // NO-OP inofensivo (`_salaSpawneadaSemillaCero` llega todo en
+            // `true`) que se deja preparado para el día en que esa costura se
+            // cierre. El INVITADO nunca entra aquí: no tiene
+            // `_playerSemillaCero`/`_knowledgeSemillaCero`/
+            // `_orderSystemSemillaCero` propios (esta clase no los cachea en
+            // la rama invitado de TrySpawnRed, ver ese método) y sus
+            // estaciones las ve por RÉPLICA (Net/MaquinaSync.cs), nunca las
+            // crea él mismo -- llamar aquí en su lado intentaría spawnear con
+            // referencias null.
+            if (ModoSemillaCero && (!SimSync.EnEscena || SimSync.EsServidor)) PollDestapesSemillaCero();
         }
 
         /// <summary>
@@ -669,17 +692,87 @@ namespace Alkahest.Game
             SpawnAlbumReal(knowledge);
             SpawnOrdersHud(orderSystem);
 
-            SpawnCrisol(apprentice.transform, knowledge);
+            // (playtest 52, CO-OP GUIADO) Referencias cacheadas -- mismos
+            // campos que usa TrySpawn (modo un jugador) para
+            // PollDestapesSemillaCero. En la rama anfitrión del multi, con
+            // ModoSemillaCero, las seis estaciones tapiables nacen TODAS DE
+            // UNA más abajo (ver el bloque "COSTURA DOCUMENTADA": MaquinaSync
+            // no admite altas tardías, archivo ajeno a este encargo) en vez
+            // de una por beat -- así que estas tres referencias, en la
+            // práctica, solo las usa `Game/SemillaCero.cs::Init` (recibe
+            // `knowledge`/`orderSystem` por parámetro directo, no de aquí) y
+            // quedan cacheadas por si una ronda futura cierra esa costura y
+            // PollDestapesSemillaCero vuelve a hacer falta de verdad en
+            // multi.
+            _playerSemillaCero = apprentice.transform;
+            _knowledgeSemillaCero = knowledge;
+            _orderSystemSemillaCero = orderSystem;
+
+            SpawnCrisol(apprentice.transform, knowledge); // NUNCA tapiado (contrato §3), en multi igual que en un jugador.
+
+            // =============================================================
+            // (playtest 52, CO-OP GUIADO) COSTURA DOCUMENTADA -- DECISIÓN
+            // FUERA DE CONTRATO EXPLÍCITA. El contrato de esta ronda pide
+            // "las estaciones se spawnean TARDE, cuando el director las
+            // destape" -- MISMO patrón que TrySpawn (modo un jugador), donde
+            // Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro/HeatPlate/
+            // ChillStone solo nacen cuando `PollDestapesSemillaCero` ve
+            // `SimLevelBuilder.SalaDestapada(n)` en true. EN MULTI ESO NO ES
+            // SEGURO: `Net/MaquinaSync.cs` (archivo AJENO a este encargo,
+            // propiedad de otra ronda) escanea UNA SOLA VEZ
+            // (`IntentarEscanear`, `_escaneado` pasa a `true` para siempre) y
+            // exige que las SIETE estaciones+grifos existan YA -- si
+            // Prensa/Chispa/Columna/Ensayo/PlacaCalor/PlacaFría nacieran
+            // tarde (una por beat, el último en el beat 5.4, cerca del final
+            // del arco), el registro replicado NUNCA se publicaría hasta ese
+            // momento -- ni siquiera el Crisol o los grifos, que SÍ existen
+            // desde el minuto 0, porque el escaneo es TODO-O-NADA. El
+            // invitado se quedaría sin UNA SOLA máquina replicada (sin
+            // animaciones, sin "E — usar", sin nada) durante la mayor parte
+            // de la sesión -- justo lo contrario del mandato central de esta
+            // ronda ("que a él también le aparezcan... y todo aunque no sea
+            // host"). MaquinaSync.cs no está en la lista de archivos de este
+            // encargo (no se toca): no tiene ningún mecanismo de "alta
+            // tardía" (append tras el primer escaneo) que se pueda enganchar
+            // sin editarlo.
+            //
+            // LA DECISIÓN: las SEIS estaciones nacen TODAS DE UNA, sin
+            // condición, aquí mismo -- igual que en multi CAÓTICO, y que como
+            // vivía este archivo ANTES de esta ronda -- para que
+            // `MaquinaSync.IntentarEscanear` tenga éxito desde el primer
+            // Update y el invitado vea TODO replicado desde el minuto 0. Lo
+            // que SÍ se conserva del arco guiado: las SALAS siguen TAPIADAS
+            // de piedra (`Sim/AlkahestSim.cs`/`SimLevelBuilder.TapiarSalasSemillaCero`,
+            // gate revertido esta ronda -- ver ese archivo) y el director
+            // (más abajo) las va destapando sala a sala con
+            // `SimLevelBuilder.DestaparSala` según el jugador progresa por
+            // los beats -- así que NINGÚN jugador (host o invitado) puede
+            // FÍSICAMENTE alcanzar ni completar la Prensa/Columna/Chispa/
+            // Ensayo/alcoba fría antes de tiempo, que es la parte de la
+            // progresión que de verdad importa para el arco. Lo único que se
+            // sacrifica es la garantía cosmética de M (playtest 40): con la
+            // estación ya viva detrás del muro, su foco de proximidad
+            // (`MachineFocus`, sin oclusión por pared -- puramente
+            // distancia) podría, en teoría, mostrar su chapa "E — usar" a un
+            // jugador que se acerque MUCHO al tapiado antes de que su beat la
+            // destape (rango típico ~3.6 celdas, ver `Prensa.ProximityRange`)
+            // -- un defecto cosmético menor, nunca un atajo real (la piedra
+            // sigue bloqueando el paso). `PollDestapesSemillaCero` (más abajo
+            // en Update()) queda como NO-OP inofensivo en este camino: todas
+            // las `_salaSpawneadaSemillaCero[n]` se marcan `true` aquí mismo
+            // para que nunca intente re-spawnear (evitaría el bug de
+            // `BuildVisual` no idempotente, regla 36 de CLAUDE.md).
+            //
+            // DEUDA para Fable, prioridad alta: extender `Net/MaquinaSync.cs`
+            // con un escaneo INCREMENTAL (publicar lo que ya existe, seguir
+            // escaneando lo que falta) desharía esta costura y permitiría el
+            // spawn tardío fiel al modo un jugador sin dejar al invitado a
+            // ciegas mientras tanto.
+            // =============================================================
+            SpawnHeatPlates(apprentice.transform);
             SpawnPrensa(apprentice.transform, knowledge);
             SpawnBancoChispa(apprentice.transform, knowledge);
             SpawnColumnaEnsayo(apprentice.transform, knowledge);
-            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS, TAMBIÉN EN
-            // MULTI: "en el taller de un jugador Y en el multi (anfitrión),
-            // con réplicas para invitados" -- Semilla Cero NO existe en esta
-            // escena (ver el docblock de esta clase, punto 3, y
-            // `ModoSemillaCero` arriba), así que las dos nacen sin condición,
-            // igual que el resto de esta lista.
-            SpawnHeatPlates(apprentice.transform);
             SpawnChillStone(apprentice.transform);
 
             var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
@@ -689,22 +782,48 @@ namespace Alkahest.Game
             // tiene quién lo haga (ver punto 3 del docblock). Sin
             // MasterSupplies, igual que en la escena de un jugador.
             hints.ReiniciarParaJornada(1);
-            // (playtest 51, EL RECETARIO DEL LABORATORIO, feedback de Cesar en
-            // el playtest 50b) En la SEMILLA CERO COMPARTIDA (ModoSemillaCero,
-            // el botón del lobby -- ver el comentario de arriba en SpawnHeatPlates/
-            // SpawnChillStone, que sigue describiendo la ausencia del director de
-            // beats, no de Semilla Cero en sí) el arco clásico genérico "LO QUE
-            // PERSISTE" no sabe nada de la seed 777002 y Cesar lo reportó
-            // ilegible; GenerateOrdersSemillaCompartida() (Game/OrderSystem.cs)
-            // lo sustituye con un arco fijo de 5 pedidos con nombres reales de
-            // esa seed. El multi normal (ModoSemillaCero==false) no cambia.
-            if (ModoSemillaCero) orderSystem.GenerateOrdersSemillaCompartida();
-            else orderSystem.GenerateOrdersPersiste();
+
+            // (playtest 52, CO-OP GUIADO) EL DIRECTOR, TAMBIÉN EN EL
+            // ANFITRIÓN DEL MULTI: mandato literal de Cesar tras el playtest
+            // 51 -- "que la Semilla 0 en multiplayer escale igual como tienes
+            // pensado para la versión solo player, así puedo probar más
+            // cosas con mi amigo". `Game/SemillaCero.cs::Init` se auto-veta
+            // en el invitado (ver su docblock) -- aquí solo se instancia
+            // dentro de la rama `anfitrion` de este método, así que nunca
+            // hay riesgo de crearla dos veces (una por lado). El director
+            // encola SUS PROPIOS pedidos guiados (uno a la vez, con nombres
+            // reales de la seed 777002) -- por eso `GenerateOrdersSemillaCompartida()`
+            // (playtest 51, el "recetario" de 5 pedidos fijos) SE RETIRA de
+            // este camino: sigue DEFINIDA en Game/OrderSystem.cs (archivo
+            // ajeno, intacto -- regla 15 de CLAUDE.md, documentar lo retirado
+            // sin borrarlo) como reserva para un futuro "modo laboratorio
+            // libre" sin arco, si alguna vez vuelve a hacer falta. El multi
+            // CAÓTICO (ModoSemillaCero false) no cambia: sigue generando "LO
+            // QUE PERSISTE" como siempre.
+            if (ModoSemillaCero)
+            {
+                // Las seis estaciones de arriba ya nacieron TODAS (ver el
+                // bloque "COSTURA DOCUMENTADA" más arriba) -- se marcan como
+                // "ya spawneadas" para que PollDestapesSemillaCero (sondeado
+                // desde Update() también en la rama anfitrión del multi, ver
+                // ese método) nunca intente re-spawnearlas cuando el director
+                // llame a DestaparSala: sería una segunda BuildVisual() sobre
+                // el mismo aparato (regla 36 de CLAUDE.md, NO idempotente).
+                for (int i = 0; i < _salaSpawneadaSemillaCero.Length; i++) _salaSpawneadaSemillaCero[i] = true;
+
+                var semillaCero = new GameObject("SemillaCero").AddComponent<SemillaCero>();
+                semillaCero.Init(_sim, knowledge, orderSystem);
+            }
+            else
+            {
+                orderSystem.GenerateOrdersPersiste();
+            }
 
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio.");
+            Debug.Log("[ChaosAlchemy][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio" +
+                      (ModoSemillaCero ? " (SEMILLA CERO compartida: arco guiado por Game/SemillaCero.cs)." : "."));
         }
 
         private ApprenticeController SpawnApprentice()

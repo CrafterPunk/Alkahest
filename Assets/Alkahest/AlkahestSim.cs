@@ -240,23 +240,38 @@ namespace Alkahest
             // rect en ObraDelTaller) y antes de crear el stepper/renderer (no
             // hace falta ninguno de los dos: solo escribe CellGrid).
             //
-            // (CONTRATO_RONDA50.md §4b, ENCARGO M) `&& !SimSync.EnEscena`
-            // ES NUEVO: el laboratorio compartido pide "TODAS las salas
-            // DESTAPADAS" (contrato, textual) -- es un banco de pruebas
-            // simultáneas, no el arco guiado de un jugador, así que el
-            // anfitrión NUNCA debe tapiar nada aunque `ModoSemillaCero` esté
-            // en `true`. Sin este añadido, el botón nuevo del lobby
-            // (Net/TallerSesionHud.cs) habría dejado al anfitrión con las
-            // cinco salas amuralladas y sin ningún `Game/SemillaCero.cs` (ver
-            // TrySpawnRed en Game/AlkahestGameBootstrap.cs, que jamás lo
-            // instancia) que las fuera destapando -- un taller compartido
-            // permanentemente sellado. `!espejo` sigue excluyendo al
-            // invitado por su propia cuenta (nunca construye nada de plano
-            // por decisión propia, ver el docblock de esta clase), así que
-            // el añadido solo cambia el comportamiento del ANFITRIÓN en la
-            // escena MULTI -- el modo un jugador (`SimSync.EnEscena` siempre
-            // false ahí) no se mueve ni una línea.
-            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero && !SimSync.EnEscena) SimLevelBuilder.TapiarSalasSemillaCero(this);
+            // (CONTRATO_RONDA50.md §4b, ENCARGO M) `&& !SimSync.EnEscena` fue
+            // NUEVO en el playtest 50: el laboratorio compartido de entonces
+            // pedía "TODAS las salas DESTAPADAS" (contrato, textual) -- un
+            // banco de pruebas simultáneas, sin arco.
+            //
+            // REVERTIDO (playtest 52, CO-OP GUIADO, mandato literal de Cesar:
+            // "que la Semilla 0 en multiplayer escale igual como tienes
+            // pensado para la versión solo player"). El laboratorio destapado
+            // deja de ser el diseño vigente: `Game/SemillaCero.cs` (Encargo
+            // único de la ronda 52) ahora SÍ se instancia en el anfitrión del
+            // multi (`TrySpawnRed`, rama `anfitrion`, ver ese archivo) y es
+            // quien va destapando sala a sala con `SimLevelBuilder.DestaparSala`
+            // según el jugador avanza por los beats -- exactamente el mismo
+            // mecanismo que el modo un jugador. Con el gate `!SimSync.EnEscena`
+            // puesto, el anfitrión NUNCA tapiaba nada y el director destapaba
+            // salas que ya estaban abiertas (inofensivo pero inútil) mientras
+            // las máquinas seguían naciendo TODAS de golpe en TrySpawnRed (ver
+            // ese archivo, playtest 52): el arco guiado quedaba mudo pese a
+            // que el director sí corría. Quitar el gate es lo que hace CIERTA
+            // la frase "salas tapiadas" en multi. `!espejo` sigue excluyendo
+            // al invitado por su propia cuenta (nunca construye nada de plano
+            // por decisión propia, ver el docblock de esta clase) -- este
+            // archivo no está en la lista de archivos exclusivos del Encargo
+            // único de la ronda 52 (`Game/SemillaCero.cs`, `Game/
+            // AlkahestGameBootstrap.cs`, `Game/SubstanceKnowledge.cs`,
+            // `Net/SaberSync.cs`, `Game/OrdersHud.cs`); esta única línea se
+            // toca aquí porque el mandato de esa ronda la señala
+            // explícitamente ("el gate... se REVIERTE para que el host
+            // tapie") y sin ella el resto del encargo no puede cumplirse --
+            // documentado como decisión fuera de contrato en el informe de
+            // esa ronda.
+            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero) SimLevelBuilder.TapiarSalasSemillaCero(this);
 
             // EL ESPEJO NO TIENE STEPPER. No es que esté pausado: NO EXISTE.
             // Es la garantía estructural de que un invitado no puede simular

@@ -3425,3 +3425,35 @@ el estado TIBIO era un fósil de la era del vivium, y el halo rojo de Opus
   cartel, no un bug). ChillStone NO tocada (sin halo; FRESCA sí tiene
   consumidor real). Deuda: HintSystem/JournalHud aún mencionan TEMPLADA en
   recetas del vivium aparcado.
+
+## Playtest 52 — SEMILLA CERO CO-OP GUIADA (el arco entero, con amigo)
+
+Mandato de Cesar: "que la [Semilla] 0 en multiplayer escale igual que la de un
+jugador — probar con mi amigo, escuchar sus descubrimientos, que le aparezcan
+en pantalla aunque no sea host". La compartida deja de ser laboratorio
+destapado y corre EL ARCO GUIADO:
+
+- El director SemillaCero corre SOLO en el ANFITRIÓN del multi (gate de Init
+  estrechado: invitado jamás lo instancia; enmienda documentada del contrato
+  pt40 §2). El recetario del pt51 queda RETIRADO de este camino (reserva).
+- Salas TAPIADAS también en multi (revertido el gate del pt50 en AlkahestSim;
+  el espejo del invitado no tapia localmente: la piedra le llega por chunks).
+- LA VOZ DEL MAESTRO viaja: SemillaCero publica texto+duración (par estático),
+  SaberSync lo replica (NetworkVariable FixedString con recorte UTF-8 y
+  elipsis) y OrdersHud lo pinta en el invitado con el MISMO panel
+  (DibujarPanelMaestro estático compartido).
+- FICHAS EN EL INVITADO: auditado el camino _descubiertos →
+  AplicarDescubrimientoRemoto → AlDescubrir → ficha modal — YA disparaba el
+  teatro correcto (transición false→true), sin código nuevo; el catch-up
+  tardío entra por la cola con respiro del pt50.
+- BUG REAL cazado de paso: las descripciones de pedido >128 bytes se
+  truncaban a mitad de frase para el invitado (el beat 5.4 lo hacía) —
+  recorte por bytes con elipsis en SaberSync.
+- DECISIÓN (costura #1, documentada): MaquinaSync publica su registro UNA vez
+  y no admite altas tardías → las 6 estaciones nacen TODAS al arrancar la
+  sesión co-op (las salas de piedra siguen selladas hasta su beat: la guía la
+  hace el muro, no el spawn). Costo cosmético: una chapa "E — usar" pegándose
+  mucho a un muro sellado. Deuda: escaneo incremental de MaquinaSync.
+- Deudas: flecha a la Tolva omitida en el invitado (DeliveryChute no es
+  NetworkObject); verificar host→salir→host SIN cerrar el juego (¿AlkahestSim
+  re-crea el mundo?); HintSystem/JournalHud aún mencionan TEMPLADA.

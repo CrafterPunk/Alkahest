@@ -67,6 +67,13 @@ namespace Alkahest.Game
     /// solo para los tipos que de verdad se resuelven ahí (ver
     /// <see cref="VaALaTolva"/>). En caótico <c>anchoFlechaTolva</c> vale 0 y
     /// el layout queda idéntico al de siempre.
+    ///
+    /// (playtest 52, CO-OP GUIADO, mandato de Cesar) LA VOZ DEL MAESTRO, TAMBIÉN AQUÍ: la
+    /// rama replicada (<see cref="OnGuiReplicado"/>) pinta el panel "EL MAESTRO" de
+    /// <see cref="SemillaCero"/> con el texto que <c>Net/SaberSync.cs</c> le replica -- ver
+    /// <see cref="ActualizarMaestroReplicado"/>. La flecha a la Tolva, en cambio, se documenta
+    /// como OMITIDA en el invitado (ver el docblock de <see cref="TryFlechaTolva"/>): la Tolva
+    /// no existe como GameObject en su proceso, así que no hay contra qué apuntar.
     /// </summary>
     public sealed class OrdersHud : MonoBehaviour
     {
@@ -79,6 +86,19 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private Transform _player;
         private DeliveryChute _tolva;
+
+        // -----------------------------------------------------------------
+        // (playtest 52, CO-OP GUIADO) LA VOZ DEL MAESTRO EN EL INVITADO -- ver
+        // ActualizarMaestroReplicado/OnGuiReplicado. `_maestroTextoVisto` guarda el ÚLTIMO
+        // valor de Net/SaberSync.cs::MaestroTexto ya procesado (comparación de struct, sin
+        // alloc); solo al CAMBIAR se llama a `ToString()` y se calcula un `Time.time` LOCAL de
+        // expiración -- de ahí en adelante el invitado cuenta su propio reloj sin volver a
+        // preguntarle a la red cuánto queda (mismo criterio de "cero strings por frame salvo
+        // cuando cambian de verdad" que el resto de este archivo).
+        // -----------------------------------------------------------------
+        private Unity.Collections.FixedString128Bytes _maestroTextoVisto;
+        private string _maestroTextoLocal;
+        private float _maestroHastaLocal;
 
         // -----------------------------------------------------------------
         // Expandir/plegar (ver docblock de la clase).
@@ -268,6 +288,28 @@ namespace Alkahest.Game
         /// esta misma clase para <see cref="SaberSync"/> y que usa
         /// Game/DeliveryChute.cs para su propio <c>_player</c>) y cacheadas:
         /// esta clase no recibe ninguna de las dos por inyección.
+        /// </summary>
+        /// <summary>
+        /// (playtest 52, CO-OP GUIADO, contrato §3: "la flecha del pt50 NO revienta en la rama
+        /// replicada... si no hay DeliveryChute local resuelto, protégela con null-check y
+        /// documenta si la omites") VERIFICADO: este método YA es a prueba de invitado -- el
+        /// `if (_player == null || _tolva == null) return false;` de abajo cubre exactamente
+        /// ese caso, así que llamarlo desde <see cref="OnGuiReplicado"/> nunca reventaría.
+        ///
+        /// DECISIÓN, DOCUMENTADA: aun así, <see cref="OnGuiReplicado"/> NO lo llama. La razón:
+        /// <c>Game/DeliveryChute.cs</c> (la Tolva) solo se instancia en la rama `anfitrion` de
+        /// <c>AlkahestGameBootstrap.TrySpawnRed</c> -- NUNCA existe como GameObject en el
+        /// proceso del invitado (no es un `NetworkBehaviour`, y `Net/MaquinaSync.cs` -- el
+        /// registro que sí replica posición de máquinas -- no tiene ningún `TipoMaquina` para
+        /// ella), así que `_tolva` se quedaría en `null` PARA SIEMPRE en el invitado. Llamar a
+        /// este método desde el invitado no reventaría, pero SÍ repetiría
+        /// `FindAnyObjectByType&lt;DeliveryChute&gt;()` una vez por encargo expandido cada
+        /// frame, buscando fruitlessly algo que jamás va a aparecer -- gasto que la disciplina
+        /// de "polling barato" del proyecto no admite pagar sin ninguna esperanza de éxito.
+        /// DEUDA para Fable: registrar la Tolva en Net/MaquinaSync.cs (archivo ajeno a este
+        /// encargo) le daría al invitado una posición real contra la que apuntar la flecha --
+        /// mientras tanto, el invitado en Semilla Cero ve los pedidos y su progreso, pero sin
+        /// el glifo de dirección hacia la Tolva.
         /// </summary>
         private bool TryFlechaTolva(out string glifo)
         {
@@ -475,6 +517,19 @@ namespace Alkahest.Game
             var saber = SaberSync.Instancia;
             if (saber == null) return;
 
+            // (playtest 52, CO-OP GUIADO, contrato §3: "en el invitado, OrdersHud pinta la
+            // línea del Maestro con el MISMO estilo visual que usa SemillaCero.OnGUI en el
+            // host") El invitado no tiene NINGUNA instancia de Game/SemillaCero.cs (su Init
+            // se auto-veta fuera del anfitrión) -- lee la línea que Net/SaberSync.cs replicó
+            // (ver SondearMaestro en ese archivo) y la pinta con
+            // SemillaCero.DibujarPanelMaestro, el MISMO método estático que usa el host, sin
+            // duplicar la aritmética del panel. Se actualiza antes de dibujar nada más: no
+            // depende de `expandido`/Favor/encargos, es un canal aparte (panel centro-bajo,
+            // no compite en layout con el de arriba-derecha).
+            ActualizarMaestroReplicado(saber);
+            if (_maestroTextoLocal != null && Time.time < _maestroHastaLocal)
+                SemillaCero.DibujarPanelMaestro(_maestroTextoLocal);
+
             UiStyles.Preparar();
             bool expandido = Expandido;
             int n = saber.CountOrdenesReplicadas;
@@ -564,6 +619,27 @@ namespace Alkahest.Game
 
                 y += gapFila;
             }
+        }
+
+        /// <summary>
+        /// (playtest 52, CO-OP GUIADO) Sincroniza <see cref="_maestroTextoLocal"/>/
+        /// <see cref="_maestroHastaLocal"/> contra <see cref="SaberSync.MaestroTexto"/>/
+        /// <see cref="SaberSync.MaestroSegundosRestantes"/> SOLO cuando el texto replicado
+        /// cambió desde la última vez (comparación de <c>FixedString128Bytes</c>, sin alloc).
+        /// El "hasta" se calcula UNA vez, en el instante del cambio, sumando los segundos
+        /// restantes que el anfitrión publicó a un `Time.time` LOCAL -- de ahí en adelante el
+        /// invitado cuenta su propio reloj (no vuelve a preguntar mientras el texto no
+        /// cambie), igual que el host cuenta el suyo en `SemillaCero._maestroHasta`.
+        /// </summary>
+        private void ActualizarMaestroReplicado(SaberSync saber)
+        {
+            var actual = saber.MaestroTexto.Value;
+            if (actual.Equals(_maestroTextoVisto)) return; // sin cambio desde el último frame.
+            _maestroTextoVisto = actual;
+
+            if (actual.Length == 0) { _maestroTextoLocal = null; return; }
+            _maestroTextoLocal = actual.ToString();
+            _maestroHastaLocal = Time.time + saber.MaestroSegundosRestantes.Value;
         }
 
         /// <summary>

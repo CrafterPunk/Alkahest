@@ -67,6 +67,13 @@ namespace Alkahest.Net
     /// son IDEMPOTENTES a propósito, así que reconstruir y recibir en vivo
     /// pueden solaparse sin duplicar nada.
     ///
+    /// (playtest 52, CO-OP GUIADO) SUMA A LO DE ARRIBA -- <see cref="MaestroTexto"/>/
+    /// <see cref="MaestroSegundosRestantes"/> (NetworkVariable, no NetworkList: es UN
+    /// mensaje activo, no un historial) republican la línea vigente de
+    /// `Game/SemillaCero.cs` para que el invitado pueda pintarla (`Game/OrdersHud.cs`, rama
+    /// replicada) con el MISMO estilo que el anfitrión (`SemillaCero.DibujarPanelMaestro`,
+    /// estático, sin estado). Ver <see cref="SondearMaestro"/>.
+    ///
     /// BAUTIZO DE UN INVITADO: T abre el rito NORMAL (`Game/NamingUi.cs`,
     /// sin cambios de comportamiento -- sigue siendo local, instantáneo,
     /// habla con SU PROPIO `SubstanceKnowledge`) y al confirmar, en vez de
@@ -169,6 +176,28 @@ namespace Alkahest.Net
         public readonly NetworkVariable<int> FavorReplicado = new NetworkVariable<int>(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        // -----------------------------------------------------------------
+        // (playtest 52, CO-OP GUIADO, mandato de Cesar: "asegúrate que a él también le
+        // aparezcan... y todo aunque no sea host") LA VOZ DEL MAESTRO: `Game/SemillaCero.cs`
+        // (Encargo único de esta ronda) solo pinta su panel "EL MAESTRO" en el proceso que lo
+        // instancia -- el ANFITRIÓN del multi, desde esta ronda (ver el gate de esa clase). Sin
+        // esto, el invitado nunca oiría al Maestro. Par de NetworkVariable (no una NetworkList:
+        // es UN mensaje activo a la vez, mismo criterio que la propia SemillaCero.cs, "un único
+        // mensaje activo a la vez... nunca en OnGUI") -- FixedString128Bytes para el texto
+        // (misma capacidad que EntradaNombre/EntradaOrden, mismo margen UTF-8) y un float de
+        // SEGUNDOS RESTANTES (no un timestamp absoluto: Time.time de cada proceso arranca en su
+        // propio momento, un "hasta" absoluto del host no significaría nada en el reloj del
+        // invitado -- ver Game/OrdersHud.cs, que convierte esto a un `Time.time` LOCAL en cuanto
+        // lo recibe, una vez, no cada frame).
+        // -----------------------------------------------------------------
+        public readonly NetworkVariable<FixedString128Bytes> MaestroTexto = new NetworkVariable<FixedString128Bytes>(
+            default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public readonly NetworkVariable<float> MaestroSegundosRestantes = new NetworkVariable<float>(
+            0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+        /// <summary>Última línea publicada (o null si la última publicación fue "sin línea") -- evita reescribir las dos NetworkVariable de arriba cuando el sondeo vuelve a ver el mismo texto que ya envió.</summary>
+        private string _maestroTextoEnviado;
+
         private const float IntervaloSondeoSeg = 0.5f;
         private float _acumuladorSondeo;
 
@@ -259,6 +288,54 @@ namespace Alkahest.Net
 
             SondearConocimiento();
             SondearOrdenes();
+            SondearMaestro();
+        }
+
+        /// <summary>
+        /// (playtest 52, CO-OP GUIADO) Publica la línea activa de `Game/SemillaCero.cs` --
+        /// solo hace algo en Semilla Cero (fuera de ese modo el director ni existe, ver el
+        /// gate de esa clase); en cualquier otro modo esto es un `return` inmediato, mismo
+        /// coste que cualquier otra comparación de bool de este ciclo de 0.5s. Compara contra
+        /// <see cref="_maestroTextoEnviado"/> (string, no la NetworkVariable -- comparar
+        /// contra la propia NetworkVariable forzaría un `ToString()` cada sondeo) y solo
+        /// escribe cuando el texto CAMBIÓ de verdad, incluida la transición a "sin línea"
+        /// (string vacío).
+        /// </summary>
+        private void SondearMaestro()
+        {
+            if (!AlkahestGameBootstrap.ModoSemillaCero) return;
+
+            string texto = SemillaCero.TextoMaestroActivo; // estático, sin FindAnyObjectByType -- ver el docblock de esa propiedad.
+            if (texto == _maestroTextoEnviado) return; // sin cambio real (incluye "sigue sin nada" -> null==null).
+            _maestroTextoEnviado = texto;
+
+            if (string.IsNullOrEmpty(texto))
+            {
+                MaestroTexto.Value = default;
+                MaestroSegundosRestantes.Value = 0f;
+                return;
+            }
+
+            MaestroTexto.Value = new FixedString128Bytes(RecortarConElipsis(texto, 120));
+            MaestroSegundosRestantes.Value = SemillaCero.SegundosRestantesMaestro;
+        }
+
+        /// <summary>
+        /// Recorte defensivo POR BYTES UTF-8 (no por caracteres, a diferencia de
+        /// <see cref="RecortarDescripcion"/>): las líneas del Maestro son prosa libre escrita a
+        /// mano (Game/SemillaCero.cs), no acotadas de antemano como las descripciones de
+        /// encargo, así que sí pueden acercarse o superar la capacidad real de
+        /// <c>FixedString128Bytes</c> con tildes/ñ (2 bytes cada una en UTF-8). Nunca en el hot
+        /// path: solo corre al detectar un CAMBIO de texto (edge-trigger, unas pocas veces por
+        /// partida, ver <see cref="SondearMaestro"/>), así que un bucle por-carácter aquí no
+        /// compite con la disciplina de cero-allocs-por-frame del resto del archivo.
+        /// </summary>
+        private static string RecortarConElipsis(string texto, int maxBytes)
+        {
+            if (System.Text.Encoding.UTF8.GetByteCount(texto) <= maxBytes) return texto;
+            int cortar = texto.Length;
+            while (cortar > 0 && System.Text.Encoding.UTF8.GetByteCount(texto.Substring(0, cortar)) > maxBytes - 3) cortar--;
+            return texto.Substring(0, cortar) + "...";
         }
 
         /// <summary>Identidad de red de `matId` para el registro de nombres: él mismo si es individual, o el representante Polvo de su base si es una base×estado -- "una base = un nombre" (regla 25/playtest 25 de CLAUDE.md), nunca 8 entradas idénticas.</summary>
@@ -456,10 +533,25 @@ namespace Alkahest.Net
             _conocimientoLocal.AplicarNombreRemoto(e.matId, e.nombre.ToString());
         }
 
-        /// <summary>El recorte canónico de una descripción de encargo para caber en FixedString128Bytes (120 chars, margen UTF-8). ÚNICO punto de verdad: lo usan el volcado y la comparación de cambios -- ver el comentario del fix CS0030.</summary>
+        /// <summary>
+        /// El recorte canónico de una descripción de encargo para caber en FixedString128Bytes.
+        /// ÚNICO punto de verdad: lo usan el volcado y la comparación de cambios -- ver el
+        /// comentario del fix CS0030.
+        ///
+        /// (fix playtest 52, CO-OP GUIADO, contrato §3: "los pedidos guiados del director
+        /// aparecen en el OrdersHud del invitado con su texto completo") ANTES cortaba a 120
+        /// CARACTERES sin elipsis -- silenciosamente correcto para las descripciones cortas de
+        /// "LO QUE PERSISTE", pero al menos una línea del arco guiado
+        /// (<c>Game/SemillaCero.cs::EntrarPreguntaEnsayo</c>, "¿DE VERDAD aguanta?...") mide 135
+        /// caracteres / 137 bytes UTF-8: SUPERABA el límite real de <c>FixedString128Bytes</c>
+        /// (128 bytes) y el invitado la veía cortada a mitad de frase, sin ningún indicio de que
+        /// faltaba texto. Ahora reutiliza <see cref="RecortarConElipsis"/> (recorte por BYTES de
+        /// verdad, con "..." cuando corta) -- el host sigue viendo la frase completa en su propio
+        /// panel (esto solo afecta a lo que viaja por red).
+        /// </summary>
         private static string RecortarDescripcion(string desc)
         {
-            return (desc != null && desc.Length > 120) ? desc.Substring(0, 120) : desc;
+            return desc == null ? null : RecortarConElipsis(desc, 120);
         }
 
         private void AlCambiarDescubiertos(NetworkListEvent<byte> ev)

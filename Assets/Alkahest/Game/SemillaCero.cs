@@ -16,17 +16,29 @@ namespace Alkahest.Game
     /// llamadas de destape (<see cref="SimLevelBuilder.DestaparSala"/>, API congelada
     /// del Encargo M) y el contador de autonomía post-final-abierto.
     ///
-    /// GATE DURO DE ESCENA (contrato §2): Semilla 0 es SOLO de la escena de un
-    /// jugador. <see cref="Init"/> comprueba <see cref="SimSync.EnEscena"/> ANTES de
-    /// guardar ninguna referencia -- si alguna vez se llama desde la escena MULTI (no
-    /// debería: el contrato dice que ahí no existe ni el botón ni el flag), esta clase
-    /// se queda con `_sim == null` para siempre y <see cref="Update"/> corta en la
-    /// primera línea, sin tocar nada más.
+    /// GATE DE ESCENA (ENMIENDA playtest 52, mandato literal de Cesar: "solo me falta
+    /// que la Semilla 0 en multiplayer escale igual como tienes pensado para la
+    /// versión solo player, así puedo probar más cosas con mi amigo... asegúrate que a
+    /// él también le aparezcan los descubrimientos en pantalla y todo aunque no sea
+    /// host"). ANTES (contrato §2, playtest 40): "Semilla 0 es SOLO de la escena de un
+    /// jugador" -- <see cref="Init"/> vetaba la escena MULTI entera comprobando
+    /// <see cref="SimSync.EnEscena"/>. AHORA: el gate se estrecha a "solo el
+    /// INVITADO no puede correr el director" -- en MULTI, <see cref="Init"/> se
+    /// permite EXCLUSIVAMENTE en el ANFITRIÓN (<see cref="SimSync.EsServidor"/>). La
+    /// razón de por qué esto es seguro: el director SOLO lee/escribe
+    /// <see cref="SubstanceKnowledge"/>/<see cref="OrderSystem"/> del avatar del propio
+    /// anfitrión, que YA es la fuente de verdad replicada al invitado por
+    /// <c>Net/SaberSync.cs</c> (descubrimientos, nombres, leyes, pedidos) -- así que un
+    /// director que solo corre en el host no es distinto, en términos de autoridad, de
+    /// cualquier otra máquina de este juego (la sim entera vive solo ahí). El invitado
+    /// JAMÁS instancia esta clase (ver <c>Game/AlkahestGameBootstrap.cs::TrySpawnRed</c>,
+    /// que solo la crea en la rama <c>anfitrion</c>) -- este gate es la red de
+    /// seguridad DURA si algo llamara a <see cref="Init"/> desde el lado equivocado.
     ///
-    /// QUIÉN LA INSTANCIA: <c>Game/AlkahestGameBootstrap.cs</c> (archivo del Encargo M
-    /// en esta misma ronda, propiedad disjunta -- no se toca aquí). El enganche exacto
-    /// que falta añadir ahí, DENTRO de <c>TrySpawn()</c> (nunca en TrySpawnRed, que es
-    /// la rama multi), justo después de que existan `knowledge`/`orderSystem`:
+    /// QUIÉN LA INSTANCIA: <c>Game/AlkahestGameBootstrap.cs</c>, en <b>DOS</b> sitios
+    /// ahora -- <c>TrySpawn()</c> (modo un jugador, sin cambios) Y, desde esta ronda,
+    /// la rama <c>anfitrion</c> de <c>TrySpawnRed()</c> (la rama MULTI), ambas con el
+    /// mismo patrón:
     /// <code>
     /// if (AlkahestGameBootstrap.ModoSemillaCero)
     /// {
@@ -221,18 +233,44 @@ namespace Alkahest.Game
         public int AccionesPostFinalAbierto => _autonomiaAcciones;
 
         /// <summary>
+        /// Única instancia viva por partida -- el gate de <see cref="Init"/> garantiza que
+        /// nunca hay más de un director corriendo a la vez (un jugador, o el anfitrión del
+        /// multi). Estática porque <c>Net/SaberSync.cs</c> (archivo ajeno a este encargo, la
+        /// propiedad la tiene ese archivo) necesita leer la línea activa del Maestro
+        /// (<see cref="TextoMaestroActivo"/>) sin que nadie le inyecte una referencia directa
+        /// -- mismo criterio que <see cref="SubstanceKnowledge.AlDescubrir"/>/
+        /// <c>PuedeAnunciarTeatro</c> (estáticos, una sola instancia viva por proceso).
+        /// </summary>
+        private static SemillaCero _instancia;
+
+        /// <summary>
         /// Inyección de dependencias desde AlkahestGameBootstrap (ver el docblock de la
-        /// clase para el enganche exacto). GATE DURO (contrato §2): si la escena es la
-        /// MULTI (<see cref="SimSync.EnEscena"/>), no se guarda ninguna referencia y esta
-        /// instancia queda muda para siempre -- Semilla 0 es solo de un jugador.
+        /// clase para el enganche exacto). GATE (ENMIENDA playtest 52, ver el docblock de
+        /// la clase): en la escena MULTI (<see cref="SimSync.EnEscena"/>) solo se permite
+        /// si somos el ANFITRIÓN (<see cref="SimSync.EsServidor"/>) -- el invitado nunca
+        /// guarda ninguna referencia y esta instancia queda muda para siempre. En el modo
+        /// de un jugador (<c>EnEscena</c> false) siempre pasa, como siempre.
         /// </summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge, OrderSystem orderSystem)
         {
-            if (SimSync.EnEscena) return;
+            if (SimSync.EnEscena && !SimSync.EsServidor) return;
 
             _sim = sim;
             _knowledge = knowledge;
             _orders = orderSystem;
+            _instancia = this;
+        }
+
+        private void OnDestroy()
+        {
+            // (playtest 52) FUGA DE ESTADO: sin esto, `_instancia` (y con ella
+            // TextoMaestroActivo/SegundosRestantesMaestro) sobreviviría a la destrucción de
+            // este GameObject (fin de partida/RestartRun/salida de sesión) apuntando a un
+            // objeto Unity ya destruido -- SaberSync seguiría leyendo un texto fantasma del
+            // Maestro de la partida ANTERIOR en cuanto una segunda sesión levante otro
+            // SaberSync antes de que este director exista de nuevo. Limpiar en el mismo
+            // frame en que Unity destruye el objeto cierra la ventana.
+            if (_instancia == this) _instancia = null;
         }
 
         private void Update()
@@ -273,6 +311,25 @@ namespace Alkahest.Game
             _maestroTexto = texto;
             _maestroHasta = Time.time + duracionSeg;
         }
+
+        // =================================================================
+        // (playtest 52, CO-OP GUIADO, contrato de la ronda §3) LA VOZ DEL MAESTRO,
+        // PUBLICADA: par estático LEGIBLE (nunca escribible desde fuera) para que
+        // Net/SaberSync.cs -- archivo ajeno a este encargo -- pueda sondearla en su
+        // ciclo de 0.5s y replicarla al invitado, sin que este archivo sepa nada de
+        // red. Deriva de los mismos campos de instancia que ya usa OnGUI (única fuente
+        // de verdad, cero duplicación de estado): "texto activo" es null en cuanto
+        // caduca, exactamente el mismo criterio que ya usaba el guardián de OnGUI.
+        // =================================================================
+
+        /// <summary>La línea actual del Maestro, o null si no hay ninguna vigente ahora mismo (caducó, o el director no existe -- p. ej. en el invitado). Estático: ver el docblock de <see cref="_instancia"/>.</summary>
+        public static string TextoMaestroActivo
+            => (_instancia != null && _instancia._maestroTexto != null && Time.time < _instancia._maestroHasta)
+                ? _instancia._maestroTexto : null;
+
+        /// <summary>Segundos que le quedan a la línea activa (0 si no hay ninguna). Nunca negativo -- <see cref="Mathf.Max(float,float)"/>.</summary>
+        public static float SegundosRestantesMaestro
+            => _instancia != null ? Mathf.Max(0f, _instancia._maestroHasta - Time.time) : 0f;
 
         // =================================================================
         // BEAT 1 — EL MILAGRO.
@@ -735,7 +792,25 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return;
-            if (_maestroTexto == null || Time.time >= _maestroHasta) return;
+            DibujarPanelMaestro(TextoMaestroActivo); // ya nulo si caducó -- mismo guardián de siempre.
+        }
+
+        /// <summary>
+        /// (playtest 52, CO-OP GUIADO, contrato §3: "el invitado pinta la línea del Maestro
+        /// con el MISMO estilo visual que usa SemillaCero.OnGUI en el host") EXTRAÍDO A
+        /// MÉTODO PÚBLICO ESTÁTICO SIN ESTADO -- dibuja el panel para CUALQUIER texto que
+        /// reciba, sin leer ningún campo de instancia. El host lo llama con
+        /// <see cref="TextoMaestroActivo"/> (arriba, OnGUI); <c>Game/OrdersHud.cs</c> lo
+        /// llama con la línea que <c>Net/SaberSync.cs</c> le replicó, en el invitado, que no
+        /// tiene NINGUNA instancia de esta clase (el gate de <see cref="Init"/> se lo veta).
+        /// Así el estilo visual es EXACTAMENTE el mismo en los dos lados sin duplicar la
+        /// aritmética del panel en un archivo ajeno (regla del proyecto: "sin duplicar
+        /// lógica compleja").
+        /// </summary>
+        public static void DibujarPanelMaestro(string texto)
+        {
+            if (DayCycle.InputLocked || DayCycle.HudSilenciado) return;
+            if (string.IsNullOrEmpty(texto)) return;
             if (UiStyles.EscribiendoTexto || JournalHud.Abierto) return; // no competir con el rito de bautizo ni con el libro.
 
             UiStyles.Preparar();
@@ -746,7 +821,7 @@ namespace Alkahest.Game
             float interior = ancho - pad * 2f - acento;
 
             float altoTitulo = UiStyles.Titulo.lineHeight;
-            float altoCuerpo = UiStyles.Alto(UiStyles.CuerpoCentrado, _maestroTexto, interior);
+            float altoCuerpo = UiStyles.Alto(UiStyles.CuerpoCentrado, texto, interior);
             float alto = pad + altoTitulo + UiStyles.S(4f) + altoCuerpo + pad;
 
             var panel = new Rect((Screen.width - ancho) * 0.5f, Screen.height * 0.62f, ancho, alto);
@@ -754,7 +829,7 @@ namespace Alkahest.Game
             UiStyles.Rellenar(new Rect(panel.x, panel.y, acento, panel.height), UiStyles.Oro);
 
             GUI.Label(new Rect(panel.x + acento + pad, panel.y + pad, interior, altoTitulo), "EL MAESTRO", UiStyles.Titulo);
-            GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoCuerpo, interior, altoCuerpo), _maestroTexto, UiStyles.CuerpoCentrado);
+            GUI.Label(new Rect(panel.x + acento + pad, panel.yMax - pad - altoCuerpo, interior, altoCuerpo), texto, UiStyles.CuerpoCentrado);
         }
     }
 }

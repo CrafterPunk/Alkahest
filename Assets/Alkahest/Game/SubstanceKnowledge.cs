@@ -1045,7 +1045,35 @@ namespace Alkahest.Game
         // cambiado de verdad.
         // =================================================================
 
-        /// <summary>Aplica un descubrimiento anunciado por el anfitrión. Reutiliza <see cref="MarcarDescubierto"/> tal cual (misma transición false→true, mismo aviso "ALGO NUEVO" si toca) -- para el conocimiento del invitado, un descubrimiento remoto ES un descubrimiento, no hay una segunda clase.</summary>
+        /// <summary>
+        /// Aplica un descubrimiento anunciado por el anfitrión. Reutiliza <see cref="MarcarDescubierto"/> tal cual (misma transición false→true, mismo aviso "ALGO NUEVO" si toca) -- para el conocimiento del invitado, un descubrimiento remoto ES un descubrimiento, no hay una segunda clase.
+        ///
+        /// (VERIFICADO playtest 52, CO-OP GUIADO, mandato de Cesar: "asegúrate que a él
+        /// también le aparezcan los descubrimientos en pantalla y todo aunque no sea host")
+        /// AUDITORÍA DE PAPEL, sin código nuevo aquí -- ya cumplía lo que este encargo pedía:
+        /// (a) NO marca en silencio -- pasa por <see cref="MarcarDescubierto"/>, que SIEMPRE
+        /// dispara <see cref="AlDescubrir"/> en la transición, el MISMO evento al que
+        /// <c>Game/AlbumReal.cs::OnAlgoDescubierto</c> está suscrito -- así que la ficha-vitrina
+        /// del invitado se abre sola exactamente igual que la del anfitrión (mismo camino,
+        /// nombre real + reseña + firma, cierre manual, ver el docblock de esa clase). (b) NO
+        /// reabre fichas en un re-apply -- el guardián `if (_discovered[matId]) return;` de
+        /// <see cref="MarcarDescubierto"/> hace que un catch-up repetido (reconexión, sondeo que
+        /// reenvía un valor ya aplicado, ver <c>Net/SaberSync.cs</c>) sea un no-op idempotente de
+        /// verdad. (c) NO produce estampida -- el catch-up de un invitado tardío
+        /// (<c>SaberSync.TickInvitado</c>) llama a este método en bucle, SÍNCRONO, por cada
+        /// descubrimiento ya publicado; cada llamada dispara <c>AlDescubrir</c> en el MISMO
+        /// frame, pero <c>AlbumReal.OnAlgoDescubierto</c> no abre N fichas a la vez: las
+        /// ENCOLA (su propia cola, <c>ColaCapacidad</c>=8) y las va sacando una a una respetando
+        /// <see cref="PuedeAnunciarTeatro"/>/<see cref="RegistrarAnuncioTeatro"/> (el respiro de
+        /// <see cref="RespiroTrasCierre"/>=2s tras cada cierre) -- el orden de llegada (el mismo
+        /// orden en que <c>SaberSync._descubiertos</c> los fue publicando, que es el orden real
+        /// en que el anfitrión los descubrió) se conserva porque la cola es FIFO. Límite
+        /// documentado, no arreglado aquí (archivo ajeno): un invitado que entra TAN tarde que
+        /// ya hay más de 8 descubrimientos sin publicar pierde el AVISO de los que exceden la
+        /// cola (no el descubrimiento en sí, que ya quedó marcado `_discovered=true` y es
+        /// repasable con B) -- mismo criterio de degradación que ya usa
+        /// <see cref="EncolarLeyBanner"/> para el banner de leyes.
+        /// </summary>
         public void AplicarDescubrimientoRemoto(byte matId) => MarcarDescubierto(matId);
 
         /// <summary>
