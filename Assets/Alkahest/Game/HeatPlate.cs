@@ -230,6 +230,86 @@ namespace Alkahest.Game
     /// la ZONA de encima"), y la chapa de ESTADO cambia de
     /// "TEMPLADA 64°"/"ARDIENTE 220°" a un VERBO + temperatura
     /// ("calentando · 64°") -- ver <see cref="RebuildChapaEstado"/>.
+    ///
+    /// ---------------------------------------------------------------------
+    /// FUERA EL HALO, TEMPLADA SALE DEL CICLO, Y EL OFICIO SE EXPLICA
+    /// (playtest 51, feedback de Cesar en el playtest 50b)
+    /// ---------------------------------------------------------------------
+    /// Cesar, jugando: (1) *"¿para qué sirve la placa de calor? ni siquiera
+    /// consigue la arena tostada aunque llegue a 320°; no sé para qué sirve
+    /// el estado tibio"*; (2) *"quítale esa luz horrible -- el rojito
+    /// encendido encima de la placa no tiene lugar en nuestro mundito, quiero
+    /// ver las partículas reales quemándose o evaporándose"*.
+    ///
+    /// 1. FUERA EL HALO (IDEA DESCARTADA, regla 15 de CLAUDE.md -- no se borra
+    ///    en silencio). El campo <c>_brillo</c> ("BrilloCalor", playtest 49,
+    ///    ver <see cref="MaquinariaSprites.Halo"/>) era una capa flotante
+    ///    DETRÁS de la losa que latía naranja-rojo con la placa encendida --
+    ///    exactamente el "rojito encendido" que Cesar pidió quitar. Retirado
+    ///    ENTERO (campo, creación en BuildVisual, ActualizarBrillo() y su
+    ///    llamada desde AnimarResistencias): el espectáculo real de "algo se
+    ///    está calentando" ya lo dan las animaciones del CA mismo (Game/
+    ///    ParticulasFx.cs + el propio material calentándose/hirviendo/
+    ///    ardiendo en la sim), no un halo de sprite superpuesto. El latido
+    ///    del SERPENTÍN dentro de la textura (<see cref="ColorResistencia"/>/
+    ///    <see cref="AnimarResistencias"/>) SE QUEDA: no es un halo flotante,
+    ///    es el propio aparato calentándose, visible solo de cerca -- la
+    ///    distinción exacta que separa "instrumento honesto" de "luz de
+    ///    neón" que pedía el playtest 48/49.
+    ///
+    /// 2. TEMPLADA SALE DEL CICLO DE E (el código NO se borra). <see cref="CycleState"/>
+    ///    ciclaba Off-&gt;Templada-&gt;Ardiente-&gt;Off (mod 3); ahora es un flip de
+    ///    DOS estados, Off&lt;-&gt;Ardiente. TEMPLADA era la banda de crecimiento
+    ///    del Vivium (playtest 4, ver el punto 3 más arriba) -- con el Vivium
+    ///    APARCADO desde el playtest 25 ("LO QUE PERSISTE", spawns comentados)
+    ///    ya no tiene ningún consumidor real en Semilla Cero ni en el
+    ///    laboratorio clásico: es exactamente el hueco que denuncia la regla
+    ///    48 de CLAUDE.md ("cada estado necesita un verbo visible Y un
+    ///    consumidor real") y la causa de que Cesar no encontrara para qué
+    ///    servía. <c>State.Templada</c>, <c>_templadaRaw</c> y las ramas
+    ///    <c>case State.Templada</c> de <see cref="ColorResistencia"/>/
+    ///    <see cref="StateLabel"/>/<see cref="RebuildChapaEstado"/> se dejan
+    ///    INTACTOS a propósito (regla 15): si el Vivium vuelve a jugarse, el
+    ///    paso de vuelta es reinsertar Templada en el ciclo, no reinventar la
+    ///    banda térmica. <see cref="IMaquinaUsableRemota.EstadoVivoRed"/> no
+    ///    necesitó tocarse: ya reduce cualquier estado activo a un solo bit
+    ///    <c>Trabajando</c> (+ <c>FuegoEncendido</c> solo en Ardiente), y
+    ///    <c>Net/MaquinaReplica.cs</c> tampoco imprime nunca el nombre crudo
+    ///    del estado (verificado: <c>DescribirTrabajo</c> dice "trabajando...",
+    ///    nunca "TEMPLADA") -- ningún camino, local o de red, puede mostrar
+    ///    ya ese texto.
+    ///    DEUDA FUERA DE ESTE ARCHIVO (no editable en este encargo): dos
+    ///    textos siguen invitando a "TEMPLADA" que ya no existe en el ciclo --
+    ///    <c>Game/HintSystem.cs</c> ("En la CUBA DERECHA, pon la placa en
+    ///    TEMPLADA (E)") y <c>Game/JournalHud.cs</c> (dos menciones, la
+    ///    receta de cultivo del Vivium). Como el Vivium ya estaba aparcado
+    ///    antes de esta ronda, es muy probablemente deuda YA existente (el
+    ///    hint/receta de un sistema que ya no se juega), no una regresión
+    ///    nueva de este cambio -- pero queda anotada para quien retome esos
+    ///    dos archivos.
+    ///
+    /// 3. EL OFICIO EXPLICADO, NO SOLO NOMBRADO. El rótulo de proximidad de
+    ///    cerca gana una segunda línea que se enseña de nuevo EN CADA
+    ///    acercamiento (rearmada por transición lejos-&gt;cerca, ver
+    ///    <see cref="_oficioVisibleHasta"/>/<see cref="OnGUI"/> -- a
+    ///    diferencia de <see cref="ChapaNombre"/>, que se apaga para siempre
+    ///    tras aprenderse una vez): "hierve, derrite y seca la ZONA -- transformar
+    ///    materia es oficio del CRISOL". Responde de raíz a "¿por qué no
+    ///    consigo arena tostada aunque llegue a 320°?": las transiciones del
+    ///    RETÍCULO (Polvo-&gt;Calcinado/Fundido/etc., <see cref="EstadoMateria"/>,
+    ///    CONTRATO_PERSISTE.md §2) son POR HORNADA -- decisión estructural del
+    ///    playtest 27, <c>Game/Crisol.DecidirHornada</c>, que exige una
+    ///    CÁMARA cerrada con combustible propio -- y esta placa NUNCA pasa
+    ///    por ahí: solo empuja <c>grid.temp[]</c> hacia un objetivo (ver
+    ///    <see cref="ApplyHeatTick"/>). Que la arena caliente a 320°C no se
+    ///    calcine sola sobre la placa es la FÍSICA CORRECTA del juego, sin
+    ///    cartel que lo explicara -- no un bug, el diagnóstico exacto que
+    ///    pide la regla 30 de CLAUDE.md antes de tocar código: el "culpable"
+    ///    no era esta clase, era la ausencia de un rótulo que dijera "aquí NO
+    ///    se transforma nada, solo se cuece lo que ya traigas". Lo que la
+    ///    placa SÍ hace de verdad -- hervir agua, fundir hielo/oleaginosos,
+    ///    secar hasta el punto de ignición -- lo dice la línea nueva sin
+    ///    prometer una capacidad que no tiene.
     /// </summary>
     public sealed class HeatPlate : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
@@ -281,15 +361,27 @@ namespace Alkahest.Game
         private int _holdTicksRestantes;
 
         private SpriteRenderer _resistencias;
-        /// <summary>(playtest 49) Halo cálido de "estufa trabajando": capa DETRÁS de la losa, desplazada hacia arriba. Ver el doc de clase "VUELVE EL SERPENTÍN, PULIDO" y <see cref="ActualizarBrillo"/>.</summary>
-        private SpriteRenderer _brillo;
         private Vector3 _centroChasis;
 
         /// <summary>(restaurado playtest 7) Capa de resalte dorado del aparato enfocado, ver ActualizarResalte.</summary>
         private SpriteRenderer _resalte;
         private float _alfaResalte;
-        /// <summary>(playtest 49) Alfa suavizada del halo cálido, ver <see cref="ActualizarBrillo"/>.</summary>
-        private float _alfaBrillo;
+
+        /// <summary>
+        /// (playtest 51, ver el docblock de clase "EL OFICIO SE EXPLICA") Reloj de
+        /// visibilidad de la segunda línea del rótulo ("hierve, derrite y seca la
+        /// ZONA..."): mientras <c>Time.time &lt; _oficioVisibleHasta</c> la línea se
+        /// dibuja. Se REARMA cada vez que el aprendiz ENTRA en el anillo de nombre
+        /// (transición lejos-&gt;cerca, ver <see cref="_dentroDeRangoNombreAnterior"/>
+        /// en <see cref="OnGUI"/>), a diferencia de <see cref="ChapaNombre"/> (que se
+        /// apaga para siempre tras <see cref="_yaConocida"/>): esta línea sigue
+        /// recordándose en CADA acercamiento, aprendida o no, porque es la que
+        /// responde a "¿para qué sirve esto?", una pregunta que Cesar seguía
+        /// teniendo bien entrada la partida.
+        /// </summary>
+        private float _oficioVisibleHasta;
+        /// <summary>Estado del frame anterior del anillo de nombre, para detectar la transición lejos-&gt;cerca que rearma <see cref="_oficioVisibleHasta"/>. Ver <see cref="OnGUI"/>.</summary>
+        private bool _dentroDeRangoNombreAnterior;
 
         // ---------------------------------------------------------------
         // ESCALA COMPARTIDA DE CERCANÍA DEL TALLER (restaurado playtest 7,
@@ -303,6 +395,9 @@ namespace Alkahest.Game
         private const float RangoEstadoDesvanece = 6.5f;
         private const float RangoNombrePleno = 2.6f;
         private const float RangoNombreDesvanece = 3.6f;
+
+        /// <summary>(playtest 51) Cuánto dura visible la línea de OFICIO tras rearmarse en cada acercamiento. Ver <see cref="_oficioVisibleHasta"/>.</summary>
+        private const float OficioDuracionSeg = 6f;
 
         /// <summary>
         /// Aprendizaje del taller (restaurado playtest 7): el aprendiz ya ha
@@ -318,6 +413,16 @@ namespace Alkahest.Game
 
         /// <summary>(playtest 48, CONTRATO_RONDA48.md §3b: "cada fuego dice su oficio") Ya no es solo un nombre -- dice lo que HACE.</summary>
         private const string ChapaNombre = "PLACA DE CALOR — entibia la ZONA de encima";
+
+        /// <summary>
+        /// (playtest 51, feedback de Cesar en el playtest 50b: "¿para qué sirve la
+        /// placa de calor? ni siquiera consigue la arena tostada aunque llegue a
+        /// 320°") Segunda línea del rótulo -- ver el docblock de clase "EL OFICIO
+        /// SE EXPLICA" para por qué esta placa NUNCA transforma materia (las
+        /// transiciones del retículo son por HORNADA, decisión del Crisol) y qué
+        /// SÍ hace de verdad.
+        /// </summary>
+        private const string ChapaOficio = "Hierve, derrite y seca la ZONA — transformar materia es oficio del CRISOL.";
 
         // Foco de interacción: solo el aparato MÁS CERCANO responde a E y
         // muestra su prompt (ver Game/MachineFocus.cs).
@@ -467,15 +572,14 @@ namespace Alkahest.Game
                 anchoMundo * 1.15f, altoMundo * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
-            // (playtest 49) HALO DE ESTUFA: va DEBAJO de la losa (17 < 18) y
-            // desplazado hacia arriba, así que la losa opaca lo tapa y solo
-            // se ve la parte que sube hacia la cuba -- que es justo adonde va
-            // el calor. Se crea UNA vez aquí (regla 36); en Update solo se le
-            // cambia el color (cero allocs/frame, ver ActualizarBrillo).
-            _brillo = MaquinariaSprites.CrearCapa(transform, "BrilloCalor", MaquinariaSprites.Halo(), 17,
-                anchoMundo * 0.92f, altoMundo * 3.4f);
-            _brillo.transform.localPosition = new Vector3(0f, altoMundo * 1.05f, 0f);
-            _brillo.color = new Color(1f, 0.45f, 0.16f, 0f);
+            // (playtest 49, RETIRADO en el playtest 51 -- ver el docblock de
+            // clase "FUERA EL HALO, TEMPLADA SALE DEL CICLO, Y EL OFICIO SE
+            // EXPLICA") Aquí vivía "BrilloCalor", una capa de halo naranja
+            // DEBAJO de la losa (sortingOrder 17). Cesar la reportó
+            // literalmente ("el rojito encendido encima de la placa no tiene
+            // lugar"): eliminada entera, ninguna capa nueva la sustituye --
+            // el latido del serpentín en la textura de abajo ya comunica
+            // "encendida" sin sprite flotante.
 
             MaquinariaSprites.CrearCapa(transform, "Losa", MaquinariaSprites.LosaPlaca(spanCeldas), 18,
                 anchoMundo, altoMundo);
@@ -537,7 +641,13 @@ namespace Alkahest.Game
         {
             bool estabaActiva = _state != State.Off;
             byte objetivoPrevio = TargetRaw(); // objetivo del estado ANTES de cambiarlo.
-            _state = (State)(((int)_state + 1) % 3);
+            // (playtest 51, ver el docblock de clase "TEMPLADA SALE DEL
+            // CICLO") Antes ciclaba mod 3 (Off->Templada->Ardiente->Off);
+            // TEMPLADA se retira del ciclo de E -- ahora es un flip de DOS
+            // estados. State.Templada/_templadaRaw NO se borran (regla 15):
+            // si el Vivium vuelve a jugarse, reinsertar el paso intermedio
+            // es el único cambio que haría falta aquí.
+            _state = _state == State.Off ? State.Ardiente : State.Off;
 
             if (_state == State.Off && estabaActiva)
             {
@@ -675,32 +785,7 @@ namespace Alkahest.Game
                 _resistencias.color = ColorResistencia(pulso);
             }
 
-            ActualizarBrillo();
             ActualizarResalte();
-        }
-
-        /// <summary>
-        /// (playtest 49) El halo cálido de "estufa trabajando": alfa 0 con la
-        /// placa apagada, latido lento y muy tenue en TEMPLADA (0.10..0.19),
-        /// más vivo y más rápido en ARDIENTE (0.20..0.34). Suavizado con
-        /// MoveTowards por la misma razón que <see cref="ActualizarResalte"/>
-        /// (que un objetivo oscilante no dé latigazos al encender/apagar).
-        /// Techo deliberadamente bajo: es un BLOOM de calor sobre lo que hay
-        /// en la cuba, no una lámpara -- "sin neón crudo" es el mandato
-        /// literal de esta ronda. Cero asignaciones: Color es struct.
-        /// </summary>
-        private void ActualizarBrillo()
-        {
-            if (_brillo == null) return;
-            float objetivo;
-            switch (_state)
-            {
-                case State.Ardiente: objetivo = 0.27f + 0.07f * Mathf.Sin(Time.time * 5.2f); break;
-                case State.Templada: objetivo = 0.145f + 0.045f * Mathf.Sin(Time.time * 2.6f); break;
-                default: objetivo = 0f; break;
-            }
-            _alfaBrillo = Mathf.MoveTowards(_alfaBrillo, objetivo, 1.2f * Time.deltaTime);
-            _brillo.color = new Color(1f, 0.45f, 0.16f, _alfaBrillo);
         }
 
         /// <summary>
@@ -782,6 +867,16 @@ namespace Alkahest.Game
             // hay nada que dibujar -- ni siquiera Preparar().
             float cercaniaEstado = UiStyles.Cercania(_centroChasis, _player, RangoEstadoPleno, RangoEstadoDesvanece);
             float cercaniaNombre = UiStyles.Cercania(_centroChasis, _player, RangoNombrePleno, RangoNombreDesvanece);
+
+            // (playtest 51) Rearma el reloj de la línea de OFICIO en cada
+            // transición lejos->cerca del anillo de nombre -- ANTES del return
+            // temprano de abajo, para que una salida COMPLETA del rango
+            // (cercaniaNombre llega a 0) sí baje el flag y el siguiente
+            // acercamiento cuente como uno nuevo.
+            bool dentroDeRangoNombre = cercaniaNombre > 0f;
+            if (dentroDeRangoNombre && !_dentroDeRangoNombreAnterior) _oficioVisibleHasta = Time.time + OficioDuracionSeg;
+            _dentroDeRangoNombreAnterior = dentroDeRangoNombre;
+
             if (cercaniaEstado <= 0f && cercaniaNombre <= 0f) return;
 
             // Aprendizaje: una vez el aprendiz entra de lleno en el anillo de
@@ -811,6 +906,18 @@ namespace Alkahest.Game
                 Color tenue = UiStyles.TextoTenue;
                 UiStyles.PlacaMundo(_centroChasis, ChapaNombre,
                     new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercaniaNombre), -UiStyles.S(34f));
+            }
+
+            // 2b) OFICIO (playtest 51): a diferencia del nombre de arriba, esta
+            // línea NO se apaga para siempre -- se rearma en cada acercamiento
+            // (ver el bloque justo antes del return temprano), porque responde a
+            // "¿para qué sirve esto?", la pregunta que Cesar seguía teniendo bien
+            // entrada la partida, no solo la primera vez que vio el aparato.
+            if (Time.time < _oficioVisibleHasta)
+            {
+                Color tenue = UiStyles.TextoTenue;
+                UiStyles.PlacaMundo(_centroChasis, ChapaOficio,
+                    new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercaniaNombre), -UiStyles.S(50f));
             }
 
             // 3) PROMPT: además de foco + manos libres, solo las dos primeras

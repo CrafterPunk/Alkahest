@@ -689,7 +689,17 @@ namespace Alkahest.Game
             // tiene quién lo haga (ver punto 3 del docblock). Sin
             // MasterSupplies, igual que en la escena de un jugador.
             hints.ReiniciarParaJornada(1);
-            orderSystem.GenerateOrdersPersiste();
+            // (playtest 51, EL RECETARIO DEL LABORATORIO, feedback de Cesar en
+            // el playtest 50b) En la SEMILLA CERO COMPARTIDA (ModoSemillaCero,
+            // el botón del lobby -- ver el comentario de arriba en SpawnHeatPlates/
+            // SpawnChillStone, que sigue describiendo la ausencia del director de
+            // beats, no de Semilla Cero en sí) el arco clásico genérico "LO QUE
+            // PERSISTE" no sabe nada de la seed 777002 y Cesar lo reportó
+            // ilegible; GenerateOrdersSemillaCompartida() (Game/OrderSystem.cs)
+            // lo sustituye con un arco fijo de 5 pedidos con nombres reales de
+            // esa seed. El multi normal (ModoSemillaCero==false) no cambia.
+            if (ModoSemillaCero) orderSystem.GenerateOrdersSemillaCompartida();
+            else orderSystem.GenerateOrdersPersiste();
 
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 

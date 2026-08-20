@@ -271,6 +271,23 @@ namespace Alkahest.Game
 
         private const int ArcoPersisteCount = 5;
 
+        /// <summary>
+        /// (playtest 51, ronda 51, EL RECETARIO DEL LABORATORIO) Mismo patrón que
+        /// <see cref="_arcoPersisteIndex"/> pero para
+        /// <see cref="GenerateOrdersSemillaCompartida"/>: -1 mientras no está
+        /// activo, 0..4 = qué pedido del arco fijo de la Semilla Cero compartida
+        /// está mostrándose, <see cref="ArcoRecetarioCount"/> = arco terminado.
+        /// Los dos arcos nunca están activos a la vez en la misma partida (uno lo
+        /// arranca el laboratorio de un jugador/multi clásico, el otro solo el
+        /// botón "SEMILLA CERO compartida" del lobby), pero se mantienen en
+        /// campos disjuntos a propósito: comparten el mecanismo de avance
+        /// (uno-en-uno, ver AvanzarArcoRecetarioSiToca) sin compartir estado, así
+        /// que ninguno puede pisar la cuenta del otro si algún día coexistieran.
+        /// </summary>
+        private int _arcoRecetarioIndex = -1;
+
+        private const int ArcoRecetarioCount = 5;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
         {
@@ -585,7 +602,20 @@ namespace Alkahest.Game
         private static readonly string[] ArcoPersisteTextos =
         {
             "Sepárame el limo primordial: tráeme una sola de sus arenas, pura.",
-            "Algo que aguante el rojo del crisol sin ceder.",
+            // (playtest 51, ENCARGO OrderSystem, feedback de Cesar en el playtest
+            // 50b) ANTES decía "Algo que aguante el rojo del crisol sin ceder" y
+            // Cesar, jugando este MISMO arco clásico en la SEMILLA CERO
+            // COMPARTIDA del multi (ver GenerateOrdersSemillaCompartida más abajo
+            // para por qué cae aquí: TrySpawnRed nunca instancia el director de
+            // beats de Game/SemillaCero.cs) reportó no entender ni el texto ni lo
+            // que pedía. Reescrito con la MISMA frase que ya usa
+            // Game/SemillaCero.cs beat 5.4 (línea "sobreviva al rojo sin arder ni
+            // fundirse -- lo bien cocido aguanta", validada por Cesar en el
+            // playtest 49/50): dice DÓNDE se ensaya (el Ensayo del Maestro, no la
+            // Tolva -- MatchesOrder nunca deja este tipo coincidir ahí) y CÓMO se
+            // gana (lo cocido, con ejemplos concretos), en vez del acertijo
+            // "aguante... sin ceder" que no daba ninguna pista accionable.
+            "Trae al ENSAYO del Maestro algo que sobreviva al rojo sin arder ni fundirse -- lo bien cocido aguanta (cerámica, ladrillo).",
             "Algo que encienda mi lámpara.",
             "Algo que flote en el agua sin deshacerse en ella.",
             "El cómo del nº2, por escrito en tu libro.",
@@ -668,6 +698,145 @@ namespace Alkahest.Game
                 return true;
             }
             return false;
+        }
+
+        // =================================================================
+        // (playtest 51, EL RECETARIO DEL LABORATORIO -- CONTRATO_RONDA51.md,
+        // feedback de Cesar en el playtest 50b) LA SEMILLA CERO COMPARTIDA DEL
+        // MULTI (botón "ANFITRIÓN -- SEMILLA CERO compartida" en
+        // Net/TallerSesionHud.cs) fija el mundo a Universe.SemillaCero=777002 +
+        // overrides + veta + TODAS las salas destapadas de una vez, SIN el
+        // director de beats (Game/AlkahestGameBootstrap.cs::TrySpawnRed NUNCA
+        // instancia Game/SemillaCero.cs -- pedido textual de Cesar, "un
+        // laboratorio para pruebas en simultáneo", no el arco guiado). Con el
+        // director ausente, TrySpawnRed llamaba a GenerateOrdersPersiste() --
+        // el arco clásico genérico de "LO QUE PERSISTE" -- que Cesar reportó
+        // no entender ("¿qué significa 'algo que aguante el calor del crisol
+        // sin ceder'?... debería pedirme la transformación del carbón, o la
+        // arena con agua, no algo que obtenga después de 3-4 procesos").
+        //
+        // Tenía razón: el arco clásico no sabe NADA de la seed 777002 (habla
+        // por EFECTO/tabla, nunca por identidad real, porque en el caótico
+        // nada tiene nombre real) -- en Semilla Cero, en cambio, TODO el
+        // retículo base×estado YA tiene nombre real desde el primer instante
+        // (Universe.TieneIdentidadReal, ver SubstanceKnowledge.cs). Este
+        // método reemplaza GenerateOrdersPersiste SOLO para el botón de la
+        // Semilla Cero compartida (ver la línea que elige el generador en
+        // AlkahestGameBootstrap.TrySpawnRed) con un arco FIJO de 5 pedidos que
+        // enseña la cadena temprana REAL de esa seed, de lo simple a lo
+        // complejo, CON NOMBRES REALES -- exactamente lo que Cesar pidió.
+        //
+        // Cadena verificada leyendo Sim/Universe.cs (ConstruirIdentidadReal +
+        // AplicarOverridesSemillaCero) y Sim/SimLevelBuilder.cs (BuildVetaTurba):
+        //  1. ARENA DE SÍLICE = MatDe(0,Polvo): la extracción "a fuego propio"
+        //     (Universe.SemillaCeroBaseIdx=0, banda MUY por debajo del rescoldo
+        //     tier0) -- ninguna otra base sale del limo sin combustible. Es el
+        //     mismo material del beat 1/2 del director single-player.
+        //  2. TURBA = MatDe(3,Polvo): YA NO sale del limo en esta seed (D1 del
+        //     playtest 48, ver el override 1) -- se TALLA de la veta parda del
+        //     muro con el Cincel (tecla C), disponible desde el arranque. Es el
+        //     "algo simple" que Cesar pedía como segundo paso, no un acertijo.
+        //  3. CARBÓN VEGETAL = MatDe(3,Calcinado): calcinar la PROPIA turba en
+        //     el crisol (turba cruda ya es combustible por sí misma a partir
+        //     del override 1b, así que se autoalimenta) -- la "transformación
+        //     del carbón" que Cesar pidió textualmente, UN solo proceso desde
+        //     el material del pedido 2.
+        //  4. ARENA TOSTADA = MatDe(0,Calcinado): calcinar arena usando turba
+        //     como combustible en el brasero -- el MISMO material y mecánica
+        //     que el beat 4 real del director single-player ("Más de eso, pero
+        //     TOSTADO"), así que el arco de Semilla Cero compartida enseña
+        //     exactamente la misma lección que el arco guiado, con las piezas
+        //     que este pedido ya dejó en el frasco (pedidos 1 y 2).
+        //  5. BARBOTINA = MatDe(1,Solucion): arcilla (extraída a más fuego,
+        //     combustible turba/carbón) disuelta en agua. LEÍDO EL CÓDIGO antes
+        //     de fijar el target (regla 50 de CLAUDE.md): Game/DeliveryChute.cs
+        //     dice explícito que la Tolva "engulle -- sólido, líquido, polvo,
+        //     da igual" (ArrastreTick no distingue arquetipo) y MatchesOrder
+        //     para OrderType.Guiado solo compara matId, sin filtrar por
+        //     arquetipo -- Solucion (líquido) SÍ es entregable en la Tolva HOY,
+        //     así que no hace falta el sustituto de Mortero/Adobe que
+        //     contemplaba el encargo: barbotina es el target real, y cierra el
+        //     arco con la ÚNICA transición del retículo que pasa por AGUA (el
+        //     eje que las 4 anteriores no tocan).
+        //
+        // TIPO: OrderType.Guiado (no NamedMaterial) A PROPÓSITO -- mismo motivo
+        // que Game/SemillaCero.cs: RefreshDescripciones() SOLO recalcula
+        // Grows/CrystalSolid/NamedMaterial al subir NamingVersion, así que un
+        // NamedMaterial aquí se reescribiría con la plantilla genérica "Trae N
+        // celdas de lo que llamas..." en cuanto CUALQUIER jugador de la partida
+        // compartida bautizara CUALQUIER cosa (los 6 clásicos innominados siguen
+        // vivos en Semilla Cero) -- Guiado es inmune a ese refresco (ver el
+        // switch de RefreshDescripciones, default: conserva la Descripcion), así
+        // que el texto a mano de este recetario nunca se pisa.
+        //
+        // CANTIDADES CHICAS (regla 43 de CLAUDE.md): 10/8/6/6/6 -- el mismo
+        // orden de magnitud que ya validó Cesar en el arco guiado de un jugador
+        // (Beat2Cantidad=10, Beat3Cantidad=8, Beat4Cantidad=8, Beat5*Cantidad=6
+        // en Game/SemillaCero.cs), no un rediseño de balance nuevo. Recompensas
+        // crecientes 20/20/30/30/40 (140 total): el laboratorio compartido no
+        // tiene desenlace (Semilla Cero no pasa por DayCycle.TerminarPartida
+        // igual que el resto del multi), así que no hay umbral de Favor que
+        // cuadrar -- solo importa que la progresión SE LEA como una escalera.
+        // =================================================================
+        private static readonly string[] ArcoRecetarioTextos =
+        {
+            "Sepárame la primera arena del limo: enciende el crisol (E) y tráeme 10 de arena de sílice.",
+            "Esa veta parda del muro es turba: tállala con el cincel (C) y tráeme 8.",
+            "Tuesta esa turba en el crisol, sin nada más -- tráeme 6 de carbón vegetal.",
+            "Ahora calcina tu arena: aliméntala con turba en el brasero -- tráeme 6 de arena tostada.",
+            "Saca arcilla del limo a más fuego y disuélvela en agua -- tráeme 6 de barbotina.",
+        };
+
+        private static readonly byte[] ArcoRecetarioTargets =
+        {
+            MaterialId.MatDe(0, EstadoMateria.Polvo),      // arena de sílice
+            MaterialId.MatDe(3, EstadoMateria.Polvo),      // turba (base3 = veta vegetal)
+            MaterialId.MatDe(3, EstadoMateria.Calcinado),  // carbón vegetal
+            MaterialId.MatDe(0, EstadoMateria.Calcinado),  // arena tostada
+            MaterialId.MatDe(1, EstadoMateria.Solucion),   // barbotina (base1 = arcilla)
+        };
+
+        private static readonly int[] ArcoRecetarioMinCells = { 10, 8, 6, 6, 6 };
+        private static readonly int[] ArcoRecetarioRecompensa = { 20, 20, 30, 30, 40 };
+
+        /// <summary>
+        /// (playtest 51) Llamada desde AlkahestGameBootstrap.TrySpawnRed SOLO
+        /// cuando <c>ModoSemillaCero</c> está activo (el botón "SEMILLA CERO
+        /// compartida" del lobby) -- reemplaza a <see cref="GenerateOrdersPersiste"/>
+        /// en ese único camino; el arco clásico de "LO QUE PERSISTE" sigue
+        /// intacto para el laboratorio de un jugador y el multi normal. Arranca
+        /// el arco en el pedido 0; el resto se encadena solo (ver
+        /// AvanzarArcoRecetarioSiToca, llamado desde TryDeliverCell).
+        /// </summary>
+        public void GenerateOrdersSemillaCompartida()
+        {
+            ActiveOrders.Clear();
+            _arcoRecetarioIndex = 0;
+            AddArcoRecetarioOrder(_arcoRecetarioIndex);
+        }
+
+        private void AddArcoRecetarioOrder(int i)
+        {
+            AddOrder(OrderType.Guiado, ArcoRecetarioMinCells[i], ArcoRecetarioRecompensa[i], ArcoRecetarioTextos[i],
+                targetMat: ArcoRecetarioTargets[i]);
+        }
+
+        /// <summary>
+        /// Llamado tras marcar Completado=true en CUALQUIER pedido mientras el
+        /// recetario de la Semilla Cero compartida está activo. Mismo criterio
+        /// que <see cref="AvanzarArcoPersisteSiToca"/>: el arco solo tiene UN
+        /// pedido vivo en <see cref="ActiveOrders"/> a la vez, así que no hace
+        /// falta comprobar CUÁL se completó.
+        /// </summary>
+        private void AvanzarArcoRecetarioSiToca()
+        {
+            if (_arcoRecetarioIndex < 0) return;
+            _arcoRecetarioIndex++;
+            ActiveOrders.Clear();
+            if (_arcoRecetarioIndex < ArcoRecetarioCount) AddArcoRecetarioOrder(_arcoRecetarioIndex);
+            // >= ArcoRecetarioCount: arco terminado -- ActiveOrders vacío a
+            // propósito, mismo criterio que el arco de LO QUE PERSISTE (el
+            // laboratorio compartido no repone "jornada siguiente").
         }
 
         private void AddNamedOrFallback(System.Random rng)
@@ -841,6 +1010,7 @@ namespace Alkahest.Game
                     AddFavor(order.Recompensa);
                     Debug.Log($"[ChaosAlchemy] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
                     AvanzarArcoPersisteSiToca(); // no-op si el arco de LO QUE PERSISTE no está activo (_arcoPersisteIndex==-1).
+                    AvanzarArcoRecetarioSiToca(); // no-op si el recetario de la Semilla Cero compartida no está activo (_arcoRecetarioIndex==-1).
                 }
                 return DeliveryOutcome.Progressed;
             }

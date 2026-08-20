@@ -3399,3 +3399,29 @@ campo InScenePlacedSource..., normal) y StartHost(Steam) por comando arrancó
 a la primera: "Anfitrión listo: sim, máquinas, encargos y avatar propio".
 La escena sellada YA está en el disco de Cesar; el fix del builder viaja en
 ca_playtest50b.cmd.
+
+## Playtest 51 — EL RECETARIO DEL LABORATORIO Y LA PLACA HONESTA
+
+Feedback de Cesar sobre el 50b (jugando la SEMILLA CERO COMPARTIDA): el arco
+clásico "LO QUE PERSISTE" corría en el laboratorio multi y su segundo pedido
+("algo que aguante el rojo sin ceder") es de final de partida — confuso e
+inalcanzable temprano; la placa de calor no explica su oficio (no puede
+calcinar arena NI DEBE: el retículo transforma por hornada, decisión pt27),
+el estado TIBIO era un fósil de la era del vivium, y el halo rojo de Opus
+("el rojito encima de la placa") sobraba: "quiero ver las partículas reales".
+
+- **GenerateOrdersSemillaCompartida()**: arco fijo de 5 pedidos uno-a-uno que
+  enseña la cadena temprana real con nombres reales — 10 arena de sílice →
+  8 turba (veta, C) → 6 carbón vegetal → 6 arena tostada → 6 barbotina
+  (Solución entregable verificada en DeliveryChute: "engulle... da igual").
+  140 Favor total. Solo en ModoSemillaCero multi; el caótico no cambia.
+- **Texto del pedido de calor clásico** (ArcoPersisteTextos[1]): "Trae al
+  ENSAYO del Maestro algo que sobreviva al rojo sin arder ni fundirse — lo
+  bien cocido aguanta (cerámica, ladrillo)."
+- **HeatPlate**: halo _brillo RETIRADO entero (regla 15); TEMPLADA fuera del
+  ciclo de E (Off↔Ardiente; el código queda documentado por si el vivium
+  vuelve); rótulo nuevo "Hierve, derrite y seca la ZONA — transformar materia
+  es oficio del CRISOL" (el "no calcina a 320°" es física correcta sin
+  cartel, no un bug). ChillStone NO tocada (sin halo; FRESCA sí tiene
+  consumidor real). Deuda: HintSystem/JournalHud aún mencionan TEMPLADA en
+  recetas del vivium aparcado.
