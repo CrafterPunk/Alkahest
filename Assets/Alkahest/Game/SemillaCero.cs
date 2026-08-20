@@ -547,8 +547,22 @@ namespace Alkahest.Game
             // genérico del universo, no atado a _sustanciaPrincipal: la pregunta la
             // responde CUALQUIER cosa que flote sin disolverse, que es justo lo que la
             // columna enseña a observar.
+            // (fix playtest 57, reporte de Cesar: "es muy difícil saber cómo cumplirlo,
+            // pensé que se cumplía mezclando cosas en la columna... mi amigo la pasó por
+            // suerte") El texto viejo era solo "¿Por qué esto queda ENCIMA?" -- no decía
+            // ni el EXPERIMENTO (soltar un polvo sobre el agua de la columna y mirar) ni
+            // el LUGAR DE ENTREGA (la Tolva, no la columna: la columna es el instrumento
+            // de observación, la Tolva es donde se responde). Se mantiene el criterio
+            // genérico -- cualquier material del universo que flote sin disolverse vale,
+            // por tabla -- pero el texto ahora enseña el ritual completo y nombra UN
+            // camino garantizado (la turba de la veta, insoluble por decreto del propio
+            // beat y menos densa que el agua) como ejemplo, no como única respuesta.
             _orders.EncolarPedidoGuiado(OrderType.FlotaInsoluble, Beat5CantidadColumna, Beat5Recompensa,
-                "¿Por qué esto queda ENCIMA?");
+                "¿Por qué esto queda ENCIMA? Suelta un polvo sobre el agua de la columna y mira: " +
+                "el que FLOTA sin deshacerse tiene menos cuerpo que el agua. Trae " +
+                Beat5CantidadColumna + " celdas de algo así a la Tolva -- la turba de la veta, por ejemplo, " +
+                "o cualquier otra cosa que flote entera.");
+            MaestroDice("La columna es para MIRAR, no para entregar: vierte agua, suelta un polvo encima y observa quién flota sin disolverse. La respuesta me la dejas en la Tolva.", 9f);
             Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.1→5.2: se destapa la columna -- idea DENSIDAD.");
         }
 
