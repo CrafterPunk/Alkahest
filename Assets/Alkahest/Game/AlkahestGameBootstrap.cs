@@ -139,6 +139,27 @@ namespace Alkahest.Game
         // que el director tenga que buscarlos por su cuenta.
         private Dispenser[] _dispensers;
 
+        // =====================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §2)
+        // LA ALACENA Y LA MUFLA -- ver PollDestapesSemillaCero (revelado de
+        // la alacena) y ManejarCompuestoCompletado/ConstruirMufla (la obra).
+        // =====================================================================
+        /// <summary>
+        /// Referencia al StorageRack de ESTA partida, guardada en
+        /// SpawnStorageRack SIN IMPORTAR el modo -- el componente siempre
+        /// existe (ver el docblock de StorageRack.Init sobre por qué
+        /// `Net/MaquinaSync.cs` lo necesita incluso invisible); solo en
+        /// Semilla Cero hace falta esta referencia MÁS TARDE, para
+        /// <see cref="StorageRack.Revelar"/>.
+        /// </summary>
+        private StorageRack _storageRack;
+
+        /// <summary>Guarda de un solo disparo para <see cref="StorageRack.Revelar"/> -- mismo criterio que <see cref="_salaSpawneadaSemillaCero"/>, ver PollDestapesSemillaCero.</summary>
+        private bool _alacenaRevelada;
+
+        /// <summary>Guarda de un solo disparo para <see cref="ConstruirMufla"/> -- el evento `OrderSystem.AlCompletarCompuesto` no debería repetir "obra_mufla" nunca, pero blindarlo es gratis (regla 36 de CLAUDE.md: BuildVisual/TallarEnPlano no son idempotentes, una segunda llamada duplicaría la mufla entera).</summary>
+        private bool _muflaConstruida;
+
         private void Start()
         {
             _sim = FindAnyObjectByType<AlkahestSim>();
@@ -149,7 +170,25 @@ namespace Alkahest.Game
                 return;
             }
 
+            // (ronda 56, CONTRATO_RONDA56.md §3, LA COSTURA) SM se suscribe a
+            // la costura contratada por O (Game/OrderSystem.cs, archivo
+            // ajeno): estático, así que la baja es responsabilidad DE ESTE
+            // suscriptor (mismo patrón que SubstanceKnowledge.AlDescubrir,
+            // ver el docblock del evento) -- ver OnDestroy. No hace falta
+            // esperar a que exista `orderSystem` local: el evento es
+            // estático, no una instancia, y "obra_mufla" no puede dispararse
+            // antes de que el resto de TrySpawn/TrySpawnRed termine de
+            // construir el mundo (el arco de Semilla Cero tarda varios
+            // beats en llegar ahí).
+            OrderSystem.AlCompletarCompuesto += ManejarCompuestoCompletado;
+
             TrySpawn();
+        }
+
+        /// <summary>(ronda 56) Baja de la suscripción estática de arriba -- sin esto, un bootstrap de una partida anterior (DayCycle.RestartRun recarga la escena, ver el docblock de StorageRack.OnDestroy para el mismo mecanismo) se quedaría colgado del evento para siempre, apuntando a un `_sim`/`_playerSemillaCero` ya destruidos.</summary>
+        private void OnDestroy()
+        {
+            OrderSystem.AlCompletarCompuesto -= ManejarCompuestoCompletado;
         }
 
         private void Update()
@@ -231,6 +270,24 @@ namespace Alkahest.Game
                 SpawnHeatPlates(_playerSemillaCero);
                 SpawnChillStone(_playerSemillaCero);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] = true;
+            }
+
+            // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md
+            // §2a) LA ALACENA: mismo patrón "PollDestapes" que las cinco
+            // salas de arriba, pero el gatillo no es `SalaDestapada` (no es
+            // una sala tapiada por piedra) sino el flag público de O
+            // (`SemillaCero.FaseVidaUtil`), que sube al entrar en el final
+            // abierto (beat 6) -- ver el docblock de ese campo en
+            // Game/SemillaCero.cs. `Revelar` construye el visual UNA VEZ
+            // (regla 36 de CLAUDE.md, ver su propio docblock en
+            // Game/StorageRack.cs) -- `_alacenaRevelada` es la guarda de
+            // este lado, redundante a propósito con la que ya lleva
+            // `Revelar` por dentro (`_visible`): defensa en profundidad
+            // barata, mismo criterio que `_muflaConstruida` más abajo.
+            if (!_alacenaRevelada && SemillaCero.FaseVidaUtil)
+            {
+                _storageRack.Revelar(SimLevelBuilder.AlacenaX0, SimLevelBuilder.AlacenaX1, SimLevelBuilder.AlacenaBaseY, numRedomas: 6);
+                _alacenaRevelada = true;
             }
         }
 
@@ -1127,6 +1184,75 @@ namespace Alkahest.Game
             crisol.Init(_sim, player, knowledge, SimLevelBuilder.CrisolX);
         }
 
+        // =====================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §2b/§3)
+        // LA MUFLA -- LA OBRA PAGADA.
+        // =====================================================================
+        /// <summary>
+        /// Manejador de la costura contratada (§3): O dispara
+        /// <c>OrderSystem.AlCompletarCompuesto</c> con el id estable del
+        /// compuesto que acaba de cerrarse. SM solo reacciona a
+        /// "obra_mufla" -- "vitrales_capilla" es asunto de O (Favor + la
+        /// línea de cierre + encadenar el pedido de obra, todo dentro de
+        /// Game/OrderSystem.cs) y este archivo lo ignora sin más.
+        /// </summary>
+        private void ManejarCompuestoCompletado(string idCompuesto)
+        {
+            if (idCompuesto != "obra_mufla") return;
+            if (_muflaConstruida) return; // idempotente -- ver el docblock del campo.
+            _muflaConstruida = true;
+            ConstruirMufla();
+        }
+
+        /// <summary>
+        /// Talla la mufla en el sitio reservado del plano
+        /// (<see cref="SimLevelBuilder.MuflaX"/>/<see cref="SimLevelBuilder.MuflaBaseY"/>,
+        /// ver el docblock de esas constantes) y spawnea la SEGUNDA instancia
+        /// de <see cref="Crisol"/> con <c>Init</c> NORMAL -- el mismo camino
+        /// que <see cref="SpawnCrisol"/> usa para el original, misma clase,
+        /// mismo tamaño (contrato: "con Init normal").
+        ///
+        /// V1 UN JUGADOR (contrato §2b, DEUDA anotada pt53/pt56): si
+        /// <see cref="SimSync.EnEscena"/>, esto corre en el HOST (la sim
+        /// autoritativa solo vive ahí -- mismo criterio que TODA la
+        /// maquinaria de este archivo, ver el punto 2 del docblock de la
+        /// clase) y la piedra tallada SÍ viaja al invitado (espejo por
+        /// chunks, Net/SimSync.cs -- es CellGrid normal, ningún camino
+        /// especial). Lo que NO viaja es la MÁQUINA: `Net/MaquinaSync.cs`
+        /// (archivo ajeno) indexa sus réplicas 1:1 por TIPO de estación
+        /// (asume instancia única de Crisol, de Prensa, etc. -- ver su
+        /// docblock) y esta ronda es la primera en romper ese supuesto con
+        /// una SEGUNDA instancia del mismo tipo. Resultado: el invitado VE
+        /// la mufla (los chunks de piedra sí llegan) pero no puede USARLA
+        /// (E no hace nada -- `MachineFocus`/`IMaquinaUsableRemota` del lado
+        /// del invitado nunca reciben un `MaquinaReplica` para ella, solo
+        /// para el Crisol original). Arreglo de raíz: `Net/MaquinaSync.cs`
+        /// tendría que admitir MÚLTIPLES réplicas por tipo -- archivo ajeno
+        /// a este encargo, fuera de alcance; documentado también en el
+        /// informe de la ronda para quien posea ese archivo después.
+        /// </summary>
+        private void ConstruirMufla()
+        {
+            Crisol.TallarEnPlano(_sim.Grid, SimLevelBuilder.MuflaX, SimLevelBuilder.MuflaBaseY);
+
+            var go = new GameObject("Crisol_Mufla");
+            var mufla = go.AddComponent<Crisol>();
+            mufla.Init(_sim, _playerSemillaCero, _knowledgeSemillaCero, SimLevelBuilder.MuflaX);
+
+            if (SimSync.EnEscena)
+            {
+                Debug.Log("[ChaosAlchemy][Red] La mufla se talló en el host -- el invitado la VE (chunks replicados) pero no puede USARLA todavía (deuda pt56, ver el docblock de ConstruirMufla).");
+            }
+
+            // (contrato §2b) El anuncio del nacimiento de la mufla, vía el
+            // hook público que O expone para no tener que tocar ningún
+            // archivo de O -- no-op si no hay director vivo (invitado, o
+            // Semilla Cero ya terminó), ver el docblock de MaestroAnuncia.
+            SemillaCero.MaestroAnuncia("La mufla está en pie. Dos fuegos, aprendiz — ahora produce como taller de verdad.", 8f);
+
+            Debug.Log("[ChaosAlchemy] La mufla se construyó en " + SimLevelBuilder.MuflaX + "," + SimLevelBuilder.MuflaBaseY + " (obra_mufla completada).");
+        }
+
         /// <summary>LO QUE PERSISTE (contrato §5.4): la Prensa, en <see cref="SimLevelBuilder.PrensaX"/>.</summary>
         private void SpawnPrensa(Transform player, SubstanceKnowledge knowledge)
         {
@@ -1218,6 +1344,11 @@ namespace Alkahest.Game
             rack.Init(_sim, flask, knowledge, player,
                 SimLevelBuilder.EstanteX0, SimLevelBuilder.EstanteX1, SimLevelBuilder.EstanteBaseY,
                 visible: !ModoSemillaCero);
+            // (ronda 56, LA ALACENA) Guardada SIN IMPORTAR el modo -- ver el
+            // docblock de _storageRack. En Semilla Cero este mismo `rack`
+            // (visible:false, una cáscara) es el que PollDestapesSemillaCero
+            // revela más tarde con StorageRack.Revelar.
+            _storageRack = rack;
         }
 
         /// <summary>

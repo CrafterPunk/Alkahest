@@ -68,6 +68,14 @@ namespace Alkahest.Game
     public sealed class StorageRack : MonoBehaviour, IMovibleAnclaEsquina
     {
         public const int CapacidadRedoma = 300;
+        /// <summary>
+        /// Redomas por defecto -- EL VALOR QUE SIGUE USANDO EL CAÓTICO, sin
+        /// cambios (contrato ronda 56 §2a: "en el CAÓTICO no cambia nada").
+        /// (ronda 56, LA ALACENA) Deja de ser el ÚNICO recuento posible: ver
+        /// <see cref="_numRedomas"/>/<see cref="Init"/>/<see cref="Revelar"/>
+        /// -- LA ALACENA de Semilla Cero pide 6 (diseño: "6 casillas"), pero
+        /// el mueble clásico sigue tallando exactamente 5 como siempre.
+        /// </summary>
         public const int NumRedomas = 5;
 
         private const float TickDt = 1f / 30f;
@@ -139,6 +147,35 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private int _cellX0, _cellX1, _cellYBase;
 
+        /// <summary>
+        /// (ronda 56, LA ALACENA) Cuántas redomas talla ESTA instancia AHORA
+        /// MISMO -- <see cref="NumRedomas"/> (5) por defecto/CAÓTICO,
+        /// <see cref="Revelar"/> lo sobreescribe a 6 para LA ALACENA. Todos
+        /// los bucles que antes recorrían la constante fija recorren este
+        /// campo (BuildVisual/ActualizarAnimacionContenidos/RedomaBajoCursor/
+        /// OnGUI) -- así una sola clase sirve a los dos muebles sin
+        /// duplicar código, y el CAÓTICO (que nunca llama a Revelar) sigue
+        /// viendo exactamente 5, como pide el contrato.
+        /// </summary>
+        private int _numRedomas = NumRedomas;
+
+        /// <summary>
+        /// (ronda 56, LA ALACENA) `true` SOLO para el mueble revelado en
+        /// Semilla Cero por <see cref="Revelar"/> -- gatilla el rebautizo
+        /// visual (rótulo de proximidad "LA ALACENA...") sin tocar NADA del
+        /// camino del CAÓTICO (que nunca pasa por Revelar y se queda en
+        /// `false` para siempre, ver contrato §2a "en el CAÓTICO no cambia
+        /// nada").
+        /// </summary>
+        private bool _esAlacena;
+
+        /// <summary>Centro del rótulo de proximidad de LA ALACENA (ver <see cref="_esAlacena"/>) -- techo del listón, recalculado en BuildVisual.</summary>
+        private Vector3 _centroRotuloAlacena;
+
+        private const float RangoAlacenaPleno = 6.0f;
+        private const float RangoAlacenaDesvanece = 8.5f;
+        private const string RotuloAlacena = "LA ALACENA — guarda aquí lo que produzcas (vierte en una casilla)";
+
         private sealed class Redoma
         {
             public byte Mat;
@@ -182,7 +219,17 @@ namespace Alkahest.Game
         private SubstanceKnowledge _saber;
         private Transform _jugador;
 
-        private readonly Redoma[] _redomas = new Redoma[NumRedomas];
+        /// <summary>
+        /// (ronda 56) YA NO ES `readonly` NI de tamaño fijo -- BuildVisual la
+        /// reasigna a <see cref="_numRedomas"/> elementos si difiere del
+        /// tamaño actual (ver ese método). Se inicializa aquí al tamaño POR
+        /// DEFECTO (5) para que <see cref="RedomaBajoCursor"/> (llamado por
+        /// otras clases vía <see cref="RatonSobreRedoma"/> INCLUSO con
+        /// `_visible=false`, ver el docblock de <see cref="Init"/>) siempre
+        /// tenga un array no nulo que recorrer, aunque esté vacío de
+        /// contenido (elementos `null`, el bucle ya los salta).
+        /// </summary>
+        private Redoma[] _redomas = new Redoma[NumRedomas];
         private float _accumulator;
 
         private int _hover = -1;
@@ -226,7 +273,7 @@ namespace Alkahest.Game
         /// para un mueble que nadie puede ver).
         /// </summary>
         public void Init(AlkahestSim sim, Flask frasco, SubstanceKnowledge saber, Transform jugador,
-            int cellX0, int cellX1, int cellYBase, bool visible = true)
+            int cellX0, int cellX1, int cellYBase, bool visible = true, int numRedomas = NumRedomas)
         {
             _sim = sim;
             _frasco = frasco;
@@ -234,6 +281,7 @@ namespace Alkahest.Game
             _jugador = jugador;
             _instancia = this;
             _visible = visible;
+            _numRedomas = numRedomas;
             if (!visible) return;
 
             BuildVisual(cellX0, cellX1, cellYBase);
@@ -243,6 +291,40 @@ namespace Alkahest.Game
             // mampostería"), así que registrarse como IMovible es más simple
             // que en cualquier otra estación -- ver Reposicionar más abajo.
             Mudanza.RegistrarMovible(this);
+        }
+
+        /// <summary>
+        /// (ronda 56, LA ALACENA, CONTRATO_RONDA56.md §2a) Construye el
+        /// visual UNA VEZ para el mueble que <see cref="Init"/> dejó como
+        /// cáscara (`visible:false`, pt54) -- llamada por
+        /// AlkahestGameBootstrap cuando `SemillaCero.FaseVidaUtil` sube a
+        /// `true` (poll barato, mismo patrón "PollDestapes" que ya usa el
+        /// bootstrap para las salas tapiables).
+        ///
+        /// IDEMPOTENTE (regla 36 de CLAUDE.md: `BuildVisual` NO lo es por sí
+        /// sola -- <see cref="MaquinariaSprites.CrearCapa"/> SIEMPRE hace
+        /// `new GameObject`, así que llamarla dos veces duplicaría
+        /// listón/redomas/tapones/brillos huérfanos, visibles, en la
+        /// posición vieja, para siempre): el guardián es <see cref="_visible"/>
+        /// -- si ya es `true` (revelada, o nacida visible en CAÓTICO), esta
+        /// llamada es no-op y no reconstruye nada.
+        ///
+        /// `numRedomas` (6 para LA ALACENA, diseño: "6 casillas") es
+        /// INDEPENDIENTE del CAÓTICO: ese camino sigue pasando por
+        /// <see cref="Init"/> con el `numRedomas` por defecto (5) y JAMÁS
+        /// llama a este método -- "en el CAÓTICO no cambia nada" (contrato
+        /// §2a) se cumple porque los dos muebles son instancias DISTINTAS de
+        /// la misma clase, cada una con su propio <see cref="_numRedomas"/>.
+        /// </summary>
+        public void Revelar(int cellX0, int cellX1, int cellYBase, int numRedomas)
+        {
+            if (_visible) return; // ya construido (o nunca estuvo oculto) -- idempotente, ver el docblock.
+
+            _visible = true;
+            _numRedomas = numRedomas;
+            _esAlacena = true; // (ronda 56) gatilla el rótulo "LA ALACENA..." en OnGUI -- ver ese campo.
+            BuildVisual(cellX0, cellX1, cellYBase);
+            Mudanza.RegistrarMovible(this); // mismo registro que Init() hace para el mueble visible desde el arranque.
         }
 
         /// <summary>
@@ -298,7 +380,7 @@ namespace Alkahest.Game
 
             transform.position += new Vector3(dxMundo, dyMundo, 0f);
 
-            for (int i = 0; i < NumRedomas; i++)
+            for (int i = 0; i < _numRedomas; i++)
             {
                 var r = _redomas[i];
                 if (r == null) continue;
@@ -345,6 +427,12 @@ namespace Alkahest.Game
             _cellX1 = cellX1;
             _cellYBase = cellYBase;
 
+            // (ronda 56, LA ALACENA) Reasigna el array SOLO si el recuento
+            // cambió -- Init() del CAÓTICO llama aquí con `_numRedomas` ya en
+            // su valor por defecto (5, el mismo tamaño con el que nació el
+            // campo), así que ese camino no reasigna nada nuevo.
+            if (_redomas.Length != _numRedomas) _redomas = new Redoma[_numRedomas];
+
             float celda = SimRenderer.CellWorldSize;
             float izq = cellX0 * celda;
             float der = (cellX1 + 1) * celda;
@@ -355,9 +443,11 @@ namespace Alkahest.Game
             // grande junto a AnchoFraccionDeSlot/AltoSobreAncho más arriba.
             // NUNCA se supone un ancho de estante a mano: si SimLevelBuilder
             // cambia RackX0/RackX1 (el plano puede MOVER el estante, ver el
-            // aviso del encargo), este cálculo se entera solo.
+            // aviso del encargo), este cálculo se entera solo. (ronda 56)
+            // `NumRedomas` -> `_numRedomas`: la única diferencia entre el
+            // estante CLÁSICO (5) y LA ALACENA (6) es este divisor.
             float anchoDisponible = der - izq;
-            _redomaSeparacion = anchoDisponible / NumRedomas;
+            _redomaSeparacion = anchoDisponible / _numRedomas;
             _redomaAncho = _redomaSeparacion * AnchoFraccionDeSlot;
             _redomaAlto = _redomaAncho * AltoSobreAncho;
             _radioRatonX = _redomaAncho * RadioRatonXFraccion;
@@ -370,11 +460,17 @@ namespace Alkahest.Game
                 der - izq, 0.24f);
             liston.transform.position = new Vector3((izq + der) * 0.5f, baseY + _redomaAlto * 0.55f, 0f);
 
-            // Cinco redomas centradas sobre el listón.
-            float anchoTotal = _redomaSeparacion * (NumRedomas - 1);
+            // (ronda 56) Centro del rótulo de proximidad de LA ALACENA (solo
+            // se dibuja si _esAlacena, ver OnGUI) -- techo del listón, un
+            // pelín por encima de donde asoman los tapones.
+            _centroRotuloAlacena = new Vector3((izq + der) * 0.5f, baseY + _redomaAlto * 1.15f, 0f);
+
+            // N redomas centradas sobre el listón (5 en el CAÓTICO, 6 en LA
+            // ALACENA -- ver _numRedomas).
+            float anchoTotal = _redomaSeparacion * (_numRedomas - 1);
             float x0 = (izq + der) * 0.5f - anchoTotal * 0.5f;
 
-            for (int i = 0; i < NumRedomas; i++)
+            for (int i = 0; i < _numRedomas; i++)
             {
                 var r = new Redoma
                 {
@@ -571,7 +667,7 @@ namespace Alkahest.Game
             if (_mascaraAlpha == null) return; // aún no se ha construido el mueble (Init no ha corrido).
 
             int frameGlobal = Mathf.FloorToInt(Time.time * FirmaVisualFabrica.AnimFps);
-            for (int i = 0; i < NumRedomas; i++)
+            for (int i = 0; i < _numRedomas; i++)
             {
                 var r = _redomas[i];
                 if (r == null || r.Cantidad <= 0 || r.Mat == MaterialId.Empty) continue;
@@ -625,7 +721,7 @@ namespace Alkahest.Game
             if (!plano.Raycast(ray, out float enter)) return _hover;
 
             Vector3 mundo = ray.GetPoint(enter);
-            for (int i = 0; i < NumRedomas; i++)
+            for (int i = 0; i < _numRedomas; i++)
             {
                 var r = _redomas[i];
                 if (r == null) continue;
@@ -763,7 +859,26 @@ namespace Alkahest.Game
             UiStyles.Preparar();
             int hover = RedomaBajoCursor();
 
-            for (int i = 0; i < NumRedomas; i++)
+            // (ronda 56, LA ALACENA, CONTRATO_RONDA56.md §2a) Rótulo de
+            // proximidad DEL MUEBLE ENTERO -- solo para el ejemplar revelado
+            // en Semilla Cero (_esAlacena, ver Revelar). El CAÓTICO nunca
+            // pone _esAlacena a true, así que este bloque jamás dibuja nada
+            // ahí: "en el CAÓTICO no cambia nada" se cumple sin ningún `if`
+            // adicional en el resto del método. Se calla mientras hay una
+            // redoma bajo el cursor (esa etiqueta manda: no hace falta que
+            // el nombre del mueble compita con "clic der. guardar...").
+            if (_esAlacena && hover < 0 && _jugador != null)
+            {
+                float cercAlacena = UiStyles.Cercania(_centroRotuloAlacena, _jugador, RangoAlacenaPleno, RangoAlacenaDesvanece);
+                if (cercAlacena > 0f)
+                {
+                    Color tenue = UiStyles.TextoTenue;
+                    UiStyles.PlacaMundo(_centroRotuloAlacena, RotuloAlacena,
+                        new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercAlacena), UiStyles.S(13f));
+                }
+            }
+
+            for (int i = 0; i < _numRedomas; i++)
             {
                 var r = _redomas[i];
                 if (r == null) continue;

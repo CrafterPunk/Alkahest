@@ -96,6 +96,37 @@ namespace Alkahest.Game
         /// <summary>Material objetivo exacto, solo relevante para <see cref="OrderType.NamedMaterial"/>.</summary>
         public readonly byte? TargetMat;
 
+        // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §1a)
+        // EL ENCARGO COMPUESTO -- decisión de implementación: TRES ORDERS
+        // HERMANAS (una por componente) que comparten <see cref="GrupoId"/>,
+        // en vez de una subclase o un arreglo interno. Cada hermana es un
+        // Order de <see cref="OrderType.Guiado"/> normal y corriente
+        // (mismo criterio de matching que ya usa Semilla Cero: matId exacto
+        // == TargetMat) -- es la opción que MENOS pelea con
+        // OrderSystem.TryDeliverCell/MatchesOrder existentes, que el
+        // contrato pedía explícitamente: no hace falta tocar NINGUNA de las
+        // dos, ambas siguen viendo tres Orders sueltas. La única pieza nueva
+        // es este grupo de campos, null en TODO Order clásico -- ver
+        // OrderSystem.EncolarCompuesto/AvanzarGrupoCompuestoSiToca para
+        // quién los llena y quién los consume.
+        // =================================================================
+
+        /// <summary>Id estable del compuesto ("vitrales_capilla", "obra_mufla") al que pertenece esta línea, o null si es un encargo normal.</summary>
+        public readonly string GrupoId;
+
+        /// <summary>Nombre corto del compuesto ("LOS VITRALES DE LA CAPILLA"), repetido en las 3 hermanas -- cualquiera basta como título del bloque en OrdersHud. Null si <see cref="GrupoId"/> es null.</summary>
+        public readonly string GrupoNombreCorto;
+
+        /// <summary>Texto narrativo largo VERBATIM del diseño, repetido en las 3 hermanas (se pinta una sola vez por bloque). Null si <see cref="GrupoId"/> es null.</summary>
+        public readonly string GrupoTextoLargo;
+
+        /// <summary>Etiqueta corta del componente para la fila del checklist ("vidrio de botella", "barbotina", "mortero" -- etiqueta de OFICIO fijada por el encargo, no sale de SubstanceKnowledge.NombreDe). Null si <see cref="GrupoId"/> es null.</summary>
+        public readonly string GrupoEtiqueta;
+
+        /// <summary>Favor TOTAL del compuesto (60/40, ver CONTRATO_RONDA56.md §0), repetido en las 3 hermanas para que OrdersHud lo muestre en la cabecera del bloque sin ir a preguntarle a OrderSystem. 0 si <see cref="GrupoId"/> es null (Recompensa por línea ya es 0 también -- ver OrderSystem.AddOrderCompuesto).</summary>
+        public readonly int GrupoRecompensaTotal;
+
         public int Progreso;
         public bool Completado;
 
@@ -112,7 +143,9 @@ namespace Alkahest.Game
         public byte? LockedMat;
 
         public Order(int id, string descripcion, OrderType tipo, int minCells, int recompensa,
-            int? minTempC = null, byte? targetMat = null)
+            int? minTempC = null, byte? targetMat = null,
+            string grupoId = null, string grupoNombreCorto = null, string grupoTextoLargo = null,
+            string grupoEtiqueta = null, int grupoRecompensaTotal = 0)
         {
             Id = id;
             Descripcion = descripcion;
@@ -121,6 +154,11 @@ namespace Alkahest.Game
             Recompensa = recompensa;
             MinTempC = minTempC;
             TargetMat = targetMat;
+            GrupoId = grupoId;
+            GrupoNombreCorto = grupoNombreCorto;
+            GrupoTextoLargo = grupoTextoLargo;
+            GrupoEtiqueta = grupoEtiqueta;
+            GrupoRecompensaTotal = grupoRecompensaTotal;
         }
     }
 }

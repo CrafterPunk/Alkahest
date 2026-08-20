@@ -462,7 +462,17 @@ namespace Alkahest.Net
 
             UiStyles.Preparar();
             Color tenue = UiStyles.TextoTenue;
-            UiStyles.PlacaMundo(_centroActual, _nombre, new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercania), UiStyles.S(30f));
+            // (integración pt55, B3 de la captura de Cesar: "el grifo" flotaba
+            // lejos de su grifo) La red solo transmite CentroMundo, que en el
+            // Dispenser real es el ANCLA DE AGARRE (transform + 2.5 celdas,
+            // ver Dispenser.CentroMundo), mientras que su rótulo propio vive
+            // en transform + 6.5 celdas (Dispenser._anclaRotulo): la réplica
+            // pintaba la chapa 4 celdas lejos de donde la pinta el host. Se
+            // compensa aquí con el MISMO delta, solo para grifos.
+            Vector3 anclaChapa = _centroActual;
+            if (_tipo == MaquinariaSprites.TipoDispenser)
+                anclaChapa.x += 4f * SimRenderer.CellWorldSize; // el delta es EN X (ambos anclas del Dispenser real son horizontales, ver sus líneas 244/363).
+            UiStyles.PlacaMundo(anclaChapa, _nombre, new Color(tenue.r, tenue.g, tenue.b, tenue.a * cercania), UiStyles.S(30f));
 
             // (ENCARGO N, playtest 43, CONTRATO_PARIDAD.md §2b) SEGUNDA LÍNEA
             // DE ESTADO: textos FIJOS del cliente (nunca strings replicados

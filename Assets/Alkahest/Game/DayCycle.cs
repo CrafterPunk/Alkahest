@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using Alkahest.Sim;
 using Alkahest.Audio;
+using Alkahest.Net;
 using FriendsLoop.Networking;
 
 namespace Alkahest.Game
@@ -293,7 +294,15 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>Nombre de la escena CLÁSICA (Título -> 3 jornadas), para "VOLVER AL TÍTULO" desde la escena MULTI -- ver <see cref="VolverAlTitulo"/>. Decisión fuera de contrato: no existía una constante compartida para este nombre; si la escena se renombrara algún día sin tocar este archivo, `SceneManager.LoadScene` falla con un solo error de consola, nada revienta en juego.</summary>
+        /// <summary>
+        /// Nombre de la escena CLÁSICA (Título -&gt; 3 jornadas). YA NO SE
+        /// USA para "VOLVER AL TÍTULO" desde la escena MULTI (playtest 55,
+        /// ronda B) -- ver el porqué en el docblock de
+        /// <see cref="VolverAlTitulo"/>. Se deja la constante, sin
+        /// llamadores, documentando el nombre por si algún día una escena
+        /// de utilidad (menú de selección, etc.) necesita referirse a la
+        /// clásica por nombre; no borrar sin releer esa nota.
+        /// </summary>
         private const string SceneNameClasica = "AlkahestLab";
 
         private void Awake()
@@ -527,7 +536,16 @@ namespace Alkahest.Game
             // lo que puede volver"), para el día en que el gate de cavado
             // regrese en otra dirección de diseño.
             HudSilenciado = false;
-            if (_orderSystem != null) _orderSystem.GenerateOrdersPersiste();
+            // (fix ronda 56, EL BUG DEL COMPUESTO) En SEMILLA CERO el arco de "LO QUE
+            // PERSISTE" NO se genera: el director (Game/SemillaCero.cs) dicta sus
+            // propios pedidos guiados uno a uno. Antes se generaba igual y quedaba
+            // ARMADO (_arcoPersisteIndex=0) debajo del guion toda la partida -- ver el
+            // docblock de OrderSystem.EncolarPedidoGuiado para la autopsia completa
+            // (una línea de compuesto completada vaciaba ActiveOrders y pagaba el
+            // grupo entero). Mismo criterio que ya usa la rama anfitrión del multi en
+            // AlkahestGameBootstrap.TrySpawnRed.
+            if (_orderSystem != null && !AlkahestGameBootstrap.ModoSemillaCero)
+                _orderSystem.GenerateOrdersPersiste();
         }
 
         /// <summary>
@@ -684,32 +702,58 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (ENCARGO M) "VOLVER AL TÍTULO" desde la Pausa.
+        /// (ENCARGO M; corregido playtest 55, ronda B) "VOLVER AL TÍTULO" desde
+        /// la Pausa.
         /// UN JUGADOR: recarga la MISMA escena SIN fijar
         /// <see cref="_skipTitleOnLoad"/> (a diferencia de <see cref="RestartRun"/>)
         /// -- Init() lo lee en false y cae directo a EnterTitle(), que es
         /// justo la pantalla que este botón promete. No hace falta pasar por
         /// RestartRun/una seed: esto no es "empezar una partida nueva", es
         /// "quiero salir de esta a la pantalla de inicio".
-        /// MULTI: la escena MULTI no tiene título propio (regla del POC, ver
-        /// AlkahestGameBootstrap.TrySpawnRed) -- desconectar primero (MISMO
-        /// gesto que el botón "SALIR de la sesión" de
-        /// Net/TallerSesionHud.cs: <see cref="SessionCoordinator.Disconnect"/>,
-        /// que apaga el NetworkManager y abandona el lobby de Steam) y CARGAR
-        /// LA ESCENA CLÁSICA por nombre (<see cref="SceneNameClasica"/>).
+        ///
+        /// MULTI (<see cref="SimSync.EnEscena"/>): la escena MULTI no tiene
+        /// título propio (regla del POC, ver AlkahestGameBootstrap.TrySpawnRed)
+        /// -- desconectar primero (MISMO gesto que el botón "SALIR de la
+        /// sesión" de Net/TallerSesionHud.cs: <see cref="SessionCoordinator.Disconnect"/>,
+        /// que apaga el NetworkManager y abandona el lobby de Steam) y
+        /// RECARGAR LA ESCENA ACTIVA -- <c>SceneManager.GetActiveScene()</c>,
+        /// MISMO camino que la rama de un jugador, NUNCA
+        /// <see cref="SceneNameClasica"/> por nombre.
+        ///
+        /// BUG REAL (playtest 55, capturado en la Development Console de la
+        /// build de REPARTO): este método pedía antes
+        /// <c>SceneManager.LoadScene("AlkahestLab")</c> por nombre. La build
+        /// MULTI (<c>AlkahestNetSceneBuilder.BuildMultiWindows</c>, Editor-only,
+        /// NO tocar) arma el <c>.exe</c> con
+        /// <c>BuildPlayerOptions.scenes = new[] { MultiScenePath }</c> --
+        /// SOLO la escena compartida, la clásica NUNCA viaja en ese
+        /// ejecutable. `LoadScene` por nombre contra una escena ausente del
+        /// build profile activo lanza "Scene 'AlkahestLab' couldn't be
+        /// loaded because it has not been added to the active build
+        /// profile..." (dos veces: una vez por el intento y otra por el
+        /// reintento implícito del propio log de Unity) y deja la
+        /// desconexión a medias -- de ahí también el segundo síntoma de la
+        /// consola, "Can't disconnect client, client not connected" (ver
+        /// <see cref="SessionCoordinator.Disconnect"/>): el Shutdown de NGO
+        /// arrancó pero la excepción de carga de escena interrumpió el
+        /// resto del flujo de salida a medio camino.
+        /// El lobby MULTI (esta misma escena) ES el "título" de esa build:
+        /// no existe otro sitio al que "volver". Recargar la escena activa
+        /// por índice reinicia el lobby limpio, sin sesión -- exactamente lo
+        /// que el botón promete, y funciona en CUALQUIER build (reparto o
+        /// editor) porque nunca depende de qué escenas empaquetó el build
+        /// profile.
         /// </summary>
         private void VolverAlTitulo()
         {
-            if (_modoMulti)
+            if (_modoMulti || SimSync.EnEscena)
             {
                 var coordinador = FindAnyObjectByType<SessionCoordinator>();
                 if (coordinador != null) coordinador.Disconnect();
-                SceneManager.LoadScene(SceneNameClasica);
             }
-            else
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
+            // Mismo destino en las dos ramas a propósito (ver docblock): la
+            // escena activa, por índice, nunca por nombre.
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         // -----------------------------------------------------------------
@@ -1004,36 +1048,66 @@ namespace Alkahest.Game
         /// cerrar la pausa: al volver de AJUSTES seguimos en pausa) y VOLVER
         /// AL TÍTULO (<see cref="VolverAlTitulo"/>, con su propia rama de un
         /// jugador/multi).
+        ///
+        /// try/finally ALREDEDOR DE <c>GUILayout.EndArea()</c> (playtest 55,
+        /// ronda B, causa raíz real de B4): <c>AbrirPanel</c> abre un
+        /// <c>GUILayout.BeginArea</c> (un <c>GUI.BeginGroup</c> por debajo,
+        /// ver el comentario de <see cref="DrawDayIntro"/>). Antes de este
+        /// fix, si <see cref="VolverAlTitulo"/> lanzaba una excepción a mitad
+        /// de este método (exactamente lo que hacía el bug de B1: `LoadScene`
+        /// por nombre contra una escena ausente del build de reparto), la
+        /// excepción saltaba por encima de <c>GUILayout.EndArea()</c> sin
+        /// ejecutarla -- el grupo de recorte de IMGUI (`GUIClip`, pila
+        /// GLOBAL compartida por TODOS los `OnGUI()` del frame, no solo el de
+        /// esta clase) se quedaba abierto para el resto del frame. Cada
+        /// `GUI.Label`/`GUI.DrawTexture` que dibujara CUALQUIER OTRO
+        /// componente después (en este caso, en el mismo frame:
+        /// `OrdersHud`/`SemillaCero.DibujarPanelMaestro`) quedaba recortado
+        /// contra el rectángulo pequeño y centrado de ESTE panel de Pausa en
+        /// vez de contra la pantalla entera -- de ahí el panel "cortado" que
+        /// reportó Cesar, que en realidad no era un bug de posición del
+        /// panel del Maestro/encargos, sino un grupo de IMGUI mal cerrado
+        /// AQUÍ. Y como `_pausado` nunca se apagaba (el botón nunca completó
+        /// su gesto), el mismo ciclo se repetía CADA FRAME -- por eso se veía
+        /// persistente, no un parpadeo de un solo frame. El fix de B1 (cargar
+        /// la escena activa por índice, que no puede fallar) ya evita que
+        /// `VolverAlTitulo` lance; este `try/finally` es la RED DE SEGURIDAD
+        /// para que ninguna excepción futura en un botón de este panel pueda
+        /// volver a dejar `GUIClip` corrupto para el resto del taller.
         /// </summary>
         private void DrawPausa()
         {
             DrawFullscreenDim();
             UiStyles.Preparar();
             AbrirPanel(360f, 240f);
-
-            GUILayout.Label(UiStyles.Espaciar("PAUSA"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(38f)));
-            GUILayout.Space(UiStyles.S(6f));
-            GUILayout.Label(_modoMulti
-                ? "El taller compartido sigue corriendo para el resto -- esto solo te pausa a ti."
-                : "La simulación está congelada.", UiStyles.CuerpoTenue);
-
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("REANUDAR", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            try
             {
-                _pausado = false;
-            }
-            GUILayout.Space(UiStyles.S(8f));
-            if (GUILayout.Button("AJUSTES", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
-            {
-                _ajustesAbiertos = true;
-            }
-            GUILayout.Space(UiStyles.S(8f));
-            if (GUILayout.Button("VOLVER AL TÍTULO", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
-            {
-                VolverAlTitulo();
-            }
+                GUILayout.Label(UiStyles.Espaciar("PAUSA"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(38f)));
+                GUILayout.Space(UiStyles.S(6f));
+                GUILayout.Label(_modoMulti
+                    ? "El taller compartido sigue corriendo para el resto -- esto solo te pausa a ti."
+                    : "La simulación está congelada.", UiStyles.CuerpoTenue);
 
-            GUILayout.EndArea();
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("REANUDAR", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+                {
+                    _pausado = false;
+                }
+                GUILayout.Space(UiStyles.S(8f));
+                if (GUILayout.Button("AJUSTES", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+                {
+                    _ajustesAbiertos = true;
+                }
+                GUILayout.Space(UiStyles.S(8f));
+                if (GUILayout.Button("VOLVER AL TÍTULO", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+                {
+                    VolverAlTitulo();
+                }
+            }
+            finally
+            {
+                GUILayout.EndArea();
+            }
         }
 
         private void DrawDayIntro()

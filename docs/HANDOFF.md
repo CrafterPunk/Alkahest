@@ -3515,3 +3515,123 @@ necesito investigar al inicio es el crisol".
   renombrados a Buzón (integración). El caótico conserva su Tolva clásica.
 - Deuda menor: TryFlechaTolva nunca emite "↑" (dominan ←/→ salvo justo
   debajo del buzón).
+
+## Playtest 55 — LOS SIETE BUGS DEL CO-OP (la noche, parte 1)
+
+Reportes de Cesar tras probar con su amigo (build + editor). Causas REALES:
+
+1. **VOLVER AL TÍTULO reventaba la build multi**: la build empaqueta SOLO la
+   escena multi y DayCycle cargaba "AlkahestLab" por nombre → error de build
+   profile. Fix: en multi, VOLVER AL TÍTULO recarga la ESCENA ACTIVA (el
+   lobby es el título de esa build). El "Can't disconnect client" era una
+   segunda llamada a Disconnect durante el frame de Shutdown de NGO — guarda
+   idempotente (Offline → no-op).
+2. **Al invitado no le saltaban las fichas — hipótesis (a) CONFIRMADA**: el
+   catch-up de SaberSync corre en cuanto existe el avatar local, pero el
+   AlbumReal del invitado nace DESPUÉS del primer snapshot del mundo
+   (Cableado ⇐ Universe ⇐ primer chunk): el evento AlDescubrir se disparaba
+   a cero oyentes y la idempotencia lo silenciaba PARA SIEMPRE. Fix: TEATRO
+   PENDIENTE persistente en SubstanceKnowledge (_pendientesVitrina, FIFO 40)
+   — se llena SIEMPRE en MarcarDescubierto; AlbumReal lo drena en su primer
+   Update (barrido de backlog) y en cada evento vivo; la cola con respiro
+   del pt50 conserva el ritmo. Nada pierde teatro en silencio.
+3. **Omisiones del espejo**: (a) chapa "el grifo" 4 celdas lejos — la red
+   solo transmite CentroMundo (ancla de agarre, +2.5c) y el rótulo real vive
+   en +6.5c: compensado en MaquinaReplica (delta X solo grifos); (b) "marco
+   dorado con grietas" = la réplica de la Pila estiraba una textura 2:1 a
+   una huella 14x9 — la textura ahora sigue la proporción real; (c) el agua
+   de la pila: pipeline de chunks estructuralmente sano — pendiente captura
+   en vivo (posible "agua con más cuerpo" del backlog, no bug de red).
+4. **Panel cortado en el borde del invitado — causa INESPERADA**: el botón
+   VOLVER AL TÍTULO lanzaba (bug 1) DENTRO del BeginArea de la Pausa y el
+   GUIClip global quedaba corrupto TODO el frame, recortando los HUD ajenos
+   contra el rect de la pausa. Fix triple: try/finally en DrawPausa (raíz),
+   clamp a pantalla de DibujarPanelMaestro (garantía), y OnGuiReplicado
+   usaba TextoSinEncargos clásico en vez de TextoVacio (contenido obsoleto).
+5. **Ámbar de brea al quemar turba — NO ES BUG, ES QUÍMICA REAL**: el calor
+   de la combustión funde turba vecina (brea = alquitrán vegetal, la
+   destilación destructiva existe: así se hacía la brea de los barcos) y al
+   enfriar templa a ámbar. Poquito, coherente, documentado — es el tipo de
+   sorpresa que la ley editorial protege.
+6. **Álbum**: reseñas/nombres largos se desbordaban (estilos compartidos sin
+   word-wrap, medidos ahora con UiStyles.Alto) + TOOLTIPS por hover en las 8
+   cabeceras de estado y en "cómo se llega" (textos precalculados, tono
+   ocre).
+7. **El haz del frasco**: el código estaba INTACTO desde el playtest 11 — lo
+   mataba AlbumReal.Abierto atascada en true tras morir su instancia (fin de
+   sesión/recarga) vía la guarda de la regla 12. Fix doble: Abierto=false en
+   AlbumReal.OnDestroy, y SALIR de la sesión ahora RECARGA la escena activa
+   (cierra de paso toda la fuga de re-host del pt53: bootstrap._spawned,
+   registro de MaquinaSync, HUDs huérfanos — el fix "por piezas" queda
+   como deuda de lujo).
+
+NOTA DE TALLER: 6º reinicio del sandbox a mitad de ronda — el repo renació
+del pt54 pusheado (regla 6b pagó de nuevo) y el rig regla 53 se reconstruyó;
+los dos encargos verificaron a mano y Roslyn confirmó después: EXIT=0.
+
+## Playtest 56 — LA VIDA ÚTIL DE LO DESCUBIERTO (la noche, parte 2: la vertical slice)
+
+Mandato nocturno de Cesar: cambiar el loop de "descubrir→registrar→descubrir"
+a "descubrir→producir→almacenar→utilizar→necesitar→descubrir". Diseño
+completo: docs/DISENO_VIDA_UTIL.md; contrato: docs/CONTRATO_RONDA56.md.
+
+- **EL ENCARGO COMPUESTO** (Order gana grupo: 3 hermanas Guiado con GrupoId
+  compartido — TryDeliverCell/MatchesOrder intactos): al entrar el arco en
+  FinalAbierto, EL MUNDO empieza a pedir — "LOS VITRALES DE LA CAPILLA"
+  (40 vidrio de botella / 12 barbotina para el engobe / 20 mortero, 60★)
+  con checklist de 3 líneas en OrdersHud (▫/✓, n/total, flecha al Buzón);
+  al completarse: cierre narrativo + se encadena "UNA MUFLA DE VIDRIERO"
+  (24 cerámica / 16 vidrio / 12 mortero, 40★).
+- **LA ALACENA** (StorageRack renace con papel): se revela con
+  SemillaCero.FaseVidaUtil en x109..140 y198 (el hueco tras el Buzón — el
+  sitio literal del ex-estante COLISIONABA con la jamba del Buzón, medido),
+  6 casillas (caótico sigue con sus 5 intactas), cap real 300/redoma,
+  nombre+cantidad y nivel visible ya existían — se añadió Revelar()
+  idempotente y el rótulo "LA ALACENA — guarda aquí lo que produzcas".
+- **LA MUFLA** (expansión pagada con materiales): sitio reservado x55
+  (CuartoX0 baja 80→30, mismo patrón pt34; la veta se muda sola);
+  al completarse "obra_mufla" el bootstrap talla Crisol.TallarEnPlano y
+  spawnea la SEGUNDA instancia de Crisol. Deuda: en co-op el invitado la VE
+  (chunks) pero no la usa (MaquinaSync asume instancia única por tipo).
+- **Costura contratada**: OrderSystem.AlCompletarCompuesto(id) +
+  SemillaCero.MaestroAnuncia(linea, seg).
+- **REGLA 57 CAZADA EN VIVO ANTES DE ZARPAR**: el pigmento era licor pardo
+  (veta Solucion) — pero la veta es INSOLUBLE por decreto del beat 5.2, y
+  la verificación en el editor mostró además que el sorteo dejaba la
+  ARCILLA insoluble: la barbotina del recetario pt51 TAMBIÉN era
+  inalcanzable. Doble fix: Override 6b (solubilidad POR DECRETO según la
+  tabla de identidades: arcilla sí, chamota no, arena/turba no, caliza/sal
+  sí) y el pigmento del encargo pasó a barbotina/engobe (técnica real).
+  El licor pardo queda sin camino en 777002 a sabiendas (el costo de que
+  la turba flote), como la arena disuelta.
+- Deudas: replicación del compuesto al invitado (SaberSync solo lleva las
+  3 líneas sueltas sin título ni narrativa — FixedString128); barra de
+  progreso individual en el checklist; réplica multi de la mufla; más
+  encargos del mundo (este es EL piloto).
+
+### El bug del compuesto (cazado y matado la misma noche, verificado 2x en vivo)
+SÍNTOMA (reproducido 3 veces por TryDeliverCell en el editor): completar SOLO
+la línea del mortero (celda 20 exacta) pagaba el compuesto ENTERO (+60★,
+obra encolada) con vidrio 0/40 y barbotina 0/12 intactas. AUTOPSIA: regla 49
+de manual — el docblock de `EncolarPedidoGuiado` prometía "_arcoPersisteIndex
+se queda como esté, normalmente -1, nunca activado en este modo" y era FALSO
+desde el playtest 25: `DayCycle.EnterCuartoIntimoSilencioso` (el arranque de
+TODA partida solo, línea 374) llama `GenerateOrdersPersiste()` TAMBIÉN en
+Semilla Cero, dejando el arco de LO QUE PERSISTE ARMADO (índice 0) debajo del
+guion entero. Cada pedido guiado completado lo incrementaba en silencio; al
+rebasar ArcoPersisteCount, `AvanzarArcoPersisteSiToca` seguía haciendo
+`ActiveOrders.Clear()` SIN reponer nada — así que al completarse UNA línea
+del compuesto, borraba a sus hermanas un renglón ANTES de que
+`AvanzarGrupoCompuestoSiToca` las buscara: cero hermanas incompletas = grupo
+"hecho". TRIPLE FIX: (1) DayCycle no genera LO QUE PERSISTE si
+ModoSemillaCero (causa raíz); (2) `EncolarPedidoGuiado` y `EncolarCompuesto`
+DESARMAN ambos arcos (`_arcoPersisteIndex=_arcoRecetarioIndex=-1`) — quien
+toma el escenario desarma a los francotiradores; (3) al completarse la obra,
+`ActiveOrders.Clear()` real (la promesa "vacío tras la obra" tampoco tenía su
+línea: quedaba el checklist ✓✓✓ eterno y `AllOrdersCompleted()==true` de por
+vida). VERIFICADO end-to-end con el código final: mortero 20/20 NO cierra el
+grupo; vitrales completos → +60★ → obra encolada; obra completa → +40★ →
+ActiveOrders vacío + "La mufla se construyó en 55,138" + Crisol_Mufla
+spawneado. Lección para la 49: cuando un método "no-op si no está activo" se
+llama desde un camino compartido, el comentario que jura quién lo activa se
+verifica leyendo TODOS los llamantes del activador, no el docblock.

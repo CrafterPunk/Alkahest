@@ -446,8 +446,96 @@ namespace Alkahest.Game
         /// <summary>Se dispara una vez por matId, la primera vez que pasa a estar descubierto (ver <see cref="MarcarDescubierto"/>). API CONGELADA para el Encargo A del álbum.</summary>
         public static event System.Action<byte> AlDescubrir;
 
+        // ===================================================================================
+        // (FIX B2, RONDA 55) EL TEATRO PENDIENTE -- por qué el invitado NUNCA veía una ficha
+        // ===================================================================================
+        // El docblock de <see cref="AplicarDescubrimientoRemoto"/> (más abajo) afirmaba
+        // "AUDITORÍA DE PAPEL... ya cumplía lo que este encargo pedía" (playtest 52) --
+        // Cesar jugó en co-op real con un amigo y la ficha JAMÁS le saltó al invitado, en
+        // NINGÚN descubrimiento de la sesión entera. La auditoría de papel comprobó que
+        // `AplicarDescubrimientoRemoto` -> `MarcarDescubierto` -> `AlDescubrir` -> el
+        // `OnAlgoDescubierto` de Game/AlbumReal.cs disparaban en cadena -- cierto, pero
+        // asumía que Game/AlbumReal.cs YA ESTABA SUSCRITO cuando la cadena corre. NO LO
+        // ESTÁ, casi siempre:
+        //   · Net/SaberSync.cs::TickInvitado resuelve `_conocimientoLocal` en cuanto
+        //     `Net/AprendizNet.cs::Local` existe -- el spawn del avatar propio, uno de los
+        //     mecanismos MÁS RÁPIDOS de NGO (objeto de jugador, aprobado nada más conectar).
+        //   · Game/AlbumReal.cs solo nace en `AlkahestGameBootstrap.TrySpawnRed`, que exige
+        //     `avatarLocal.Cableado` -- y `Net/AprendizNet.cs::Cablear` exige
+        //     `sim.Universe != null`, que en el espejo del invitado SOLO llega tras
+        //     `Net/SimSync.cs::CrearMundoEspejo(seed)`, disparado al recibir el PRIMER
+        //     snapshot de red del anfitrión (la seed viaja en su cabecera) -- un viaje de
+        //     red completo, sistemáticamente MÁS LENTO que "el avatar ya existe".
+        // Con las dos cosas cableadas por el gate equivocado, el catch-up de
+        // `SaberSync.TickInvitado` (que recorre TODO lo que `_descubiertos` ya tuviera
+        // publicado) corre y llama a `MarcarDescubierto` para cada matId ANTES de que
+        // `Game/AlbumReal.cs::OnEnable` exista para suscribirse a `AlDescubrir` -- el evento
+        // dispara AL VACÍO. Y como `MarcarDescubierto` es idempotente por diseño
+        // (`if (_discovered[matId]) return;`), ESE matId nunca vuelve a disparar el evento:
+        // la ficha de ese descubrimiento queda perdida PARA SIEMPRE, no solo retrasada. En
+        // un co-op real (el amigo se conecta unos segundos después de que el anfitrión ya
+        // esté tallando/hornando el beat 1) esto se come el descubrimiento entero de la
+        // primera oleada -- y de ahí en adelante cada nuevo matId sigue el mismo patrón
+        // salvo que el invitado tenga la suerte de que AlbumReal ya exista antes de que
+        // llegue: en la práctica, "en ningún caso" (el reporte de Cesar).
+        //
+        // Se descartaron, una por una, las otras tres hipótesis del encargo:
+        //   (b) ¿AplicarDescubrimientoRemoto NO pasa por el disparo del evento? FALSO --
+        //       es un alias directo de MarcarDescubierto (línea de abajo), que SIEMPRE
+        //       invoca AlDescubrir en la transición, antes de cualquier `return`.
+        //   (c) ¿El gate de teatro (PuedeAnunciarTeatro/HudSilenciado/DayCycle) exige algo
+        //       que el invitado nunca cumple? FALSO -- `DayCycle.ForzarDesbloqueoSesion()`
+        //       corre en la PRIMERÍSIMA pasada de `AlkahestGameBootstrap.TrySpawn` que
+        //       detecta `SimSync.EnEscena` (antes incluso de esperar al avatar), en los DOS
+        //       procesos por igual; `HudSilenciado`/`InputLocked` quedan en `false` para el
+        //       resto de la sesión (nadie los revierte a `true` en la rama MULTI -- esa
+        //       reversión solo vive en `DayCycle.Init`, que la escena MULTI nunca llama).
+        //   (d) ¿AlbumReal ni se instancia en el invitado? FALSO -- `TrySpawnRed` SÍ llama
+        //       a `SpawnAlbumReal(knowledge)` en la rama invitado; el problema nunca fue
+        //       "nunca", fue "demasiado tarde para el evento que ya pasó".
+        //
+        // FIX ROBUSTO: el descubrimiento YA NO depende de que alguien esté escuchando en el
+        // instante exacto en que ocurre. Este archivo pasa a ser la fuente de verdad del
+        // TEATRO PENDIENTE (no solo del registro `_discovered`): `EncolarPendienteVitrina`
+        // guarda el matId aquí, sobreviva o no un AlbumReal vivo en ese momento; Game/AlbumReal.cs
+        // ya NO empuja directo a su propia cola desde el evento -- DRENA esta cola persistente
+        // (`TryTomarPendienteVitrina`) tanto la primera vez que existe (barre TODO el atraso,
+        // incluido el catch-up de un invitado tardío) como cada vez que `AlDescubrir` la
+        // despierta en vivo. El orden FIFO es el mismo orden real de descubrimiento (el mismo
+        // que ya reconstruía `SaberSync._descubiertos`), así que "recibe su tanda EN ORDEN con
+        // la cola con respiro del playtest 50" sigue cumpliéndose sin cambiar nada de
+        // Game/AlbumReal.cs::PuedeAnunciarTeatro/RegistrarAnuncioTeatro -- solo cambia DE DÓNDE
+        // saca AlbumReal el siguiente matId, nunca CUÁNDO se le permite mostrarlo.
+        // ===================================================================================
+
+        /// <summary>Techo de la cola persistente: las 5 bases × 8 estados del retículo entero (playtest 25) -- el peor caso real es un invitado que se conecta tan tarde que TODO el álbum ya está descubierto y nada se le mostró todavía. Sin relación con <c>AlbumReal.ColaCapacidad</c> (8, la ráfaga que se muestra SEGUIDA): esta cola es el ALMACÉN, esa es la vitrina de turno.</summary>
+        private const int PendientesVitrinaCapacidad = MaterialId.BasesCount * 8;
+        private readonly byte[] _pendientesVitrina = new byte[PendientesVitrinaCapacidad];
+        private int _pendientesVitrinaCount;
+
+        /// <summary>Encola `matId` para su ficha-vitrina, sin importar si hay algo escuchando <see cref="AlDescubrir"/> ahora mismo. Mismo criterio de degradación que <see cref="EncolarLeyBanner"/>: si la cola se llena (no debería, ver la capacidad de arriba), se pierde el AVISO de esa vez, nunca el registro -- `_discovered[matId]` ya quedó en true antes de llamar aquí.</summary>
+        private void EncolarPendienteVitrina(byte matId)
+        {
+            if (_pendientesVitrinaCount >= PendientesVitrinaCapacidad) return;
+            _pendientesVitrina[_pendientesVitrinaCount++] = matId;
+        }
+
         /// <summary>
-        /// ÚNICO punto de entrada para poner `_discovered[matId]` a true desde fuera de
+        /// Saca el matId más antiguo pendiente de vitrina (FIFO -- mismo orden real en que se
+        /// descubrieron), o `false` si no queda ninguno. ÚNICO punto de lectura de esta cola:
+        /// lo consume Game/AlbumReal.cs, tanto al arrancar (barre el atraso completo, exista o
+        /// no exista él mismo cuando cada descubrimiento ocurrió) como en cada aviso en vivo.
+        /// </summary>
+        public bool TryTomarPendienteVitrina(out byte matId)
+        {
+            if (_pendientesVitrinaCount <= 0) { matId = MaterialId.Empty; return false; }
+            matId = _pendientesVitrina[0];
+            for (int i = 1; i < _pendientesVitrinaCount; i++) _pendientesVitrina[i - 1] = _pendientesVitrina[i];
+            _pendientesVitrinaCount--;
+            return true;
+        }
+
+        /// <summary>ÚNICO punto de entrada para poner `_discovered[matId]` a true desde fuera de
         /// <see cref="Bautizar"/> (que ya lo hace como efecto colateral de nombrar, sin
         /// invitación posible: si lo acabas de bautizar no hace falta invitarte a
         /// bautizarlo). Detecta la TRANSICIÓN false-&gt;true -- sin ella no hay "momento
@@ -460,7 +548,16 @@ namespace Alkahest.Game
             if (matId == MaterialId.Empty || matId >= MaterialId.Count) return;
             if (_discovered[matId]) return; // ya lo sabíamos -- sin transición no hay nada que anunciar.
             _discovered[matId] = true;
-            AlDescubrir?.Invoke(matId); // (Encargo Q) API congelada para el álbum -- SIEMPRE en la transición, antes de cualquier `return` de abajo (incluida la identidad real, que ya no pasa por NecesitaBautizo).
+            // (FIX B2, RONDA 55) EL TEATRO PENDIENTE, primero que nada: encolar AQUÍ, no
+            // solo disparar el evento -- ver el docblock grande junto a EncolarPendienteVitrina
+            // para la causa real de por qué el invitado nunca veía su ficha. Solo el retículo
+            // base×estado tiene vitrina (mismo filtro que ya usaba Game/AlbumReal.cs::OnAlgoDescubierto);
+            // se hace INCONDICIONALMENTE, sin mirar JournalHud/modo, porque esta cola es el
+            // ALMACÉN, no el aviso -- el ritmo de cuándo se muestra lo sigue decidiendo
+            // AlbumReal (PuedeAnunciarTeatro/RespiroTrasCierre), esto solo garantiza que nada
+            // se pierde por falta de oyente en el instante exacto del descubrimiento.
+            if (MaterialId.EsBaseEstado(matId)) EncolarPendienteVitrina(matId);
+            AlDescubrir?.Invoke(matId); // (Encargo Q) API congelada para el álbum -- SIEMPRE en la transición, antes de cualquier `return` de abajo (incluida la identidad real, que ya no pasa por NecesitaBautizo). Sigue viva para quien quiera "despertar" al enterarse de un descubrimiento EN VIVO (ver Game/AlbumReal.cs::OnAlgoDescubierto) -- pero desde esta ronda ya NO es la única forma de llegar a la vitrina.
 
             // (Encargo Q, LA QUÍMICA CON NOMBRE REAL) IDENTIDAD REAL: en Semilla Cero,
             // cualquier matId con identidad (Universe.TieneIdentidadReal) sigue
@@ -1048,31 +1145,34 @@ namespace Alkahest.Game
         /// <summary>
         /// Aplica un descubrimiento anunciado por el anfitrión. Reutiliza <see cref="MarcarDescubierto"/> tal cual (misma transición false→true, mismo aviso "ALGO NUEVO" si toca) -- para el conocimiento del invitado, un descubrimiento remoto ES un descubrimiento, no hay una segunda clase.
         ///
-        /// (VERIFICADO playtest 52, CO-OP GUIADO, mandato de Cesar: "asegúrate que a él
-        /// también le aparezcan los descubrimientos en pantalla y todo aunque no sea host")
-        /// AUDITORÍA DE PAPEL, sin código nuevo aquí -- ya cumplía lo que este encargo pedía:
-        /// (a) NO marca en silencio -- pasa por <see cref="MarcarDescubierto"/>, que SIEMPRE
-        /// dispara <see cref="AlDescubrir"/> en la transición, el MISMO evento al que
-        /// <c>Game/AlbumReal.cs::OnAlgoDescubierto</c> está suscrito -- así que la ficha-vitrina
-        /// del invitado se abre sola exactamente igual que la del anfitrión (mismo camino,
-        /// nombre real + reseña + firma, cierre manual, ver el docblock de esa clase). (b) NO
-        /// reabre fichas en un re-apply -- el guardián `if (_discovered[matId]) return;` de
-        /// <see cref="MarcarDescubierto"/> hace que un catch-up repetido (reconexión, sondeo que
-        /// reenvía un valor ya aplicado, ver <c>Net/SaberSync.cs</c>) sea un no-op idempotente de
-        /// verdad. (c) NO produce estampida -- el catch-up de un invitado tardío
-        /// (<c>SaberSync.TickInvitado</c>) llama a este método en bucle, SÍNCRONO, por cada
-        /// descubrimiento ya publicado; cada llamada dispara <c>AlDescubrir</c> en el MISMO
-        /// frame, pero <c>AlbumReal.OnAlgoDescubierto</c> no abre N fichas a la vez: las
-        /// ENCOLA (su propia cola, <c>ColaCapacidad</c>=8) y las va sacando una a una respetando
-        /// <see cref="PuedeAnunciarTeatro"/>/<see cref="RegistrarAnuncioTeatro"/> (el respiro de
-        /// <see cref="RespiroTrasCierre"/>=2s tras cada cierre) -- el orden de llegada (el mismo
-        /// orden en que <c>SaberSync._descubiertos</c> los fue publicando, que es el orden real
-        /// en que el anfitrión los descubrió) se conserva porque la cola es FIFO. Límite
-        /// documentado, no arreglado aquí (archivo ajeno): un invitado que entra TAN tarde que
-        /// ya hay más de 8 descubrimientos sin publicar pierde el AVISO de los que exceden la
-        /// cola (no el descubrimiento en sí, que ya quedó marcado `_discovered=true` y es
-        /// repasable con B) -- mismo criterio de degradación que ya usa
-        /// <see cref="EncolarLeyBanner"/> para el banner de leyes.
+        /// (RONDA 55, B2 -- CORRIGE la "AUDITORÍA DE PAPEL" del playtest 52) La ronda 52
+        /// certificó este camino comprobando que la cadena `MarcarDescubierto` ->
+        /// <see cref="AlDescubrir"/> -> <c>AlbumReal.OnAlgoDescubierto</c> disparaba -- CIERTO,
+        /// pero DABA POR HECHO que <c>Game/AlbumReal.cs</c> ya estaba suscrito cuando el
+        /// catch-up de un invitado tardío (<c>Net/SaberSync.cs::TickInvitado</c>) llama a este
+        /// método en bucle. NO LO ESTÁ, casi nunca: <c>SaberSync.TickInvitado</c> resuelve su
+        /// conocimiento local en cuanto el AVATAR existe (uno de los spawns más rápidos de
+        /// NGO), mientras que <c>AlbumReal</c> solo nace en
+        /// <c>AlkahestGameBootstrap.TrySpawnRed</c>, que espera a que el ESPEJO tenga
+        /// `Universe` -- y eso solo llega tras el PRIMER snapshot de red del anfitrión
+        /// (<c>Net/SimSync.cs::CrearMundoEspejo</c>), sistemáticamente más lento que "el avatar
+        /// ya existe". Jugado en real por Cesar con un amigo: la ficha NUNCA le saltó al
+        /// invitado, en ningún descubrimiento de la sesión -- el evento disparaba una y otra
+        /// vez contra CERO oyentes, y por el guardián de idempotencia de
+        /// <see cref="MarcarDescubierto"/> (`if (_discovered[matId]) return;`) cada matId solo
+        /// tiene UNA oportunidad de anunciarse: perdida esa vez, perdida para siempre. Fix real
+        /// (ver el docblock grande junto a <c>EncolarPendienteVitrina</c>, unas líneas antes de
+        /// <see cref="MarcarDescubierto"/>): el registro de "pendiente de vitrina" ya NO vive
+        /// solo en la suscripción de AlbumReal al evento -- vive AQUÍ, en una cola persistente
+        /// que sobrevive a que nadie estuviera escuchando en el instante exacto del
+        /// descubrimiento. <see cref="AlDescubrir"/> sigue disparando (API congelada, y sirve
+        /// de "despertador" para un AlbumReal ya vivo), pero <c>AlbumReal</c> ahora DRENA esta
+        /// cola (`TryTomarPendienteVitrina`) tanto al arrancar (barre TODO el atraso, exista o
+        /// no exista él mismo cuando cada descubrimiento ocurrió) como en cada aviso en vivo --
+        /// así que (a)/(b)/(c) de la auditoría original siguen siendo ciertos (no marca en
+        /// silencio, no reabre en un re-apply, no produce estampida -- la cola de AlbumReal
+        /// sigue siendo FIFO con el mismo respiro de <see cref="RespiroTrasCierre"/>), pero
+        /// ahora TAMBIÉN es cierto para el invitado real, no solo sobre el papel.
         /// </summary>
         public void AplicarDescubrimientoRemoto(byte matId) => MarcarDescubierto(matId);
 

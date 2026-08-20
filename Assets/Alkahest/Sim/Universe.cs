@@ -3907,6 +3907,28 @@ namespace Alkahest.Sim
                 turbaDef.density = (short)(u.Materials[MaterialId.Water].density - 20);
             u._solubleEnAguaPorMaterial[polvoTurba] = false;
 
+            // ---- Override 6b (ronda 56, regla 57 EN VIVO): SOLUBILIDAD POR
+            // DECRETO -- la tabla de identidades ES el diseño ----
+            // Verificado en el editor real: el sorteo de 777002 dejaba la
+            // ARCILLA insoluble -- "barbotina" (MatDe(1,Solucion), con
+            // entrada de identidad y reseña propias) era INALCANZABLE, y con
+            // ella el pedido 5 del recetario co-op (pt51) y la línea del
+            // engobe de los vitrales (pt56). Mismo fantasma que el eclipse
+            // de la veta: la garantía vivía en una tabla y el sorteo decía
+            // otra cosa. En la seed DE AUTOR, todo material CON entrada de
+            // Solucion en la tabla de identidades debe poder disolverse, y
+            // todo material SIN entrada, no: arcilla=sí (barbotina, la
+            // arcilla real se dispersa en agua), caliza=sí (agua de cal),
+            // sal=sí (salmuera), arena=no (D2), turba polvo=no (flota,
+            // beat 5.2). El licor pardo (veta Solucion) queda SIN camino en
+            // esta seed a sabiendas -- el costo de que la turba flote;
+            // anotado en su figurita como el mismo caso que la arena.
+            byte polvoArcilla = MaterialId.MatDe(1, EstadoMateria.Polvo);
+            u._solubleEnAguaPorMaterial[polvoArcilla] = true;
+            // El calcinado de la arcilla ("ladrillo molido"/chamota) NO se
+            // dispersa como la cruda: se deja explícitamente insoluble.
+            u._solubleEnAguaPorMaterial[MaterialId.MatDe(1, EstadoMateria.Calcinado)] = false;
+
 #if UNITY_EDITOR
             {
                 // (D2) Releer G3 (soluble+insoluble alcanzables) CON los

@@ -224,6 +224,23 @@ namespace Alkahest.Game
         private int _ultimaManipTotal;
         private int _ultimoNamingVersion;
 
+        // -----------------------------------------------------------------
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §1b) EL MUNDO
+        // EMPIEZA A PEDIR -- ver EntrarFinalAbierto/SondeoVidaUtil.
+        // -----------------------------------------------------------------
+        /// <summary>
+        /// True en cuanto este director entra en FinalAbierto (beat 6) y encola el
+        /// compuesto de los vitrales (ver SondeoVidaUtil). El bootstrap (SM,
+        /// Game/AlkahestGameBootstrap.cs) la sondea barato (patrón PollDestapes) para
+        /// revelar LA ALACENA en el sitio del ex-estante. False por defecto; se resetea
+        /// en OnDestroy junto al resto de estáticas del director (mismo criterio que
+        /// <see cref="_instancia"/>) para que una segunda partida no la herede encendida.
+        /// </summary>
+        public static bool FaseVidaUtil;
+
+        /// <summary>Edge-trigger de un solo disparo: ver <see cref="SondeoVidaUtil"/>.</summary>
+        private bool _vidaUtilPendiente;
+
         /// <summary>
         /// Acciones contadas desde el final abierto (beat 6). Público para que un F3
         /// futuro (Dev/DevPalette.cs, fuera de la propiedad de este encargo -- ver el
@@ -270,7 +287,11 @@ namespace Alkahest.Game
             // Maestro de la partida ANTERIOR en cuanto una segunda sesión levante otro
             // SaberSync antes de que este director exista de nuevo. Limpiar en el mismo
             // frame en que Unity destruye el objeto cierra la ventana.
-            if (_instancia == this) _instancia = null;
+            if (_instancia == this)
+            {
+                _instancia = null;
+                FaseVidaUtil = false; // (ronda 56) misma fuga que _instancia -- ver el docblock de FaseVidaUtil.
+            }
         }
 
         private void Update()
@@ -295,7 +316,7 @@ namespace Alkahest.Game
                 case Beat.PreguntaChispa: SondeoPreguntaChispa(); break;
                 case Beat.PreguntaFrio: SondeoPreguntaFrio(); break;
                 case Beat.PreguntaEnsayo: SondeoPreguntaEnsayo(); break;
-                case Beat.FinalAbierto: break; // nada más que hacer -- SondeoAutonomia ya corrió arriba.
+                case Beat.FinalAbierto: SondeoVidaUtil(); break; // (ronda 56) además de la autonomía, ver su docblock.
             }
         }
 
@@ -330,6 +351,22 @@ namespace Alkahest.Game
         /// <summary>Segundos que le quedan a la línea activa (0 si no hay ninguna). Nunca negativo -- <see cref="Mathf.Max(float,float)"/>.</summary>
         public static float SegundosRestantesMaestro
             => _instancia != null ? Mathf.Max(0f, _instancia._maestroHasta - Time.time) : 0f;
+
+        /// <summary>
+        /// (ronda 56, CONTRATO_RONDA56.md §3) Hook público SIN estado propio para que
+        /// archivos ajenos anuncien una línea del Maestro sin tocar ningún campo privado
+        /// de esta clase: lo usan Game/OrderSystem.cs (misma propiedad -- la línea de
+        /// cierre de un encargo compuesto, ver OrderSystem.AvanzarGrupoCompuestoSiToca) y
+        /// Game/AlkahestGameBootstrap.cs (SM -- el nacimiento de la mufla, contrato §2b).
+        /// Sobre <see cref="MaestroDice"/> del director VIVO -- no-op si no hay ninguno
+        /// (invitado en multi, o Semilla Cero no está activa): mismo guardián de
+        /// instancia que <see cref="TextoMaestroActivo"/>.
+        /// </summary>
+        public static void MaestroAnuncia(string linea, float seg)
+        {
+            if (_instancia == null) return;
+            _instancia.MaestroDice(linea, seg);
+        }
 
         // =================================================================
         // BEAT 1 — EL MILAGRO.
@@ -735,6 +772,34 @@ namespace Alkahest.Game
             _autonomiaAccionesEsteMinuto = 0;
             _autonomiaMinutoAcc = 0f;
             _autonomiaActiva = true;
+
+            // (ronda 56, CONTRATO_RONDA56.md §1b) EL MUNDO EMPIEZA A PEDIR -- se dispara
+            // en SondeoVidaUtil, no aquí mismo: MaestroDice tiene un único slot de texto
+            // activo (ver su docblock) y la línea de arriba ("no necesito nada más por
+            // hoy... pero queda limo") ya lo ocupa 9s -- superponerla con la de la
+            // alacena la cortaría a medias. SondeoVidaUtil espera a que se apague sola.
+            _vidaUtilPendiente = true;
+        }
+
+        /// <summary>
+        /// (ronda 56, CONTRATO_RONDA56.md §1b) Dispara UNA sola vez, una vez apagada la
+        /// línea de cierre del beat 6 (ver el comentario de <see cref="EntrarFinalAbierto"/>):
+        /// sube <see cref="FaseVidaUtil"/> (SM la sondea para revelar LA ALACENA), dice la
+        /// línea de la alacena VERBATIM del diseño y encola el compuesto de los vitrales
+        /// (<see cref="OrderSystem.EncolarCompuestoVitrales"/>) -- "el Maestro deja de
+        /// preguntar y EL MUNDO EMPIEZA A PEDIR" (docs/DISENO_VIDA_UTIL.md §1). No
+        /// depende de <see cref="SondeoSeg"/> más que como cadencia de sondeo (ya la trae
+        /// Update): la condición real es <c>Time.time &gt;= _maestroHasta</c>.
+        /// </summary>
+        private void SondeoVidaUtil()
+        {
+            if (!_vidaUtilPendiente || Time.time < _maestroHasta) return;
+            _vidaUtilPendiente = false;
+
+            FaseVidaUtil = true;
+            MaestroDice("Y te subí la alacena del sótano: lo que produzcas, guárdalo — el mundo no avisa antes de pedir.", 9f);
+            _orders.EncolarCompuestoVitrales();
+            Debug.Log("[ChaosAlchemy][SemillaCero] beat 6: EL MUNDO EMPIEZA A PEDIR -- compuesto \"vitrales_capilla\" encolado, Alacena revelada (FaseVidaUtil=true).");
         }
 
         private int SumaManipulaciones()
@@ -806,6 +871,21 @@ namespace Alkahest.Game
         /// Así el estilo visual es EXACTAMENTE el mismo en los dos lados sin duplicar la
         /// aritmética del panel en un archivo ajeno (regla del proyecto: "sin duplicar
         /// lógica compleja").
+        ///
+        /// CLAMP A PANTALLA (playtest 55, ronda B, "B4"): antes esta Rect se centraba con
+        /// pura aritmética (<c>(Screen.width - ancho) * 0.5f</c>) sin ningún tope -- si algo
+        /// deja la mitad izquierda o derecha de esa cuenta fuera de rango (una ventana más
+        /// angosta de lo previsto, o CUALQUIER corrupción del `GUIClip` global de IMGUI que
+        /// deje un `GUI.BeginGroup` de OTRO componente sin cerrar ese frame -- la causa REAL
+        /// que Cesar reportó como "el panel del Maestro se corta en el borde derecho del
+        /// invitado": ver el docblock de <see cref="Alkahest.Game.DayCycle.DrawPausa"/> para
+        /// la investigación completa, ya cerrada con un try/finally allá) el panel podía
+        /// terminar con parte de su ancho fuera de la pantalla visible, cortando el texto.
+        /// El panel YA se centraba igual en host e invitado (método estático sin estado, sin
+        /// ninguna rama que distinga quién lo llama) -- el clamp de abajo es una segunda
+        /// defensa, barata y sin coste visual en el caso normal (a resoluciones de juego
+        /// reales `ancho` nunca se acerca a `Screen.width`, así que el clamp no mueve nada):
+        /// "nunca cortado" pasa a ser una GARANTÍA geométrica, no una esperanza.
         /// </summary>
         public static void DibujarPanelMaestro(string texto)
         {
@@ -824,7 +904,13 @@ namespace Alkahest.Game
             float altoCuerpo = UiStyles.Alto(UiStyles.CuerpoCentrado, texto, interior);
             float alto = pad + altoTitulo + UiStyles.S(4f) + altoCuerpo + pad;
 
-            var panel = new Rect((Screen.width - ancho) * 0.5f, Screen.height * 0.62f, ancho, alto);
+            // Centrado, luego CLAMPEADO a pantalla en los dos ejes -- si `ancho`/`alto`
+            // (poco probable, ver arriba) llegaran a superar Screen.width/height, el panel
+            // se pega al borde en vez de quedar centrado a medias fuera de cuadro; nunca se
+            // deja que `panel.x`/`panel.y` salgan de [0, Screen.*].
+            float x = Mathf.Clamp((Screen.width - ancho) * 0.5f, 0f, Mathf.Max(0f, Screen.width - ancho));
+            float y = Mathf.Clamp(Screen.height * 0.62f, 0f, Mathf.Max(0f, Screen.height - alto));
+            var panel = new Rect(x, y, ancho, alto);
             UiStyles.Panel(panel, UiStyles.TintaFuerte, UiStyles.Oro);
             UiStyles.Rellenar(new Rect(panel.x, panel.y, acento, panel.height), UiStyles.Oro);
 

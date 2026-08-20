@@ -1030,7 +1030,8 @@ namespace Alkahest.Sim
         // medio, y desde ahí se sale a mano izquierda a transformar y a mano
         // derecha a observar. "Organización primigenia": el pozo del pueblo
         // en la plaza y los oficios alrededor.
-        //   aire        80..87   ( 8)  muro izquierdo
+        //   aire        80..87   ( 8)  muro izquierdo (playtest 34) -- ronda 56:
+        //                              PASILLO hacia la MUFLA, ver más abajo.
         //   CRISOL      88..124  (37)  + ALAMBIQUE encima (transformar)
         //   paso       125..142  (18)  terraza tallada
         //   PRENSA     143..173  (31)  (transformar)
@@ -1045,9 +1046,26 @@ namespace Alkahest.Sim
         //   ATRIO      316..347  (32)  terraza ceremonial
         //   ENSAYO     348..376  (29)  casado con la Tolva (cota +3)
         //   pared      377..378 ( 2) -> pasillo 379..392 -> boca de la Tolva
-        // Suma: 8+37+18+31+24+34+26+23+8+27+32+29+2 = 299 = el ancho nuevo.
+        // Suma: 8+37+18+31+24+34+26+23+8+27+32+29+2 = 299 = el ancho del 34.
+        //
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO) EL CUARTO CRECE OTRAS 50
+        // CELDAS A LA IZQUIERDA -- mismo movimiento, misma dirección, mismo
+        // motivo que el playtest 34 (ganar aire sin reordenar NADA de lo de
+        // arriba: `CuartoX1`=378 sigue sin tocarse, la Tolva no se entera).
+        // La franja nueva (30..79, 50 celdas) aloja LA MUFLA (ver el bloque
+        // de constantes `MuflaX`/`MuflaBaseY` junto a `EnsayoPlintoX` más
+        // arriba para las 39 celdas exactas de su huella y el porqué no cabía
+        // en ningún hueco de la lista de arriba) más 11+8 celdas de aire a
+        // cada lado (muro nuevo|mufla|Crisol). `VetaTurbaX0/X1/CaraX`
+        // (derivadas de `CuartoX0`, regla 47 de CLAUDE.md) se mudan CON el
+        // muro sin tocar una sola fórmula -- exactamente la garantía que ya
+        // dio el playtest 34 al mover este mismo borde.
+        //   aire nuevo   30..40  (11)  muro izquierdo NUEVO
+        //   MUFLA        41..79  (39)  segunda estación de Crisol (ronda 56,
+        //                              tallada solo al completar "obra_mufla")
+        //   aire         80..87  ( 8)  el mismo colchón de siempre hasta el Crisol
         // =================================================================
-        public const int CuartoX0 = 80;  // (playtest 34) 140 -> 80: ancho 239 -> 299 (+1/4). Ver el bloque de arriba.
+        public const int CuartoX0 = 30;  // (playtest 34) 140 -> 80; (ronda 56) 80 -> 30: +50 celdas para LA MUFLA. Ver el bloque de arriba.
         public const int CuartoX1 = 378; // (playtest 33) 357 -> 378. NO SE MUEVE en el 34: besa el contrafuerte de la Tolva.
         public const int CuartoY0 = 136; // (playtest 34) 168 -> 136: alto 95 -> 127 (+1/3), creciendo HACIA ABAJO. Ver el bloque de arriba.
         public const int CuartoY1 = 262; // (playtest 33) 240 -> 262. NO SE MUEVE en el 34: por arriba ya no cabe la bóveda.
@@ -1449,6 +1467,58 @@ namespace Alkahest.Sim
         public const int EstanteBaseY = AlambiqueBaseY + Alambique.MatrazAlto + Alambique.DomoAlto + 1 + EstanteMargenSobreAlambique; // 193 (techo real del domo) + 5 = 198.
 
         // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §2a)
+        // LA ALACENA -- el mismo mueble (Game/StorageRack.cs), revelado en
+        // Semilla Cero cuando `SemillaCero.FaseVidaUtil` sube a `true`.
+        //
+        // POR QUÉ NO SON `EstanteX0/EstanteX1/EstanteBaseY` TAL CUAL (el
+        // contrato pedía literalmente "leer EstanteX0/BaseY reales del
+        // plano" -- esto es la verificación de esa lectura, regla 39/47 de
+        // CLAUDE.md: medir contra el plano REAL, no confiar en que el nombre
+        // de la constante siga describiendo un hueco vacío): en Semilla
+        // Cero, `EstanteBaseY`=198 YA NO es aire libre en todo su ancho --
+        // el BUZÓN DEL MAESTRO (`BuzonX0..BuzonX1`=97..106, tallado SOLO en
+        // Semilla Cero, ver `BuildBuzonMaestro`) usa EXPLÍCITAMENTE
+        // `BuzonBaseY = EstanteBaseY` (misma cota) y ocupa justo el TERCIO
+        // CENTRAL de `EstanteX0..EstanteX1` (88..124) con piedra maciza
+        // hasta `BuzonBlockTopY`=209 -- por encima de donde llegarían 2 de
+        // las 6 redomas (con `NumRedomas`=6 sobre el ancho 88..124, las
+        // redomas #2 y #3 caen en 94.6..99.9 y 100.75..106.1, DENTRO de la
+        // piedra del Buzón). El CAÓTICO nunca talla el Buzón (gate
+        // `ModoSemillaCero` en `BuildBuzonMaestro`), así que
+        // `EstanteX0/X1/BaseY` SIGUEN SIENDO CORRECTOS para el estante
+        // clásico -- sin cambios, contrato §2a "en el CAÓTICO no cambia
+        // nada" -- el problema es SOLO para el mueble que se revela EN
+        // Semilla Cero.
+        //
+        // EL SITIO REAL: a la derecha del Buzón, MISMA `EstanteBaseY` (ya
+        // validada libre de la maquinaria de abajo -- el domo del Alambique
+        // termina en 193, el depósito de anclajes empieza en 212, ver el
+        // bloque de arriba) pero desplazado en X para no compartir columna
+        // con la piedra del Buzón. `AlacenaMargenBuzon`/`AlacenaMargenPrensa`
+        // son AIRE de sobra (ninguno de los dos toca nada, ver los números
+        // exactos en los comentarios de cada constante) -- no hace falta el
+        // mínimo posible, solo que no colisione.
+        // =================================================================
+        private const int AlacenaMargenBuzon = 3;  // aire tras la jamba derecha del Buzón (BuzonX1=106) antes de la primera redoma.
+        private const int AlacenaMargenPrensa = 2; // aire antes de la jamba izquierda del pórtico de la Prensa.
+        public const int AlacenaX0 = BuzonX1 + AlacenaMargenBuzon; // 109.
+        /// <summary>
+        /// 140 -- derivado de la huella REAL de la Prensa (`Prensa.LechoAncho`/
+        /// `MuroGrosor`/`LechoAJamba`/`JambaAncho`, constantes públicas de
+        /// Game/Prensa.cs, regla 39: nunca copiar el número "143..173" de un
+        /// comentario, leerlo de las medidas reales) menos 1 celda de la
+        /// jamba izquierda de la Prensa (`OutX0`=143) menos
+        /// <see cref="AlacenaMargenPrensa"/>. Ancho resultante 109..140 = 32
+        /// celdas (vs. 37 del estante clásico) -- de sobra para 6 redomas
+        /// más pequeñas (ver Game/StorageRack.cs, que deriva su tamaño del
+        /// ancho real que reciba, sin ningún cambio de código).
+        /// </summary>
+        public const int AlacenaX1 = PrensaX - Prensa.LechoAncho / 2 - Prensa.MuroGrosor - Prensa.LechoAJamba - Prensa.JambaAncho - 1 - AlacenaMargenPrensa; // 140.
+        /// <summary>Misma cota que el estante clásico (<see cref="EstanteBaseY"/>) -- ya validada libre de todo lo de abajo (domo del Alambique, depósito de anclajes), ver el bloque de arriba.</summary>
+        public const int AlacenaBaseY = EstanteBaseY;
+
+        // =================================================================
         // (CONTRATO_RONDA54.md, playtest 54) EL BUZÓN DEL MAESTRO -- SOLO
         // SEMILLA CERO. Reemplaza a la TOLVA CERCANA del playtest 50
         // (<see cref="BuildTolvaCercana"/>, constantes `TolvaCercana*` más
@@ -1703,6 +1773,65 @@ namespace Alkahest.Sim
         /// ceremonial compartida.
         /// </summary>
         public const int EnsayoPlintoX = 362; // (playtest 34) NO SE MUEVE: sigue casado con la Tolva en el extremo derecho, tal y como pidió Cesar.
+
+        // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §2b)
+        // EL SITIO RESERVADO DE LA MUFLA -- segunda instancia de Crisol,
+        // spawneada por AlkahestGameBootstrap al completarse "obra_mufla"
+        // (evento de OrderSystem, §3 del contrato).
+        //
+        // POR QUÉ NO CABE EN NINGÚN HUECO EXISTENTE (medido, no a ojo --
+        // regla 39 de CLAUDE.md): la huella TOTAL de un Crisol (con el
+        // brasero de playtest 48, BraseroAncho=7) mide
+        // <c>CamaraAncho/2 + MuroGrosor + BocaVuelo</c> a la izquierda del
+        // ancla más <c>CamaraAncho/2 + 2*MuroGrosor + BraseroSeparacion +
+        // BraseroAncho + MuroGrosor</c> a la derecha -- **39 celdas en
+        // total** (verificado con el propio Crisol.CrisolX: 88..126, DOS
+        // celdas más ancho que el "88..124" que documentan los comentarios
+        // de zonificación de más arriba, que datan de ANTES del playtest 48
+        // -- ver la nota de esa ronda en Game/Crisol.cs sobre el brasero
+        // agrandado). Ninguno de los huecos del PLANO CENTRAL llega a 39:
+        // "paso" 125..142 (18, además YA tallado como terraza por
+        // AdornarCuarto), "umbral" 174..197 (24), "escalinata" 232..257
+        // (26), "atrio" 316..347 (32, YA terraza ceremonial) -- el más ancho
+        // se queda 7 celdas corto INCLUSO vacío, y ninguno está de verdad
+        // vacío: todos ya son terrazas decorativas talladas por
+        // AdornarCuarto en el génesis (pisarlas sería "pisar algo
+        // validado", justo lo que prohíbe el contrato).
+        //
+        // LA SOLUCIÓN: EL CUARTO CRECE 50 CELDAS MÁS A LA IZQUIERDA (mismo
+        // movimiento, mismo criterio y misma dirección que ya usó el
+        // playtest 34 para ganar espacio -- ver el bloque grande junto a
+        // `CuartoX0` más abajo). El aire que YA existía entre el muro
+        // izquierdo y el Crisol (80..87, 8 celdas, "muro izquierdo" en el
+        // mapa de zonas) se convierte en la boca de un pasillo hacia una
+        // SEGUNDA sala de fuego, en vez de intentar exprimir una estación de
+        // 39 celdas en un hueco de 8. `VetaTurbaX0/X1/CaraX` (derivadas de
+        // `CuartoX0`, regla 47) se mudan CON el muro sin ningún cambio de
+        // fórmula.
+        //
+        // SITIO: `MuflaX`=55, huella real 41..79 (39 celdas) -- 11 celdas de
+        // aire hasta el nuevo muro izquierdo (`CuartoX0`=30) y 8 celdas de
+        // aire hasta la huella real del Crisol (88), ninguna de las dos
+        // toca nada. `MuflaBaseY` reutiliza EXPLÍCITAMENTE
+        // <see cref="BaseYDeEstacion"/>(<see cref="CrisolX"/>) en vez de
+        // <c>BaseYDeEstacion(MuflaX)</c> -- DEUDA DE Game/Crisol.cs, no de
+        // este archivo (ver el docblock de <see cref="ReservarSitioMufla"/>
+        // para el porqué exacto): `Crisol.Init()` hardcodea
+        // `BaseYDeEstacion(CrisolX)` para CUALQUIER ancla que reciba (un
+        // supuesto de instancia única que esta ronda es la primera en
+        // romper), así que la MASONRY (`Crisol.TallarEnPlano`, que sí recibe
+        // `baseY` como parámetro explícito) tiene que usar el MISMO valor
+        // para que la piedra tallada y la instancia viva coincidan celda a
+        // celda -- `MuflaX`=55 cae en el mismo bracket que `CrisolX`=102
+        // (los dos &lt;250) así que, por una vez, el atajo de Crisol.cs da
+        // la respuesta correcta por casualidad de rango, no por corrección
+        // general: si algún día `MuflaX` cruzara 250, seguiría habiendo que
+        // pasar `MuflaBaseY` a mano (como ya se hace aquí) para no
+        // heredar el bug.
+        // =================================================================
+        public const int MuflaX = 55;
+        public static readonly int MuflaBaseY = BaseYDeEstacion(CrisolX);
 
         // =================================================================
         // (CONTRATO_TERMICA.md §3b, ENCARGO I, playtest 44) LA ALCOBA FRÍA:
@@ -2414,6 +2543,16 @@ namespace Alkahest.Sim
                 BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
                 CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
             }
+            // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md
+            // §2b) EL SITIO RESERVADO DE LA MUFLA: en el génesis es SOLO
+            // suelo/piedra normal (la excavación de más arriba ya lo deja
+            // hueco, la losa de WallThickness ya lo deja sólido -- nada que
+            // tallar aquí todavía) -- SOLO se registra como Obra para que
+            // AdornarCuarto (justo debajo) no plante una terraza/pilastra
+            // encima. Tiene que ir ANTES de AdornarCuarto, como cualquier
+            // otra estación de esta lista. Ver el docblock de
+            // ReservarSitioMufla para las coordenadas exactas.
+            ReservarSitioMufla();
             // (playtest 31) LA ARQUITECTURA: peldaños, pilastras y el arco del
             // pasillo. VA AL FINAL, después de TODAS las estaciones, porque
             // decide dónde puede tallar leyendo `ObraDelTaller` -- que solo
@@ -3199,6 +3338,56 @@ namespace Alkahest.Sim
         public static readonly int[] ClaraboyaColumnas = { 214, 268, 302 }; // (playtest 34) una sobre la ISLA DE FUENTES (el agua devuelve el reflejo) y dos sobre la alcoba de observación. Comprobadas contra PilastraColumnas: ninguna cae sobre un nervio.
         public const int ClaraboyaAncho = 5;
         private const int ClaraboyaAlto = 6; // (playtest 34) 8 -> 6: con las flechas de bóveda subidas a 13, el pozo tenía que ceder dos filas para no besar el borde del mundo.
+
+        /// <summary>
+        /// (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md
+        /// §2b) Registra en <see cref="ObraDelTaller"/> el rect EXACTO que
+        /// <see cref="Crisol.TallarEnPlano"/> tallará más tarde en
+        /// <see cref="MuflaX"/>/<see cref="MuflaBaseY"/> cuando el jugador
+        /// complete el pedido de obra ("obra_mufla", evento contratado en
+        /// §3) -- SIN tallar nada todavía (regla del contrato: "en el
+        /// génesis es solo suelo/piedra normal"). Corre en el génesis, ANTES
+        /// de <see cref="AdornarCuarto"/>, para que esa pasada de
+        /// decoración vea el sitio como "ocupado" y no plante una terraza o
+        /// una pilastra encima -- MISMO criterio que usa el propio Crisol
+        /// para su instancia real (su `TallarEnPlano` registra su huella
+        /// ANTES de que exista la instancia, ver el docblock de
+        /// <c>Crisol._handleObra</c>).
+        ///
+        /// LA ARITMÉTICA ES UNA COPIA DELIBERADA de
+        /// <c>Crisol.Calcular</c> (privado, no reutilizable desde aquí) --
+        /// usa SOLO las constantes PÚBLICAS de Game/Crisol.cs
+        /// (CamaraAncho/MuroGrosor/BocaVuelo/BraseroAncho/
+        /// BraseroSeparacion/BocaFilas/HogarFilas), nunca un número mágico
+        /// propio, así que si esas medidas cambian algún día (un reajuste de
+        /// Crisol.cs, archivo ajeno a este encargo) este rect se entera
+        /// solo. Cuando <see cref="Crisol.Init"/> corra de verdad sobre esta
+        /// instancia (al completarse la obra), su propio
+        /// <see cref="HallarObraExacta"/> encontrará y RECLAMARÁ este mismo
+        /// handle en vez de crear uno huérfano -- el mismo mecanismo,
+        /// documentado, que ya usa el Crisol original entre su
+        /// `TallarEnPlano` (génesis) y su `Init` (spawn tardío, aquí:
+        /// mid-partida).
+        /// </summary>
+        private static void ReservarSitioMufla()
+        {
+            int camX0 = MuflaX - Crisol.CamaraAncho / 2;
+            int camX1 = camX0 + Crisol.CamaraAncho - 1;
+            int camY0 = MuflaBaseY + 1;
+            int camY1 = camY0 + Crisol.CamaraAlto - 1;
+
+            int bocaY1 = camY1 + Crisol.BocaFilas; // = camY1 + 1 (bocaY0) + BocaFilas - 1.
+
+            int braX0 = camX1 + Crisol.MuroGrosor + Crisol.BraseroSeparacion + Crisol.MuroGrosor;
+            int braX1 = braX0 + Crisol.BraseroAncho - 1;
+
+            int outX0 = camX0 - Crisol.MuroGrosor - Crisol.BocaVuelo;
+            int outX1 = braX1 + Crisol.MuroGrosor;
+            int outY0 = MuflaBaseY - Crisol.HogarFilas; // mismo -HogarFilas que Crisol.TallarEnPlano pasa a RegistrarObra.
+            int outY1 = bocaY1 + 1;
+
+            RegistrarObra(outX0, outY0, outX1, outY1);
+        }
 
         private static void AdornarCuarto(CellGrid grid)
         {

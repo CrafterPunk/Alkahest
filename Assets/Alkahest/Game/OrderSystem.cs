@@ -288,6 +288,28 @@ namespace Alkahest.Game
 
         private const int ArcoRecetarioCount = 5;
 
+        // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §1a/§3)
+        // EL ENCARGO COMPUESTO -- estado del ÚNICO grupo activo a la vez (mismo
+        // criterio de "un solo slot" que _arcoPersisteIndex/_arcoRecetarioIndex
+        // de arriba: esta ronda nunca tiene dos compuestos vivos a la vez). Ver
+        // EncolarCompuesto/AvanzarGrupoCompuestoSiToca más abajo, junto a
+        // EncolarCompuestoVitrales/EncolarCompuestoObra.
+        // =================================================================
+        private string _grupoCompuestoActivo;
+        private int _recompensaGrupoActivo;
+        private string _textoCierreGrupoActivo;
+
+        /// <summary>
+        /// (ronda 56, CONTRATO_RONDA56.md §3) LA COSTURA CON EL ENCARGO SM: disparado al
+        /// completarse un encargo compuesto, con su id estable ("vitrales_capilla",
+        /// "obra_mufla"). El bootstrap (SM, Game/AlkahestGameBootstrap.cs) se suscribe
+        /// para tallar obras pagadas. Estático: limpiar suscriptores es responsabilidad
+        /// del suscriptor (patrón AlDescubrir de SubstanceKnowledge.cs) -- OrderSystem no
+        /// lleva la cuenta de quién escucha.
+        /// </summary>
+        public static event System.Action<string> AlCompletarCompuesto;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
         {
@@ -913,11 +935,181 @@ namespace Alkahest.Game
             byte? targetMat = null, int? minTempC = null)
         {
             ActiveOrders.Clear();
+            // (fix ronda 56, EL BUG DEL COMPUESTO -- regla 49 de CLAUDE.md en carne
+            // viva) Este comentario decía "_arcoPersisteIndex se queda como esté --
+            // normalmente -1, nunca activado en este modo" y era FALSO desde el
+            // playtest 25: DayCycle.EnterCuartoIntimoSilencioso llama a
+            // GenerateOrdersPersiste TAMBIÉN al entrar en Semilla Cero solo, así que
+            // el arco quedaba ARMADO (_arcoPersisteIndex=0) toda la partida. Cada
+            // pedido guiado completado lo incrementaba en silencio y, al pasar de
+            // ArcoPersisteCount, AvanzarArcoPersisteSiToca seguía haciendo
+            // ActiveOrders.Clear() SIN reponer nada: al completarse UNA línea de un
+            // compuesto, borraba a sus hermanas y AvanzarGrupoCompuestoSiToca daba el
+            // grupo entero por hecho (reproducido 3x: mortero 20/20 pagaba los
+            // vitrales con vidrio 0/40 y barbotina 0/12). La promesa ahora tiene su
+            // línea: quien toma el escenario DESARMA los arcos de pedido único.
+            _arcoPersisteIndex = -1;
+            _arcoRecetarioIndex = -1;
             AddOrder(tipo, minCells, recompensa, descripcion, minTempC, targetMat);
-            // (Semilla 0 no usa el arco de "LO QUE PERSISTE": _arcoPersisteIndex se queda
-            // como esté -- normalmente -1, nunca activado en este modo -- así que
-            // AvanzarArcoPersisteSiToca sigue siendo un no-op cuando este pedido se
-            // complete. La propia SemillaCero.cs sondea ActiveOrders para avanzar su beat.)
+            // (La propia SemillaCero.cs sondea ActiveOrders para avanzar su beat.)
+        }
+
+        // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §1,
+        // docs/DISENO_VIDA_UTIL.md §1) EL ENCARGO COMPUESTO -- "los vitrales de la
+        // capilla" y, al completarlos, "la mufla del vidriero". Textos VERBATIM del
+        // diseño (el markdown **negrita** del documento es SOLO énfasis de doc, no se
+        // reproduce en el juego). Arranca en <see cref="SemillaCero.EntrarFinalAbierto"/>
+        // (beat 6, ver su docblock) -- SemillaCero SOLO llama a
+        // <see cref="EncolarCompuestoVitrales"/>; encadenar a la obra al completarse los
+        // vitrales lo hace este mismo archivo (ver AvanzarGrupoCompuestoSiToca), igual
+        // que ya genera el resto de los textos de encargos de este archivo.
+        // =================================================================
+        private const string GrupoVitrales = "vitrales_capilla";
+        private const string GrupoObra = "obra_mufla";
+
+        /// <summary>
+        /// (integración pt56, regla 57 EN VIVO) El pigmento del trazo era
+        /// "licor pardo" (MatDe(3,Solucion)) -- pero la verificación en el
+        /// editor real mostró que en 777002 la veta es INSOLUBLE (el pt48 la
+        /// decretó así para que la turba FLOTE en el beat 5.2): la línea de
+        /// 12 grisallas era INCOMPLETABLE, el mismo fantasma del eclipse de
+        /// la veta con otro disfraz. El pigmento pasa a BARBOTINA
+        /// (MatDe(1,Solucion), "la crema de los alfareros"): el trazo se
+        /// pinta AL ENGOBE, técnica real de trazo cerámico -- y la
+        /// solubilidad de la arcilla se fija POR DECRETO en
+        /// AplicarOverridesSemillaCero (el sorteo también la había negado,
+        /// rompiendo de paso el recetario del pt51).
+        /// </summary>
+        private static readonly byte EngobeBarbotina = MaterialId.MatDe(1, EstadoMateria.Solucion);
+        /// <summary>"cerámica" (contrato §0: MatDe(1,Ceramico) -- el refractario de la mufla).</summary>
+        private static readonly byte CeramicaBase1 = MaterialId.MatDe(1, EstadoMateria.Ceramico);
+
+        private const string TextoVitrales =
+            "Una tormenta quebró los vitrales de la capilla del valle. El vidriero " +
+            "murió hace años; solo queda tu taller. Necesito: 40 de vidrio de " +
+            "botella para los paneles, 12 de barbotina para el engobe del " +
+            "trazo, y 20 de mortero para fijarlos al plomo viejo.";
+
+        private const string TextoCierreVitrales = "El valle vuelve a tener luz de colores. Corrió la voz, aprendiz.";
+
+        private const string TextoObra =
+            "Con lo que corrió la voz, necesitas un segundo fuego. UNA MUFLA DE " +
+            "VIDRIERO: tráeme 24 de cerámica (el refractario), 16 de vidrio de " +
+            "botella (la mirilla) y 12 de mortero (el asiento), y la levanto " +
+            "contigo.";
+
+        private const string NombreCortoVitrales = "LOS VITRALES DE LA CAPILLA";
+        private const string NombreCortoObra = "UNA MUFLA DE VIDRIERO";
+
+        private const int RecompensaVitrales = 60;
+        private const int RecompensaObra = 40;
+
+        /// <summary>
+        /// (CONTRATO_RONDA56.md §1b) Llamado por <c>Game/SemillaCero.cs</c> al entrar en
+        /// FinalAbierto (beat 6): encola el compuesto de los vitrales, la primera
+        /// petición del MUNDO (ya no del Maestro) tras el final abierto del arco guiado.
+        /// </summary>
+        public void EncolarCompuestoVitrales()
+        {
+            EncolarCompuesto(GrupoVitrales, NombreCortoVitrales, TextoVitrales, TextoCierreVitrales, RecompensaVitrales,
+                MaterialId.VidrioVerde, 40, "vidrio de botella",
+                EngobeBarbotina, 12, "barbotina",
+                MaterialId.Mortero, 20, "mortero");
+        }
+
+        /// <summary>(CONTRATO_RONDA56.md §1b) "Al completarse los vitrales: encolar EL PEDIDO DE OBRA" -- disparado desde <see cref="AvanzarGrupoCompuestoSiToca"/>, nunca a mano.</summary>
+        private void EncolarCompuestoObra()
+        {
+            EncolarCompuesto(GrupoObra, NombreCortoObra, TextoObra, null, RecompensaObra,
+                CeramicaBase1, 24, "cerámica",
+                MaterialId.VidrioVerde, 16, "vidrio de botella",
+                MaterialId.Mortero, 12, "mortero");
+        }
+
+        /// <summary>
+        /// Reemplaza <see cref="ActiveOrders"/> entero por TRES Orders hermanas
+        /// (<see cref="OrderType.Guiado"/>, mismo criterio de matching que
+        /// <see cref="EncolarPedidoGuiado"/>) que comparten <c>GrupoId</c> -- ver el
+        /// docblock de esos campos en Game/Order.cs. Cada componente lleva
+        /// Recompensa=0 A PROPÓSITO: el Favor del compuesto entero
+        /// (<paramref name="recompensaGrupo"/>) se paga UNA sola vez, al completarse la
+        /// TERCERA línea (ver <see cref="AvanzarGrupoCompuestoSiToca"/>), nunca al
+        /// completar una línea suelta.
+        /// </summary>
+        private void EncolarCompuesto(string grupoId, string nombreCorto, string textoLargo, string textoCierre, int recompensaGrupo,
+            byte mat1, int cant1, string etiqueta1,
+            byte mat2, int cant2, string etiqueta2,
+            byte mat3, int cant3, string etiqueta3)
+        {
+            ActiveOrders.Clear();
+            // (fix ronda 56) Mismo desarme que EncolarPedidoGuiado (ver su docblock:
+            // el arco de LO QUE PERSISTE quedaba armado en Semilla Cero y su
+            // AvanzarArcoPersisteSiToca vaciaba ActiveOrders al completarse una
+            // línea, dando el compuesto entero por hecho). Un compuesto REEMPLAZA el
+            // escenario: ningún arco de pedido único puede seguir reaccionando a
+            // completados ajenos.
+            _arcoPersisteIndex = -1;
+            _arcoRecetarioIndex = -1;
+            _grupoCompuestoActivo = grupoId;
+            _recompensaGrupoActivo = recompensaGrupo;
+            _textoCierreGrupoActivo = textoCierre;
+            AddOrderCompuesto(grupoId, nombreCorto, textoLargo, recompensaGrupo, mat1, cant1, etiqueta1);
+            AddOrderCompuesto(grupoId, nombreCorto, textoLargo, recompensaGrupo, mat2, cant2, etiqueta2);
+            AddOrderCompuesto(grupoId, nombreCorto, textoLargo, recompensaGrupo, mat3, cant3, etiqueta3);
+        }
+
+        private void AddOrderCompuesto(string grupoId, string nombreCorto, string textoLargo, int recompensaGrupo,
+            byte targetMat, int cantidad, string etiqueta)
+        {
+            string descripcionLinea = "Trae " + cantidad + " de " + etiqueta + ".";
+            ActiveOrders.Add(new Order(_nextOrderId++, descripcionLinea, OrderType.Guiado, cantidad, 0,
+                minTempC: null, targetMat: targetMat,
+                grupoId: grupoId, grupoNombreCorto: nombreCorto, grupoTextoLargo: textoLargo,
+                grupoEtiqueta: etiqueta, grupoRecompensaTotal: recompensaGrupo));
+        }
+
+        /// <summary>
+        /// Llamado desde <see cref="TryDeliverCell"/> justo tras marcar Completado=true en
+        /// una línea que pertenece a un grupo (<c>order.GrupoId != null</c>). Comprueba si
+        /// las TRES hermanas del grupo activo ya están completas -- si falta alguna, no
+        /// hace nada (progreso independiente por línea, contrato §1a); si las tres están
+        /// hechas, paga el Favor del compuesto ENTERO, dice la línea de cierre (si la
+        /// hay -- la obra no tiene, ver <see cref="EncolarCompuestoObra"/>), dispara
+        /// <see cref="AlCompletarCompuesto"/> con el id del grupo que acaba de cerrarse y,
+        /// si era "vitrales_capilla", encadena el pedido de obra (contrato §1b).
+        /// </summary>
+        private void AvanzarGrupoCompuestoSiToca(Order order)
+        {
+            if (order.GrupoId == null || order.GrupoId != _grupoCompuestoActivo) return;
+            for (int i = 0; i < ActiveOrders.Count; i++)
+                if (ActiveOrders[i].GrupoId == _grupoCompuestoActivo && !ActiveOrders[i].Completado) return; // aún falta una línea.
+
+            AddFavor(_recompensaGrupoActivo);
+            Debug.Log($"[ChaosAlchemy] Encargo compuesto completado: {_grupoCompuestoActivo} (+{_recompensaGrupoActivo} Favor).");
+            if (_textoCierreGrupoActivo != null) SemillaCero.MaestroAnuncia(_textoCierreGrupoActivo, 9f);
+
+            string grupoQueTermino = _grupoCompuestoActivo;
+            _grupoCompuestoActivo = null;
+            _recompensaGrupoActivo = 0;
+            _textoCierreGrupoActivo = null;
+
+            AlCompletarCompuesto?.Invoke(grupoQueTermino);
+
+            // (contrato §1b) Solo los vitrales encadenan un segundo compuesto -- la obra
+            // (GrupoObra) no encola nada más esta ronda: el diseño §3 deja "más encargos
+            // del mundo" fuera a propósito ("este es EL piloto -- si valida, se vuelve
+            // generador"). ActiveOrders se queda vacío tras la obra, mismo criterio que el
+            // panel vacío del beat 6 (regla 43: lo indistinguible de "no pasó nada" no
+            // ocurrió -- OrdersHud ya sabe pintar TextoVacio con cero encargos).
+            // (fix ronda 56, regla 49) El Clear de abajo ES la línea que cumple esa
+            // promesa: la verificación en vivo mostró que sin él las tres líneas de la
+            // obra quedaban completadas-para-siempre en ActiveOrders (el checklist ✓✓✓
+            // eterno en el HUD, y AllOrdersCompleted()==true de por vida). Seguro aquí:
+            // TryDeliverCell hace `return` inmediatamente después de llamarnos, no
+            // sigue iterando la lista.
+            if (grupoQueTermino == GrupoVitrales) EncolarCompuestoObra();
+            else ActiveOrders.Clear();
         }
 
         /// <summary>
@@ -1011,6 +1203,7 @@ namespace Alkahest.Game
                     Debug.Log($"[ChaosAlchemy] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
                     AvanzarArcoPersisteSiToca(); // no-op si el arco de LO QUE PERSISTE no está activo (_arcoPersisteIndex==-1).
                     AvanzarArcoRecetarioSiToca(); // no-op si el recetario de la Semilla Cero compartida no está activo (_arcoRecetarioIndex==-1).
+                    AvanzarGrupoCompuestoSiToca(order); // no-op si `order` no pertenece a un grupo (ronda 56, GrupoId==null en TODO Order clásico).
                 }
                 return DeliveryOutcome.Progressed;
             }

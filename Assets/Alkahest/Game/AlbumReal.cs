@@ -226,6 +226,31 @@ namespace Alkahest.Game
             "POLVO", "FUNDIDO", "TEMPLADO", "RECOCIDO", "COMPACTO", "CERÁMICO", "CALCINADO", "SOLUCIÓN",
         };
 
+        /// <summary>
+        /// (RONDA 55, pedido de Cesar) Explicación breve al pasar el mouse sobre cada cabecera
+        /// de estado: qué significa + con qué proceso se alcanza, en el mismo orden que
+        /// <see cref="_rotuloEstado"/> (índice = valor del enum <see cref="EstadoMateria"/>).
+        /// Cotejado contra los comentarios de <c>Sim/Universe.cs::EstadoMateria</c> (la fuente
+        /// de verdad física del proyecto) y contra el árbol de <see cref="_nodos"/> (el verbo
+        /// real que lleva a cada uno) -- literales YA construidos, cero allocs por frame, mismo
+        /// criterio que <see cref="_rotuloEstado"/>. Español latino neutro (regla 53).
+        /// </summary>
+        private static readonly string[] _tooltipEstado =
+        {
+            /* Polvo     */ "POLVO — el estado natal: la materia bruta, tal como sale de la fuente, antes de que el taller la toque.",
+            /* Fundido   */ "FUNDIDO — licuado al rojo en el crisol: brilla y fluye mientras dure el calor.",
+            /* Templado  */ "TEMPLADO — enfriado de golpe en el mundo: duro y quebradizo.",
+            /* Recocido  */ "RECOCIDO — enfriado lento dentro del crisol: dúctil, se deja trabajar sin romperse.",
+            /* Compacto  */ "COMPACTO — prensado hasta apretarse sobre sí mismo, sin fuego de por medio.",
+            /* Ceramico  */ "CERÁMICO — el compacto, cocido: el techo de resistencia de esta familia.",
+            /* Calcinado */ "CALCINADO — tostado sin llegar a fundir: otro polvo distinto, y a veces buen combustible.",
+            /* Solucion  */ "SOLUCIÓN — disuelto en agua: un líquido teñido del color de la base.",
+        };
+
+        /// <summary>Tooltip de la sección "CÓMO SE LLEGA" (el árbol de verbos de la hoja derecha) -- mismo pedido de Cesar, mismo tono ocre que el resto del HUD.</summary>
+        private const string TooltipComoSeLlega =
+            "CÓMO SE LLEGA — cada línea es un proceso real del taller (fundir, prensar, calcinar, disolver, templar, recocer, ceramizar): sigue las ramas desde el polvo para saber qué hacerle a la materia.";
+
         /// <summary>Los "clásicos del arco" (diseño §2, tabla final): página propia, siempre revelada -- son vocabulario del taller desde el día 1, no hay sorpresa que ocultar (regla 13 de CLAUDE.md). NO cuentan en el progreso N/M (ver TotalFiguritas): ese contador es del retículo, no del vocabulario que el jugador ya trae puesto.</summary>
         private static readonly byte[] _clasicos =
         {
@@ -296,6 +321,9 @@ namespace Alkahest.Game
         private readonly byte[] _cola = new byte[ColaCapacidad];
         private int _colaCount;
 
+        /// <summary>(RONDA 55, FIX B2) ¿Ya se barrió el atraso de <see cref="SubstanceKnowledge"/> al menos una vez? Igual que <c>SaberSync._catchUpHecho</c>: hace falta esperar a que <see cref="Init"/> haya corrido (<see cref="_knowledge"/> no nulo) antes de poder drenar nada -- ver <see cref="Update"/>.</summary>
+        private bool _catchUpDrenado;
+
         private bool _fichaAbierta;
         private byte _fichaMat;
         /// <summary>Firma visual EN PALABRAS del material de la ficha, cacheada AL ABRIR (DescribirFirma construye un string: llamarlo desde OnGUI sería una asignación por frame) -- mismo patrón que NamingUi._firmaTexto.</summary>
@@ -349,19 +377,48 @@ namespace Alkahest.Game
         private void OnDisable() => SubstanceKnowledge.AlDescubrir -= OnAlgoDescubierto;
 
         /// <summary>
-        /// EL MOMENTO: se dispara UNA vez por material, la primera vez que
-        /// se descubre (contrato del evento). Solo el retículo base×estado
-        /// entra en la cola de vitrinas -- los clásicos ya se conocían.
+        /// (RONDA 55, FIX B2) YA NO decide aquí si `matId` entra en la vitrina, ni lo empuja
+        /// directo a <see cref="_cola"/>: <see cref="SubstanceKnowledge.MarcarDescubierto"/> ya
+        /// lo encoló en SU cola PERSISTENTE (`EncolarPendienteVitrina`) antes de disparar este
+        /// evento -- ver el docblock grande de esa clase para la causa real de por qué el
+        /// invitado nunca veía su ficha (el evento disparaba antes de que este componente
+        /// existiera para suscribirse). Este handler solo sirve de DESPERTADOR: cuando llega en
+        /// vivo (este componente YA existe), drena lo que haya. El caso importante -- el atraso
+        /// acumulado ANTES de que este componente naciera -- lo cubre <see cref="Update"/> la
+        /// primera vez que corre, no este evento (que para ese atraso ya sonó al vacío).
         /// </summary>
-        private void OnAlgoDescubierto(byte matId)
+        private void OnAlgoDescubierto(byte matId) => DrenarPendientesDeConocimiento();
+
+        /// <summary>
+        /// Vacía en <see cref="_cola"/> todo lo que <see cref="SubstanceKnowledge"/> tuviera
+        /// pendiente de vitrina -- la cola de verdad, que sobrevive a que este componente ni
+        /// existiera cuando el descubrimiento ocurrió. Respeta <see cref="ColaCapacidad"/> (si
+        /// algún día hubiera más pendientes que hueco, el resto espera su turno en la próxima
+        /// llamada -- no se pierde, solo se pospone, a diferencia del recorte antiguo que sí
+        /// descartaba el aviso).
+        /// </summary>
+        private void DrenarPendientesDeConocimiento()
         {
-            if (!MaterialId.EsBaseEstado(matId)) return;
-            if (_colaCount >= ColaCapacidad) return; // cola llena: se pierde el AVISO de esta vez, no el descubrimiento -- el jugador ya lo tiene marcado y puede repasarlo entrando con B (mismo criterio que SubstanceKnowledge.EncolarLeyBanner).
-            _cola[_colaCount++] = matId;
+            if (_knowledge == null) return;
+            while (_colaCount < ColaCapacidad && _knowledge.TryTomarPendienteVitrina(out byte matId))
+                _cola[_colaCount++] = matId;
         }
 
         private void Update()
         {
+            // (RONDA 55, FIX B2) EL BARRIDO DEL ATRASO: se hace aquí, no en OnEnable (Init
+            // todavía no ha corrido cuando OnEnable dispara -- AlkahestGameBootstrap llama
+            // AddComponent y luego Init en la línea siguiente, y AddComponent ya invocó
+            // OnEnable). ANTES de la guarda de DayCycle.InputLocked a propósito: barrer el
+            // atraso no dibuja nada ni consume input, así que no hay razón para esperar a que
+            // un overlay de jornada se aparte -- y en la escena MULTI (donde vive este bug)
+            // InputLocked ya está en false desde el primer frame de todas formas.
+            if (!_catchUpDrenado && _knowledge != null)
+            {
+                _catchUpDrenado = true;
+                DrenarPendientesDeConocimiento();
+            }
+
             if (DayCycle.InputLocked)
             {
                 // (mismo criterio que JournalHud.Update) un overlay de jornada manda: no dejar nada nuestro fantasma debajo.
@@ -755,6 +812,26 @@ namespace Alkahest.Game
             string resena = ResenaDe(_fichaMat);
             float ladoMuestra = UiStyles.S(92f);
 
+            // (RONDA 55, FIX B6) ancho de la columna de texto junto a la muestra, calculado
+            // AQUÍ (independiente de `r`, que todavía no existe -- ancho FIJO derivado de
+            // FichaAncho/ladoMuestra, no de la posición en pantalla) para poder medir el
+            // nombre ANTES de fijar el alto del panel -- mismo criterio que ya usaba
+            // altoResena/altoCeremonia dos líneas más abajo. Antes esta columna reutilizaba
+            // (y MUTABA) el estilo compartido UiStyles.NombreGrande, sin word-wrap y con
+            // clipping=Overflow: un nombre real/bautizado largo no cabía en la única línea
+            // de S(30f) reservada y se pintaba POR ENCIMA de la reseña de abajo -- "el título
+            // de la cabecera choca" del reporte. _estiloNombreFicha (local, ajusta+recorta)
+            // + medir su alto real cierran el hueco.
+            float anchoTexto = w - pad * 2f - ladoMuestra - UiStyles.S(16f);
+            float altoNombre = Mathf.Max(UiStyles.S(28f), UiStyles.Alto(_estiloNombreFicha, nombre, anchoTexto));
+            float altoFirmaTexto = !string.IsNullOrEmpty(_fichaFirma) ? UiStyles.Alto(UiStyles.Ceremonial, _fichaFirma, anchoTexto) : 0f;
+            // "SE LLAMA" (S(18f) hasta el nombre) + el nombre (ahora de alto real) + el hueco
+            // fijo antes de la firma + la firma si la hay -- la columna de texto puede acabar
+            // más alta que la muestra si el nombre ocupa dos líneas; el bloque entero usa lo
+            // que sea MÁS ALTO de las dos, para que nada de lo de al lado quede recortado.
+            float altoColumnaTexto = UiStyles.S(18f) + altoNombre + (altoFirmaTexto > 0f ? UiStyles.S(6f) + altoFirmaTexto : 0f);
+            float altoBloqueMuestra = Mathf.Max(ladoMuestra, altoColumnaTexto);
+
             // --- Medición previa (sin dibujar): el panel se ajusta al contenido.
             int total = _fichaIndiceRafaga + _colaCount;
             bool hayContador = total >= 2;
@@ -766,7 +843,7 @@ namespace Alkahest.Game
             float altoAyuda = UiStyles.TenueCentrado.lineHeight;
 
             float h = UiStyles.S(18f) + altoTitulo + altoContador + UiStyles.S(9f) + UiStyles.S(14f)
-                    + ladoMuestra + UiStyles.S(16f)
+                    + altoBloqueMuestra + UiStyles.S(16f)
                     + altoResena + UiStyles.S(12f)
                     + altoCeremonia + UiStyles.S(12f)
                     + altoBoton + UiStyles.S(6f) + altoAyuda + UiStyles.S(18f);
@@ -816,24 +893,28 @@ namespace Alkahest.Game
 
             // ---- A la derecha de la muestra: rótulo tenue, nombre en Cinzel dorado y la
             // firma visual descrita en palabras (el mismo "retrato hablado" del bautizo).
+            // `anchoTexto` ya se calculó arriba (para poder medir el nombre ANTES de fijar
+            // `h`) -- mismo valor, así que no se recalcula aquí.
             float xTexto = marco.xMax + UiStyles.S(16f);
-            float anchoTexto = r.xMax - pad - xTexto;
             GUI.Label(new Rect(xTexto, y + UiStyles.S(2f), anchoTexto, UiStyles.CuerpoTenue.lineHeight), "SE LLAMA", UiStyles.CuerpoTenue);
 
-            var estiloNombre = UiStyles.NombreGrande;
-            var previo = estiloNombre.normal.textColor;
-            estiloNombre.normal.textColor = UiStyles.Oro; // el nombre de algo recién descubierto SIEMPRE es oro: es el premio de la tarjeta.
-            GUI.Label(new Rect(xTexto, y + UiStyles.S(18f), anchoTexto, UiStyles.S(30f)), nombre, estiloNombre);
-            estiloNombre.normal.textColor = previo;
+            // (RONDA 55, FIX B6) `_estiloNombreFicha` es un estilo PROPIO (Oro fijo, wordWrap
+            // real, clipping=Clip) -- ya NO se muta el UiStyles.NombreGrande compartido, y un
+            // nombre largo se ENVUELVE dentro de `altoNombre` (medido arriba) en vez de
+            // desbordar sobre la reseña de abajo.
+            GUI.Label(new Rect(xTexto, y + UiStyles.S(18f), anchoTexto, altoNombre), nombre, _estiloNombreFicha);
 
-            if (!string.IsNullOrEmpty(_fichaFirma))
+            if (altoFirmaTexto > 0f)
             {
-                float yFirma = y + UiStyles.S(48f);
-                float altoFirma = UiStyles.Alto(UiStyles.Ceremonial, _fichaFirma, anchoTexto);
-                GUI.Label(new Rect(xTexto, yFirma, anchoTexto, altoFirma), _fichaFirma, UiStyles.Ceremonial);
+                float yFirma = y + UiStyles.S(18f) + altoNombre + UiStyles.S(6f);
+                GUI.Label(new Rect(xTexto, yFirma, anchoTexto, altoFirmaTexto), _fichaFirma, UiStyles.Ceremonial);
             }
 
-            y = marco.yMax + UiStyles.S(16f);
+            // (RONDA 55, FIX B6) el bloque que sigue (la reseña) arranca DESPUÉS de lo que sea
+            // más alto: la muestra cuadrada o la columna de texto (nombre envuelto + firma) --
+            // antes siempre asumía la muestra (`marco.yMax`), que es exactamente lo que dejaba
+            // "chocar" un nombre largo contra la reseña.
+            y = r.y + UiStyles.S(18f) + altoTitulo + altoContador + UiStyles.S(9f) + UiStyles.S(14f) + altoBloqueMuestra + UiStyles.S(16f);
 
             // ---- LA RESEÑA, en Alegreya (el cuerpo del proyecto), a ancho completo.
             GUI.Label(new Rect(x, y, ancho, altoResena), resena, UiStyles.Cuerpo);
@@ -972,7 +1053,7 @@ namespace Alkahest.Game
             {
                 int col = e % 2, fila = e / 2;
                 var celda = new Rect(rejilla.x + anchoCelda * col, rejilla.y + altoCelda * fila, anchoCelda, altoCelda);
-                DibujarVitrina(celda, MaterialId.MatDe(baseIdx, (EstadoMateria)e), _rotuloEstado[e], sim, knowledge);
+                DibujarVitrina(celda, MaterialId.MatDe(baseIdx, (EstadoMateria)e), _rotuloEstado[e], sim, knowledge, e);
             }
 
             // ---- HOJA DERECHA: el árbol de verbos DE ESTA FAMILIA, con la página entera
@@ -980,7 +1061,14 @@ namespace Alkahest.Game
             // grandes y ordenados, en la hoja de al lado -- repetirlos era exactamente lo
             // que hacía que se pisaran.
             float altoTituloDer = _estiloCabeceraFamilia.lineHeight;
-            GUI.Label(new Rect(der.x, der.y, der.width, altoTituloDer), "CÓMO SE LLEGA", _estiloCabeceraFamilia);
+            var rectComoSeLlega = new Rect(der.x, der.y, der.width, altoTituloDer);
+            GUI.Label(rectComoSeLlega, "CÓMO SE LLEGA", _estiloCabeceraFamilia);
+            // (RONDA 55, pedido de Cesar) Tooltip por hover sobre "CÓMO SE LLEGA".
+            if (Event.current != null && Event.current.type == EventType.Repaint
+                && rectComoSeLlega.Contains(Event.current.mousePosition))
+            {
+                DrawTooltipWrapped(Event.current.mousePosition, TooltipComoSeLlega);
+            }
             float yFileteDer = der.y + altoTituloDer + UiStyles.S(7f);
             UiStyles.FileteRombo(der.x + der.width * 0.5f, yFileteDer, der.width * 0.86f, UiStyles.Laton);
 
@@ -1202,12 +1290,18 @@ namespace Alkahest.Game
         /// las cantoneras de ese (S(14)) se comerían una caja de 60 px: aquí el gesto
         /// correcto es un filete fino de dos tonos, no una escuadra.
         /// </summary>
-        private static void DibujarVitrina(Rect celda, byte matId, string rotuloEstado, AlkahestSim sim, SubstanceKnowledge knowledge)
+        /// <summary>`estadoIndex` (0..7, valor del enum <see cref="EstadoMateria"/>) es -1 para los clásicos/cruces (rotuloEstado ya viene null ahí, no hay cabecera de estado que explicar) -- lo usan las familias para el tooltip de <see cref="_tooltipEstado"/> (RONDA 55, pedido de Cesar).</summary>
+        private static void DibujarVitrina(Rect celda, byte matId, string rotuloEstado, AlkahestSim sim, SubstanceKnowledge knowledge, int estadoIndex = -1)
         {
             bool revelado = rotuloEstado == null || knowledge.EsDescubierto(matId); // rotuloEstado==null solo lo pasan los clásicos, que nunca se ocultan (regla 13).
 
             float altoRotulo = rotuloEstado != null ? _estiloRotuloEstado.lineHeight : 0f;
-            float altoNombre = _estiloNombreFigurita.lineHeight;
+            // (RONDA 55, FIX B6) DOS líneas de reserva, no una -- _estiloNombreFigurita ahora
+            // ajusta (wordWrap=true, ver PrepararEstilosPropios): un nombre real/bautizado más
+            // ancho que la celda ya no se corta a mitad de palabra, se envuelve. Con una sola
+            // línea de alto reservada, la segunda línea invadiría la vitrina de la fila de
+            // abajo -- exactamente el "el título de la cabecera choca" del reporte.
+            float altoNombre = _estiloNombreFigurita.lineHeight * 2f;
             float margen = UiStyles.S(4f);
             // margen * 5 y no * 3: los dos márgenes de más son el AIRE ENTRE CELDAS. Sin
             // ellos la vitrina crecía hasta tocar el rótulo de la de abajo y la rejilla se
@@ -1220,7 +1314,16 @@ namespace Alkahest.Game
 
             if (rotuloEstado != null)
             {
-                GUI.Label(new Rect(celda.x, y, celda.width, altoRotulo), rotuloEstado, _estiloRotuloEstado);
+                var rectRotulo = new Rect(celda.x, y, celda.width, altoRotulo);
+                GUI.Label(rectRotulo, rotuloEstado, _estiloRotuloEstado);
+                // (RONDA 55, pedido de Cesar) Tooltip por hover sobre la cabecera de estado:
+                // qué significa + con qué proceso se alcanza (ver _tooltipEstado).
+                if (estadoIndex >= 0 && estadoIndex < _tooltipEstado.Length
+                    && Event.current != null && Event.current.type == EventType.Repaint
+                    && rectRotulo.Contains(Event.current.mousePosition))
+                {
+                    DrawTooltipWrapped(Event.current.mousePosition, _tooltipEstado[estadoIndex]);
+                }
                 y += altoRotulo + margen;
             }
 
@@ -1265,14 +1368,16 @@ namespace Alkahest.Game
             // Repaso de la reseña al pasar el cursor: la única forma de releer la trivia de
             // una figurita YA anotada sin tener que esperar a que vuelva a "descubrirse" (la
             // ficha-vitrina solo aparece la primera vez). Barato: un Contains() y, si toca, el
-            // mismo Globo que ya usa el resto del HUD (UiStyles.Globo no asigna nada nuevo).
+            // tooltip propio del álbum (ver DrawTooltipWrapped -- FIX B6: ya NO usa
+            // UiStyles.Globo, que dibujaba la reseña entera en una sola línea sin límite de
+            // ancho y "tapaba"/desbordaba sobre la vitrina vecina, ver su docblock).
             if (revelado && Event.current != null && Event.current.type == EventType.Repaint
                 && box.Contains(Event.current.mousePosition))
             {
                 string resena = ResenaDe(matId);
                 if (!string.IsNullOrEmpty(resena) && resena != SinResena)
                 {
-                    UiStyles.Globo(Event.current.mousePosition + new Vector2(0f, -UiStyles.S(26f)), resena, UiStyles.Oro);
+                    DrawTooltipWrapped(Event.current.mousePosition, resena);
                 }
             }
         }
@@ -1343,6 +1448,15 @@ namespace Alkahest.Game
         /// <summary>Misma disciplina que NamingUi/FlaskHud/JournalHud: las Texture2D creadas por código no se liberan solas al recargar la escena (DayCycle.RestartRun recrea este componente).</summary>
         private void OnDestroy()
         {
+            // (integración pt55, EL HAZ PERDIDO — hallazgo del Encargo B)
+            // `Abierto` es estática y solo se autocorrige mientras una
+            // instancia viva corre Update(): si esta instancia muere con la
+            // ficha/álbum abiertos (fin de sesión multi, recarga de escena),
+            // Abierto quedaba ATASCADA en true PARA SIEMPRE y la guarda de la
+            // regla 12 de Flask/Cincel/Mudanza ocultaba todos los visuales
+            // del mundo — incluido el haz personaje→cursor que Cesar reportó
+            // desaparecido. La estática se baja aquí, incondicional.
+            Abierto = false;
             for (int m = 0; m < _muestras.Length; m++)
             {
                 var t = _muestras[m];
@@ -1363,7 +1477,7 @@ namespace Alkahest.Game
 
         private static GUIStyle _estiloCabeceraFamilia, _estiloProgresoFamilia, _estiloProgresoTotal,
                                 _estiloVerbo, _estiloNombreFigurita, _estiloRotuloEstado, _estiloSigno, _estiloNotaArbol,
-                                _estiloRecetaPregunta, _estiloRecetaRevelada;
+                                _estiloRecetaPregunta, _estiloRecetaRevelada, _estiloTooltip, _estiloNombreFicha;
         private static int _alturaEstilosEstaticos = -1;
 
         private static void PrepararEstilosPropios()
@@ -1376,7 +1490,12 @@ namespace Alkahest.Game
             _estiloProgresoFamilia = Nuevo(UiStyles.S(12f), FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.OroTenue, false, UiStyles.FuenteTitulos);
             _estiloProgresoTotal = Nuevo(UiStyles.S(11f), FontStyle.Normal, TextAnchor.LowerRight, UiStyles.OroTenue, false, UiStyles.FuenteTitulos);
             _estiloVerbo = Nuevo(UiStyles.S(12f), FontStyle.Italic, TextAnchor.MiddleCenter, UiStyles.Texto, false);
-            _estiloNombreFigurita = Nuevo(UiStyles.S(12f), FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.Texto, false);
+            // (RONDA 55, FIX B6) `ajustar=true` (word-wrap) -- ANTES false: un nombre real o
+            // bautizado más ancho que la celda (celda.width/2, angosta) se cortaba a mitad de
+            // palabra sin ningún indicio (Clip silencioso, "los títulos se CORTAN" del reporte).
+            // Con wrap + la reserva de DOS líneas en DibujarVitrina (ver `altoNombre`) el nombre
+            // se lee entero en vez de perder la cola.
+            _estiloNombreFigurita = Nuevo(UiStyles.S(12f), FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.Texto, true);
             _estiloRotuloEstado = Nuevo(UiStyles.S(10f), FontStyle.Normal, TextAnchor.UpperCenter, UiStyles.TextoTenue, false, UiStyles.FuenteTitulos);
             _estiloSigno = Nuevo(UiStyles.S(18f), FontStyle.Bold, TextAnchor.MiddleCenter, UiStyles.TextoTenue, false);
             _estiloNotaArbol = Nuevo(UiStyles.S(11f), FontStyle.Italic, TextAnchor.UpperCenter, UiStyles.TextoTenue, false);
@@ -1385,6 +1504,18 @@ namespace Alkahest.Game
             // contraste tenue/claro que el resto del álbum usa para "sin descubrir"/"descubierto".
             _estiloRecetaPregunta = Nuevo(UiStyles.S(13f), FontStyle.Italic, TextAnchor.UpperLeft, UiStyles.TextoTenue, false);
             _estiloRecetaRevelada = Nuevo(UiStyles.S(13f), FontStyle.Normal, TextAnchor.UpperLeft, UiStyles.Texto, false);
+            // (RONDA 55, FIX B6) EL TOOLTIP PROPIO -- ver DrawTooltipWrapped para la causa raíz
+            // que reemplaza: `UiStyles.Globo` (Chip, wordWrap=false, clipping=Overflow) está
+            // pensado para chips CORTOS de una línea; reusarlo para la reseña (una frase larga
+            // de trivia) la dibujaba en un único renglón sin límite de ancho, que "tapaba" la
+            // vitrina de al lado o se salía de pantalla ("la reseña en marquesina" del reporte).
+            // Este estilo SÍ ajusta (wordWrap=true) y recorta (Clip, heredado de Nuevo()).
+            _estiloTooltip = Nuevo(UiStyles.S(12f), FontStyle.Normal, TextAnchor.UpperLeft, UiStyles.Texto, true);
+            // (RONDA 55, FIX B6) El nombre de la ficha-vitrina (DrawFicha): estilo PROPIO en
+            // vez de reutilizar (y mutar) UiStyles.NombreGrande -- mismo tamaño/tipografía que
+            // ese, pero con Oro FIJO (no hace falta guardar/restaurar textColor ajeno) y
+            // wordWrap=true para que un nombre largo se envuelva en vez de desbordar.
+            _estiloNombreFicha = Nuevo(UiStyles.S(19f), FontStyle.Normal, TextAnchor.MiddleLeft, UiStyles.Oro, true, UiStyles.FuenteTitulos);
         }
 
         /// <summary>
@@ -1410,6 +1541,41 @@ namespace Alkahest.Game
             if (tipografia != null) s.font = tipografia;
             s.normal.textColor = color;
             return s;
+        }
+
+        /// <summary>
+        /// (RONDA 55, FIX B6) EL TOOLTIP PROPIO DEL ÁLBUM -- ancho FIJO con word-wrap real
+        /// (a diferencia de <see cref="UiStyles.Globo"/>, pensado para chips cortos de una
+        /// sola línea: <c>Chip</c> no ajusta y su ancho sale de <c>CalcSize</c>, la medida SIN
+        /// wrap -- para una reseña de trivia de una frase larga eso produce una caja
+        /// desproporcionada que se sale de pantalla o se pinta encima de la vitrina vecina).
+        /// Mide su alto REAL con <see cref="UiStyles.Alto"/> (word-wrap incluido) antes de
+        /// dibujar nada, así que nunca recorta texto por abajo -- y clampa su posición dentro
+        /// de la pantalla en los dos ejes, igual que <c>Globo</c>. Usado por el hover de la
+        /// reseña (<see cref="DibujarFigurita"/>) y por los tooltips nuevos de las cabeceras de
+        /// estado / "CÓMO SE LLEGA" (pedido de Cesar).
+        /// </summary>
+        private const float TooltipAncho = 210f;
+
+        private static void DrawTooltipWrapped(Vector2 anclaPantalla, string texto)
+        {
+            if (string.IsNullOrEmpty(texto) || _estiloTooltip == null) return;
+
+            float padInterior = UiStyles.S(8f);
+            float w = UiStyles.S(TooltipAncho);
+            float altoTexto = UiStyles.Alto(_estiloTooltip, texto, w - padInterior * 2f);
+            float h = altoTexto + padInterior * 2f;
+
+            float x = Mathf.Clamp(anclaPantalla.x - w * 0.5f, UiStyles.S(4f), Mathf.Max(UiStyles.S(4f), Screen.width - w - UiStyles.S(4f)));
+            // Por encima del cursor, como Globo -- salvo que no quepa arriba (cerca del borde
+            // superior de la pantalla), caso que Globo no tiene que resolver porque sus chips
+            // son casi planos: aquí una reseña de cuatro líneas SÍ puede chocar con el techo.
+            float y = anclaPantalla.y - h - UiStyles.S(12f);
+            if (y < UiStyles.S(4f)) y = Mathf.Min(anclaPantalla.y + UiStyles.S(16f), Mathf.Max(UiStyles.S(4f), Screen.height - h - UiStyles.S(4f)));
+
+            var r = new Rect(x, y, w, h);
+            UiStyles.Panel(r, UiStyles.TintaFuerte, UiStyles.OroTenue);
+            GUI.Label(new Rect(r.x + padInterior, r.y + padInterior, r.width - padInterior * 2f, altoTexto), texto, _estiloTooltip);
         }
 
         // Estilos de INSTANCIA para la pantalla completa / la ficha (no los necesita el

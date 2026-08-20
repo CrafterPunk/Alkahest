@@ -328,6 +328,91 @@ namespace Alkahest.Game
             return true;
         }
 
+        // =================================================================
+        // (ronda 56, LA VIDA ÚTIL DE LO DESCUBIERTO, CONTRATO_RONDA56.md §1c)
+        // EL ENCARGO COMPUESTO: se pinta como UN bloque de 3 líneas (cabecera con
+        // nombre corto + recompensa TOTAL, narrativa si expandido, y el checklist
+        // "▫ etiqueta  n/total" por componente, atenuado con ✓ al completarse) en vez
+        // de tres filas sueltas indistinguibles del resto del panel. Formato a
+        // decisión de este encargo (contrato: "respetando el ancho real del panel,
+        // medido") -- reutiliza <see cref="ObtenerFila"/> para el texto de progreso de
+        // cada componente (mismo cache de "cero strings por frame salvo cuando
+        // cambian de verdad" que ya usa el resto del archivo) y
+        // <see cref="TryFlechaTolva"/>/<see cref="VaALaTolva"/> tal cual, sin
+        // duplicar esa lógica: "la flecha al Buzón del pt50 aplica al compuesto
+        // igual que a los Guiado" (contrato §1c, textual).
+        // =================================================================
+
+        /// <summary>Alto en píxeles del bloque completo de un encargo compuesto (cabecera + narrativa opcional + 3 líneas de checklist). Ver el docblock de la región de arriba.</summary>
+        private float AltoBloqueCompuesto(Order cabecera, bool expandido, float interior, float altoLinea, float gapChico)
+        {
+            float alto = altoLinea; // cabecera: nombre corto + recompensa total.
+            if (expandido)
+                alto += gapChico + UiStyles.Alto(UiStyles.CuerpoTenue, cabecera.GrupoTextoLargo, interior);
+            alto += gapChico + altoLinea * 3f; // 3 líneas de checklist, una por componente.
+            return alto;
+        }
+
+        /// <summary>
+        /// Dibuja el bloque de un encargo compuesto (ver el docblock de la región de
+        /// arriba). `orders[i]`/`orders[i+1]`/`orders[i+2]` son las 3 hermanas del
+        /// mismo grupo (garantía de <see cref="OrderSystem.EncolarCompuesto"/>): todas
+        /// comparten GrupoNombreCorto/GrupoTextoLargo/GrupoRecompensaTotal, así que
+        /// cualquiera sirve de cabecera -- se usa `orders[i]`.
+        /// </summary>
+        private void DibujarBloqueCompuesto(List<Order> orders, int i, ref float y, float x, float interior,
+            float altoLinea, float gapChico, float anchoRecompensa, bool expandido, bool modoSemillaCero, float ladoCaja)
+        {
+            var cabecera = orders[i];
+
+            GUI.Label(new Rect(x, y, interior - anchoRecompensa, altoLinea), cabecera.GrupoNombreCorto, UiStyles.Titulo);
+            GUI.Label(new Rect(x + interior - anchoRecompensa, y, anchoRecompensa, altoLinea),
+                "+" + cabecera.GrupoRecompensaTotal + " ★", UiStyles.Numero);
+            y += altoLinea;
+
+            if (expandido)
+            {
+                y += gapChico;
+                // Narrativa completa: leída FRESCA cada frame (regla 13) -- aunque en esta
+                // ronda el texto es constante, mismo criterio que el resto del panel para
+                // Order.Descripcion (nunca se cachea el texto largo de origen).
+                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, cabecera.GrupoTextoLargo, interior);
+                GUI.Label(new Rect(x, y, interior, altoTexto), cabecera.GrupoTextoLargo, UiStyles.CuerpoTenue);
+                y += altoTexto;
+            }
+
+            y += gapChico;
+            float indent = UiStyles.S(4f);
+            for (int k = 0; k < 3; k++)
+            {
+                var comp = orders[i + k];
+                var fila = ObtenerFila(comp); // cache de "n/total"/"hecho" -- mismo criterio que las filas clásicas.
+                string glifo = comp.Completado ? "✓" : "▫";
+                string linea = glifo + " " + comp.GrupoEtiqueta + "  " + fila.TextoProgreso;
+
+                float xLinea = x + indent;
+                float anchoLinea = interior - indent;
+
+                // (contrato §1c) LA FLECHA AL BUZÓN aplica al compuesto igual que a los
+                // Guiado -- mismo criterio y mismos métodos que ya usa cada fila clásica.
+                if (modoSemillaCero && !comp.Completado && VaALaTolva(comp.Tipo) && TryFlechaTolva(out string flechaGlifo))
+                {
+                    var flechaRect = new Rect(xLinea, y + (altoLinea - ladoCaja) * 0.5f, ladoCaja, ladoCaja);
+                    UiStyles.Rellenar(flechaRect, UiStyles.Oro);
+                    var previoColorFlecha = UiStyles.ChipMini.normal.textColor;
+                    UiStyles.ChipMini.normal.textColor = new Color(0f, 0f, 0f, 0.82f);
+                    GUI.Label(flechaRect, flechaGlifo, UiStyles.ChipMini);
+                    UiStyles.ChipMini.normal.textColor = previoColorFlecha;
+                    xLinea += ladoCaja + UiStyles.S(4f);
+                    anchoLinea -= ladoCaja + UiStyles.S(4f);
+                }
+
+                GUI.Label(new Rect(xLinea, y, anchoLinea, altoLinea), linea,
+                    comp.Completado ? UiStyles.CuerpoTenue : UiStyles.CuerpoLinea);
+                y += altoLinea;
+            }
+        }
+
         private void OnGUI()
         {
             // (playtest 21, EL PIVOT) HudSilenciado, hermano de InputLocked
@@ -380,11 +465,22 @@ namespace Alkahest.Game
                        + gapFila;
             for (int i = 0; i < orders.Count; i++)
             {
+                var orderMedido = orders[i];
+                if (orderMedido.GrupoId != null)
+                {
+                    // (ronda 56, CONTRATO_RONDA56.md §1c) EL ENCARGO COMPUESTO: bloque de 3
+                    // líneas en vez de una fila -- ver AltoBloqueCompuesto/DibujarBloqueCompuesto.
+                    // Las 3 hermanas SIEMPRE llegan consecutivas (OrderSystem.EncolarCompuesto),
+                    // así que se miden/dibujan de una sola vez y el índice salta las otras dos.
+                    alto += AltoBloqueCompuesto(orderMedido, expandido, interior, altoLinea, gapChico) + gapFila;
+                    i += 2;
+                    continue;
+                }
                 alto += altoLinea; // fila compacta: caja + progreso + recompensa.
                 if (expandido)
                 {
                     alto += gapChico + altoBarra;
-                    alto += gapChico + UiStyles.Alto(UiStyles.CuerpoTenue, orders[i].Descripcion, interior - xTextoDesde);
+                    alto += gapChico + UiStyles.Alto(UiStyles.CuerpoTenue, orderMedido.Descripcion, interior - xTextoDesde);
                 }
                 alto += gapFila;
             }
@@ -431,6 +527,15 @@ namespace Alkahest.Game
             for (int i = 0; i < orders.Count; i++)
             {
                 var order = orders[i];
+                if (order.GrupoId != null)
+                {
+                    DibujarBloqueCompuesto(orders, i, ref y, x, interior, altoLinea, gapChico, anchoRecompensa,
+                        expandido, modoSemillaCero, ladoCaja);
+                    y += gapFila;
+                    i += 2;
+                    continue;
+                }
+
                 var fila = ObtenerFila(order);
 
                 TipoVisual(order.Tipo, order.Completado, out Color colorCaja, out string glifo);
@@ -562,7 +667,16 @@ namespace Alkahest.Game
                 }
                 alto += gapFila;
             }
-            if (n == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior) + gapFila;
+            // (playtest 55, ronda B, "B4") TextoVacio, NO TextoSinEncargos a secas -- ver
+            // TextoVacio arriba: en Semilla Cero, la clásica "la Tolva del Maestro sigue
+            // sellada tras la roca, hacia la derecha" ya NO describe el mundo (la Tolva de
+            // ese modo es el Buzón del Maestro desde el playtest 54, y ni siquiera está
+            // "hacia la derecha") -- esta rama replicada (el invitado) se había quedado con
+            // el texto clásico a secas mientras la rama local (arriba, línea 399) ya usaba
+            // TextoVacio desde que existe ese distingo. Mismo criterio: el caótico no cambia
+            // (TextoVacio ahí sigue devolviendo TextoSinEncargos), Semilla Cero ahora sí ve
+            // "(nada por ahora)" también en el invitado.
+            if (n == 0) alto += UiStyles.Alto(UiStyles.CuerpoTenue, TextoVacio, interior) + gapFila;
             alto += pad - (n > 0 ? gapFila : 0f);
 
             var panel = new Rect(Screen.width - ancho - margen, margen, ancho, alto);
@@ -579,8 +693,8 @@ namespace Alkahest.Game
 
             if (n == 0)
             {
-                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoSinEncargos, interior);
-                GUI.Label(new Rect(x, y, interior, altoTexto), TextoSinEncargos, UiStyles.CuerpoTenue);
+                float altoTexto = UiStyles.Alto(UiStyles.CuerpoTenue, TextoVacio, interior);
+                GUI.Label(new Rect(x, y, interior, altoTexto), TextoVacio, UiStyles.CuerpoTenue);
                 y += altoTexto + gapFila;
             }
 

@@ -481,6 +481,19 @@ namespace Alkahest.Net
             if (GUILayout.Button("SALIR de la sesión", UiStyles.Boton))
             {
                 sessionCoordinator.Disconnect();
+                // (integración pt55, LA FUGA DE RE-HOST del pt53) Salir de la
+                // sesión RECARGA la escena activa: es la única forma barata y
+                // completa de resetear el estado por-escena (bootstrap._spawned,
+                // registro de MaquinaSync, HUDs, réplicas huérfanas) — el fix
+                // fino "por piezas" está anotado como deuda desde el pt53 y
+                // nadie lo cerró; mientras tanto, re-hostear sin recargar
+                // dejaba un taller fantasma (y hasta el haz del frasco muerto,
+                // ver Flask.cs:241). Las estáticas que deben sobrevivir ya se
+                // resetean solas (ModoSemillaCero en SimSync.OnNetworkDespawn,
+                // guardas de Balda/Anclaje/Pila y MachineFocus en el arranque
+                // del bootstrap, AlbumReal.Abierto en su OnDestroy).
+                UnityEngine.SceneManagement.SceneManager.LoadScene(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
             }
         }
     }

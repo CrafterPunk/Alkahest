@@ -292,9 +292,41 @@ namespace FriendsLoop.Networking
             steamLobbyService.JoinLobby(lobbyId);
         }
 
-        /// <summary>Cierra la sesión actual (host o cliente) y abandona el lobby de Steam si corresponde.</summary>
+        /// <summary>
+        /// Cierra la sesión actual (host o cliente) y abandona el lobby de
+        /// Steam si corresponde.
+        ///
+        /// GUARDA DE REENTRADA (playtest 55, ronda B): idéntico mecanismo al
+        /// que ya documenta <see cref="StartHost"/> arriba ("el Shutdown de
+        /// NGO tarda un frame, no se puede encadenar en la misma llamada").
+        /// `SetState(ConnectionState.Offline)` se fija de forma SÍNCRONA al
+        /// final de este método, pero `networkManager.Shutdown()` es
+        /// ASÍNCRONO por dentro: durante esa ventana `IsHost`/`IsClient`/
+        /// `IsServer` pueden seguir en `true` un frame más aunque
+        /// `CurrentState` ya diga Offline. Sin esta guarda, una SEGUNDA
+        /// llamada a `Disconnect()` en esa ventana (dos clics rápidos del
+        /// mismo botón, o dos llamadores distintos en el mismo frame --
+        /// visto en vivo: <see cref="Alkahest.Game.DayCycle.VolverAlTitulo"/>
+        /// reintentado porque la escena tardó en cargar/falló) vuelve a
+        /// invocar `networkManager.Shutdown()` mientras el primero sigue
+        /// vivo: NGO reintenta desconectar a un cliente cuyo TRANSPORTE ya
+        /// cerró esa conexión en la primera pasada (el diccionario interno
+        /// de `SteamNetworkingSocketsTransport` ya no lo tiene), y el
+        /// transporte lo reporta como error en vez de ignorarlo en
+        /// silencio -- exactamente "[Netcode]
+        /// SteamNetworkingSocketsTransport - Can't disconnect client, client
+        /// not connected, clientId:..." en la consola de la build de
+        /// reparto. `CurrentState == Offline` ya es la señal de "esto ya se
+        /// pidió"; una segunda llamada mientras tanto es un no-op limpio, no
+        /// una segunda desconexión.
+        /// </summary>
         public void Disconnect()
         {
+            if (CurrentState == ConnectionState.Offline)
+            {
+                return;
+            }
+
             if (networkManager != null && (networkManager.IsHost || networkManager.IsClient || networkManager.IsServer))
             {
                 networkManager.Shutdown();

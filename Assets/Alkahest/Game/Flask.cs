@@ -238,6 +238,53 @@ namespace Alkahest.Game
             // está tapado por el velo: aspirar o verter a ciegas detrás del libro
             // solo puede acabar en destrozo. Además el libro pagina con Re Pág /
             // Av Pág y el jugador tiene el ratón encima del papel, no del taller.
+            //
+            // COSTURA CON EL ENCARGO A -- "B7" (playtest 55, ronda B): investigado a fondo
+            // "el haz del frasco desapareció y no volvió" (reporte de Cesar). VEREDICTO: el
+            // código del haz (esta guarda, UpdateWorldVisuals, BuildBeamVisual...) está
+            // INTACTO desde que se retiró el anillo en el playtest 11 -- verificado contra
+            // `git log`/tamaño en bytes de Game/Flask.cs commit a commit (regla 26): la única
+            // caída de tamaño de todo el historial es la del propio playtest 11 (42790 ->
+            // 38049 bytes), la retirada DOCUMENTADA del anillo (ver el punto 3 del docblock de
+            // esta clase); de ahí en adelante el archivo solo crece. El orden de capas tampoco
+            // cambió: BeamSortingOrder=40/41 sigue por debajo de las alas (47-49) y el cuerpo
+            // (50) del aprendiz (Game/ApprenticeController.cs), por encima del mundo (-5,
+            // Sim/SimRenderer.cs). Descartadas (b) regresión de código y (c) orden de capas.
+            //
+            // CAUSA REAL, (a): esta guarda es CORRECTA (regla 12 -- el frasco no puede actuar
+            // con una vitrina modal en pantalla) y NO se toca. El problema es que
+            // `AlbumReal.Abierto` puede quedarse ATASCADO en `true` PARA SIEMPRE, matando el
+            // haz (y el resto de visuales de mundo, vía esta misma línea) en TODA sesión
+            // futura hasta reiniciar el .exe entero. Mecanismo confirmado leyendo
+            // Game/AlkahestGameBootstrap.cs y Game/AlbumReal.cs (sin editarlos, fuera de
+            // alcance de este encargo): `AlbumReal.Abierto` es una propiedad ESTÁTICA que cada
+            // instancia de `AlbumReal.Update()` recalcula como `_visible || _fichaAbierta`
+            // cada frame -- se autocorrige SOLO SI esa instancia sigue viva y corriendo. La
+            // fuga YA DOCUMENTADA en la sección "Playtest 53" de docs/HANDOFF.md ("host que
+            // sale de la sesión y re-hostea SIN cerrar el juego") es exactamente el
+            // escenario: `AlkahestGameBootstrap._spawned` (bootstrap.cs:103) no se resetea al
+            // desconectar, así que un segundo `TrySpawnRed()` en el MISMO proceso (mismo
+            // patrón de reporte que Cesar probó con su amigo) se salta ENTERO el bloque de
+            // spawn -- incluida `SpawnAlbumReal` -- y deja viva, huérfana y sin nadie que la
+            // reinicie, la instancia VIEJA de `AlbumReal` de la sesión anterior. Si esa
+            // instancia tenía `_fichaAbierta`/`_visible` en `true` en el instante exacto de
+            // salir (plausible: una ficha de descubrimiento se abre SOLA, pt50), su
+            // `Update()` (que SÍ sigue corriendo, el GameObject nunca se destruye) mantiene
+            // `AlbumReal.Abierto` en `true` para siempre -- invisible, porque su propio
+            // `OnGUI` puede estar devolviendo temprano (`_sim`/`_knowledge` de la sesión
+            // vieja), así que no hay ni panel en pantalla que el jugador pueda cerrar. El
+            // WORKAROUND que ya documentaba el playtest 53 ("tras salir, VOLVER AL TÍTULO y
+            // reentrar antes de re-hostear") estaba además ROTO por B1 en la build de reparto
+            // (`SceneManager.LoadScene("AlkahestLab")` por nombre, ausente del build MULTI) --
+            // arreglado esta misma ronda en Game/DayCycle.cs, así que el escape real vuelve a
+            // funcionar, pero la fuga en sí sigue viva.
+            //
+            // NO SE TOCA `Game/AlbumReal.cs` (propiedad del Encargo A, fuera de mi lista) ni
+            // se debilita esta guarda (regla 12 es innegociable) -- el fix real es que
+            // `AlbumReal`/`AlkahestGameBootstrap` se limpien a sí mismos al salir de una
+            // sesión (mismo trabajo pendiente que `_spawned`/MaquinaSync del playtest 53).
+            // Reportado al director como costura entre A y B para cerrarlo junto con esa
+            // deuda ya conocida.
             if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisualesDeMundo(); return; } // (integración pt50, regla 12) AlbumReal.Abierto: la ficha modal de descubrimiento (ENCARGO F) se abre sola -- aspirar/verter con ella en pantalla era el hueco reportado.
 
             // (playtest 16) EL CINCEL ES UN MODO, NO OTRO BOTÓN. Con la tecla C el

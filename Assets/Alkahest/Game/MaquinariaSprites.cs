@@ -2800,7 +2800,18 @@ namespace Alkahest.Game
                 case TipoBalda: return ConstruirReplicaBalda(padre, ancho, alto);
                 case TipoRack: return ConstruirReplicaRack(padre, ancho, alto);
                 case TipoAlambique: return ConstruirReplicaAlambique(padre, ancho, alto);
-                case TipoPila: return CrearCapa(padre, "ReplicaVisualEstatica", MarcoBandeja(10, 5), ReplicaVisualSortingOrder, ancho, alto);
+                // (integración pt55, B3: "marco dorado raro con grietas" en la
+                // captura del invitado) MarcoBandeja(10,5) horneaba una textura
+                // 2:1 que se estiraba a la huella real de la Pila (14x9 celdas,
+                // ~1.56:1): el borde y las cartelas diagonales se deformaban y
+                // se leían como "grietas". La proporción de la textura ahora
+                // SIGUE a la huella real recibida.
+                case TipoPila:
+                {
+                    int texW = Mathf.Clamp(Mathf.RoundToInt(ancho / Mathf.Max(0.02f, SimRenderer.CellWorldSize)), 6, 32);
+                    int texH = Mathf.Clamp(Mathf.RoundToInt(alto / Mathf.Max(0.02f, SimRenderer.CellWorldSize)), 4, 32);
+                    return CrearCapa(padre, "ReplicaVisualEstatica", MarcoBandeja(texW, texH), ReplicaVisualSortingOrder, ancho, alto);
+                }
             }
 
             Sprite pieza;
