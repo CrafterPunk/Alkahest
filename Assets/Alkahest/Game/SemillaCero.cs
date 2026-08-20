@@ -150,6 +150,18 @@ namespace Alkahest.Game
         /// <summary>Edge-trigger: el comentario del Maestro sobre la ceniza solo se dice una vez por partida.</summary>
         private bool _cenizaComentada;
 
+        /// <summary>
+        /// (RONDA 49, ENCARGO RITMO+ENSAYO) Perezoso: `Game/EnsayoMaestro.cs` es un archivo de
+        /// propiedad DISJUNTA (fuera de este encargo) y `AlkahestGameBootstrap` no lo inyecta
+        /// aquí -- mismo patrón que `EnsayoMaestro._knowledge` (busca su
+        /// `SubstanceKnowledge` con `FindAnyObjectByType` en su propio `Update`, ver su
+        /// docblock de `Init`). Se resuelve la primera vez que hace falta (beat PreguntaEnsayo)
+        /// y se cachea -- la instancia vive toda la partida, buscarla una vez basta.
+        /// </summary>
+        private EnsayoMaestro _ensayo;
+        /// <summary>Edge-trigger: la pista del Maestro sobre "lo cocido aguanta" solo se dice una vez por partida, al segundo fallo del Ensayo -- mismo patrón que <see cref="_cenizaComentada"/>.</summary>
+        private bool _ensayoComentado;
+
         // -----------------------------------------------------------------
         // (CONTRATO_TERMICA.md §3c, ENCARGO I) BEAT DEL FRÍO: rastreo del
         // hielo derretido -- ver el docblock de SondeoDerretidoHielo para el
@@ -580,12 +592,44 @@ namespace Alkahest.Game
             SimLevelBuilder.DestaparSala(_sim, SalaEnsayo);
             // (idea TEMPERATURA, cierra el círculo del beat 4) resuelto en el Ensayo vía
             // OrderSystem.CompletarEnsayo(OrderType.AguantaCalor, ...).
-            _orders.EncolarPedidoGuiado(OrderType.AguantaCalor, 1, Beat5RecompensaEnsayo, "¿DE VERDAD aguanta?");
+            // (RONDA 49, ENCARGO RITMO+ENSAYO, contrato §3 punto 4) Coletilla concreta añadida
+            // al texto del pedido: el título a secas no decía QUÉ traer ni A DÓNDE -- Cesar se
+            // quedó sin saber qué muestra probar (playtest 48). Las tres ideas del contrato
+            // (diario/resistencias, cocido, en frío) las da MaestroDice al segundo fallo (ver
+            // SondeoPreguntaEnsayo); esta línea del pedido da el primer empujón, visible desde
+            // el minuto uno en el panel de encargos, sin esperar a que el jugador falle dos veces.
+            _orders.EncolarPedidoGuiado(OrderType.AguantaCalor, 1, Beat5RecompensaEnsayo, "¿DE VERDAD aguanta? Trae al Ensayo algo que resista el rojo.");
             Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.3→5.4: se destapa el Ensayo -- idea TEMPERATURA, cierra el fracaso del beat 4.");
         }
 
+        /// <summary>
+        /// Constante de umbral (contrato §3 del encargo, literal: "al llegar a 2"): la primera
+        /// prueba fallida es información nueva y no merece interrupción; a la segunda, el
+        /// jugador está claramente probando a ciegas y el Maestro interviene.
+        /// </summary>
+        private const int FallosEnsayoParaComentario = 2;
+
         private void SondeoPreguntaEnsayo()
         {
+            // (RONDA 49) LA PISTA DEL MAESTRO -- Cesar, playtest 48, literal: "me quedé
+            // trabado: no sé qué aguanta el rojo del crisol, no lo hace ni el ladrillo ni la
+            // brea ni el carbón". Sondea EnsayoMaestro.FallosAguantaCalor (ver su docblock): al
+            // llegar a 2 fallos, UNA vez, el Maestro señala las tres ideas del contrato --
+            // consultar el DIARIO de resistencias, que lo CALCINADO/lo COCIDO aguanta, y dejar
+            // ENFRIAR la muestra antes de presentarla (la trampa muda B de esta misma ronda,
+            // ver EnsayoMaestro.NormalizarMuestraAAmbiente -- que a partir de esta ronda ya la
+            // resuelve el propio altar, pero una muestra puede seguir llegando caliente de una
+            // hornada que el jugador todavía no ha dejado reposar en la Tolva).
+            if (!_ensayoComentado)
+            {
+                if (_ensayo == null) _ensayo = FindAnyObjectByType<EnsayoMaestro>();
+                if (_ensayo != null && _ensayo.FallosAguantaCalor >= FallosEnsayoParaComentario)
+                {
+                    _ensayoComentado = true;
+                    MaestroDice("Lo suelto arde o revienta. Busca en tu diario lo que ya te dijo 'resiste este fuego' -- lo bien COCIDO aguanta. Y deja ENFRIAR la muestra antes de presentarla.", 9f);
+                }
+            }
+
             if (!PedidoActivoCompletado()) return;
             EntrarFinalAbierto();
         }

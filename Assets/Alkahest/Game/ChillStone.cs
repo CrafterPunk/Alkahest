@@ -323,6 +323,46 @@ namespace Alkahest.Game
     /// trabaja (<see cref="ColorCristal"/>, <see cref="AnimarCristales"/>)
     /// ya existía desde el playtest 13 -- no se tocó, cumplía el contrato
     /// de fábrica.
+    ///
+    /// ---------------------------------------------------------------------
+    /// LA REGLETA DE ESCARCHA (playtest 49, "OPUS CON OJOS" — rediseño sobre
+    /// la FOTO DE REFERENCIA de Cesar)
+    /// ---------------------------------------------------------------------
+    /// La "armonización" del playtest 48 salió mal MEDIDA, no de gusto: dejó
+    /// a las dos placas con la MISMA construcción (misma fórmula de tamaño,
+    /// mismo gradiente de roca, mismas juntas de sillería, misma banda clara
+    /// arriba) y encima ADELGAZÓ los dientes de escarcha, que eran el único
+    /// rasgo propio que le quedaba a este aparato. Veredicto de Cesar: *"no
+    /// sé por qué la placa de calor y frío es el mismo, parece que perdiste
+    /// registro del que te pedí en la foto"*. Su foto pedía literalmente
+    /// "una regleta metálica gris-azulada con dientes triangulares claros
+    /// apuntando hacia arriba", tipo bandeja de hielo.
+    ///  · <see cref="MaquinariaSprites.BloqueGelido"/> deja de ser piedra con
+    ///    sillería y pasa a ser ACERO FRÍO CLARO con ranurado VERTICAL de
+    ///    disipador + labio de escarcha + garganta en penumbra. El cuerpo
+    ///    CLARO es lo que la separa de la losa parda y oscura de su hermana
+    ///    aunque se miren de reojo (ver el bloque "LAS DOS PLACAS DE ZONA" en
+    ///    Game/MaquinariaSprites.cs para el criterio de los tres canales:
+    ///    silueta, valor, grano).
+    ///  · <see cref="MaquinariaSprites.CristalesGelidos"/>: los dientes
+    ///    VUELVEN A CRECER (el adelgazamiento del 48 queda como IDEA
+    ///    DESCARTADA, regla 15: a ~10 px por celda, un diente de 2 téxeles no
+    ///    existe). Ahora miden ~1.0 x 1.43 celdas (9 x 13 px medidos a 9.2 px/celda), son PRISMAS de tres
+    ///    facetas y ROMPEN el borde superior del aparato: la silueta
+    ///    dentada es el rasgo que hace inconfundible a esta placa a
+    ///    cualquier distancia.
+    ///  · <see cref="ColorCristal"/> apagada pasa de (0.42,0.46,0.52,0.75) a
+    ///    (0.60,0.66,0.74,1.00): opaca y más clara. Con alfa 0.75 los dientes
+    ///    casi desaparecían contra la garganta oscura, y una placa apagada
+    ///    tiene que seguir diciendo QUÉ ES. Y los DOS estados activos dejan de
+    ///    irse al violeta en el valle del latido -- ver el comentario dentro de
+    ///    <see cref="ColorCristal"/> con la medición del tinte real.
+    /// LO QUE NO SE TOCA: la cronología del RÓTULO ANCLADO ABAJO (ver
+    /// "POSICIÓN DEL RÓTULO DE FRÍO" arriba — cuarta vez que se avisa, regla
+    /// 27), el rótulo de oficio del 48 ("PIEDRA GÉLIDA — enfría la ZONA de
+    /// encima"), toda la física de <see cref="ApplyColdTick"/> /
+    /// <see cref="Sim.EmisionTermica"/>, y la regla 36 (las capas se crean
+    /// UNA vez en <see cref="BuildVisual"/>).
     /// </summary>
     public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
@@ -816,9 +856,28 @@ namespace Alkahest.Game
         {
             switch (_state)
             {
-                case State.Helando: return new Color(0.62f * pulso + 0.20f, 0.90f * pulso, 1f, 1f);
-                case State.Fresca: return new Color(0.50f * pulso + 0.16f, 0.72f * pulso, 0.88f * pulso + 0.08f, 1f);
-                default: return new Color(0.42f, 0.46f, 0.52f, 0.75f); // apagada: cristal mate, sin luz propia
+                // (playtest 49) EL LATIDO SE QUEDA EN EL HIELO, NO SE VA AL
+                // VIOLETA. Medido en vivo (Unity_RunCommand sobre el
+                // SpriteRenderer real): con la fórmula del playtest 13, en el
+                // VALLE del pulso el tinte de HELANDO caía a
+                // RGBA(0.57, 0.54, 1.00) -- azul y rojo casi iguales con el
+                // azul clavado a tope, o sea PERIWINKLE/violeta, que sobre el
+                // cuerpo de acero nuevo se leía como una luz de neón y no como
+                // escarcha. Ahora el rojo y el verde suben JUNTOS desde un
+                // suelo alto (0.55/0.72) y el verde va SIEMPRE por delante del
+                // rojo: el matiz se queda en el cian-hielo en todo el ciclo y
+                // el latido lo hace el BRILLO, no el tono. Mismo criterio que
+                // la incandescencia de HeatPlate: nunca un canal saturado
+                // solo. Rango real HELANDO: (0.55,0.72,1.00)..(0.85,0.96,1.00).
+                case State.Helando: return new Color(0.55f + 0.30f * pulso, 0.72f + 0.24f * pulso, 1f, 1f);
+                case State.Fresca: return new Color(0.45f + 0.22f * pulso, 0.60f + 0.22f * pulso, 0.84f + 0.14f * pulso, 1f);
+                // (playtest 49) Apagada: HIELO MATE, sin luz propia -- pero
+                // OPACO y más claro que antes (0.42/0.46/0.52 con alfa 0.75).
+                // Con alfa 0.75 los dientes se transparentaban contra la
+                // garganta oscura del bloque y el peine se perdía; el aparato
+                // apagado tiene que seguir diciendo qué es (ver el doc de
+                // clase, "LA REGLETA DE ESCARCHA").
+                default: return new Color(0.60f, 0.66f, 0.74f, 1f);
             }
         }
 

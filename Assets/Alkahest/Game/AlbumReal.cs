@@ -296,6 +296,21 @@ namespace Alkahest.Game
         /// <summary>Fase 0..1 del pulso del librito (~1 Hz), acumulada en Update -- Time.time crudo bastaría, pero acumular en un campo propio deja la puerta abierta a pausar el pulso sin tocar Time.timeScale si algún día hiciera falta.</summary>
         private float _pulsoT;
 
+        /// <summary>
+        /// (RONDA 49, LA COLA CON RESPIRO -- ver el docblock largo en
+        /// Game/SubstanceKnowledge.cs junto a <see cref="SubstanceKnowledge.PuedeAnunciarTeatro"/>)
+        /// True desde el frame en que el librito YA pidió y obtuvo su turno en el reloj
+        /// compartido de teatro de descubrimiento, hasta que la cola de vitrinas se vacía del
+        /// todo. Mientras sea false y haya algo en <see cref="_cola"/>, `OnGUI` sigue
+        /// reintentando cada frame (barato: una comparación de `Time.time`) en vez de dibujar
+        /// el librito -- así el pulso NO arranca en el mismo instante que un banner "ALGO
+        /// NUEVO" de Game/SubstanceKnowledge.cs sobre el MISMO descubrimiento (en Semilla
+        /// Cero los dos canales reaccionan al mismo evento `AlDescubrir`). Se resetea a false
+        /// en cuanto <see cref="_colaCount"/> vuelve a 0: la próxima vez que llegue algo será
+        /// una ráfaga nueva y debe volver a pedir su hueco, no heredar el turno de la anterior.
+        /// </summary>
+        private bool _libritoAnunciado;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap (TrySpawn/TrySpawnRed).</summary>
         public void Init(AlkahestSim sim, SubstanceKnowledge knowledge)
         {
@@ -448,9 +463,24 @@ namespace Alkahest.Game
 
             // El librito solo tiene sentido si NO hay ya una vitrina abierta y el jugador no
             // está leyendo el álbum completo (ahí ya se ve todo lo nuevo con sus propios ojos).
-            if (!_fichaAbierta && !_visible && !DayCycle.HudSilenciado && !JournalHud.Abierto && _colaCount > 0)
+            if (_colaCount == 0)
             {
-                DrawLibrito();
+                _libritoAnunciado = false; // (RONDA 49) cola vacía: la próxima ráfaga es nueva, vuelve a pedir su turno.
+            }
+            else if (!_fichaAbierta && !_visible && !DayCycle.HudSilenciado && !JournalHud.Abierto)
+            {
+                // (RONDA 49, LA COLA CON RESPIRO) El pulso NO arranca solo porque haya algo
+                // pendiente: tiene que pedir turno en el reloj compartido con el banner "ALGO
+                // NUEVO" de Game/SubstanceKnowledge.cs -- ver el docblock de `_libritoAnunciado`
+                // y de `SubstanceKnowledge.PuedeAnunciarTeatro`. Una vez concedido el turno se
+                // queda pulsando sin volver a pedirlo (abrir/cerrar la ficha no lo reinicia,
+                // solo vaciar la cola entera lo hace).
+                if (!_libritoAnunciado && SubstanceKnowledge.PuedeAnunciarTeatro())
+                {
+                    _libritoAnunciado = true;
+                    SubstanceKnowledge.RegistrarAnuncioTeatro();
+                }
+                if (_libritoAnunciado) DrawLibrito();
             }
 
             if (_fichaAbierta) DrawFicha();

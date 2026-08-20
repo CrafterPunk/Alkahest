@@ -198,6 +198,76 @@ namespace Alkahest.Game
         private byte _leyBannerActualMat;
         private float _leyBannerHasta;
 
+        // ===================================================================================
+        // (RONDA 49, ENCARGO RITMO+ENSAYO) LA COLA CON RESPIRO
+        // ===================================================================================
+        // Feedback literal de Cesar en el playtest 48: "me sentí abrumado por la cantidad de
+        // cosas que podía hacer de inmediato: en 1 minuto ya había descubierto 3 cosas antes
+        // de siquiera leerlas -- necesitamos reajustar". La causa NO era que se descubriera
+        // demasiado rápido (eso es el arco de Semilla Cero funcionando: el retículo
+        // base×estado revela varios estados casi de golpe la primera vez que algo pasa por el
+        // Crisol) -- era que el TEATRO de cada descubrimiento salía en ráfaga por TRES canales
+        // sin ningún reloj compartido entre ellos:
+        //   1) el banner "ALGO NUEVO"/"LEY DESCUBIERTA"/"¡NUEVO PROCEDIMIENTO!" de esta clase
+        //      (`_leyBannerCola`, más abajo) -- YA era una cola FIFO de un solo elemento
+        //      visible a la vez, pero `ActualizarBannerLey` avanzaba al siguiente banner en el
+        //      MISMO frame en que el anterior caducaba: cero segundos de silencio entre uno y
+        //      el próximo, y sin mirar si había algo más grande abierto encima (el diario, el
+        //      álbum) tapándolo.
+        //   2) el pulso del librito de Game/AlbumReal.cs -- empezaba a latir en el mismo frame
+        //      en que `OnAlgoDescubierto` metía el primer material del retículo en su cola,
+        //      SIN esperar a que el banner de "ALGO NUEVO" de ESTE mismo descubrimiento (que
+        //      en Semilla Cero se dispara para el MISMO matId, ver `MarcarDescubierto`)
+        //      terminara de leerse -- dos anuncios sobre EL MISMO evento, a la vez.
+        //   3) la ficha-vitrina de AlbumReal (la que de verdad se lee: nombre + reseña) --
+        //      hoy SOLO se abre por gesto del jugador (B o clic en el librito, nunca sola),
+        //      pero el diseño la incluye en el mismo reloj POR SI ALGÚN DÍA se le añade un
+        //      camino de apertura automática: ese camino futuro tiene que pedir turno igual
+        //      que los otros dos, o reintroduciría exactamente este bug.
+        //
+        // LA SOLUCIÓN: un reloj de silencio COMPARTIDO entre los tres canales (no uno por
+        // canal -- si cada canal tuviera su propio hueco de 10s, tres canales podrían seguir
+        // sonando en ráfaga con solo 0-9s de solape entre ellos, que es indistinguible de la
+        // ráfaga original). <see cref="PuedeAnunciarTeatro"/> es la ÚNICA puerta: exige (a)
+        // que hayan pasado <see cref="IntervaloMinimoAnuncios"/> segundos desde que CUALQUIER
+        // canal arrancó su último anuncio, Y (b) que no haya ya un panel grande ocupando la
+        // pantalla (el diario o el álbum) -- un anuncio que aparece detrás de un libro abierto
+        // no lo lee nadie y solo añade ruido a la cola cuando el jugador por fin cierra el
+        // libro. `RegistrarAnuncioTeatro` reinicia el reloj EN EL MOMENTO EXACTO en que un
+        // anuncio se vuelve visible por primera vez (nunca al encolarlo: encolar es registro
+        // inmediato, mostrarlo es teatro, ver el punto siguiente).
+        //
+        // LO QUE **NO** CAMBIA (deliberado, "ningún descubrimiento se pierde: solo se ordena
+        // la fila"): `MarcarDescubierto` sigue marcando `_discovered[matId] = true` y
+        // disparando `AlDescubrir` EN EL MISMO FRAME que siempre (así el álbum, los contadores
+        // del diario y `EsDescubierto` no se retrasan ni un tick); lo único que se encola y
+        // espera turno es CUÁNDO se le enseña al jugador el aviso -- exactamente la misma
+        // distinción que ya usaba `_leyBannerCola` entre "presenciar la ley" (inmediato, en
+        // `ApplyLey`) y "ver el banner" (en cola). Esta ronda solo AMPLÍA esa distinción para
+        // que cubra los tres canales con un reloj común, en vez de dejar que cada uno decida
+        // por su cuenta cuándo tiene prisa.
+        // ===================================================================================
+
+        /// <summary>Segundos mínimos entre el arranque de dos anuncios de teatro consecutivos, en CUALQUIER combinación de canales (banner/librito/ficha-si-se-abre-sola). Ver el docblock de arriba.</summary>
+        public const float IntervaloMinimoAnuncios = 10f;
+
+        private static float _proximoAnuncioTeatroPermitido;
+
+        /// <summary>
+        /// ¿Puede un canal de teatro de descubrimiento (banner de esta clase, librito o ficha
+        /// de Game/AlbumReal.cs) volverse visible AHORA MISMO? Estático y público a propósito:
+        /// es el reloj COMPARTIDO entre archivos de propiedad disjunta de esta ronda (ver el
+        /// docblock de la sección). Consultarlo no reserva turno por sí solo -- eso lo hace
+        /// <see cref="RegistrarAnuncioTeatro"/>, que cada canal debe llamar EXACTAMENTE cuando
+        /// decide mostrarse (nunca antes, o dos canales que consultan en el mismo frame podrían
+        /// verse los dos "libres" y arrancar los dos a la vez).
+        /// </summary>
+        public static bool PuedeAnunciarTeatro()
+            => Time.time >= _proximoAnuncioTeatroPermitido && !JournalHud.Abierto && !AlbumReal.Abierto;
+
+        /// <summary>Reserva el reloj compartido: el próximo anuncio de CUALQUIER canal no podrá arrancar hasta dentro de <see cref="IntervaloMinimoAnuncios"/> segundos. Llamar SOLO en el frame en que un canal decide mostrarse de verdad (nunca al encolar, nunca especulativamente).</summary>
+        public static void RegistrarAnuncioTeatro() => _proximoAnuncioTeatroPermitido = Time.time + IntervaloMinimoAnuncios;
+
         // ---------------------------------------------------------------------------------
         // (fix Cesar playtest 33, "LA MUERTE DEL AUTO-PATENTE DE 1 PASO")
         // ANTES: `_ultimoPatenteCountVisto` disparaba el banner "¡NUEVO
@@ -1388,12 +1458,18 @@ namespace Alkahest.Game
                 _leyBannerActual = null;
             }
             if (_leyBannerColaLeidos >= _leyBannerColaCount) return;
+            // (RONDA 49) LA COLA CON RESPIRO: no basta con que el banner anterior haya
+            // caducado -- hace falta además el hueco de silencio compartido (ver
+            // PuedeAnunciarTeatro). Si no toca todavía, se reintenta el frame que viene sin
+            // coste real (una comparación de float + dos bools ya cacheados como propiedad).
+            if (!PuedeAnunciarTeatro()) return;
 
             _leyBannerActual = _leyBannerCola[_leyBannerColaLeidos];
             _leyBannerActualMat = _leyBannerColaMat[_leyBannerColaLeidos];
             _leyBannerActualTitulo = _leyBannerColaTitulo[_leyBannerColaLeidos];
             _leyBannerColaLeidos++;
             _leyBannerHasta = Time.time + LeyBannerDuracionSeg;
+            RegistrarAnuncioTeatro();
         }
 
         private void OnGUI()

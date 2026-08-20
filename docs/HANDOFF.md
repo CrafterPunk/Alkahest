@@ -3270,3 +3270,51 @@ placa nueva sin zigzag, lobby multi con AJUSTES/MENÚ desde el primer frame, y
 avatar dorado) tras regenerar las DOS escenas. Deudas nuevas: SimSync:330
 CrearMundoAnfitrion sin try/catch (candidato #1 del fallo original);
 AbrirAjustes() público en DayCycle (retirar la reflexión del HUD multi).
+
+## Playtest 49 — EL RITMO Y EL ENSAYO QUE ENSEÑA (+ las placas de la foto, por Opus con ojos)
+
+Feedback de Cesar sobre el 48: (1) trabado en "¿DE VERDAD aguanta?" — "no sé qué
+aguanta el rojo, no lo hace ni el ladrillo ni la brea ni el carbón"; (2) las
+placas de calor y frío quedaron casi iguales ("parece que perdiste registro del
+que te pedí en la foto" — su captura vieja tenía DOS aparatos distintos);
+(3) abrumado: 3 descubrimientos en el primer minuto sin tiempo de leerlos;
+(4) la turba se ve finita (respuesta: 445 celdas + ceniza reutilizable; la
+reposición real llega con la Fase B).
+
+### El diagnóstico del "nada aguanta" (verificado EN VIVO)
+El Ensayo FUNCIONA: 45/45 celdas de ladrillo molido (umbral 188) sobrevivieron
+al rojo (177) en una prueba forense en el editor real. Lo que mataba a los
+candidatos de Cesar eran DOS TRAMPAS MUDAS: (a) el frasco CONSERVA la
+temperatura — el carbón recién horneado llegaba caliente y se encendía solo en
+la bandeja; (b) los líquidos se TEMPLAN en el viaje — la brea llegaba como
+ámbar, que sí muere (regla 51). Y una INVERSIÓN DE REALISMO: la cerámica (180)
+aguantaba menos que su propio polvo calcinado (188).
+
+### Lo entregado
+- **El altar templa la muestra**: EnsayoMaestro normaliza la bandeja a ambiente
+  antes de la rampa — el ensayo juzga el material, no el viaje.
+- **El ensayo que enseña**: DescribirMuerte nombra EN QUÉ se convirtió la
+  muestra ("se encendió: era combustible (ahora es …)"); contador público
+  FallosAguantaCalor; a los 2 fallos el Maestro suelta la pista
+  (diario/"resiste este fuego"/lo cocido/en frío); el pedido 5.4 gana la
+  coletilla "Trae al Ensayo algo que resista el rojo."
+- **La cerámica es el techo** (override 2b, solo Semilla Cero): Ceramico sube a
+  max(natural,205) y Compacto a max(natural,ensayo+3) SOLO si quedaban por
+  debajo del Calcinado de su base; log de umbrales de arcilla en el arranque.
+- **La cola con respiro**: el TEATRO de los descubrimientos (banner ALGO NUEVO,
+  pulso del librito) sale de a UNO con ≥10s de intervalo y nunca detrás de un
+  panel abierto (reloj compartido SubstanceKnowledge.PuedeAnunciarTeatro/
+  RegistrarAnuncioTeatro; AlbumReal pide turno con _libritoAnunciado). El
+  REGISTRO sigue siendo inmediato: nada se pierde, solo se ordena.
+- **LAS DOS PLACAS DE LA FOTO (Opus con ojos, 4 ciclos desplegando/capturando
+  en el PC real)**: son DOS aparatos inconfundibles — PLACA DE CALOR = losa de
+  fundición oscura con SERPENTÍN incandescente pulido (sinusoide submuestreada,
+  incandescencia horneada en 3 bandas, bornes de latón, halo cálido) — la "N
+  roja" vuelve como estufa digna, cronología del serpentín en el header;
+  PLACA FRÍA = regleta metálica CLARA con ranurado de disipador y 6
+  dientes-prisma de escarcha (sin violeta: tinte medido en vivo 0.85,0.96,1.00).
+  Dato medido que explicaba el "son iguales": ambas placas miden 8×3 celdas =
+  73×27 px en pantalla — la diferencia tiene que vivir en silueta+valor+grano a
+  la vez. Réplicas multi heredan el look (deuda: verificar en sesión multi).
+
+Detalle de la ronda anterior y sus deudas: sección Playtest 48.

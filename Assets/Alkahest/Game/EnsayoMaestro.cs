@@ -115,6 +115,18 @@ namespace Alkahest.Game
         private Color _rotuloColor = UiStyles.Oro;
         private float _rotuloHasta;
 
+        /// <summary>
+        /// (RONDA 49, ENCARGO RITMO+ENSAYO, "EL ENSAYO QUE ENSEÑA") Cuántas veces ha FALLADO
+        /// una evaluación del pedido AguantaCalor esta partida (nunca decrece; se incrementa en
+        /// <see cref="EvaluarAguantaCalor"/>, rama de fallo, exactamente una vez por presentación
+        /// fallida -- no por tick de la rampa). Lo sondea <c>Game/SemillaCero.cs</c> (beat
+        /// PreguntaEnsayo) para disparar UNA vez el comentario del Maestro al llegar a 2 fallos:
+        /// el jugador que se queda trabado con "el rojo del crisol" (feedback literal de Cesar,
+        /// playtest 48: "no sé qué aguanta... no lo hace ni el ladrillo ni la brea ni el
+        /// carbón") necesita una pista concreta ANTES de la tercera o cuarta prueba a ciegas.
+        /// </summary>
+        public int FallosAguantaCalor { get; private set; }
+
         private SpriteRenderer _resalte, _latidoTrabajo, _destelloMarco, _brasas;
 
         // (playtest 31) EL ALTAR ES LO ÚNICO QUE SE ENCIENDE EN SU RINCÓN:
@@ -628,12 +640,63 @@ namespace Alkahest.Game
                 return true;
             }
 
+            NormalizarMuestraAAmbiente(); // (RONDA 49) EL ALTAR TEMPLA LA MUESTRA -- ver docblock. ANTES de arrancar la rampa: la evaluación tiene que partir de la temperatura del MATERIAL, no la del viaje que trajo la muestra hasta aquí.
             _calentandoDominante = matId;
             _calentandoN0 = n0;
             _calentandoHasta = Time.time + RampSeconds;
             _fase = Fase.Calentando;
             Rotular("calentando la muestra al rojo del crisol...", UiStyles.Aviso);
             return true;
+        }
+
+        /// <summary>
+        /// (RONDA 49, ENCARGO RITMO+ENSAYO, "EL ALTAR TEMPLA LA MUESTRA") Antes de evaluar
+        /// nada, la bandeja pone TODA celda no vacía a <see cref="CellGrid.AmbientRaw"/> --
+        /// literalmente, el altar deja que la muestra vuelva a temperatura ambiente antes de
+        /// juzgarla.
+        ///
+        /// POR QUÉ: <c>Game/Flask.cs</c> CONSERVA la temperatura de lo aspirado (regla 22 de
+        /// CLAUDE.md: "un líquido que fluye arrastra su propia temperatura"), y eso es
+        /// correcto para el frasco -- pero significa que una muestra recién salida del Crisol
+        /// (o de cualquier hornada caliente) LLEGA CALIENTE a esta bandeja. Diagnóstico cerrado
+        /// del playtest 48/49 (verificado en vivo por el director): el Ensayo del Maestro en sí
+        /// FUNCIONA -- el ladrillo molido (umbral 188) aguanta el rojo (177) con el 100% de sus
+        /// celdas -- pero dos TRAMPAS MUDAS mataban a los candidatos de Cesar antes de que la
+        /// mecánica del ensayo llegara siquiera a correr: (a) esta, el frasco conserva calor y
+        /// una muestra combustible (el carbón enciende cerca de raw 180) que llega caliente se
+        /// AUTOENCIENDE en la bandeja en cuanto se presenta, sin que la rampa del Ensayo
+        /// alcance a hacer nada; (b) los líquidos se TEMPLAN de camino (regla 51 de CLAUDE.md:
+        /// "una garantía procedural cuantifica sobre lo entregable" -- lo fundido nunca llega
+        /// fundido al examen), y esa la corrige el propio material al enfriarse solo antes de
+        /// llegar aquí, no esta función.
+        ///
+        /// El Ensayo mide el MATERIAL (¿su umbral de persistencia aguanta el rojo del crisol?),
+        /// nunca el VIAJE que trajo la muestra hasta el altar -- sin esta normalización, el
+        /// veredicto mentía: un carbón que SÍ habría aguantado el rojo (su umbral real está muy
+        /// por encima del ensayo) podía morir igual, por llegar ya sobre su punto de ignición,
+        /// y el jugador leería "no aguantó el rojo del crisol" sobre un material que sí aguanta.
+        ///
+        /// Mismo acceso directo a <c>grid.temp</c> + <c>WakeChunk</c> que ya usa
+        /// <see cref="ApplyCalentamientoTick"/> (regla 55b de CLAUDE.md: un proceso que toca la
+        /// simulación despierta su propio chunk, nunca depende de que otro lo haga por él). Se
+        /// salta las celdas que YA están a ambiente (la inmensa mayoría de una muestra que
+        /// llevaba un rato quieta en la bandeja) para no despertar chunks sin necesidad.
+        /// </summary>
+        private void NormalizarMuestraAAmbiente()
+        {
+            var grid = _sim.Grid;
+            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+            for (int x = _x0; x <= _x1; x++)
+            {
+                for (int y = _y0; y <= _y1; y++)
+                {
+                    int idx = CellGrid.Idx(x, y);
+                    if (grid.mat[idx] == MaterialId.Empty) continue;
+                    if (grid.temp[idx] == CellGrid.AmbientRaw) continue;
+                    grid.temp[idx] = CellGrid.AmbientRaw;
+                    grid.WakeChunk(x, y, tick);
+                }
+            }
         }
 
         // =================================================================
@@ -753,25 +816,47 @@ namespace Alkahest.Game
             }
             else
             {
+                FallosAguantaCalor++; // (RONDA 49) ver docblock del campo -- una vez por presentación fallida.
                 string motivo = DescribirMuerte();
                 Rotular(motivo, UiStyles.Peligro);
                 _knowledge?.RegistrarObservacionPropiedad(_calentandoDominante, "no aguantó el Ensayo: " + motivo);
             }
         }
 
-        /// <summary>El rótulo dice CÓMO murió la muestra, por ARQUETIPO -- nunca revela el nombre interno de algo innominado (reglas 13/17).</summary>
+        /// <summary>
+        /// (RONDA 49, ENCARGO RITMO+ENSAYO, "EL ENSAYO QUE ENSEÑA") El rótulo dice CÓMO murió
+        /// la muestra, por ARQUETIPO -- nunca revela el nombre interno de algo innominado
+        /// (reglas 13/17: usa <see cref="SubstanceKnowledge.NombreParaHud"/>, la MISMA función
+        /// que ya usa el resto del HUD para decidir entre nombre real / propio / provisional /
+        /// "???", nunca un acceso directo a la identidad). Antes solo describía el ARQUETIPO
+        /// ("se fundió a mitad del ensayo") sin decir EN QUÉ -- Cesar, playtest 48: "no sé qué
+        /// aguanta el rojo del crisol, no lo hace ni el ladrillo ni la brea ni el carbón". El
+        /// diagnóstico cerrado (ver <see cref="NormalizarMuestraAAmbiente"/>) es que casi
+        /// siempre SÍ había un nombre que decir -- el problema era que el jugador nunca lo veía
+        /// escrito, así que cada fallo se sentía como una caja negra en vez de un dato con el
+        /// que seguir cazando. Ahora SIEMPRE nombra el resultado cuando lo hay: "se encendió:
+        /// era combustible (ahora es ceniza)" / "se fundió a vidrio" en vez de un genérico que
+        /// no enseña nada.
+        /// </summary>
         private string DescribirMuerte()
         {
-            if (!ConteoDominante(out byte matId, out int count) || count == 0)
+            if (!ConteoDominante(out byte finalMatId, out int count) || count == 0)
                 return "no quedó nada de la muestra: se consumió por completo en el calor";
 
-            var def = _sim.Universe.Get(matId);
+            // Si lo que sigue siendo mayoría en la bandeja es EL MISMO material que se metió a
+            // examen (solo que por debajo del umbral de supervivencia), no hubo transformación
+            // que nombrar -- fue destrucción PARCIAL, no un "se convirtió en".
+            if (finalMatId == _calentandoDominante)
+                return "no aguantó lo bastante: solo una fracción sobrevivió";
+
+            string nombre = _knowledge != null ? _knowledge.NombreParaHud(finalMatId) : "algo sin identificar";
+            var def = _sim.Universe.Get(finalMatId);
             switch (def.archetype)
             {
-                case MaterialArchetype.Liquid: return "se fundió a mitad del ensayo";
-                case MaterialArchetype.Gas: return "se evaporó en el calor";
-                case MaterialArchetype.Fire: return "ardió hasta consumirse";
-                default: return "no aguantó lo bastante: solo una fracción sobrevivió";
+                case MaterialArchetype.Fire: return "se encendió: era combustible (ahora es " + nombre + ")";
+                case MaterialArchetype.Gas: return "se evaporó: ahora es " + nombre;
+                case MaterialArchetype.Liquid: return "se fundió a " + nombre;
+                default: return "se transformó en " + nombre;
             }
         }
 

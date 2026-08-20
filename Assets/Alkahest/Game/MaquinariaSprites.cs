@@ -212,79 +212,196 @@ namespace Alkahest.Game
         }
 
         // =================================================================
-        // PLACA DE CALOR (playtest 48, CONTRATO_RONDA48.md §3a)
+        // LAS DOS PLACAS DE ZONA (playtest 49, "OPUS CON OJOS" — rediseño
+        // sobre la FOTO DE REFERENCIA de Cesar)
         // =================================================================
-        // IDEA DESCARTADA, DOCUMENTADA (regla 15 de CLAUDE.md): hasta esta
-        // ronda la placa era un chasis de metal remachado con una ventana
-        // por la que se veía un serpentín en ZIGZAG rojo puro (la "N roja"
-        // que Cesar señaló textualmente como "horrible" en el feedback del
-        // 47b). Se retira entera -- ni el chasis metálico ni el serpentín.
-        // Dos razones, no solo estética: (1) una resistencia de nicromo no
-        // pertenece al lenguaje visual del taller (piedra/latón/hierro
-        // forjado por código en todas las demás estaciones, ver el bloque
-        // "EL TALLER GRANDE" más abajo); (2) el rojo plano del zigzag
-        // ignoraba la paleta de incandescencia real que el propio
-        // SimRenderer usa para el fuego de verdad (playtest 41, brasa
-        // ADITIVA con azul casi nulo -- IncandBrasaR/G/B -- nunca un rojo
-        // sólido sin mezcla). Sustituida por <see cref="LosaPlaca"/> (el
-        // cuerpo: piedra oscura, MISMA construcción por bloques con juntas
-        // que <see cref="BloqueGelido"/>, la piedra gélida hermana) con
-        // <see cref="LechoBrasasPlaca"/> (brasas de verdad, mismo lenguaje
-        // que <see cref="LechoBrasas"/>, el lecho real del hogar/Crisol) en
-        // el nicho recesado.
+        // EL PROBLEMA QUE RESUELVE ESTA PASADA (feedback literal del
+        // playtest 48): *"no sé por qué la placa de calor y frío es el
+        // mismo, parece que perdiste registro del que te pedí en la foto"*.
+        // Tenía razón, y la causa era medible, no de gusto: tras el 48 las
+        // dos placas compartían LITERALMENTE la misma construcción —
+        // w = span*2*Escala, h = S(14), gradiente vertical de roca, juntas
+        // de sillería cada S(9), banda clara en el canto superior— y solo se
+        // diferenciaban por el TINTE (pardo vs. azul) y por unos detalles de
+        // 2-3 téxeles (brasas tenues dentro de un nicho / dientes finos).
+        // MEDIDAS REALES, LEÍDAS EN VIVO EN EL EDITOR (regla 39, no de la
+        // prosa de nadie): las DOS placas miden **8 x 3 CELDAS** de mundo
+        // (0.80 x 0.30 unidades). HeatPlate/ChillStone.Init recortan a
+        // FootprintFraction=0.4 con SUELO de 8 celdas, y la alcoba fría solo
+        // tiene 8 de ancho (SimLevelBuilder.AlcobaFriaAncho), así que las dos
+        // caen en el suelo: son hermanas EXACTAS en huella. Por tanto la
+        // textura sale siempre en el CLAMP MÍNIMO, 48x42 téxeles = 6
+        // téxeles/celda en X y 14 en Y (de ahí toda la corrección de
+        // anisotropía de este bloque). Y la cámara del juego, medida en
+        // partida: ortho 5.57 sobre 1024 px de alto = **9.2 px por celda**,
+        // o sea la placa entera son 73 x 27 PÍXELES en pantalla: todo lo que
+        // se juegue por debajo de ~1 celda de detalle NO EXISTE para el
+        // jugador (regla 52). Dos objetos con la misma silueta, el mismo
+        // valor tonal y el mismo grano se leen como el mismo objeto pintado
+        // de otro color — que es exactamente lo que reportó.
+        //
+        // CRITERIO NUEVO: la diferencia tiene que vivir en los tres canales
+        // que sobreviven a 30 px, y en los tres a la vez:
+        //   1. SILUETA — frío: peine de DIENTES que rompen el borde
+        //      superior; calor: losa MACIZA de borde recto con dos bornes
+        //      que sobresalen en los extremos.
+        //   2. VALOR — frío: cuerpo CLARO (acero azulado, 0x5A6676..0xB8CCDD en el
+        //      canto); calor: cuerpo OSCURO (fundición parda, ~0x2A1F18) con
+        //      UNA línea incandescente dentro. Claro contra oscuro se
+        //      distingue incluso en una miniatura en blanco y negro.
+        //   3. GRANO — frío: ranurado VERTICAL de disipador (mecanizado);
+        //      calor: sillería/fundición horizontal con nicho recesado.
+        //
+        // FIDELIDAD A LA FOTO DE REFERENCIA: la placa fría es "una regleta
+        // metálica gris-azulada con dientes triangulares claros apuntando
+        // hacia arriba" (bandeja de hielo / sierra de escarcha); la placa de
+        // calor es "una losa oscura con una resistencia en zigzag
+        // roja-naranja dentro y terminales naranjas en los extremos".
+        //
+        // ---------------------------------------------------------------
+        // CRONOLOGÍA DEL SERPENTÍN (regla 27 de CLAUDE.md: LEER ANTES DE
+        // VOLVER A QUITARLO — es la tercera vez que esta pieza cambia)
+        // ---------------------------------------------------------------
+        //  1) Playtest 4: la placa nace como chasis metálico remachado con
+        //     una ventana y un serpentín en ZIGZAG de rojo PLANO.
+        //  2) Playtest 47b: Cesar lo llama "la N roja horrible".
+        //  3) Playtest 48: se retira ENTERO (chasis + serpentín) y se
+        //     sustituye por losa de piedra con lecho de brasas.
+        //  4) Playtest 49 (ESTA pasada): Cesar aclara que la queja del (2)
+        //     era EL ACABADO, no el concepto — *"la idea de resistencia /
+        //     estufa me gustaba"*— y que el 48 borró el ADN de su foto. El
+        //     serpentín VUELVE, pero PULIDO: ya no es una polilínea de rojo
+        //     saturado de 1 téxel de grosor, es un TUBO de sección elíptica
+        //     con incandescencia GRADUAL horneada en la propia textura
+        //     (núcleo blanco-amarillo -> cuerpo ámbar -> halo rojo profundo,
+        //     ver <see cref="SerpentinPlaca"/>) y trazado sobre una SINUSOIDE
+        //     muestreada a 1/4 de téxel, no sobre esquinas de 90°.
+        //  LO QUE NO VUELVE del (1), y por qué (regla 15): el CHASIS
+        //  METÁLICO REMACHADO. La queja de fondo del 47b/48 sobre el
+        //  lenguaje visual sigue siendo cierta —el taller entero es piedra,
+        //  latón y hierro forjado— así que el cuerpo se queda en FUNDICIÓN/
+        //  piedra oscura y solo los BORNES son latón. Tampoco vuelve el rojo
+        //  plano: el color se hornea con la misma lógica de incandescencia
+        //  que usa SimRenderer para el fuego real (playtest 41: nunca un
+        //  rojo sólido sin mezcla; el centro de una brasa TIENDE AL BLANCO).
+        //  Y el LECHO DE BRASAS del 48 se retira de la PLACA (sigue vivo e
+        //  intacto en <see cref="LechoBrasas"/>, el hogar del Crisol, que es
+        //  donde una cama de brasas sí tiene sentido físico: ahí hay
+        //  combustible sólido ardiendo; en una placa de zona no hay nada que
+        //  arda, hay un elemento que se pone al rojo).
         // =================================================================
 
         /// <summary>
-        /// LA LOSA DE PIEDRA: cuerpo de la placa de calor, piedra oscura y
-        /// TIBIA con un nicho recesado donde vive el lecho de brasas (ver
-        /// <see cref="LechoBrasasPlaca"/>). Construcción por bloques con
-        /// juntas IDÉNTICA a <see cref="BloqueGelido"/> (misma fórmula de
-        /// w/h, mismo <see cref="Escala"/>) a propósito: las dos placas de
-        /// zona tienen que leerse como HERMANAS de una misma familia
-        /// (contrato §3a), solo que esta se tuerce hacia el pardo/rojizo en
-        /// vez del azul-gris de la piedra gélida.
+        /// LA LOSA DE LA PLACA DE CALOR: cuerpo de fundición/piedra oscura
+        /// con un NICHO recesado a lo ancho (donde vive el serpentín, ver
+        /// <see cref="SerpentinPlaca"/>) y dos BORNES de latón en los
+        /// extremos —los "terminales naranjas" de la foto de referencia—,
+        /// que son hardware y por eso NO se tiñen con el estado (viven en
+        /// esta capa, no en la del serpentín: un borne no se enfría).
+        ///
+        /// Es deliberadamente lo CONTRARIO de <see cref="BloqueGelido"/> en
+        /// los tres canales del criterio de arriba: valor oscuro, grano
+        /// horizontal, borde superior RECTO y macizo (la cuba se apoya ahí).
+        /// Comparte con ella la FÓRMULA DE TAMAÑO (w = span*2*Escala,
+        /// h = S(14)) porque las dos son hermanas en proporción: mismo
+        /// grosor, misma huella, aparatos de la misma familia.
         /// </summary>
         public static Sprite LosaPlaca(int spanCeldas)
         {
             string clave = "losaplaca" + spanCeldas;
             if (_cache.TryGetValue(clave, out var s)) return s;
 
-            // (fix playtest 6: baja resolución) mismo espacio de diseño y misma
-            // Escala que BloqueGelido -- las dos placas comparten grosor/proporción.
             int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
             int h = S(14);
             var px = new Color32[w * h];
 
-            Color32 rocaAlta = new Color32(0x5C, 0x48, 0x3E, 255);
-            Color32 rocaBaja = new Color32(0x26, 0x1B, 0x16, 255);
-            Color32 borde = new Color32(0x74, 0x50, 0x38, 255);      // filete de contacto TIBIO (la cuba se apoya aquí) en vez de escarcha.
-            Color32 ventana = new Color32(0x14, 0x0E, 0x0C, 255);    // nicho recesado: aquí viven las brasas.
-            int juntaAncho = Mathf.Max(1, Escala / 2);
+            // Fundición parda: OSCURA de arriba abajo (el canal "valor" del
+            // criterio). El punto más claro de esta losa (0x5A4436, luminancia
+            // ~0x48) sigue siendo más oscuro que el punto MÁS OSCURO del
+            // cuerpo de la piedra gélida en su franja de acero (0x5A6676,
+            // luminancia ~0x64): no hay solape tonal entre las dos, ni en su
+            // pixel más favorable.
+            Color32 hierroAlto = new Color32(0x5A, 0x44, 0x36, 255);
+            Color32 hierroBajo = new Color32(0x1B, 0x13, 0x0F, 255);
+            Color32 nicho = new Color32(0x10, 0x0A, 0x08, 255);   // boca del nicho: casi negra, para que el serpentín tenga contra qué brillar.
+            Color32 filete = new Color32(0x7A, 0x54, 0x36, 255);  // canto superior TIBIO donde se apoya la cuba.
+            Color32 sombra = new Color32(0x0C, 0x08, 0x06, 255);
+
+            // Geometría del nicho y de los bornes, derivada del ancho real
+            // (regla 39: nada de números fijos que dejen de encajar cuando
+            // el aparato cambie de huella o cuando lo pida la réplica de red
+            // con span=10).
+            int margen = Mathf.Max(Escala, w / 40);
+            int anchoBorne = Mathf.Clamp(w / 12, S(2), S(5));
+            int nichoX0 = margen + anchoBorne + Escala;
+            int nichoX1 = w - nichoX0;
+            int nichoY0 = S(2), nichoY1 = S(11);
 
             for (int y = 0; y < h; y++)
             {
                 float t = y / (float)(h - 1);
-                Color32 fila = Color32.Lerp(rocaBaja, rocaAlta, t * t);
+                Color32 fila = Color32.Lerp(hierroBajo, hierroAlto, t * t);
                 for (int x = 0; x < w; x++)
                 {
                     Color32 c = fila;
 
-                    // Junta de sillería (mismo patrón que BloqueGelido): bloques
-                    // de piedra tallada, no una placa lisa.
-                    if ((x % S(9)) < juntaAncho) c = Color32.Lerp(c, rocaBaja, 0.6f);
+                    // Grano de fundición: juntas HORIZONTALES largas (una
+                    // cada S(4) filas), no la sillería vertical de la piedra
+                    // gélida -- el canal "grano" del criterio.
+                    if ((y % S(4)) == 0) c = Color32.Lerp(c, hierroBajo, 0.45f);
 
-                    // Nicho recesado central (mismas filas 4..9 que el viejo
-                    // chasis: el encaje con LechoBrasasPlaca es idéntico).
-                    if (y >= S(4) && y < S(10) && x >= S(3) && x < w - S(3)) c = ventana;
-
-                    // Filete de contacto TIBIO en el canto superior (la cuba se apoya aquí).
-                    if (y >= h - S(2)) c = borde;
-                    // Sombra de apoyo en el suelo.
-                    if (y < S(2)) c = new Color32(0x10, 0x0B, 0x09, 255);
+                    // Nicho recesado, con bisel: una fila clara justo debajo
+                    // del labio superior del nicho vende la profundidad.
+                    if (y >= nichoY0 && y < nichoY1 && x >= nichoX0 && x < nichoX1)
+                    {
+                        c = nicho;
+                        if (y >= nichoY1 - Escala) c = Color32.Lerp(nicho, hierroAlto, 0.30f);
+                        if (y < nichoY0 + Escala) c = Color32.Lerp(nicho, sombra, 0.6f);
+                    }
 
                     px[y * w + x] = c;
                 }
             }
+
+            // BORNES DE LATÓN en los dos extremos (la foto: "terminales
+            // naranjas en los extremos"). Sobresalen por arriba del filete:
+            // son los dos únicos puntos donde la silueta de esta placa NO es
+            // una recta, y están en los extremos, que es donde el ojo los
+            // encuentra sin buscarlos.
+            int borneY0 = S(1), borneY1 = h - Escala;
+            for (int lado = 0; lado < 2; lado++)
+            {
+                int bx0 = lado == 0 ? margen : w - margen - anchoBorne;
+                for (int y = borneY0; y < borneY1; y++)
+                {
+                    float tb = (y - borneY0) / (float)Mathf.Max(1, borneY1 - borneY0 - 1);
+                    Color32 cb = Color32.Lerp(LatonBajo, LatonAlto, tb * tb);
+                    for (int x = bx0; x < bx0 + anchoBorne; x++)
+                    {
+                        if (x < 0 || x >= w) continue;
+                        Color32 c = cb;
+                        if (x == bx0) c = LatonBajo;                       // canto en sombra
+                        else if (x == bx0 + anchoBorne - 1) c = LatonBajo;
+                        px[y * w + x] = c;
+                    }
+                    // Anillos del borne (dos gargantas oscuras): lo que hace
+                    // que se lea "poste roscado" y no "barra amarilla".
+                    if (y == borneY0 + S(3) || y == borneY0 + S(6))
+                        for (int x = bx0; x < bx0 + anchoBorne; x++)
+                            if (x >= 0 && x < w) px[y * w + x] = Laton;
+                }
+                MarcarRemache(px, w, h, bx0 + anchoBorne / 2, borneY1 - Escala, LatonAlto);
+            }
+
+            // Filete de contacto (canto superior) y sombra de apoyo. Van al
+            // final para que pisen a la fundición pero NO a los bornes: el
+            // filete se dibuja solo entre los dos bornes.
+            for (int y = h - S(2); y < h; y++)
+                for (int x = margen + anchoBorne; x < w - margen - anchoBorne; x++)
+                    px[y * w + x] = filete;
+            for (int y = 0; y < S(1); y++)
+                for (int x = 0; x < w; x++)
+                    px[y * w + x] = sombra;
 
             s = Crear(px, w, h, "ChaosAlchemyLosaPlaca");
             _cache[clave] = s;
@@ -292,101 +409,265 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// EL LECHO DE BRASAS DE LA PLACA: manchas de brasa irregulares y
-        /// DETERMINISTAS (hash de posición, nunca UnityEngine.Random -- el
-        /// mismo mecanismo que <see cref="LechoBrasas"/>), confinadas al
-        /// nicho recesado de <see cref="LosaPlaca"/> (filas S(4)..S(10),
-        /// idéntico al hueco del viejo serpentín para que el encaje sea
-        /// exacto sin retocar el llamante). El velo tenue del canto superior
-        /// (mismas filas que el filete de contacto de <see cref="LosaPlaca"/>)
-        /// es el SHIMMER del contrato §3a: como vive en esta misma capa, se
-        /// tiñe y late con la MISMA animación que las brasas -- ningún coste
-        /// de animación aparte. El llamante (Game/HeatPlate.cs) tinta el
-        /// conjunto según intensidad: apagada, ceniza gris tenue; templada/
-        /// ardiente, naranja-rojo profundo, latiendo por ritmo -- nunca
-        /// neón (mismo criterio que la incandescencia real de SimRenderer).
+        /// EL SERPENTÍN DE LA PLACA DE CALOR (playtest 49; sustituye al
+        /// <c>LechoBrasasPlaca</c> del playtest 48, ver la CRONOLOGÍA DEL
+        /// SERPENTÍN arriba): la resistencia de estufa de la foto de
+        /// referencia, pero PULIDA.
+        ///
+        /// CÓMO SE PULE una resistencia dibujada por código, que era la queja
+        /// real de Cesar ("horrible" el zigzag CRUDO, no la idea):
+        ///  · TRAZADO CONTINUO, no polilínea. La línea guía es una SINUSOIDE
+        ///    muestreada cada 1/4 de téxel, así que no hay esquinas de 90°
+        ///    ni escalones de aliasing: el tubo curva.
+        ///  · SECCIÓN ELÍPTICA CORREGIDA POR ANISOTROPÍA. La textura tiene
+        ///    ~6 téxeles por celda en X y ~14 en Y (w = span*2*Escala sobre
+        ///    span celdas; h = S(14)=42 sobre WallThickness=3 celdas), así
+        ///    que un pincel CIRCULAR en téxeles saldría 2,33x más ancho que
+        ///    alto en el mundo -- una mancha, no un tubo. El pincel es una
+        ///    elipse con <c>ry = 2.33 * rx</c> para que el tubo salga
+        ///    REDONDO en pantalla.
+        ///  · INCANDESCENCIA HORNEADA EN LA TEXTURA, no un tinte plano. El
+        ///    llamante tiñe la capa entera con UN color por estado
+        ///    (Game/HeatPlate.cs::ColorResistencia), así que si la textura
+        ///    fuera blanca el resultado sería un rojo uniforme -- justo el
+        ///    defecto del zigzag viejo. Aquí el gradiente va DENTRO:
+        ///    núcleo casi blanco (255,252,244) -> cuerpo ámbar (255,214,150)
+        ///    -> halo rojo (255,120,45) con alfa en caída. Multiplicado por
+        ///    el tinte ARDIENTE (1, 0.52, 0.22) da núcleo naranja pálido y
+        ///    borde rojo profundo: incandescencia real, misma lógica que la
+        ///    brasa de SimRenderer (playtest 41), nunca neón.
+        ///  · BLOOM DE CALOR: una segunda pasada mucho más ancha y de alfa
+        ///    bajísima (<=52) que solo escribe donde no hay tubo. Es lo que
+        ///    hace que el nicho entero parezca caliente en vez de contener
+        ///    un alambre. Vive en ESTA capa, así que late con la misma
+        ///    animación que el tubo: cero coste de animación aparte.
+        ///
+        /// El serpentín arranca y termina EN LOS BORNES de
+        /// <see cref="LosaPlaca"/> (tramos rectos fuera del nicho, con la
+        /// fase de la sinusoide clavada a 0 en los extremos), así que el
+        /// circuito se lee completo: borne -> resistencia -> borne.
         /// </summary>
-        public static Sprite LechoBrasasPlaca(int spanCeldas)
+        public static Sprite SerpentinPlaca(int spanCeldas)
         {
-            string clave = "brasasplaca" + spanCeldas;
+            string clave = "serpentinplaca" + spanCeldas;
             if (_cache.TryGetValue(clave, out var s)) return s;
 
             int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
             int h = S(14);
-            var px = new Color32[w * h]; // transparente fuera del nicho.
+            var px = new Color32[w * h];   // transparente por defecto.
 
-            int y0 = S(4), y1 = S(10); // mismo nicho que talla LosaPlaca.
-            int r = Mathf.Max(2, (y1 - y0) / 3);
-            int paso = Mathf.Max(3, r * 2);
-            for (int cy = y0 + r; cy < y1; cy += paso)
+            // MISMA geometría que talla LosaPlaca (duplicada a propósito, en
+            // dos funciones estáticas puras: pasar un struct de layout entre
+            // ellas costaría una asignación por llamada y estas dos SIEMPRE
+            // se piden con el mismo span desde Game/HeatPlate.cs::BuildVisual).
+            int margen = Mathf.Max(Escala, w / 40);
+            int anchoBorne = Mathf.Clamp(w / 12, S(2), S(5));
+            int nichoX0 = margen + anchoBorne + Escala;
+            int nichoX1 = w - nichoX0;
+
+            float xIni = margen + anchoBorne * 0.5f;      // centro del borne izquierdo
+            float xFin = w - margen - anchoBorne * 0.5f;  // centro del borne derecho
+            float centroY = (S(2) + S(11)) * 0.5f;
+
+            // Número ENTERO de periodos dentro del nicho: así la sinusoide
+            // entra y sale con fase 0 y empalma sin codo con los tramos
+            // rectos que van a los bornes.
+            int anchoNicho = Mathf.Max(1, nichoX1 - nichoX0);
+            int periodos = Mathf.Clamp(Mathf.RoundToInt(anchoNicho / (float)S(6)), 2, 40);
+            float periodo = anchoNicho / (float)periodos;
+
+            // Amplitud y grosor: la amplitud llena el nicho sin tocar sus
+            // labios (nicho = 27 téxeles de alto; amplitud 7 + ry 5.5 = 12.5
+            // desde el centro, deja ~1 téxel de aire arriba y abajo).
+            float amp = h / 5.6f;           // 7.5 téxeles = 0.54 celdas de mundo.
+            float rx = Escala * 0.68f;      // 2.04 téxeles = 0.34 celdas de radio en X.
+            float ry = rx * ((h / 3f) / (2f * Escala)); // x2.33: corrección de anisotropía -> tubo REDONDO en pantalla.
+
+            // Búfer de INTENSIDAD (0..1 por téxel): el trazado pasa muchas
+            // veces por el mismo píxel (muestreo a 1/4 de téxel) y lo que
+            // vale es el MÁXIMO, no el último. Sin este búfer un lóbulo
+            // exterior de una muestra posterior pisaría el núcleo ya escrito
+            // por otra -- el tubo saldría moteado.
+            var inten = new float[w * h];
+
+            // --- Pasada 1: el TUBO incandescente ---
+            RecorrerSerpentin(px, inten, w, h, xIni, xFin, nichoX0, nichoX1, centroY, amp, periodo, rx, ry, false);
+            // --- Pasada 2: BLOOM ancho, SOLO donde no hay tubo ---
+            RecorrerSerpentin(px, inten, w, h, xIni, xFin, nichoX0, nichoX1, centroY, amp, periodo, rx * 3.2f, ry * 2.4f, true);
+
+            s = Crear(px, w, h, "ChaosAlchemySerpentinPlaca");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// Recorre la línea guía del serpentín muestreando cada 1/4 de téxel
+        /// y estampa un pincel elíptico con caída cuadrática. `bloom` a true
+        /// dibuja el velo de calor (alfa baja, NO pisa lo ya escrito); a
+        /// false dibuja el tubo (siempre gana). Método privado de una sola
+        /// llamada por pasada: sin asignaciones (todo aritmética sobre el
+        /// array que le pasan).
+        /// </summary>
+        private static void RecorrerSerpentin(Color32[] px, float[] inten, int w, int h,
+            float xIni, float xFin, int nichoX0, int nichoX1,
+            float centroY, float amp, float periodo, float rx, float ry, bool bloom)
+        {
+            int radX = Mathf.CeilToInt(rx), radY = Mathf.CeilToInt(ry);
+            for (float fx = xIni; fx <= xFin; fx += 0.25f)
             {
-                for (int cx = S(4); cx < w - S(3); cx += paso)
-                {
-                    uint hash = (uint)(cx * 73856093 ^ cy * 19349663);
-                    int jx = (int)(hash % 5) - 2;
-                    int jy = (int)((hash >> 8) % 3) - 1;
-                    int rr = Mathf.Max(1, r - (int)((hash >> 16) % 2));
-                    byte brillo = (byte)(170 + (hash >> 20) % 86); // 170..255: brasas de distinta vida (mismo rango que LechoBrasas).
+                // Fuera del nicho (tramos que van a los bornes) la guía es
+                // RECTA: la fase se clava a 0, que es justo el valor de la
+                // sinusoide en los dos bordes del nicho -> empalme sin codo.
+                float fase = Mathf.Clamp(fx, nichoX0, nichoX1) - nichoX0;
+                float cy = centroY + amp * Mathf.Sin(fase / periodo * Mathf.PI * 2f);
 
-                    for (int y = -rr; y <= rr; y++)
+                int cx = Mathf.RoundToInt(fx);
+                for (int dy = -radY; dy <= radY; dy++)
+                {
+                    int yy = Mathf.RoundToInt(cy) + dy;
+                    if (yy < 0 || yy >= h) continue;
+                    for (int dx = -radX; dx <= radX; dx++)
                     {
-                        for (int x = -rr; x <= rr; x++)
+                        int xx = cx + dx;
+                        if (xx < 0 || xx >= w) continue;
+
+                        float ex = (xx - fx) / rx, ey = (yy - cy) / ry;
+                        float d2 = ex * ex + ey * ey;
+                        if (d2 >= 1f) continue;
+                        float i = 1f - d2;               // 0 en el borde, 1 en el eje.
+
+                        int idx = yy * w + xx;
+                        if (i <= inten[idx]) continue;   // ver el búfer de intensidad en SerpentinPlaca.
+
+                        if (bloom)
                         {
-                            if (x * x + y * y > rr * rr) continue;
-                            int xx = cx + jx + x, yy = cy + jy + y;
-                            if (xx < 0 || xx >= w || yy < y0 || yy >= y1) continue; // nunca se sale del nicho.
-                            px[yy * w + xx] = new Color32(255, 255, 255, brillo);
+                            if (px[idx].a != 0 && inten[idx] > 0f) continue; // el tubo manda.
+                            inten[idx] = i;
+                            px[idx] = new Color32(255, 132, 52, (byte)(i * 52f));
+                            continue;
                         }
+                        inten[idx] = i;
+
+                        Color32 c;
+                        // Tres bandas de incandescencia (calibradas mirando el
+                        // sprite renderizado a escala de juego, no a ojo sobre
+                        // el hex): NÚCLEO casi blanco muy fino, CUERPO ámbar y
+                        // un RIBETE rojo profundo ancho -- el ribete es lo que
+                        // vende "metal al rojo" en vez de "línea naranja".
+                        if (i >= 0.82f)
+                        {
+                            float k = (i - 0.82f) / 0.18f;
+                            c = new Color32(255, (byte)(232 + 20 * k), (byte)(196 + 52 * k), 255);
+                        }
+                        else if (i >= 0.38f)
+                        {
+                            float k = (i - 0.38f) / 0.44f;
+                            c = new Color32(255, (byte)(136 + 96 * k), (byte)(48 + 148 * k), 255);
+                        }
+                        else
+                        {
+                            float k = i / 0.38f;
+                            c = new Color32(255, (byte)(104 + 32 * k), (byte)(30 + 18 * k), (byte)(70f + 185f * k));
+                        }
+                        px[idx] = c;
                     }
                 }
             }
-
-            // Shimmer superior (contrato §3a: "borde superior con shimmer
-            // suave"): velo tenue en el filete de contacto, SOLO donde no hay
-            // ya una brasa dibujada -- vive en la misma capa que las brasas,
-            // así que hereda su tinte y su latido sin animación aparte.
-            for (int y = h - S(2); y < h; y++)
-                for (int x = S(2); x < w - S(2); x++)
-                    if (px[y * w + x].a == 0) px[y * w + x] = new Color32(255, 255, 255, 55);
-
-            s = Crear(px, w, h, "ChaosAlchemyLechoBrasasPlaca");
-            _cache[clave] = s;
-            return s;
         }
 
         // =================================================================
         // PIEDRA GÉLIDA
         // =================================================================
 
-        /// <summary>Bloque de la piedra gélida: roca pálida escarchada con vetas azules.</summary>
+        /// <summary>
+        /// EL CUERPO DE LA PLACA FRÍA (rediseñado en el playtest 49, ver el
+        /// bloque "LAS DOS PLACAS DE ZONA" arriba): la REGLETA METÁLICA
+        /// gris-azulada de la foto de referencia. Tres franjas de abajo
+        /// arriba:
+        ///  · sombra de apoyo (2 téxeles),
+        ///  · CUERPO DE ACERO FRÍO con ranurado VERTICAL de disipador —
+        ///    claro (0x5A6676 en la base, 0xB8CCDD en el canto), que es el canal "valor"
+        ///    que la separa de la losa parda de <see cref="LosaPlaca"/>: la
+        ///    fría es el objeto CLARO del taller, la de calor el OSCURO;
+        ///  · LABIO DE ESCARCHA (blanco azulado) y, por encima, la GARGANTA
+        ///    en penumbra de donde brotan los dientes
+        ///    (<see cref="CristalesGelidos"/>). La garganta es OSCURA a
+        ///    propósito: sin ella los dientes blancos no tendrían contra qué
+        ///    recortarse y volveríamos al problema del playtest 48.
+        ///
+        /// Ya NO usa la sillería vertical de piedra del 48 (idéntica a la de
+        /// la placa de calor, que es lo que hacía que se leyeran iguales):
+        /// el ranurado es MECANIZADO —surco oscuro + filo brillante, como
+        /// las aletas de un disipador— y corre en el sentido contrario a las
+        /// juntas horizontales de la fundición hermana.
+        /// </summary>
         public static Sprite BloqueGelido(int spanCeldas)
         {
             string clave = "gelido" + spanCeldas;
             if (_cache.TryGetValue(clave, out var s)) return s;
 
-            // (fix playtest 6: baja resolución) mismo Escala que LosaPlaca (la
-            // placa de calor hermana, ver "PLACA DE CALOR" más abajo): las dos
-            // placas de zona comparten grosor/proporción a propósito.
+            // MISMA fórmula de tamaño que LosaPlaca: hermanas en proporción.
             int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
             int h = S(14);
             var px = new Color32[w * h];
 
-            Color32 rocaAlta = new Color32(0x5E, 0x66, 0x74, 255);
-            Color32 rocaBaja = new Color32(0x28, 0x2E, 0x38, 255);
-            Color32 escarcha = new Color32(0x86, 0x9A, 0xAE, 255);
-            int juntaAncho = Mathf.Max(1, Escala / 2);
+            // CALIBRADO CONTRA CAPTURA EN VIVO (regla 52): con aceroBajo en
+            // 0x39424F y curva cuadrática, los 9 px de cuerpo que quedan bajo
+            // los dientes salían MÁS OSCUROS que la roca del taller y la placa
+            // fría perdía justo el canal que la separa de su hermana (el
+            // VALOR). El suelo del degradado sube a 0x5A6676 y la curva pasa a
+            // LINEAL: la mitad inferior de la placa se queda en tonos medios
+            // claros de punta a punta.
+            Color32 aceroAlto = new Color32(0xB8, 0xCC, 0xDD, 255);
+            Color32 aceroBajo = new Color32(0x5A, 0x66, 0x76, 255);
+            Color32 surco = new Color32(0x24, 0x2C, 0x38, 255);
+            Color32 filo = new Color32(0xC6, 0xD8, 0xE8, 255);
+            Color32 labio = new Color32(0xB4, 0xCB, 0xDE, 255);     // escarcha del labio (por DEBAJO de la vena tintada de los dientes: la que 'enciende' con el estado es esa, no esta)
+            Color32 garganta = new Color32(0x26, 0x31, 0x40, 255);  // penumbra de donde brotan los dientes (azul, NUNCA negra: un hueco negro se lee como un agujero en el sprite)
+            Color32 sombra = new Color32(0x0E, 0x12, 0x18, 255);
+
+            int cuerpoY1 = S(7);            // techo del acero (21 de 42 téxeles = media placa)
+            int labioY1 = cuerpoY1 + S(1);  // 3 téxeles de labio de escarcha (21..23)
+            int pasoAleta = Mathf.Max(2, Escala + 1); // ranurado cada 4 téxeles = 0.67 celdas: MECANIZADO fino.
+                                                      // A S(3)=9 (1.5 celdas) el ranurado salía tan grueso que
+                                                      // volvía a leerse como SILLERÍA -- exactamente el defecto
+                                                      // del playtest 48 que esta ronda vino a corregir. Medido en
+                                                      // vivo: la placa real mide 8 CELDAS (ver la nota de tamaño
+                                                      // en el docblock), o sea 5 bloques de 1.5 celdas. Cinco
+                                                      // bloques es mampostería; doce surcos finos es metal.
 
             for (int y = 0; y < h; y++)
             {
-                float t = y / (float)(h - 1);
-                Color32 fila = Color32.Lerp(rocaBaja, rocaAlta, t * t);
+                float t = Mathf.Clamp01(y / (float)Mathf.Max(1, cuerpoY1 - 1));
+                Color32 fila = Color32.Lerp(aceroBajo, aceroAlto, t);
                 for (int x = 0; x < w; x++)
                 {
-                    Color32 c = fila;
-                    // Grano de piedra tallada (bloques de ~9 px escalados con junta oscura).
-                    if ((x % S(9)) < juntaAncho) c = Color32.Lerp(c, rocaBaja, 0.6f);
-                    if (y >= h - S(2)) c = escarcha;          // capa de escarcha superior
-                    if (y < S(2)) c = new Color32(0x12, 0x15, 0x1B, 255);
+                    Color32 c;
+                    if (y >= labioY1)
+                    {
+                        // Garganta: se oscurece hacia arriba (el fondo del
+                        // hueco donde crece la escarcha).
+                        float tg = (y - labioY1) / (float)Mathf.Max(1, h - labioY1 - 1);
+                        c = Color32.Lerp(garganta, sombra, tg * 0.75f);
+                    }
+                    else if (y >= cuerpoY1)
+                    {
+                        c = labio;
+                        if (y == cuerpoY1) c = Color32.Lerp(labio, aceroAlto, 0.45f);
+                    }
+                    else
+                    {
+                        c = fila;
+                        int m = x % pasoAleta;
+                        // Contraste BAJO a propósito: subido (0.85/0.55, como
+                        // salió la primera pasada) el ranurado se comía la
+                        // placa y se leía como una empalizada de barrotes que
+                        // competía con los dientes. Aquí es textura, no forma.
+                        if (m == 0) c = Color32.Lerp(c, surco, 0.38f);            // surco
+                        else if (m == 1) c = Color32.Lerp(c, filo, 0.14f);        // filo iluminado de la aleta
+                    }
+
+                    if (y < S(1)) c = sombra;
                     px[y * w + x] = c;
                 }
             }
@@ -396,56 +677,105 @@ namespace Alkahest.Game
             return s;
         }
 
-        /// <summary>Cristales de la piedra gélida: agujas blancas (se tintan de cian al activarse) brotando del bloque.</summary>
+        /// <summary>
+        /// LOS DIENTES DE ESCARCHA (rediseñados en el playtest 49): el rasgo
+        /// que la foto de referencia pide literalmente —"dientes triangulares
+        /// claros apuntando hacia arriba, como sierra de escarcha"— y el
+        /// único de las dos placas que ROMPE LA SILUETA. Por eso son grandes:
+        /// ~1.43 celdas de alto y ~1.0 de ancho en la base (13 x 9 px a
+        /// escala de juego), no los 2-3 téxeles del playtest 48, que a 9 px
+        /// por celda simplemente no llegaban al ojo (regla 52).
+        ///
+        /// Cada diente es un PRISMA, no un triángulo plano: cara izquierda
+        /// casi blanca, cuerpo azul hielo, cara derecha en sombra. Tres
+        /// alturas alternas (1.00 / 0.62 / 0.82) para que el peine se lea
+        /// como escarcha crecida y no como una cremallera. Las proporciones
+        /// están CORREGIDAS POR ANISOTROPÍA igual que el serpentín hermano
+        /// (~6 téxeles/celda en X contra ~14 en Y): la base mide 6 téxeles y
+        /// la altura 20, que en el mundo son 1.0 x 1.43 celdas -- un
+        /// triángulo, no una aguja aplastada.
+        ///
+        /// Encima del labio se siembra ESCARCHA menuda (téxeles sueltos de
+        /// alfa baja, hash determinista de la posición -- nunca
+        /// UnityEngine.Random, regla de oro del proyecto) para que el borde
+        /// no sea una línea perfecta de fábrica.
+        /// </summary>
         public static Sprite CristalesGelidos(int spanCeldas)
         {
             string clave = "cristales" + spanCeldas;
             if (_cache.TryGetValue(clave, out var s)) return s;
 
-            // (fix playtest 6: baja resolución) mismo Escala que LosaPlaca.
             int w = Mathf.Clamp(spanCeldas * 2 * Escala, S(16), S(512));
             int h = S(14);
             var px = new Color32[w * h];
 
-            // Agujas de altura alterna cada 6 px (escalado): la silueta dentada es lo
-            // que hace que se lea "cristal" y no "barra pintada de azul". (playtest 48,
-            // CONTRATO_RONDA48.md §3a, "dientes de escarcha más finos" -- armonización
-            // con la placa de calor hermana): paso 8->6 (más agujas por unidad de
-            // ancho) y divisor de semi-anchura 3->4 (cada aguja, más delgada) --
-            // resultado medido: base de la aguja más alta pasa de 3 téxeles (Escala=3,
-            // /3) a 2 téxeles (/4) de semi-anchura, un tercio más fina sin desaparecer
-            // por debajo de 1 téxel.
-            int paso = S(6);
-            int baseY = S(4);
-            for (int cx = S(5); cx < w - S(4); cx += paso)
+            int baseY = S(7);                        // arranca en el labio de BloqueGelido (misma fila)
+            int alturaMax = h - baseY - 1;           // 20 téxeles = 1.43 celdas de mundo
+            int semiBase = Mathf.Max(2, Escala);              // 3 téxeles -> base de 6 = 1.0 celda
+            int paso = Mathf.Max(semiBase * 2 + 2, semiBase * 8 / 3); // 8 téxeles = 1.33 celdas entre puntas
+            // CALIBRADO CONTRA LA MEDIDA REAL, no contra la prosa (regla 39):
+            // el aparato mide 8 CELDAS de ancho (Init lo recorta a
+            // FootprintFraction con suelo de 8, y la alcoba fría solo tiene 8
+            // -- SimLevelBuilder.AlcobaFriaAncho), así que la textura sale
+            // SIEMPRE en el clamp mínimo, 48x42 téxeles. Con base 8 y paso 12
+            // (primer intento de esta ronda) salían CUATRO dientes en toda la
+            // placa y se leían como cuatro montañas; con base 6 y paso 8 salen
+            // SEIS y ya se lee "sierra". A 9.2 px/celda medidos en vivo eso es
+            // un diente de 9 x 13 px: por encima del umbral de la regla 52.
+
+            for (int cx = paso / 2; cx < w - semiBase; cx += paso)
             {
-                int idxAguja = cx / paso;
-                int altura = S((idxAguja % 3 == 0) ? 9 : (idxAguja % 3 == 1 ? 6 : 7));
+                int idx = cx / paso;
+                float f = (idx % 3 == 0) ? 1f : (idx % 3 == 1 ? 0.86f : 0.93f);  // irregularidad LEVE: la foto pide una sierra, no una cresta de montañas.
+                int altura = Mathf.Max(3, Mathf.RoundToInt(alturaMax * f));
+
                 for (int y = 0; y < altura; y++)
                 {
-                    int semi = Mathf.Max(0, (altura - y) / 4);
+                    int semi = Mathf.RoundToInt(semiBase * (1f - y / (float)altura));
+                    int yy = baseY + y;
+                    if (yy >= h) break;
                     for (int dx = -semi; dx <= semi; dx++)
                     {
                         int x = cx + dx;
                         if (x < 0 || x >= w) continue;
-                        int yy = baseY + y;
-                        if (yy >= h) continue;
-                        byte a = (byte)(dx == -semi ? 255 : 205); // canto izquierdo más brillante
-                        px[yy * w + x] = new Color32(255, 255, 255, a);
+
+                        Color32 c;
+                        if (semi > 0 && dx == -semi)
+                            c = new Color32(0xFA, 0xFD, 0xFF, 255);              // arista iluminada
+                        else if (semi > 0 && dx == semi)
+                            c = new Color32(0x8E, 0xB6, 0xD6, 210);              // cara en sombra
+                        else if (dx < 0)
+                            c = new Color32(0xE4, 0xF2, 0xFC, 250);              // cara al sol
+                        else
+                            c = new Color32(0xB6, 0xD6, 0xEE, 235);              // cara opuesta
+
+                        px[yy * w + x] = c;
                     }
                 }
             }
 
-            // Vena horizontal que une las agujas por su base (fila baseY, alpha150,
-            // y una banda justo debajo, alpha90 -- unifica visualmente las agujas).
-            for (int x = S(3); x < w - S(3); x++)
+            // Vena que une los dientes por la base: el peine tiene que
+            // leerse como UNA pieza (escarcha corrida), no como dientes
+            // sueltos flotando sobre el labio.
+            for (int t = 0; t < Escala; t++)
             {
-                for (int t = 0; t < Escala; t++)
+                int y = baseY + t;
+                if (y < 0 || y >= h) continue;
+                for (int x = Escala; x < w - Escala; x++)
+                    if (px[y * w + x].a == 0)
+                        px[y * w + x] = new Color32(0xDC, 0xEC, 0xF8, (byte)(200 - t * 45));
+            }
+
+            // ESCARCHA MENUDA determinista sobre la garganta (hash de la
+            // posición, cero UnityEngine.Random).
+            for (int y = baseY + Escala; y < h; y++)
+            {
+                for (int x = 1; x < w - 1; x++)
                 {
-                    int yA = baseY + t;
-                    if (yA < h) px[yA * w + x] = new Color32(255, 255, 255, 150);
-                    int yB = baseY - Escala + t;
-                    if (yB >= 0) px[yB * w + x] = new Color32(255, 255, 255, 90);
+                    if (px[y * w + x].a != 0) continue;
+                    uint hash = (uint)(x * 73856093 ^ y * 19349663);
+                    if ((hash % 29u) != 0u) continue;
+                    px[y * w + x] = new Color32(0xE8, 0xF4, 0xFF, (byte)(60 + hash % 55u));
                 }
             }
 
@@ -735,8 +1065,13 @@ namespace Alkahest.Game
         /// otra altura, otro color (hierro oscuro, no latón): jamás se
         /// confunde. Silueta de bowl con barrotes verticales (rejilla del
         /// cesto) que dejan asomar el rescoldo de dentro (capa
-        /// <see cref="LechoBrasasPlaca"/> (playtest 48, ex-ResistenciasPlaca),
-        /// reutilizada por el llamante, tintada de ámbar/naranja).
+        /// <see cref="LechoBrasas"/>, reutilizada por el llamante
+        /// —Game/Crisol.cs, Game/EnsayoMaestro.cs—, tintada de ámbar/naranja.
+        /// NOTA (playtest 49): este cref apuntaba a <c>LechoBrasasPlaca</c>,
+        /// la variante que el playtest 48 hizo para la placa de calor y que
+        /// el 49 retiró al volver el serpentín (ver la CRONOLOGÍA DEL
+        /// SERPENTÍN arriba). El lecho de brasas del HOGAR —este— nunca se
+        /// tocó: es el bueno y sigue siendo el que usan Crisol y Ensayo).
         /// </summary>
         public static Sprite Brasero(int spanCeldas)
         {

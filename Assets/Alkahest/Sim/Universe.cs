@@ -3782,6 +3782,65 @@ namespace Alkahest.Sim
             u._calcinacionRaw[b0] = calcinacionB0;
             u._umbralPersistenciaRaw[calcinadoB0] = techoCalcinadoB0;
 
+            // ---- Override 2b (RONDA 49, ENCARGO RITMO+ENSAYO, "LA CERÁMICA ES EL TECHO") ----
+            // INVERSIÓN DE REALISMO detectada y verificada EN VIVO por el director (playtest
+            // 48/49): el ladrillo molido (Calcinado de la arcilla, umbral 188 en esta seed)
+            // aguanta el rojo del Ensayo con el 100% de sus celdas -- pero ni la cerámica COCIDA
+            // (Ceramico, umbral 180) ni el adobe (Compacto) de la misma base lo hacían, pese a
+            // que en la realidad es exactamente al revés: la loza/terracota se cuece PRECISAMENTE
+            // para resistir el fuego, y debería aguantar MÁS que su propio polvo quemado, no
+            // menos. Cesar, playtest 48, literal: "no sé qué aguanta el rojo del crisol, no lo
+            // hace ni el ladrillo ni la brea ni el carbón" -- el jugador probaba la respuesta
+            // intuitiva (lo cocido) y fallaba contra un derivado del mismo material que "en
+            // teoría" debería ser más frágil, no menos.
+            //
+            // La corrección es CONDICIONAL, para las 5 bases, y NUNCA incondicional (si el
+            // sorteo de una base concreta ya tenía la cerámica/el compacto por encima de su
+            // calcinado, ahí no hay ninguna inversión que arreglar):
+            //   - Ceramico sube a max(natural, techoCeramicoMinimo=205) SOLO si hoy queda por
+            //     debajo del Calcinado de su misma base -- 205 da margen cómodo sobre
+            //     TempEnsayoCalorRaw (165..180 en cualquier seed): la cerámica bien cocida
+            //     SIEMPRE aguanta el rojo del crisol, en las 5 familias.
+            //   - Compacto sube a max(natural, TempEnsayoCalorRaw + margenCompactoMinimo=3) SOLO
+            //     bajo la misma condición -- un margen mínimo pero real: lo prensado sin cocer
+            //     (adobe/arenisca/briqueta) al menos sobrevive por poco al examen, nunca se
+            //     funde exactamente a su temperatura.
+            // NO se toca Calcinado (es la vara de medir contra la que se compara, y para la
+            // base 0 ya lo fijó el override 2 de arriba con su propio criterio -- D1/regla 57),
+            // ni <c>GanadorGarantizado</c>, ni <see cref="TempEnsayoCalorRaw"/> (solo se LEE).
+            const byte techoCeramicoMinimo = 205;
+            const int margenCompactoMinimo = 3;
+            byte pisoCompacto = (byte)Mathf.Min(255, u.TempEnsayoCalorRaw + margenCompactoMinimo);
+            for (int bCeramica = 0; bCeramica < MaterialId.BasesCount; bCeramica++)
+            {
+                byte ceramicoId = MaterialId.MatDe(bCeramica, EstadoMateria.Ceramico);
+                byte compactoId = MaterialId.MatDe(bCeramica, EstadoMateria.Compacto);
+                byte calcinadoIdBase = MaterialId.MatDe(bCeramica, EstadoMateria.Calcinado);
+                byte umbralCalcinadoBase = u.UmbralPersistenciaRaw(calcinadoIdBase);
+
+                byte umbralCeramicoNatural = u.UmbralPersistenciaRaw(ceramicoId);
+                if (umbralCeramicoNatural < umbralCalcinadoBase)
+                    u._umbralPersistenciaRaw[ceramicoId] = (byte)Mathf.Max(umbralCeramicoNatural, techoCeramicoMinimo);
+
+                byte umbralCompactoNatural = u.UmbralPersistenciaRaw(compactoId);
+                if (umbralCompactoNatural < umbralCalcinadoBase)
+                    u._umbralPersistenciaRaw[compactoId] = (byte)Mathf.Max(umbralCompactoNatural, pisoCompacto);
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            {
+                // (regla 51 de CLAUDE.md: "un assert/log que no se puede leer no protege
+                // nada") Arcilla = base1 (literal, mismo índice que ya usa el override 1c de
+                // arriba para "arcilla ('la 2ª arena' de la tabla real)") -- es el caso EXACTO
+                // del diagnóstico ("cerámica 180 < ladrillo molido 188") citado en el contrato
+                // de esta ronda, así que se imprime con su nombre real para que el log de seed
+                // cuente la inversión (o su ausencia) en voz alta.
+                byte arcillaCalcinado = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Calcinado));
+                byte arcillaCompacto = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Compacto));
+                byte arcillaCeramico = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Ceramico));
+                UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] LA CERÁMICA ES EL TECHO -- umbrales finales de arcilla (base1): calcinado/ladrillo molido={arcillaCalcinado}, compacto/adobe={arcillaCompacto}, ceramico/cerámica={arcillaCeramico} (ceramico y compacto deben quedar >= calcinado tras el override, o no había inversión que corregir).");
+            }
+#endif
+
             // ---- Override 3: calcinado combustible garantizado (verificación, no cambio) ----
             // (baseCombustibleGarantizada ya se leyó arriba, antes del override 1 -- D1 la necesitaba.)
             // `tierUnoDeB1` se calcula SIEMPRE (no solo en editor): el override 7 y

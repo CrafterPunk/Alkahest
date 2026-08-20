@@ -281,11 +281,15 @@ namespace Alkahest.Game
         private int _holdTicksRestantes;
 
         private SpriteRenderer _resistencias;
+        /// <summary>(playtest 49) Halo cálido de "estufa trabajando": capa DETRÁS de la losa, desplazada hacia arriba. Ver el doc de clase "VUELVE EL SERPENTÍN, PULIDO" y <see cref="ActualizarBrillo"/>.</summary>
+        private SpriteRenderer _brillo;
         private Vector3 _centroChasis;
 
         /// <summary>(restaurado playtest 7) Capa de resalte dorado del aparato enfocado, ver ActualizarResalte.</summary>
         private SpriteRenderer _resalte;
         private float _alfaResalte;
+        /// <summary>(playtest 49) Alfa suavizada del halo cálido, ver <see cref="ActualizarBrillo"/>.</summary>
+        private float _alfaBrillo;
 
         // ---------------------------------------------------------------
         // ESCALA COMPARTIDA DE CERCANÍA DEL TALLER (restaurado playtest 7,
@@ -463,10 +467,20 @@ namespace Alkahest.Game
                 anchoMundo * 1.15f, altoMundo * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
+            // (playtest 49) HALO DE ESTUFA: va DEBAJO de la losa (17 < 18) y
+            // desplazado hacia arriba, así que la losa opaca lo tapa y solo
+            // se ve la parte que sube hacia la cuba -- que es justo adonde va
+            // el calor. Se crea UNA vez aquí (regla 36); en Update solo se le
+            // cambia el color (cero allocs/frame, ver ActualizarBrillo).
+            _brillo = MaquinariaSprites.CrearCapa(transform, "BrilloCalor", MaquinariaSprites.Halo(), 17,
+                anchoMundo * 0.92f, altoMundo * 3.4f);
+            _brillo.transform.localPosition = new Vector3(0f, altoMundo * 1.05f, 0f);
+            _brillo.color = new Color(1f, 0.45f, 0.16f, 0f);
+
             MaquinariaSprites.CrearCapa(transform, "Losa", MaquinariaSprites.LosaPlaca(spanCeldas), 18,
                 anchoMundo, altoMundo);
-            _resistencias = MaquinariaSprites.CrearCapa(transform, "LechoBrasas",
-                MaquinariaSprites.LechoBrasasPlaca(spanCeldas), 19, anchoMundo, altoMundo);
+            _resistencias = MaquinariaSprites.CrearCapa(transform, "Serpentin",
+                MaquinariaSprites.SerpentinPlaca(spanCeldas), 19, anchoMundo, altoMundo);
         }
 
         private void Update()
@@ -659,7 +673,32 @@ namespace Alkahest.Game
                 _resistencias.color = ColorResistencia(pulso);
             }
 
+            ActualizarBrillo();
             ActualizarResalte();
+        }
+
+        /// <summary>
+        /// (playtest 49) El halo cálido de "estufa trabajando": alfa 0 con la
+        /// placa apagada, latido lento y muy tenue en TEMPLADA (0.10..0.19),
+        /// más vivo y más rápido en ARDIENTE (0.20..0.34). Suavizado con
+        /// MoveTowards por la misma razón que <see cref="ActualizarResalte"/>
+        /// (que un objetivo oscilante no dé latigazos al encender/apagar).
+        /// Techo deliberadamente bajo: es un BLOOM de calor sobre lo que hay
+        /// en la cuba, no una lámpara -- "sin neón crudo" es el mandato
+        /// literal de esta ronda. Cero asignaciones: Color es struct.
+        /// </summary>
+        private void ActualizarBrillo()
+        {
+            if (_brillo == null) return;
+            float objetivo;
+            switch (_state)
+            {
+                case State.Ardiente: objetivo = 0.27f + 0.07f * Mathf.Sin(Time.time * 5.2f); break;
+                case State.Templada: objetivo = 0.145f + 0.045f * Mathf.Sin(Time.time * 2.6f); break;
+                default: objetivo = 0f; break;
+            }
+            _alfaBrillo = Mathf.MoveTowards(_alfaBrillo, objetivo, 1.2f * Time.deltaTime);
+            _brillo.color = new Color(1f, 0.45f, 0.16f, _alfaBrillo);
         }
 
         /// <summary>
@@ -685,12 +724,17 @@ namespace Alkahest.Game
             {
                 case State.Ardiente: return new Color(1f, 0.52f * pulso, 0.22f * pulso, 1f);
                 case State.Templada: return new Color(1f * pulso, 0.58f * pulso, 0.16f * pulso, 1f);
-                // (playtest 48) Apagada: CENIZA gris tenue, no metal -- el
-                // lecho de brasas sigue ahí (LechoBrasasPlaca lo dibuja
-                // siempre, ver su docblock), este tinte solo decide qué tan
-                // vivo se ve. Ligero matiz cálido residual (rescoldo mínimo),
-                // nunca un gris puro ni negro.
-                default: return new Color(0.24f, 0.21f, 0.19f, 1f);
+                // (playtest 48, RECALIBRADO en el 49) Apagada: NICROMO FRÍO.
+                // El serpentín se dibuja siempre (SerpentinPlaca, ver su
+                // docblock) y este tinte solo decide qué tan vivo se ve. Sube
+                // de (0.24,0.21,0.19) a (0.30,0.26,0.23) porque ahora la
+                // incandescencia vive DENTRO de la textura: apagado tiene que
+                // quedar un alambre gris tibio claramente visible contra la
+                // boca casi negra del nicho (0x100A08) -- una placa apagada
+                // que se confunde con una losa lisa fue exactamente el fallo
+                // que Cesar reportó del playtest 48. Matiz cálido residual,
+                // nunca gris puro ni negro.
+                default: return new Color(0.30f, 0.26f, 0.23f, 1f);
             }
         }
 
