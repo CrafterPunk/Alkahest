@@ -304,19 +304,44 @@ namespace Alkahest.Net
         {
             base.OnNetworkSpawn();
 
-            _sim = FindAnyObjectByType<AlkahestSim>();
-            _registro.OnListChanged += AlCambiarRegistro;
-
-            if (!IsServer)
+            // (playtest 48, CONTRATO_RONDA48.md D3/§2d: "MaquinaSync a
+            // prueba de orden de spawn") AUDITADO: este método NUNCA lee
+            // `_sim.Universe`/`_sim.Grid` -- solo guarda la referencia a
+            // `_sim` (usada por Update()/IntentarEscanear, que ya esperan a
+            // que las siete máquinas existan de verdad, y esas solo nacen
+            // DESPUÉS de que AlkahestGameBootstrap.TrySpawnRed compruebe
+            // `_sim.Universe != null` -- ver ese archivo) y, en el invitado,
+            // reconstruye réplicas puramente VISUALES
+            // (Net/MaquinaReplica.cs no toca `_sim` ni Universe en ningún
+            // punto). Es decir: es seguro sea cual sea el orden real en que
+            // NGO spawee este objeto frente a Net/AlkahestSimSync. El
+            // try/catch es la garantía DURA de esa promesa, no solo el
+            // análisis: si algo aquí dentro lanzara de todos modos, NO debe
+            // tumbar el StartHost/StartClient del NetworkManager en
+            // silencio (el mecanismo exacto que D3 señala como sospechoso
+            // del "StartHost devolvió false" mudo de Cesar) -- se registra
+            // y el componente sigue vivo, sin registro hasta el próximo
+            // reintento de Update()/IntentarEscanear.
+            try
             {
-                // Red de seguridad simétrica a SimSync/AprendizNet: si el
-                // NetworkList ya llegó con su estado inicial completo ANTES
-                // de que este método se ejecute (los NetworkVariable/List de
-                // NGO se deserializan antes de invocar OnNetworkSpawn), un
-                // invitado que se conecta TARDE no debe depender de que NGO
-                // repita un evento Add por cada elemento preexistente --
-                // reconstruimos a mano lo que ya haya.
-                for (int i = 0; i < _registro.Count; i++) CrearOActualizarReplica(i, _registro[i]);
+                _sim = FindAnyObjectByType<AlkahestSim>();
+                _registro.OnListChanged += AlCambiarRegistro;
+
+                if (!IsServer)
+                {
+                    // Red de seguridad simétrica a SimSync/AprendizNet: si el
+                    // NetworkList ya llegó con su estado inicial completo ANTES
+                    // de que este método se ejecute (los NetworkVariable/List de
+                    // NGO se deserializan antes de invocar OnNetworkSpawn), un
+                    // invitado que se conecta TARDE no debe depender de que NGO
+                    // repita un evento Add por cada elemento preexistente --
+                    // reconstruimos a mano lo que ya haya.
+                    for (int i = 0; i < _registro.Count; i++) CrearOActualizarReplica(i, _registro[i]);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[ChaosAlchemy][Red] MaquinaSync.OnNetworkSpawn: excepción inesperada, NO debe tumbar la sesión: " + ex);
             }
         }
 
@@ -338,7 +363,22 @@ namespace Alkahest.Net
 
             if (!_escaneado)
             {
-                IntentarEscanear();
+                // (playtest 48, §2d) EXCEPCIÓN-SAFE POR CONTRATO: IntentarEscanear
+                // toca `IMovible.AnclaCelda`/`CentroMundo`/`TamanoMundo` de
+                // objetos ajenos (Crisol/Prensa/.../PlacaFria) que este
+                // archivo no controla -- si algún día uno de ellos lanjara
+                // antes de terminar su propio Init() (p. ej. por llegar a
+                // existir como GameObject un frame antes de estar listo), NO
+                // debe tumbar Update() de este NetworkBehaviour: se
+                // reintenta solo, `_escaneado` sigue en false.
+                try
+                {
+                    IntentarEscanear();
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError("[ChaosAlchemy][Red] MaquinaSync: excepción durante el escaneo de máquinas (se reintentará el próximo Update): " + ex);
+                }
                 return; // hasta que el escaneo tenga éxito no hay nada que sondear.
             }
 

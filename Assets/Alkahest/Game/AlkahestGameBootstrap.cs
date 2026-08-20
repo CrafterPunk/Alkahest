@@ -94,6 +94,19 @@ namespace Alkahest.Game
         private AlkahestSim _sim;
         private bool _spawned;
 
+        // (playtest 48, CONTRATO_RONDA48.md D4/§2e: "la pausa existe desde
+        // el primer frame del lobby") Guarda de una sola vez para que
+        // `DayCycle.ForzarDesbloqueoSesion()` se dispare en la PRIMERA
+        // pasada de `TrySpawn()` que detecta `SimSync.EnEscena` -- no tras
+        // el avatar (ver `TrySpawnRed`, que antes lo llamaba recién después
+        // de las dos puertas de `avatarLocal`). El método en sí ya es
+        // idempotente (comprueba `FindAnyObjectByType<DayCycle>() == null`
+        // antes de crear la instancia), pero este flag evita reevaluar esa
+        // búsqueda cada Update mientras el lobby sigue esperando mundo/
+        // avatar -- Update() llama a TrySpawn() en cada frame hasta que
+        // `_spawned` sea true (ver Update() más abajo).
+        private bool _desbloqueoSesionMultiForzado;
+
         // (playtest 40, SEMILLA CERO) Referencias cacheadas para poder
         // spawnear las cuatro estaciones tapiables MÁS TARDE, cuando el otro
         // encargo (Game/SemillaCero.cs) llame a
@@ -193,7 +206,29 @@ namespace Alkahest.Game
             // abajo. La escena Lab CLÁSICA no tiene SimSync: `EnEscena` es
             // false, este `if` no entra nunca, y de aquí para abajo NO CAMBIÓ
             // NI UNA LÍNEA.
-            if (SimSync.EnEscena) { TrySpawnRed(); return; }
+            if (SimSync.EnEscena)
+            {
+                // (playtest 48, D4/§2e) EL LOBBY DEBE PODER PAUSARSE DESDE EL
+                // PRIMER FRAME: antes, `DayCycle.ForzarDesbloqueoSesion()`
+                // vivía dentro de `TrySpawnRed`, DESPUÉS de esperar a
+                // `_sim.Universe`/`_sim.Grid` Y al avatar local cableado --
+                // así que mientras la sesión estaba en el lobby (o tras
+                // CUALQUIER fallo de host/cliente, ver SessionCoordinator),
+                // no existía ningún DayCycle en escena: ni Escape ni AJUSTES
+                // funcionaban ahí. Se dispara aquí, en la primerísima pasada
+                // en la que se detecta la escena MULTI (`SimSync.EnEscena`),
+                // sin esperar a nada más -- el propio método es
+                // autosuficiente (crea su GameObject de pausa sin `_sim` a
+                // propósito, ver su docblock en Game/DayCycle.cs).
+                if (!_desbloqueoSesionMultiForzado)
+                {
+                    _desbloqueoSesionMultiForzado = true;
+                    DayCycle.ForzarDesbloqueoSesion();
+                }
+
+                TrySpawnRed();
+                return;
+            }
 
             if (_spawned || _sim == null || _sim.Universe == null || _sim.Grid == null) return;
 
@@ -470,11 +505,17 @@ namespace Alkahest.Game
         ///     Los invitados acarrean materia; el anfitrión hornea.
         ///
         ///  3) NO HAY CICLO DE JORNADAS. La escena MULTI no tiene Título ni
-        ///     reloj, así que no se instancia `DayCycle`; en su lugar se hace a
-        ///     mano lo único que su arranque silencioso hacía y que aquí sigue
-        ///     haciendo falta: soltar los cerrojos de input/HUD
-        ///     (<see cref="DayCycle.ForzarDesbloqueoSesion"/>), reiniciar las
-        ///     pistas de la jornada 1 y generar los encargos.
+        ///     reloj, así que no se instancia `DayCycle` por el camino normal;
+        ///     en su lugar se hace a mano lo único que su arranque silencioso
+        ///     hacía. (playtest 48, D4/§2e) <see cref="DayCycle.ForzarDesbloqueoSesion"/>
+        ///     YA NO se llama desde AQUÍ dentro -- se dispara en la
+        ///     PRIMERÍSIMA pasada de <see cref="TrySpawn"/> que detecta
+        ///     `SimSync.EnEscena` (antes de este método siquiera arrancar,
+        ///     ver `_desbloqueoSesionMultiForzado`), para que Escape y
+        ///     AJUSTES funcionen en el LOBBY desde el primer frame -- antes
+        ///     y después de cualquier fallo de sesión -- y no solo tras el
+        ///     avatar. Lo que SÍ sigue haciéndose aquí: reiniciar las pistas
+        ///     de la jornada 1 y generar los encargos.
         /// </summary>
         private void TrySpawnRed()
         {
@@ -490,7 +531,12 @@ namespace Alkahest.Game
             bool anfitrion = SimSync.EsServidor;
 
             MachineFocus.Limpiar();
-            DayCycle.ForzarDesbloqueoSesion();
+            // (playtest 48, D4/§2e) DayCycle.ForzarDesbloqueoSesion() YA NO
+            // se llama aquí -- se movió a la primerísima pasada de
+            // TrySpawn() que detecta SimSync.EnEscena (antes de este método
+            // siquiera arrancar), para que el lobby pueda pausarse y abrir
+            // AJUSTES desde el primer frame, no solo tras el avatar. Ver el
+            // docblock de `_desbloqueoSesionMultiForzado`.
 
             // El fondo del cuarto es puramente visual y se genera por código:
             // lo tienen los dos lados, o el invitado vería el taller flotando

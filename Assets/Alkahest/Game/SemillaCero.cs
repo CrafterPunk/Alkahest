@@ -255,7 +255,7 @@ namespace Alkahest.Game
         // BEAT 1 — EL MILAGRO.
         // =================================================================
         /// <summary>
-        /// Busca la primera base×estado en Polvo (el estado NATAL, "sale la primera
+        /// Busca la base×estado en Polvo (el estado NATAL, "sale la primera
         /// arena") que el jugador ya haya descubierto -- el banner "ALGO NUEVO" con el
         /// nombre provisional ya lo dispara <see cref="SubstanceKnowledge"/> sola (ver su
         /// enmienda 1); aquí solo se detecta la transición para arrancar el beat 2.
@@ -275,14 +275,29 @@ namespace Alkahest.Game
             Debug.Log("[ChaosAlchemy][SemillaCero] beat 1→2: primera hornada lista (\"" + nombre + "\"). Petición a regañadientes: " + texto);
         }
 
+        /// <summary>
+        /// (ENCARGO V, CONTRATO_RONDA48.md §1a) FIJADA a
+        /// <see cref="Universe.SemillaCeroBaseIdx"/> (arena) en vez de barrer
+        /// "la primera base descubierta, sea cual sea" -- ANTES de la veta
+        /// esto daba igual (la arena era, de hecho, lo primero que se podía
+        /// sacar del limo), pero con la veta de turba tallable y aspirable
+        /// DESDE EL ARRANQUE (Sim/SimLevelBuilder.cs::BuildVetaTurba), un
+        /// jugador que aspire la veta ANTES de encender el crisol por
+        /// primera vez habría descubierto la base 3 primero: el bucle
+        /// genérico "b=0.. el primero descubierto" habría arrancado el arco
+        /// entero con turba en vez de arena, descalibrando el override 2 de
+        /// Universe (fusión/calcinación/techo de Ash, tallado a mano SOLO
+        /// para <see cref="Universe.SemillaCeroBaseIdx"/>) y la propia
+        /// designación de <see cref="Universe.SemillaCeroBaseTurbaIdx"/> como
+        /// "el combustible que ya tienes cuando te piden tostar". Fijar el
+        /// beat 1 a la base de diseño (no a "lo que sea que el jugador tocó
+        /// primero") cierra ese hueco de raíz -- el aprendiz puede tallar y
+        /// guardar turba desde el primer segundo sin romper el guion.
+        /// </summary>
         private byte EscanearBasePolvoDescubierta()
         {
-            for (int b = 0; b < MaterialId.BasesCount; b++)
-            {
-                byte polvo = MaterialId.MatDe(b, EstadoMateria.Polvo);
-                if (_knowledge.EsDescubierto(polvo)) return polvo;
-            }
-            return MaterialId.Empty;
+            byte polvo = MaterialId.MatDe(Universe.SemillaCeroBaseIdx, EstadoMateria.Polvo);
+            return _knowledge.EsDescubierto(polvo) ? polvo : MaterialId.Empty;
         }
 
         // =================================================================
@@ -328,6 +343,21 @@ namespace Alkahest.Game
         // =================================================================
         // BEAT 4 — EL FRACASO FORENSE.
         // =================================================================
+        /// <summary>
+        /// (CONTRATO_RONDA48.md §1d, ENCARGO V) EL CONSEJO DE LA VETA. Aquí,
+        /// y NUNCA antes: el contrato es explícito ("aparece con el beat 4,
+        /// cuando el fuego propio deja de bastar"). Este es exactamente el
+        /// instante en que el fuego propio (rescoldo, sin combustible) deja
+        /// de bastar -- el Maestro acaba de pedir "más TOSTADO", algo que la
+        /// banda de calcinación estrecha (Universe.AplicarOverridesSemillaCero,
+        /// override 2) hace IMPOSIBLE a rescoldo. Texto EXACTO del contrato,
+        /// sin parafrasear. Usa el canal ya existente de "EL MAESTRO HABLA"
+        /// (<see cref="MaestroDice"/>) -- no HintSystem.cs, cuyo carrusel es
+        /// un temporizador ciego al beat actual y no puede expresar "no
+        /// antes de X" sin acoplarlo a esta máquina de estados (decisión
+        /// documentada del encargo: el "canal del arco" que el contrato deja
+        /// a elección de V).
+        /// </summary>
         private void EntrarFracasoTostado()
         {
             _beat = Beat.FracasoTostado;
@@ -335,9 +365,17 @@ namespace Alkahest.Game
             _cenizaComentada = false;
 
             string nombre = _knowledge.NombreDe(_sustanciaPrincipal);
-            string texto = "Más de eso, pero TOSTADO -- tráeme " + Beat4Cantidad + " de tu \"" + nombre + "\", bien calcinada.";
+            // (ENCARGO V, contrato §1d) "La línea del beat 4 del Maestro puede
+            // ganar UNA frase que apunte al brasero con lo tallado" -- literal:
+            // se añade UNA cláusula al pedido ya existente, el resto de la
+            // frase no cambia.
+            string texto = "Más de eso, pero TOSTADO -- tráeme " + Beat4Cantidad + " de tu \"" + nombre + "\", bien calcinada. El brasero come lo que talles del muro.";
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat4Cantidad, Beat4Recompensa, texto, targetMat: _calcinadoPrincipal);
             Debug.Log("[ChaosAlchemy][SemillaCero] beat 3→4: pide lo tostado -- la banda de calcinación es estrecha, el brasero recién alimentado se pasará de largo.");
+
+            // (contrato §1d) El consejo de la veta, texto EXACTO, disparado
+            // UNA vez al entrar en este beat -- ver el docblock del método.
+            MaestroDice("Esa veta parda del muro es TURBA: tállala (C), el brasero la come.", 8f);
         }
 
         private void SondeoFracasoTostado()

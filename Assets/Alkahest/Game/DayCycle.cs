@@ -1135,6 +1135,25 @@ namespace Alkahest.Game
 
         private void DrawPlayingHud()
         {
+            // (integración pt48, VISTO EN VIVO) EL BOTÓN MENÚ: en el EDITOR,
+            // la vista Game en modo "Play Focused" se COME la tecla Escape
+            // antes de que llegue al Input System (verificado en la cabina:
+            // la 'a' de moverse llega, Escape no) -- así que un jugador que
+            // prueba en el editor, como Cesar, JAMÁS podía abrir la pausa
+            // por teclado, y "los menús nuevos" del playtest 47 eran
+            // invisibles para él. Un botón chico y clicable en la esquina
+            // inferior derecha abre EXACTAMENTE la misma pausa; Escape sigue
+            // funcionando donde el editor no estorba (la build del jugador).
+            // Se dibuja SIEMPRE en Playing (también en multi, donde este
+            // DayCycle vive solo para la pausa): que el camino al menú nunca
+            // dependa de una tecla que alguien más puede comerse.
+            {
+                UiStyles.Preparar();
+                float bw = UiStyles.S(96f), bh = UiStyles.S(26f);
+                var rMenu = new Rect(Screen.width - bw - UiStyles.S(10f), Screen.height - bh - UiStyles.S(10f), bw, bh);
+                if (GUI.Button(rMenu, "MENÚ · Esc", UiStyles.Boton)) _pausado = true;
+            }
+
             // (tercera ronda del pivot) El aviso de "los encargos han
             // llegado" (ver ActualizarDesbloqueoDeEncargos/
             // DrawEncargosDesbloqueadosBanner) vive FUERA del `return` de

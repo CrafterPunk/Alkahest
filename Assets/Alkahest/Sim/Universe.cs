@@ -3328,6 +3328,27 @@ namespace Alkahest.Sim
         /// <summary>La base que Semilla Cero designa como "la arena de sílice" del beat 1 (antes "el sedimento celeste": ver el override 4 de <see cref="AplicarOverridesSemillaCero"/>, ronda "LA QUÍMICA CON NOMBRE REAL") -- ver el docblock de ese método para el porqué de la designación explícita (no es GanadorGarantizado ni BaseCombustibleGarantizada de esta seed).</summary>
         public const int SemillaCeroBaseIdx = 0;
 
+        /// <summary>
+        /// (CONTRATO_RONDA48.md §1a/D1, ENCARGO V) baseIdx de "la turba" -- LA
+        /// MISMA base que <see cref="BaseCombustibleGarantizada"/> calcula en
+        /// runtime para la seed congelada 777002 (verificado: el docblock de
+        /// <see cref="SemillaCero"/> ya documentaba "combustible=base 3", y el
+        /// Assert de <see cref="AplicarOverridesSemillaCero"/> lo reconfirma
+        /// cada arranque). Declarada A MANO porque
+        /// <see cref="Sim.SimLevelBuilder.BuildCuartoIntimo"/> talla el plano
+        /// (incluida la veta de turba embutida en el muro, D1) ANTES de que
+        /// exista ninguna referencia a <c>Universe</c> en esa llamada --
+        /// <c>AlkahestSim.CrearMundoInterno</c> crea el universo y le aplica
+        /// los overrides primero, sí, pero pasa un <c>CellGrid</c> desnudo a
+        /// <c>BuildCuartoIntimo</c>, nunca el propio <c>Universe</c> (regla 47
+        /// de CLAUDE.md: no asumir por el nombre, leer la firma real). Si
+        /// algún día se recongela Semilla Cero con otra seed cuya
+        /// BaseCombustibleGarantizada caiga en otra base, este valor tiene que
+        /// actualizarse a mano junto con <see cref="SemillaCero"/> -- el
+        /// Assert de abajo grita si se desalinean.
+        /// </summary>
+        public const int SemillaCeroBaseTurbaIdx = 3;
+
         // ===================================================================
         // (Encargo Q, ronda "LA QUÍMICA CON NOMBRE REAL", docs/DISENO_QUIMICA_REAL.md
         // §2) IDENTIDAD REAL: nombre + mini-reseña de trivia real, copiados VERBATIM
@@ -3508,19 +3529,54 @@ namespace Alkahest.Sim
         private static readonly byte[] _jitterPorEstado = { 16, 10, 8, 10, 6, 8, 14, 10 };
 
         /// <summary>
-        /// Aplica los cuatro overrides del contrato §3 sobre un Universe ya
-        /// creado con <see cref="SemillaCero"/> (o una semilla vecina si
-        /// algún día hiciera falta recongelar). Documentados 1 a 1:
+        /// (CONTRATO_RONDA48.md §1, ENCARGO V, "EL DESATASCO") Aplica los
+        /// overrides del contrato sobre un Universe ya creado con
+        /// <see cref="SemillaCero"/> (o una semilla vecina si algún día
+        /// hiciera falta recongelar). Documentados 1 a 1:
         ///
-        /// 1. EXTRACCIÓN A FUEGO PROPIO, BANDA GENEROSA: <see cref="ExtraccionRaw"/>
-        ///    de <see cref="SemillaCeroBaseIdx"/> baja a un valor muy por
-        ///    debajo de <see cref="CrisolTier0Raw"/> (100, 20 raw de margen) --
-        ///    la primera hornada de Limo a fuego propio SIEMPRE saca esta
-        ///    base. Defensivo: cualquier OTRA base cuya banda natural caiga
-        ///    en el hueco (100, tier0] se clampea por debajo de 100 -- si no,
-        ///    `Game/Crisol.DecidirHornada` (que elige la banda MÁS ALTA
-        ///    alcanzable, no la de esta base por nombre) podría sacar la base
-        ///    equivocada en el beat 1.
+        /// 1. EXTRACCIÓN A FUEGO PROPIO, BANDA GENEROSA (REESCRITO, D1): la de
+        ///    <see cref="SemillaCeroBaseIdx"/> baja a un valor muy por debajo
+        ///    de <see cref="CrisolTier0Raw"/> (100, 20 raw de margen) -- la
+        ///    primera hornada de Limo a fuego propio SIEMPRE saca esta base.
+        ///    ANTES (playtest 40-47b) el defensivo de más abajo CLAMPEABA
+        ///    CUALQUIER banda colisionante a 95, POR DEBAJO de arena -- eso
+        ///    eclipsaba PARA SIEMPRE la banda natural de
+        ///    <see cref="SemillaCeroBaseTurbaIdx"/> (~106±4, cae en el hueco
+        ///    (100,120]): `Game/Crisol.DecidirHornada` elige la banda MÁS
+        ///    ALTA alcanzable, así que 100 (arena) siempre ganaba a 95
+        ///    (turba) en TODA cima -- sin turba, sin carbón, arco muerto
+        ///    (D1 de CONTRATO_RONDA48.md, la causa real del atasco de
+        ///    Cesar). AHORA: <see cref="SemillaCeroBaseTurbaIdx"/> se APARTA
+        ///    del todo de la escalera de extracción (255 -- nunca la banda
+        ///    más alta a ninguna cima real, tope real de combustible ~190):
+        ///    la turba YA NO SALE DEL LIMO en esta seed, sale TALLADA de la
+        ///    veta del muro (<see cref="Sim.SimLevelBuilder"/>, la otra mitad
+        ///    de este mismo encargo) -- ver el punto 5. El defensivo que
+        ///    protege a arena de CUALQUIER OTRA colisión futura se mantiene,
+        ///    pero cambia de sentido: empuja la banda colisionante POR ENCIMA
+        ///    de <see cref="CrisolTier0Raw"/> (nunca por debajo de arena --
+        ///    bajarla es exactamente el bug de D1), un empujón mínimo que
+        ///    conserva su lugar en la escalera del punto 5b.
+        /// 1b. TURBA COMBUSTIBLE TIER BAJO (contrato §1b, punto nuevo): el
+        ///    Polvo de <see cref="SemillaCeroBaseTurbaIdx"/> se vuelve
+        ///    combustible POR SÍ MISMO (no solo su Calcinado, que ya lo era
+        ///    vía <see cref="BaseCombustibleGarantizada"/>) a
+        ///    <c>turbaCombustibleRaw</c>=130 -- el jugador la talla CRUDA de
+        ///    la veta y la echa al brasero sin pasar por ninguna hornada
+        ///    previa. Parámetros de combustión "arde mal y humeante, mejor
+        ///    que ceniza (24 reserva/192 ticks), peor que carbón (90
+        ///    reserva/720 ticks)" -- interpolados a mano entre el bloque Ash
+        ///    tier0.5 (más abajo) y el bloque general del Calcinado
+        ///    combustible (línea ~3259): reserva 48 (384 ticks=12,8s),
+        ///    calor 13, humo 24 (MÁS sucio que los dos -- "humeante" es
+        ///    literal), propagación 14, lengua 18. Residuo =
+        ///    <see cref="MaterialId.Ash"/> (no Brasa, a diferencia del
+        ///    Calcinado combustible general): turba cruda quemada deja
+        ///    CENIZA, no brasa -- coherente con que es materia prima sin
+        ///    refinar, y cierra el lazo con la ceniza tier0.5 de más abajo
+        ///    (regla 55 de CLAUDE.md, MORTAL: solo decaimiento, cero
+        ///    ganancia -- mismo mecanismo genérico ya probado en Ash/
+        ///    Calcinado, sin código nuevo en SimStepper).
         /// 2. BANDA DE CALCINACIÓN ESTRECHA + SOBRECALENTAMIENTO -&gt; ASH: la
         ///    banda natural del solver es ancha a propósito (CalcinadoUmbral =
         ///    FusionRaw+15..30, contrato 4.2) para que un combustible normal
@@ -3547,7 +3603,11 @@ namespace Alkahest.Sim
         ///    "más de eso, pero TOSTADO" -- el que, usado de más, dispara la
         ///    trampa del override 2. Se deja un Assert de solo-editor por si
         ///    una futura seed recongelada rompiera esta separación en
-        ///    silencio.
+        ///    silencio, MÁS uno nuevo (D1) que confirma que
+        ///    <see cref="SemillaCeroBaseTurbaIdx"/> sigue siendo exactamente
+        ///    esa misma base -- si algún día se desalinean, la veta tallada
+        ///    en <see cref="Sim.SimLevelBuilder"/> dejaría de ser el
+        ///    combustible garantizado y el arco entero cojearía en silencio.
         /// 4. COLORES REALES DE LA TABLA (Encargo Q, ronda "LA QUÍMICA CON NOMBRE
         ///    REAL", docs/DISENO_QUIMICA_REAL.md §2): las CINCO bases (no solo
         ///    <see cref="SemillaCeroBaseIdx"/>) se tiñen, estado a estado, con
@@ -3564,9 +3624,43 @@ namespace Alkahest.Sim
         ///    "nombre real" lo sustituye por el color auténtico de la arena de
         ///    sílice, (194,178,128). Única excepción: la Solucion de base0 no
         ///    tiene entrada en la tabla ("la arena no se disuelve") y se deja con
-        ///    el color que le tocó al sorteo normal de esta seed.
+        ///    el color que le tocó al sorteo normal de esta seed -- con el punto
+        ///    5 (D2) esa variante además deja de ser alcanzable de verdad
+        ///    (arena insoluble), así que el hueco de color es inofensivo.
+        /// 5. `SolubleBase[base0] = false` (D2, CONTRATO_RONDA48.md §0): en la
+        ///    seed congelada la arena salía SOLUBLE del sorteo normal y nadie
+        ///    apagaba el flag -- arena+agua formaba una "Solución" de base0
+        ///    sin identidad real (<see cref="TieneIdentidadReal"/> ya
+        ///    devolvía false ahí a propósito, ver <see cref="ConstruirIdentidadReal"/>,
+        ///    "la arena no se disuelve — sin entrada"), violando la ley
+        ///    editorial (la sílice real no se disuelve) y el mandato "sin
+        ///    nombres pobres". Se apaga a mano para las DOS variantes que
+        ///    <see cref="SolubleEstado"/> consulta (Polvo/Calcinado, contrato
+        ///    §3). Verificado que la garantía G3 del solver (soluble +
+        ///    insoluble alcanzables) sigue en pie con las bases restantes
+        ///    (sal/arcilla siguen solubles en 777002) con un Assert de
+        ///    solo-editor que relee la tabla YA con los overrides aplicados
+        ///    -- el solver corrió ANTES de este método con los valores
+        ///    naturales, así que necesita su propia comprobación aquí.
+        /// 6. LA TURBA FLOTA (contrato §1b, beat 5.2/FlotaInsoluble): la
+        ///    pregunta de la columna necesita, EN ESE PUNTO del arco, algo
+        ///    disponible que sea menos denso que el agua y no soluble --
+        ///    "vegetal, flota" es una verdad física real, no solo
+        ///    conveniencia de diseño, así que se GARANTIZA a mano (clamp
+        ///    defensivo, no toca nada si el sorteo natural ya lo cumplía)
+        ///    en vez de fiarse del sorteo de densidad/solubilidad de esta
+        ///    base -- exactamente el mismo tipo de sorteo que ya demostró en
+        ///    D2 que puede salir mal para OTRA base.
+        /// 7. LA ESCALERA, IMPRESA Y VERIFICADA (contrato §1b/§1c, regla 51 de
+        ///    CLAUDE.md): el log de seed imprime, POR BASE Y CON LOS NÚMEROS
+        ///    REALES de esta instancia (nunca de las constantes -- el jitter
+        ///    ±4 de <see cref="BandasExtraccion"/> las mueve), qué cima de la
+        ///    escalera fuel→base la alcanza primero, y un Assert de editor
+        ///    grita si alguna de las 4 bases que SÍ salen del limo queda sin
+        ///    cima (eclipse) o si la banda de arcilla no cabe bajo la cima de
+        ///    la turba (130).
         ///
-        /// ADEMÁS (fuera de la numeración 1-4 pero exigido por el contrato,
+        /// ADEMÁS (fuera de la numeración 1-7 pero exigido por el contrato,
         /// "Ceniza combustible tier 0.5"): <see cref="MaterialId.Ash"/> se
         /// vuelve combustible SOLO en esta instancia de Universe (nunca en el
         /// caótico, que jamás llama a este método) -- ver el bloque
@@ -3575,20 +3669,92 @@ namespace Alkahest.Sim
         public static void AplicarOverridesSemillaCero(Universe u)
         {
             const int b0 = SemillaCeroBaseIdx;
+            const int bTurba = SemillaCeroBaseTurbaIdx;
 
-            // ---- Override 1: extracción a fuego propio, banda generosa ----
+            // BaseCombustibleGarantizada se lee YA aquí (antes solo la leía el
+            // override 3, verificación tardía) porque el override 1 (D1) la
+            // necesita para apartar la banda de extracción de la turba de la
+            // escalera del limo -- ver el docblock del punto 1.
+            int baseCombustibleGarantizada = u.BaseCombustibleGarantizada;
+#if UNITY_EDITOR
+            UnityEngine.Debug.Assert(baseCombustibleGarantizada == bTurba,
+                $"[ChaosAlchemy][SemillaCero] BaseCombustibleGarantizada (base{baseCombustibleGarantizada}) ya no coincide con SemillaCeroBaseTurbaIdx ({bTurba}): la veta tallada en SimLevelBuilder dejaría de ser el combustible garantizado -- actualizar la constante junto con SemillaCero si se recongela.");
+#endif
+
+            // ---- Override 1: extracción a fuego propio, banda generosa (REESCRITO, D1) ----
             const byte extraccionB0 = 100; // 20 raw por debajo de CrisolTier0Raw=120.
             u._extraccionRaw[b0] = extraccionB0;
+
+            // (D1) La turba YA NO sale del limo en esta seed -- sale tallada
+            // de la veta del muro (Sim/SimLevelBuilder.cs::BuildVetaTurba).
+            // Se aparta del todo de la escalera de extracción: 255 nunca
+            // puede ser "la banda más alta alcanzable" a NINGUNA cima real
+            // (el tope real de combustible es ~190, ver TempCombustibleRawBase
+            // en SortearTablaPersistencia), así que Crisol.DecidirHornada
+            // jamás la elige por esta vía -- ni compite con arena en el
+            // hueco (100,120] (la causa exacta de D1) ni con nadie más.
+            const byte extraccionApartada = 255;
+            u._extraccionRaw[bTurba] = extraccionApartada;
+
             for (int b = 0; b < MaterialId.BasesCount; b++)
             {
-                if (b == b0) continue;
-                // Defensivo (ver docblock arriba): ninguna otra base puede
-                // quedar "más alcanzable" que b0 a fuego propio, o
-                // Game/Crisol.DecidirHornada (Limo -> la banda MÁS ALTA
-                // alcanzable) sacaría esa otra base en el beat 1.
+                if (b == b0 || b == bTurba) continue;
+                // Defensivo: ninguna otra base puede quedar "más alcanzable"
+                // que b0 a fuego propio, o Game/Crisol.DecidirHornada (Limo
+                // -> la banda MÁS ALTA alcanzable) sacaría esa otra base en
+                // el beat 1. ANTES (D1) esto clampeaba HACIA ABAJO, por
+                // debajo de arena -- si la base colisionante era la única vía
+                // de otro combustible más adelante en la escalera, bajarla
+                // la habría eclipsado exactamente igual que a la turba.
+                // AHORA empuja hacia ARRIBA, justo por encima del tier0: un
+                // empujón mínimo (la banda seguía queriendo estar cerca del
+                // hueco) que la saca de la competencia con arena sin
+                // hundirla por debajo de nadie.
                 if (u._extraccionRaw[b] > extraccionB0 && u._extraccionRaw[b] <= CrisolTier0Raw)
-                    u._extraccionRaw[b] = (byte)(extraccionB0 - 5);
+                    u._extraccionRaw[b] = (byte)(CrisolTier0Raw + 1);
             }
+
+            // ---- Override 1c (integración ronda 48): BANDAS POR DECRETO ----
+            // Semilla Cero es una seed DE AUTOR: la escalera fuel->base no
+            // puede depender de la permutación ±4 del sorteo (bandaOrden en
+            // SortearTablaPersistencia reparte {106,124,136,148,158} al azar
+            // entre las bases; con jitter, dos bandas pueden caer bajo la
+            // misma cima y la más baja queda ECLIPSADA por el argmax de
+            // Crisol.DecidirHornada -- exactamente la clase de accidente que
+            // causó D1). Se fijan las tres bandas restantes a los peldaños
+            // exactos de la escalera del contrato §1b:
+            //   rescoldo 120 -> arena  (100, override 1)
+            //   turba    130 -> ARCILLA (124)
+            //   ceniza   145 -> CALIZA  (136)
+            //   carbón ~185 -> SAL     (158; tier1 natural 165..190 SIEMPRE
+            //                            la alcanza, ver TempCombustibleRawBase)
+            // Cada peldaño extrae UNA base nueva y solo una: la escalera es
+            // exacta por construcción, no por suerte. (El caótico no cambia:
+            // esto solo corre en AplicarOverridesSemillaCero.)
+            u._extraccionRaw[1] = 124; // arcilla ("la 2ª arena" de la tabla real)
+            u._extraccionRaw[2] = 136; // caliza
+            u._extraccionRaw[4] = 158; // sal ("la última en soltar")
+
+            // ---- Override 1b: turba combustible tier bajo (contrato §1b) ----
+            const byte turbaCombustibleRaw = 130;
+            byte polvoTurba = MaterialId.MatDe(bTurba, EstadoMateria.Polvo);
+            u._esCombustiblePorMaterial[polvoTurba] = true;
+            u._tempCombustibleRawPorMaterial[polvoTurba] = turbaCombustibleRaw;
+            var turbaDef = u.Materials[polvoTurba];
+            turbaDef.flammable = true;
+            turbaDef.ignitionTemp = turbaCombustibleRaw;
+            turbaDef.burnsInto = MaterialId.Fire; // camino legado, sin efecto real mientras combustReserva>0 (ver MaterialDef.combustReserva).
+            // "Arde mal y humeante, mejor que ceniza (24/192t=6,4s), peor que
+            // carbón (90/720t=24s, ver el bloque general de Calcinado
+            // combustible más abajo)": interpolado a mano, ver el docblock
+            // del punto 1b de arriba.
+            turbaDef.combustReserva = 48;      // 48*8=384 ticks=12,8s.
+            turbaDef.combustPasoTicks = 8;
+            turbaDef.combustCalorRaw = 13;
+            turbaDef.combustHumoPct = 24;      // más sucia que ceniza(20) Y que carbón(15): "humeante" es literal.
+            turbaDef.combustPropagacionPct = 14;
+            turbaDef.combustLenguaPct = 18;
+            turbaDef.combustResiduo = MaterialId.Ash; // materia prima sin refinar quemada -> CENIZA (regla 54: la evidencia que deja un fracaso), no Brasa como el Calcinado ya refinado.
 
             // ---- Override 2: banda de calcinación estrecha + techo de Ash ----
             // Números elegidos con margen generoso entre sí (verificados a
@@ -3617,11 +3783,15 @@ namespace Alkahest.Sim
             u._umbralPersistenciaRaw[calcinadoB0] = techoCalcinadoB0;
 
             // ---- Override 3: calcinado combustible garantizado (verificación, no cambio) ----
-            int baseCombustibleGarantizada = u.BaseCombustibleGarantizada;
+            // (baseCombustibleGarantizada ya se leyó arriba, antes del override 1 -- D1 la necesitaba.)
+            // `tierUnoDeB1` se calcula SIEMPRE (no solo en editor): el override 7 y
+            // el log final de más abajo lo necesitan también bajo DEVELOPMENT_BUILD
+            // sin UNITY_EDITOR -- declararlo dentro de un `#if UNITY_EDITOR` sin
+            // llaves (como antes) lo habría dejado inexistente en ese caso (CS0103).
+            byte tierUnoDeB1 = u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado));
 #if UNITY_EDITOR
             UnityEngine.Debug.Assert(baseCombustibleGarantizada != b0,
                 "[ChaosAlchemy][SemillaCero] BaseCombustibleGarantizada coincide con SemillaCeroBaseIdx: la trampa del beat 4 (\"alimenta el brasero\") no tiene con qué dispararse -- recongelar SemillaCero con otra seed vecina.");
-            byte tierUnoDeB1 = u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado));
             UnityEngine.Debug.Assert(tierUnoDeB1 >= techoCalcinadoB0,
                 "[ChaosAlchemy][SemillaCero] El combustible garantizado de esta seed no supera el techo de calcinación de la base 0: la trampa del beat 4 no se dispara -- recalibrar techoCalcinadoB0 o recongelar la seed.");
 #endif
@@ -3663,8 +3833,105 @@ namespace Alkahest.Sim
             ashDef.combustLenguaPct = 15;
             ashDef.combustResiduo = MaterialId.Empty; // ya es el residuo de un fracaso anterior: al agotarse, no deja nada más.
 
+            // ---- Override 5 (D2): la arena YA NO se disuelve ----
+            u._solubleEnAguaPorMaterial[polvoB0] = false;
+            u._solubleEnAguaPorMaterial[calcinadoB0] = false; // mismo id ya calculado arriba (override 2): Polvo/Calcinado son las DOS variantes que SolubleEstado consulta.
+
+            // ---- Override 6 (contrato §1b): la turba flota (beat 5.2, FlotaInsoluble) ----
+            // "Vegetal, flota" es físicamente real -- se GARANTIZA a mano en
+            // vez de fiar el sorteo natural de densidad/solubilidad de esta
+            // base (D2 ya demostró que ese sorteo puede salir mal). Clamp
+            // defensivo: no toca nada si ya lo cumplía. ANTES del Assert de
+            // G3 de abajo a propósito: G3 tiene que leer el estado YA
+            // finalizado de la solubilidad de la turba, no uno a medias.
+            if (turbaDef.density >= u.Materials[MaterialId.Water].density)
+                turbaDef.density = (short)(u.Materials[MaterialId.Water].density - 20);
+            u._solubleEnAguaPorMaterial[polvoTurba] = false;
+
+#if UNITY_EDITOR
+            {
+                // (D2) Releer G3 (soluble+insoluble alcanzables) CON los
+                // overrides 5 y 6 YA aplicados -- el solver de Create() la
+                // evaluó ANTES de este método, con SolubleBase[b0] todavía
+                // true. "Alcanzable" aquí = por Crisol (ExtraccionRaw <=
+                // mejor cima real, turbaCombustibleRaw o el tier1 del
+                // combustible garantizado, lo que sea más alto) o por la
+                // veta (la propia base combustible garantizada, que ya no
+                // pasa por el limo).
+                byte mejorCimaReal = tierUnoDeB1 > turbaCombustibleRaw ? tierUnoDeB1 : turbaCombustibleRaw;
+                bool haySoluble = false, hayInsoluble = false;
+                for (int b = 0; b < MaterialId.BasesCount; b++)
+                {
+                    bool alcanzable = b == bTurba || u.ExtraccionRaw(b) <= mejorCimaReal;
+                    if (!alcanzable) continue;
+                    bool soluble = u.SolubleEnAgua(MaterialId.MatDe(b, EstadoMateria.Polvo));
+                    if (soluble) haySoluble = true; else hayInsoluble = true;
+                }
+                UnityEngine.Debug.Assert(haySoluble && hayInsoluble,
+                    "[ChaosAlchemy][SemillaCero] G3 rota tras apagar SolubleBase[base0] (D2): ya no hay soluble+insoluble alcanzables a la vez -- ajustar SOLO otra base soluble (nunca reencender la arena), CONTRATO_RONDA48.md §1b.");
+            }
+#endif
+
+            // ---- Override 7: LA ESCALERA, impresa y verificada contra los números REALES de esta instancia ----
+            // (contrato §1b/§1c, regla 51 de CLAUDE.md: "un assert que no se
+            // puede leer no protege nada"). Turba se APARTA de la escalera
+            // del limo (override 1, D1) -- se llega a ella tallando, no
+            // calentando -- así que se documenta aparte y se excluye del
+            // barrido de eclipse: las 4 bases que SÍ dependen de la escalera
+            // son arena/arcilla/caliza/sal.
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Overrides aplicados: base0={b0} (extraccion={u.ExtraccionRaw(b0)}, calcinacion={u.CalcinacionRaw(b0)}, techoCalcinado={u.UmbralPersistenciaRaw(calcinadoB0)}, fusion={u.FusionRaw(b0)}), combustibleGarantizado=base{baseCombustibleGarantizada} (tier1={u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado))}), cenizaTier0_5={u.TempCombustibleRaw(MaterialId.Ash)}, ganadorGarantizado(sin tocar)={u.GanadorGarantizado}.");
+            {
+                byte[] cimaEscalera = { CrisolTier0Raw, turbaCombustibleRaw, ashTier0_5, tierUnoDeB1 };
+                string[] etiquetaCima = { "rescoldo (sin combustible)", "turba cruda (veta, tallada)", "ceniza (residuo del beat 4, tier 0.5)", "carbón vegetal (combustible garantizado, tallado y calcinado)" };
+
+                var sbEsc = new System.Text.StringBuilder();
+                sbEsc.Append($"[ChaosAlchemy][SemillaCero] ESCALERA fuel->base (seed {SemillaCero}), bandas REALES de esta instancia:");
+                bool huboEclipse = false;
+                for (int b = 0; b < MaterialId.BasesCount; b++)
+                {
+                    if (b == bTurba)
+                    {
+                        sbEsc.Append($" base{b}=APARTADA(tallada de la veta, no del limo)");
+                        continue;
+                    }
+                    byte banda = u.ExtraccionRaw(b);
+                    // ARGMAX real (integración ronda 48): una base se extrae a
+                    // la cima C solo si es LA MÁS ALTA <= C (Crisol.cs:1300),
+                    // no basta con "banda <= C". Se busca la primera cima de
+                    // la escalera donde ESTA base gana el argmax.
+                    int cimaIdx = -1;
+                    for (int i = 0; i < cimaEscalera.Length; i++)
+                    {
+                        if (banda > cimaEscalera[i]) continue;
+                        bool ganaArgmax = true;
+                        for (int ob = 0; ob < MaterialId.BasesCount; ob++)
+                        {
+                            if (ob == b || ob == bTurba) continue;
+                            byte otra = u.ExtraccionRaw(ob);
+                            if (otra <= cimaEscalera[i] && otra > banda) { ganaArgmax = false; break; }
+                        }
+                        if (ganaArgmax) { cimaIdx = i; break; }
+                    }
+                    if (cimaIdx < 0)
+                    {
+                        huboEclipse = true;
+                        sbEsc.Append($" base{b}=ECLIPSADA(banda={banda}, ninguna cima de la escalera la alcanza)");
+                    }
+                    else
+                    {
+                        sbEsc.Append($" base{b}=banda{banda}->con {etiquetaCima[cimaIdx]}");
+                    }
+                }
+                UnityEngine.Debug.Log(sbEsc.ToString());
+#if UNITY_EDITOR
+                UnityEngine.Debug.Assert(!huboEclipse,
+                    "[ChaosAlchemy][SemillaCero] ECLIPSE en la escalera fuel->base: alguna de las 4 bases que salen del limo no tiene cima que la alcance (D1, CONTRATO_RONDA48.md §1b) -- ver el log de arriba para cuál.");
+                UnityEngine.Debug.Assert(u.ExtraccionRaw(1) <= turbaCombustibleRaw,
+                    $"[ChaosAlchemy][SemillaCero] La banda de arcilla (base1={u.ExtraccionRaw(1)}) no cabe bajo la cima de la turba ({turbaCombustibleRaw}) -- contrato §1b: subir el tier de la turba justo por encima, NUNCA bajar la banda de arcilla.");
+#endif
+            }
+
+            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Overrides aplicados: base0={b0} (extraccion={u.ExtraccionRaw(b0)}, calcinacion={u.CalcinacionRaw(b0)}, techoCalcinado={u.UmbralPersistenciaRaw(calcinadoB0)}, fusion={u.FusionRaw(b0)}), turba=base{bTurba} (combustibleCrudo={u.TempCombustibleRaw(polvoTurba)}, tier1Calcinado={tierUnoDeB1}, densidad={turbaDef.density} vs agua={u.Materials[MaterialId.Water].density}, soluble={u.SolubleEnAgua(polvoTurba)}), cenizaTier0_5={u.TempCombustibleRaw(MaterialId.Ash)}, ganadorGarantizado(sin tocar)={u.GanadorGarantizado}.");
 #endif
         }
 

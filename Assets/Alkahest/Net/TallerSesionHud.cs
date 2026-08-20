@@ -2,6 +2,13 @@ using UnityEngine;
 using Alkahest.Game;
 using FriendsLoop.Networking;
 using FriendsLoop.Platform;
+// (integración pt48) `using Netcode.Transports;` RETIRADO: ese namespace vive
+// en el asmdef del transporte Steam vendorizado, que Alkahest.Runtime NO
+// referencia (solo FriendsLoop.Runtime lo hace) -- compilaba en el rig del
+// sandbox (un solo ensamblado con todos los refs, punto ciego de la regla 53)
+// y reventaba en Unity con CS0246. La sonda del transporte se consulta ahora
+// vía SessionCoordinator.TransporteSteamSoportado, que vive del lado correcto
+// de la frontera de ensamblados.
 
 namespace Alkahest.Net
 {
@@ -28,6 +35,28 @@ namespace Alkahest.Net
         private string _avisoLocal;
         private float _avisoLocalHasta; // (fix legibilidad) el aviso caduca solo y desaparece al arrancar la sesión.
         private const int VentanaId = 0x414C4B4E; // "ALKN"
+
+        /// <summary>
+        /// (playtest 48, CONTRATO_RONDA48.md D3/§2c: "el error caduca y
+        /// ofrece salida") ANTES `sessionCoordinator.LastError` se pintaba
+        /// SIN caducidad y solo se limpiaba dentro de los tres métodos
+        /// públicos de <see cref="SessionCoordinator"/> (StartHost/JoinLocal/
+        /// JoinSteamLobby, que ponen `LastError = string.Empty` al ENTRAR) --
+        /// así que un error viejo podía convivir en pantalla con el panel de
+        /// "conectado" (invitado) si el jugador reintentaba y esta vez SÍ
+        /// entraba, dando el efecto de "error fantasma" que describe D3. Este
+        /// HUD lleva su PROPIA ventana de vida sobre una COPIA local del
+        /// mensaje (mismo trato que <see cref="_avisoLocal"/>/
+        /// <see cref="_avisoLocalHasta"/>, líneas de arriba): se arma solo
+        /// cuando el mensaje CAMBIA (nunca allocs nuevas -- se compara la
+        /// referencia/contenido que ya llegó de <see cref="SessionCoordinator.LastError"/>,
+        /// no se construye ningún string aquí) y se apaga también, sin
+        /// esperar a que caduque, en cuanto <see cref="DibujarVentana"/> ve
+        /// el estado Hosting o Client (ver ahí).
+        /// </summary>
+        private string _errorMostrado;
+        private float _errorHasta;
+        private const float ErrorVentanaSeg = 14f; // mismo orden que _avisoLocalHasta (14f) -- de sobra para leerlo, no permanente.
 
         /// <summary>Jugadores máximos del lobby. Cuatro: el mandato de Cesar para este POC.</summary>
         private const int MaxJugadores = 4;
@@ -129,11 +158,31 @@ namespace Alkahest.Net
 
             SessionCoordinator.ConnectionState estado = sessionCoordinator.CurrentState;
 
+            // (playtest 48, §2c) LA VENTANA DE CADUCIDAD del error: se arma
+            // SOLO cuando el mensaje cambia (sin allocs -- el propio string
+            // ya viene de SessionCoordinator, no se construye ninguno
+            // nuevo aquí) y se apaga de golpe al entrar en una sesión real
+            // (Hosting/Client), que es justo el "limpiado también al entrar
+            // en Hosting/Client" del contrato: sin esto, un jugador que
+            // reintenta y esta vez SÍ conecta seguiría viendo el error
+            // viejo debajo del panel de "conectado".
+            string errorActual = sessionCoordinator.LastError;
+            if (!string.IsNullOrEmpty(errorActual) && !ReferenceEquals(errorActual, _errorMostrado))
+            {
+                _errorMostrado = errorActual;
+                _errorHasta = Time.time + ErrorVentanaSeg;
+            }
+            if (estado == SessionCoordinator.ConnectionState.Hosting || estado == SessionCoordinator.ConnectionState.Client)
+            {
+                _errorMostrado = null;
+            }
+            bool errorVigente = !string.IsNullOrEmpty(_errorMostrado) && Time.time < _errorHasta;
+
             switch (estado)
             {
                 case SessionCoordinator.ConnectionState.Offline:
                 case SessionCoordinator.ConnectionState.Starting:
-                    DibujarDesconectado(estado);
+                    DibujarDesconectado(estado, errorVigente);
                     break;
                 default:
                     DibujarConectado(estado);
@@ -147,19 +196,75 @@ namespace Alkahest.Net
                 GUILayout.Label(_avisoLocal, UiStyles.Cuerpo);
                 if (GUILayout.Button("entendido", UiStyles.Boton)) _avisoLocal = null;
             }
-            if (!string.IsNullOrEmpty(sessionCoordinator.LastError))
+            if (errorVigente)
             {
                 GUILayout.Space(6f);
-                GUILayout.Label("Algo falló: " + sessionCoordinator.LastError, UiStyles.CuerpoTenue);
+                GUILayout.Label("Algo falló: " + _errorMostrado, UiStyles.CuerpoTenue);
+                if (GUILayout.Button("entendido", UiStyles.Boton)) _errorMostrado = null;
             }
 
             GUILayout.Space(4f);
+            // (playtest 48, D4/§2e) BOTÓN AJUSTES CHICO: el mismo panel de
+            // Game/DayCycle.cs, para que el lobby (y cualquier estado de
+            // fallo) tenga una salida sin depender del avatar -- ver
+            // AbrirAjustesDayCycle() para el porqué de la reflexión (DayCycle.cs
+            // no está en la lista de archivos de este encargo).
+            if (GUILayout.Button("AJUSTES", UiStyles.Boton, GUILayout.Height(UiStyles.S(22f))))
+            {
+                AbrirAjustesDayCycle();
+            }
             GUILayout.Label("F9 esconde este panel.", UiStyles.CuerpoTenue);
 
             GUI.DragWindow();
         }
 
-        private void DibujarDesconectado(SessionCoordinator.ConnectionState estado)
+        /// <summary>
+        /// (playtest 48, D4/§2e) Abre el panel de AJUSTES de
+        /// <see cref="Game.DayCycle"/> desde el HUD del lobby, SIN duplicar
+        /// UI (el contrato lo pide explícitamente: "sin duplicar UI: exponer
+        /// un `AbrirAjustes()` público si hace falta"). `Game/DayCycle.cs`
+        /// NO está en la lista de archivos EXCLUSIVOS de este encargo (ver
+        /// CONTRATO_RONDA48.md §2, "Archivos de R"), así que no se le puede
+        /// añadir ese método público sin salirse del contrato de propiedad
+        /// de archivos disjunta (regla 41 de CLAUDE.md). En su lugar se
+        /// reutiliza el MISMO patrón que ya usa este proyecto para cruzar
+        /// esa frontera sin editar el archivo ajeno
+        /// (Net/SimSync.cs::Awake ya cablea por reflexión un campo privado
+        /// de FriendsLoop.Networking.SessionCoordinator, otro archivo fuera
+        /// de su propia lista, con el mismo razonamiento): se garantiza que
+        /// exista la instancia de pausa del lobby con el método público
+        /// idempotente <see cref="DayCycle.ForzarDesbloqueoSesion"/>, y se
+        /// marca su campo privado `_ajustesAbiertos` por reflexión -- el
+        /// MISMO campo que ya leen/escriben <c>ManejarEscape</c>/
+        /// <c>DrawTitle</c>/<c>DrawPausa</c> de esa clase, así que el panel
+        /// que se abre es literalmente el mismo, no una copia.
+        /// COSTURA DOCUMENTADA (para el informe de la ronda): el día que
+        /// Game/DayCycle.cs entre en el alcance de este encargo, la forma
+        /// correcta es reemplazar esto por un `DayCycle.AbrirAjustes()`
+        /// público de verdad.
+        /// </summary>
+        private static void AbrirAjustesDayCycle()
+        {
+            DayCycle.ForzarDesbloqueoSesion(); // idempotente: no-op si ya existe una instancia (título clásico) o crea la de pausa del lobby multi.
+            var dayCycle = FindAnyObjectByType<DayCycle>();
+            if (dayCycle == null)
+            {
+                Debug.LogWarning("[ChaosAlchemy][Red] AJUSTES: no se encontró ningún DayCycle en la escena tras ForzarDesbloqueoSesion.");
+                return;
+            }
+
+            var campo = typeof(DayCycle).GetField("_ajustesAbiertos",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (campo == null)
+            {
+                Debug.LogWarning("[ChaosAlchemy][Red] AJUSTES: DayCycle._ajustesAbiertos no existe (¿renombrado?) -- botón sin efecto.");
+                return;
+            }
+
+            campo.SetValue(dayCycle, true);
+        }
+
+        private void DibujarDesconectado(SessionCoordinator.ConnectionState estado, bool errorVigente)
         {
             bool arrancando = estado == SessionCoordinator.ConnectionState.Starting;
 
@@ -167,6 +272,24 @@ namespace Alkahest.Net
             GUILayout.Space(4f);
 
             GUI.enabled = !arrancando;
+
+            // (playtest 48, D3/§2c) "JUGAR SOLO EN ESTE PC": cuando hay un
+            // error vigente, la salida más honesta no es pedirle al jugador
+            // que reintente el mismo camino que acaba de fallar -- es
+            // ofrecerle DE INMEDIATO el camino que YA funciona (el mismo
+            // StartHost(LocalLoopback) del botón "ANFITRIÓN en local" de más
+            // abajo, ver ese botón). Grande y arriba de todo, justo donde
+            // aparece el error: es la respuesta directa a "el multi en
+            // solitario sale roto" del feedback de Cesar.
+            if (errorVigente)
+            {
+                if (GUILayout.Button("JUGAR SOLO EN ESTE PC", UiStyles.Boton, GUILayout.Height(UiStyles.S(30f))))
+                {
+                    _errorMostrado = null;
+                    sessionCoordinator.StartHost(TransportMode.LocalLoopback, MaxJugadores);
+                }
+                GUILayout.Space(6f);
+            }
 
             // ANFITRIÓN: abre el taller. El modo de transporte por defecto lo
             // decide el propio coordinador leyendo `-transport local|steam` de
@@ -182,6 +305,17 @@ namespace Alkahest.Net
                 var modo = sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam);
                 bool steamListo = FriendsLoop.Platform.SteamBootstrap.Instance != null
                     && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady;
+                // (playtest 48, §2c) LA SONDA BARATA, ANTES del StartHost de
+                // Steam: SteamBootstrap.IsSteamReady solo dice "el cliente de
+                // Steam respondió al arrancar la app" -- no dice nada del
+                // TRANSPORTE en sí (SteamNetworkingSocketsTransport.IsSupported
+                // existía desde antes, nadie lo consultaba desde este HUD).
+                // Combinar las dos reduce el número de veces que se llega a
+                // intentar StartHost(Steam) para acabar cayendo en la rama de
+                // fallo de SessionCoordinator (D3/§2a) -- más barato detectar
+                // aquí que dejar que NGO/el transporte lo descubran solos.
+                if (steamListo)
+                    steamListo = sessionCoordinator.TransporteSteamSoportado; // (integración pt48) la sonda vive en SessionCoordinator: Alkahest.Runtime no referencia el asmdef del transporte.
                 bool cayoALocal = modo == TransportMode.Steam && !steamListo;
                 if (cayoALocal) modo = TransportMode.LocalLoopback;
 

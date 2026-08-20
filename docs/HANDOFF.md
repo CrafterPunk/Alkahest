@@ -3151,3 +3151,122 @@ runtime y el compilador fiel no puede cazarlo (regla 53 no cubre restricciones d
 FIX: centinela -1 + carga perezosa en el primer acceso (Awake/OnGUI son contextos permitidos),
 ambos archivos, con docblocks espejo. Barrido del resto del proyecto: ningún otro inicializador
 estático llama API de Unity. REGLA 56 nueva en CLAUDE.md. Verificado en vivo tras redeploy.
+
+## Playtest 48 — EL DESATASCO (la veta a la vista, el multi que falla limpio, los dos fuegos que se explican)
+
+Feedback de Cesar sobre el 47b: Semilla Cero TRABADA ("conseguí sílice, con agua
+conseguí tinte, y de ahí no evolucioné; no pude cumplir lo del tostado"), el multi
+en solitario roto ("StartHost devolvió false" + panel de INVITADO + mundo de ruido
+gris), los menús nuevos invisibles, y los dos fuegos del inicio sin explicación
+(la "N roja horrible" del calentador, el brasero chiquitito que no comunica).
+
+### Los tres diagnósticos (detalle completo en docs/CONTRATO_RONDA48.md §0)
+- **D1 EL ECLIPSE DE LA VETA (regla 57 nueva)**: la extracción del limo elige la
+  banda MÁS ALTA ≤ cima (Crisol:1300) y la cima depende SOLO del combustible
+  (Crisol:1131). El override 1 de Semilla Cero clampaba la base combustible
+  garantizada (banda natural 106±4) POR DEBAJO de la arena (100): eclipse
+  permanente → sin turba → sin carbón → calcinación de arena (banda 130)
+  inalcanzable a rescoldo (120) → beat 4 imposible → arco muerto. NADIE pudo
+  haber completado jamás el arco: el "trabado" de Cesar era estructural.
+- **D2 EL "TINTE"**: la arena salió SOLUBLE del sorteo de 777002; el diseño dice
+  "la arena no se disuelve" y solo omitió su entrada de identidad — la física
+  seguía disolviendo y el nombre caía al provisional "tinte …"
+  (SubstanceKnowledge:579). Doble violación (ley editorial + "sin nombres pobres").
+- **D3 EL MULTI QUE SE UNÍA A SÍ MISMO**: StartHost false NO limpiaba (lobby Steam
+  huérfano, m_IsHosting sucio) y HandleLobbyJoined no tenía NI UNA guarda → el
+  LobbyEnter del PROPIO lobby entraba por la rama de invitado → StartClient contra
+  uno mismo → "Estás en el taller de otro". El transporte Steam vendorizado SIEMPRE
+  devuelve true en StartServer: un StartHost false es una EXCEPCIÓN dentro del
+  arranque de NGO (tragada por su try/catch), jamás "el socket de Steam falló".
+  El ruido gris = el mundo SÍ se creó y la cámara sin aprendiz cae al centro
+  (384,144) = piedra maciza. El .unity del 47b además intercambió el orden de
+  spawn SimSync/MaquinaSync (regenerado por el director, sin querer).
+
+### Lo que entrega la ronda (tres encargos Sonnet paralelos + integración Fable)
+- **V — LA VETA A LA VISTA**: veta de turba orgánica (salt 569, ~359 celdas,
+  x80..83 y139..258, muro izquierdo del cuarto íntimo ensanchado +1 pilar solo en
+  Semilla Cero) tallable con C desde el arranque; turba combustible crudo tier 130
+  (arde 12,8s, humeante, residuo ceniza — regla 55 respetada); ESCALERA POR
+  DECRETO: rescoldo 120→arena(100) · turba 130→ARCILLA(124) · ceniza 145→
+  CALIZA(136) · carbón tier1(~185)→SAL(158) — bandas fijadas en el override
+  (integración: en una seed de autor los peldaños no se heredan del sorteo), log
+  de arranque "ESCALERA fuel->base" con verificación ARGMAX real + Asserts de
+  eclipse; arena insoluble (D2) y turba flotante-insoluble garantizada (beat 5.2);
+  beat 1 fijado a base0 (la veta ya no puede secuestrar el milagro); línea nueva
+  del Maestro en el beat 4: "Esa veta parda del muro es TURBA: tállala (C), el
+  brasero la come."
+- **R — EL MULTI QUE FALLA LIMPIO**: StartHost false ahora cierra TODO (Shutdown +
+  LeaveLobby + banderas + SessionLeft + Offline) con try/catch propio que captura
+  la excepción REAL de NGO en LastError ("Steam creó la sala pero la partida no
+  pudo arrancar: …"); HandleLobbyJoined con tres guardas (estado ≠ Offline / mi
+  propio SteamID / host pendiente); LastError caduca a 14s con "entendido" y se
+  limpia al conectar; botón "JUGAR SOLO EN ESTE PC" cuando hay error (LocalLoopback,
+  el camino que ya existía enterrado); sonda IsSupported+IsSteamReady antes del
+  intento Steam; MaquinaSync blindado con try/catch (spawn y Update — una
+  excepción ahí tumba StartHost entero y mudo); la pausa/AJUSTES existen desde el
+  PRIMER FRAME del lobby multi (ForzarDesbloqueoSesion al detectar escena, no tras
+  el avatar) + botón AJUSTES en el panel del lobby (reflexión sobre
+  _ajustesAbiertos, costura documentada). COSTURA PENDIENTE: SimSync:330
+  CrearMundoAnfitrion sin try/catch (candidato #1 del fallo original, archivo
+  fuera de alcance esta ronda).
+- **L — LOS DOS FUEGOS SE EXPLICAN**: fuera la resistencia zigzag roja (la "N
+  roja", documentada como idea descartada regla 15) → losa de piedra con LECHO DE
+  BRASAS que laten (paleta de las brasas reales pt39, apagada = ceniza gris);
+  ChillStone armonizada (dientes de escarcha más finos); rótulos de oficio:
+  "PLACA DE CALOR — entibia la ZONA de encima" / "PIEDRA GÉLIDA — enfría la ZONA
+  de encima" / consejo único "el crisol TRANSFORMA por hornadas; la placa solo
+  CALIENTA la zona"; brasero del crisol +63% de área (5x6→7x7 interior, huella
+  37→39, colchón a la Prensa 6 celdas verificado) con pila de combustible visible;
+  RÓTULO DE CARGA del crisol ("cámara: arena de sílice · 62%" / "cesto: turba ×4 →
+  fuego hasta ~130°"), cacheado por firma, cero allocs.
+
+### El guion de prueba esperado (Semilla Cero, ahora completable)
+limo al crisol + E → arena (beat 1-3) → beat 4 pide TOSTADO → tallar la veta
+parda (C) → turba al brasero → calcina en banda 130..170 → si en cambio usas
+carbón (turba calcinada, tier1 ~185) te pasas → CENIZA + lección forense + la
+ceniza es combustible medido (145) → preguntas 5.1-5.4 → escalera completa:
+turba→arcilla, ceniza→caliza, carbón→sal → los 6 cruces de la Fase A por fin
+alcanzables (mortero, clínker, hormigón, vidrio de botella, lejía, esmaltado).
+
+### Deudas de la ronda
+SimSync.CrearMundoAnfitrion sin try/catch (D3, candidato #1); AbrirAjustes()
+público en DayCycle (retirar la reflexión de TallerSesionHud); regenerar la
+escena MULTI en el PC de Cesar (orden de spawn del .unity del 47b — el código ya
+es tolerante, pero el orden correcto no estorba); SimLevelBuilder comenta
+"CRISOL 37 celdas" y ya son 39 (comentario, no código); verificación visual en
+vivo de placas/brasero/veta (regla 52) — la hace el director con capturas antes
+de entregar; la trampa del beat 4 ya no es OBLIGATORIA (turba 130 calcina bien a
+la primera; el sobrecalentamiento queda para quien use carbón) — alineado con el
+mandato de Cesar "restamos dificultad".
+
+### Verificación EN VIVO de la ronda (regla 52, cabina del director) y 3 fixes que nacieron de ella
+1. **CS0246 en el editor que el rig no vio**: `using Netcode.Transports;` en
+   TallerSesionHud — ese namespace vive en el asmdef del transporte Steam, que
+   Alkahest.Runtime NO referencia. El compilador fiel une todo en UN ensamblado
+   (punto ciego de la regla 53 con fronteras de asmdef). Fix: la sonda pasó a
+   `SessionCoordinator.TransporteSteamSoportado` (el lado correcto de la
+   frontera; además es el papel declarado de la fachada).
+2. **La veta se derramó en cascada** (primera colocación en x80..83 = AIRE del
+   cuarto: CuartoX0 es la primera columna de aire, la cara del muro es 79;
+   medido el grid en vivo: roca maciza real en x68..79). Reubicada y luego
+   SELLADA (x73..78 tras la cara intacta x79) porque la turba es polvo y toda
+   cara expuesta se desliza sola — enterró la boca del crisol en la segunda
+   prueba. Descubrimiento: ASOMO de 3 celdas a ras de piso (a lo sumo una
+   migaja se desliza como señuelo) + la línea del Maestro del beat 4. Conteo
+   final EN EDITOR: 445 celdas (banda 250-500) — la réplica Python del hash
+   había prometido 359 sobre el sitio equivocado: el assert leíble salvó la
+   ronda dos veces.
+3. **El editor SE COME Escape** (modo Play Focused de la vista Game): la 'a'
+   de moverse llega al Input System, Escape no — por eso Cesar JAMÁS vio la
+   pausa del pt47 ("no vi los menús"): prueba en el editor. Fix: botón
+   **MENÚ · Esc** en la esquina inferior derecha del HUD (Playing, también en
+   multi) que abre la MISMA pausa con el mouse; Escape sigue para las builds.
+
+Verificado en vivo con capturas: escalera fuel→base impresa sin eclipses
+(100/124/136/158 contra 120/130/145/185), veta legible y contenida, título con
+AJUSTES, MENÚ→PAUSA→AJUSTES completo con mouse, brasero con lecho de brasas,
+placa nueva sin zigzag, lobby multi con AJUSTES/MENÚ desde el primer frame, y
+**ANFITRIÓN por Steam levanta a la primera** (lobby id, mundo, 36 máquinas,
+avatar dorado) tras regenerar las DOS escenas. Deudas nuevas: SimSync:330
+CrearMundoAnfitrion sin try/catch (candidato #1 del fallo original);
+AbrirAjustes() público en DayCycle (retirar la reflexión del HUD multi).

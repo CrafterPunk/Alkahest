@@ -49,6 +49,27 @@ namespace FriendsLoop.Networking
         /// <summary>Último mensaje de error legible, útil para mostrarlo en la UI. Cadena vacía si no hay error.</summary>
         public string LastError { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// (integración pt48, §2c) Sonda barata del transporte Steam para la UI:
+        /// `SteamNetworkingSocketsTransport.IsSupported` vive en el asmdef del
+        /// transporte vendorizado, que Alkahest.Runtime NO referencia -- el HUD
+        /// (TallerSesionHud) la consulta a través de esta fachada, que es
+        /// exactamente el papel de SessionCoordinator ("la UI nunca toca los
+        /// transportes directamente", docblock de la clase). Devuelve false si
+        /// no hay transporte Steam configurado o Steamworks está deshabilitado.
+        /// </summary>
+        public bool TransporteSteamSoportado
+        {
+            get
+            {
+#if !DISABLESTEAMWORKS && STEAMWORKSNET && NETCODEGAMEOBJECTS
+                return steamTransport != null && steamTransport.IsSupported;
+#else
+                return false;
+#endif
+            }
+        }
+
         /// <summary>Se dispara cuando cambia el estado de conexión.</summary>
         public event Action<ConnectionState> OnStateChanged;
 
@@ -362,9 +383,59 @@ namespace FriendsLoop.Networking
             }
 
             networkManager.NetworkConfig.NetworkTransport = steamTransport;
-            if (!networkManager.StartHost())
+
+            // (playtest 48, CONTRATO_RONDA48.md D3/§2a: "el multi que se une
+            // a sí mismo") NGO se TRAGA la excepción real dentro de
+            // HostServerInitialize y solo devuelve false -- así que un
+            // StartHost==false en Steam NUNCA significaba "el socket de
+            // Steam falló" (el mensaje viejo mentía), sino una excepción
+            // interna que el jugador no podía ver. Try/catch PROPIO: si NGO
+            // alguna vez SÍ propaga (versión/transporte distintos), aquí se
+            // captura tipo+mensaje -- la única forma de distinguir la causa
+            // real en vez de un "StartHost devolvió false" mudo.
+            bool inicioOk;
+            string excepcionCapturada = null;
+            try
             {
-                RaiseError("No se pudo iniciar el host de Steam (StartHost devolvió false).");
+                inicioOk = networkManager.StartHost();
+            }
+            catch (Exception ex)
+            {
+                inicioOk = false;
+                excepcionCapturada = ex.GetType().Name + ": " + ex.Message;
+            }
+
+            if (!inicioOk)
+            {
+                // (D3) EL FALLO DE HOST CIERRA TODO -- mismo trabajo que
+                // Disconnect(), para no dejar el lobby de Steam vivo con
+                // NetworkManager a medias: ANTES esta rama solo hacía
+                // SetState(Offline) y dejaba CurrentLobbyId/el lobby de Steam
+                // intactos, así que el LobbyEnter_t del propio lobby (evento
+                // de Steam que también llega al anfitrión) acababa entrando
+                // por HandleLobbyJoined sin que nada lo distinguiera de una
+                // invitación real -- el jugador host terminaba uniéndose a
+                // su propio lobby como invitado, con el mundo de ruido gris
+                // (TrySpawnRed nunca pasaba sus puertas). Orden EXACTO del
+                // contrato: Shutdown, LeaveLobby, limpiar estado local,
+                // avisar con el mensaje real, RaiseSessionLeft, y RECIÉN
+                // ENTONCES SetState(Offline).
+                if (networkManager.IsListening || networkManager.IsServer || networkManager.IsClient)
+                {
+                    networkManager.Shutdown();
+                }
+
+                if (steamLobbyService != null)
+                {
+                    steamLobbyService.LeaveLobby();
+                }
+
+                CurrentLobbyId = 0;
+                m_PendingHostAfterLobby = false;
+
+                string detalle = excepcionCapturada ?? "StartHost devolvió false sin lanzar una excepción explícita (revisa el Player.log).";
+                RaiseError("Steam creó la sala pero la partida no pudo arrancar: " + detalle);
+                SessionEvents.RaiseSessionLeft();
                 SetState(ConnectionState.Offline);
                 return;
             }
@@ -381,6 +452,44 @@ namespace FriendsLoop.Networking
         private void HandleLobbyJoined(ulong hostSteamId)
         {
 #if !DISABLESTEAMWORKS && STEAMWORKSNET && NETCODEGAMEOBJECTS
+            // (playtest 48, CONTRATO_RONDA48.md D3/§2b: "blindar
+            // HandleLobbyJoined") ANTES este método no tenía NI UNA guarda:
+            // el LobbyEnter_t que Steam dispara para el PROPIO lobby recién
+            // creado (SteamLobbyService lo reenvía igual que una invitación
+            // real de un amigo) entraba aquí sin distinción y arrancaba un
+            // StartClient contra uno mismo -- el jugador host terminaba en
+            // ConnectionState.Client, el panel decía "Estás en el taller de
+            // otro" y el mundo real (creado por SimSync en el propio
+            // proceso) quedaba huérfano. Tres guardas, CUALQUIERA corta el
+            // "taller de otro":
+            if (CurrentState != ConnectionState.Offline)
+            {
+                // Ya hay una sesión en marcha (Hosting/Client/Starting): un
+                // LobbyEnter_t tardío o duplicado no puede pisarla.
+                return;
+            }
+
+            bool esMiPropioLobby = FriendsLoop.Platform.SteamBootstrap.Instance != null
+                && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady
+                && hostSteamId == FriendsLoop.Platform.SteamBootstrap.Instance.LocalSteamId;
+            if (esMiPropioLobby)
+            {
+                // ES MI PROPIO LOBBY: el caso exacto de D3. Se ignora en
+                // silencio para el jugador (el flujo de host ya lo maneja
+                // HandleLobbyCreated), pero se deja constancia en consola
+                // para quien depure esto en el futuro.
+                Debug.Log("[FriendsLoop] LobbyEnter_t de mi propio lobby, ignorado (ya soy el anfitrión).");
+                return;
+            }
+
+            if (m_PendingHostAfterLobby)
+            {
+                // Estamos a mitad de HostLobby() -> HandleLobbyCreated():
+                // ese camino es el dueño legítimo de este lobby todavía, no
+                // hay que dejar que un evento de "unión" se le adelante.
+                return;
+            }
+
             if (steamTransport == null)
             {
                 RaiseError("No hay una referencia a SteamNetworkingSocketsTransport configurada en SessionCoordinator.");

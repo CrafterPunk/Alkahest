@@ -1648,6 +1648,85 @@ namespace Alkahest.Sim
         /// <summary>Mismo criterio que `PlataformaMargen` de esas 5 estaciones.</summary>
         private const int AlcobaFriaMargen = 2;
 
+        // =================================================================
+        // (CONTRATO_RONDA48.md §1a, ENCARGO V, "EL DESATASCO") LA VETA DE
+        // TURBA -- SOLO Semilla Cero (ver el gate en BuildVetaTurba). D1
+        // diagnosticó que la única vía anterior para obtener la base
+        // combustible garantizada de la seed (Universe.SemillaCeroBaseTurbaIdx)
+        // era el Crisol, y que Universe.AplicarOverridesSemillaCero la
+        // eclipsaba ahí para siempre; Cesar pt45 ya había pedido el arreglo
+        // real: *"si hay que partir de carbón/madera esos serán los puntos
+        // de partida"*. Esta veta ES ese punto de partida: turba tallada,
+        // visible, alcanzable con el cincel desde el arranque, embutida en
+        // piedra YA maciza -- nunca sale del limo (Universe la aparta de la
+        // escalera de extracción a propósito, ver su override 1).
+        //
+        // SITIO ELEGIDO: el muro IZQUIERDO del cuarto (`CuartoX0`=80..82, ya
+        // piedra maciza de fábrica por `DrawUShape`/`WallThickness`=3 en
+        // `ExcavateCuarto`), el más cercano a la ZONA DE FUEGO (`CrisolX`=102,
+        // huella real 88..124 -- ver su docblock): 6-8 celdas de aire lo
+        // separan del crisol, la distancia más corta a cualquier estación
+        // desde ese muro. Los dos caños del cuarto (`CanoAguaX`/
+        // `CanoMontajeX`) YA NO montan ahí (playtest 34, "LA ESTACIÓN DE
+        // FUENTES SE VA AL CENTRO": `CanoAguaX`=`MensulaAguaX1`≈200), así que
+        // el muro entero queda libre de fábrica -- cero colisión con nada ya
+        // construido en ese rango. Ancho 4 (`VetaTurbaX0`..`VetaTurbaX1` =
+        // 80..83): una celda MÁS que el propio `WallThickness`=3 -- ver
+        // `BuildVetaTurba` para el porqué del pilar extra (evitar la repisa
+        // "ala izquierda de la línea del horno", X0=84, Y=`CuartoY0`+42=178,
+        // primera entrada de `_galeriasOriginales` -- con X1=83 nunca se
+        // solapan, sea cual sea la Y). Alto: `VetaTurbaY0`=`CuartoY0`+`WallThickness`=139
+        // (una fila por encima de la losa del suelo, que ocupa
+        // `CuartoY0`..`CuartoY0`+`WallThickness`-1=136..138 -- SIN redundar
+        // con ella; con los caños ya lejos de este muro no hace falta ningún
+        // margen adicional, así que la veta arranca prácticamente pegada al
+        // suelo de la ZONA DE FUEGO, lo más "cerca del crisol" que da el
+        // plano) a `VetaTurbaY1`=`CuartoY1`-4=258 (4 filas limpias antes del
+        // remate del muro en 262, donde empieza la geometría de la bóveda).
+        // (integración pt48, VISTO EN VIVO) CORRECCIÓN DE SITIO: la primera
+        // versión ponía la veta en CuartoX0..CuartoX0+3 (80..83) creyendo que
+        // ahí vivía el muro -- pero `CuartoX0` es LA PRIMERA COLUMNA DE AIRE
+        // de la sala (ver el bloque "LA ESTACIÓN DE FUENTES" más arriba: la
+        // cara del muro es CuartoX0-1 = 79), así que la veta caía en el aire,
+        // solo tallaba 76 celdas donde pillaba piedra suelta, y el "pilar
+        // extra" plantaba una columna de piedra FLOTANDO dentro del cuarto.
+        // Medido en vivo con el grid corriendo: x68..79 es roca maciza 120/120
+        // en todo el rango Y de la veta. La veta vive ahora EMBUTIDA en esa
+        // roca, con la cara en x79 asomando al cuarto -- tallar (C) es el
+        // verbo, como pide el contrato. El pilar extra se RETIRÓ entero
+        // (regla 15: idea descartada -- ensanchar un muro que no era el muro).
+        // (integración pt48, SEGUNDA LECCIÓN EN VIVO) LA CARA SE SELLA: la
+        // primera reubicación dejaba la veta asomando en x79 (la cara del
+        // muro) -- y la turba es POLVO: toda celda de la cara con aire en
+        // diagonal-abajo se deslizaba sola, la veta entera se derramó en
+        // cascada dentro del cuarto y enterró la boca del crisol (visto con
+        // capturas, regla 52). La veta vive ahora SELLADA tras una columna
+        // de piedra intacta (x79), y el jugador la descubre por el ASOMO de
+        // la base (ver BuildVetaTurba: 3 celdas a ras de piso, de las que a
+        // lo sumo una se desliza como migaja-señuelo) más la línea del
+        // Maestro en el beat 4. Tallar (C) sigue siendo el verbo.
+        public const int VetaTurbaX0 = CuartoX0 - 7;                  // 73
+        public const int VetaTurbaX1 = CuartoX0 - 2;                  // 78 -- sellada: x79 (la cara) queda piedra.
+        /// <summary>La columna de la CARA del muro (piedra intacta que sella la veta) -- solo el asomo de la base la perfora.</summary>
+        public const int VetaTurbaCaraX = CuartoX0 - 1;               // 79
+        public const int VetaTurbaY0 = CuartoY0 + WallThickness;      // 139
+        public const int VetaTurbaY1 = CuartoY1 - 4;                  // 258
+        /// <summary>Cada fila que cae en un "cuello" (contrato §1a, "bolsones dentro de la piedra": la turba es Polvo y CAE, así que un corredor sin estrechamientos se derramaría entero de golpe al tallar el primer hueco) tiene probabilidad `VetaTurbaCuelloPct`/100 -- ver <see cref="BuildVetaTurba"/>.</summary>
+        private const int VetaTurbaCuelloPct = 8;
+        /// <summary>Probabilidad de saltarse una celda NO-espina dentro del radio local -- el borde deshilachado que hace la silueta orgánica (contrato §1a: "no un rectángulo").</summary>
+        private const int VetaTurbaBordeSaltoPct = 15;
+        /// <summary>
+        /// (regla del proyecto sobre salts de <see cref="XorShift"/>: elegir uno
+        /// libre y documentarlo) Grep de `FromCell(` en toda `Assets/Alkahest`
+        /// verificado antes de escribir esto: la sal declarada más alta del
+        /// proyecto es `Game/Crisol.cs::SalFrenteHornada`=563. 569 es la
+        /// primera libre a partir de ahí (y `SalVetaTurba+1` -- 570 -- para el
+        /// segundo generador de la misma fila, el del borde deshilachado --
+        /// también libre). No reutilizar 569/570 en otro archivo sin volver a
+        /// grepear.
+        /// </summary>
+        private const uint SalVetaTurba = 569u;
+
         /// <summary>
         /// EL ALAMBIQUE (playtest 30, "LA ALQUIMIA VISIBLE" -- encargo de
         /// Cesar: "que el vapor se pueda ATRAPAR"). DECISIÓN: misma X que el
@@ -2221,6 +2300,15 @@ namespace Alkahest.Sim
             // terrazas (ColumnaOcupada solo mira la X).
             TallarRepisas(grid);
             PaintClimate(grid);       // mismo ambiente uniforme que el plano viejo (regla 31 de CLAUDE.md: no reintroducir clima por zona).
+            // (CONTRATO_RONDA48.md §1a, ENCARGO V) LA VETA DE TURBA -- AL FINAL
+            // a propósito: solo sustituye celdas que YA son Stone, así que
+            // corre después de TODA la arquitectura decorativa (AdornarCuarto/
+            // TallarRepisas, que podrían tallar o vaciar algo en su rango) y
+            // tiene la última palabra sobre su propio muro sin arriesgarse a
+            // que un pase posterior la borre. Internamente comprueba
+            // AlkahestGameBootstrap.ModoSemillaCero y no hace nada en
+            // caótico/multi.
+            BuildVetaTurba(grid);
         }
 
         /// <summary>
@@ -2354,6 +2442,134 @@ namespace Alkahest.Sim
             }
 
             RegistrarObra(AlcobaFriaX0, baseY - AlcobaFriaProfundidad, AlcobaFriaX1, baseY + AlcobaFriaMuroAlto);
+        }
+
+        /// <summary>
+        /// (CONTRATO_RONDA48.md §1a, D1) LA VETA DE TURBA -- el desatasco de
+        /// Semilla Cero. Embute <c>MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx,
+        /// EstadoMateria.Polvo)</c> (turba, color real pardo de la tabla, ver
+        /// <c>Universe.ConstruirIdentidadReal</c>) en el muro izquierdo del
+        /// cuarto (ver el bloque de constantes junto a
+        /// <see cref="VetaTurbaX0"/> para el porqué exacto del sitio).
+        ///
+        /// PRIMER PASO -- EL PILAR EXTRA: <c>DrawUShape</c> solo talla
+        /// <see cref="WallThickness"/>=3 celdas de muro (80..82);
+        /// <see cref="VetaTurbaAncho"/>=4 pide una columna más (83) para dar
+        /// grosor 3-6 sin invadir la repisa "ala izquierda" (X0=84). Se
+        /// maciza esa columna en TODA la altura del muro (mismo
+        /// `CuartoY0..CuartoY1` que las otras dos) para que se lea como parte
+        /// de la misma piedra, no como un parche pegado.
+        ///
+        /// SEGUNDO PASO -- LA FORMA: un paseo aleatorio determinista
+        /// (<see cref="XorShift.FromCell"/>, tick constante 0 -- mismo patrón
+        /// de ruido ESTÁTICO de nivel que la regla 42 de CLAUDE.md, salt
+        /// propio <see cref="SalVetaTurba"/>) serpentea la ESPINA en X dentro
+        /// del corredor mientras Y avanza; un radio local 1-3 alrededor de la
+        /// espina más un filtro de borde (<see cref="VetaTurbaBordeSaltoPct"/>)
+        /// da la silueta orgánica ("no un rectángulo", contrato §1a). Cada
+        /// fila tiene además <see cref="VetaTurbaCuelloPct"/>% de probabilidad
+        /// de ser un CUELLO (radio 0, solo la espina) -- LOS BOLSONES del
+        /// contrato: la turba es Polvo y CAE, así que un corredor sin
+        /// estrechamientos se derramaría entero de golpe en cuanto el
+        /// jugador abriera un hueco encima; los cuellos trocean la veta en
+        /// bolsones que caen por separado.
+        ///
+        /// Solo sustituye celdas que YA son <see cref="MaterialId.Stone"/>
+        /// (nunca pinta sobre aire, nunca sobre la repisa/otra obra) y cuenta
+        /// las celdas realmente talladas. (Integración pt48: la verificación
+        /// "fuera de Unity reimplementando el hash" de la primera versión
+        /// DIVERGIÓ del XorShift real -- prometía 359 celdas y el editor
+        /// midió 76, porque además el corredor original caía en el aire. La
+        /// fuente de verdad es el Assert de abajo más el log de arranque,
+        /// leídos EN el editor -- regla 51: un assert que no se puede leer no
+        /// protege nada, y una réplica del hash no es el hash.) El mínimo 250
+        /// responde a la regla 44 (mejor sobrar que agotarse a mitad de
+        /// partida); el máximo 500 evita convertir el muro en un silo.
+        ///
+        /// SOLO SEMILLA CERO: en caótico/multi el muro se queda macizo, sin
+        /// veta -- una sustancia con identidad real fija
+        /// (<see cref="Universe.TieneIdentidadReal"/>) no tiene sentido fuera
+        /// de la seed congelada 777002.
+        /// </summary>
+        private static void BuildVetaTurba(CellGrid grid)
+        {
+            if (!AlkahestGameBootstrap.ModoSemillaCero) return;
+
+            // (integración pt48) El "pilar extra" que aquí ensanchaba el muro
+            // se RETIRÓ: ensanchaba una columna de AIRE (CuartoX0 es interior,
+            // no muro) y dejaba piedra flotante dentro del cuarto. La veta
+            // vive ahora en la roca maciza real (ver VetaTurbaX0/X1).
+
+            byte turba = MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx, EstadoMateria.Polvo);
+            int spineX = (VetaTurbaX0 + VetaTurbaX1) / 2;
+            int celdas = 0;
+
+            for (int y = VetaTurbaY0; y <= VetaTurbaY1; y++)
+            {
+                var rngFila = XorShift.FromCell(0u, VetaTurbaX0, y, SalVetaTurba);
+
+                int paso = rngFila.Next(3) - 1; // -1/0/+1: paseo aleatorio de la espina.
+                spineX += paso;
+                if (spineX < VetaTurbaX0 + 1) spineX = VetaTurbaX0 + 1;
+                if (spineX > VetaTurbaX1 - 1) spineX = VetaTurbaX1 - 1;
+
+                bool esCuello = rngFila.ChancePercent(VetaTurbaCuelloPct);
+                int radio = esCuello ? 0 : 1 + rngFila.Next(3); // 1-3, salvo cuello (0).
+
+                for (int x = VetaTurbaX0; x <= VetaTurbaX1; x++)
+                {
+                    int dx = x - spineX;
+                    if (dx < 0) dx = -dx;
+                    if (dx > radio) continue;
+
+                    if (x != spineX)
+                    {
+                        // Borde deshilachado (nunca en la propia espina, que
+                        // siempre queda sólida): generador propio por celda,
+                        // salt+1 para no repetir la tirada de la fila.
+                        var rngCelda = XorShift.FromCell(0u, x, y, SalVetaTurba + 1u);
+                        if (rngCelda.ChancePercent(VetaTurbaBordeSaltoPct)) continue;
+                    }
+
+                    if (!CellGrid.InBounds(x, y) || grid.GetMat(x, y) != MaterialId.Stone) continue;
+                    grid.SetCell(x, y, turba);
+                    celdas++;
+                }
+            }
+
+            // EL ASOMO (integración pt48): 3 celdas de turba perforan la cara
+            // (VetaTurbaCaraX) a ras del piso del cuarto. Física medida: la
+            // celda de la base tiene piedra debajo Y en diagonal-abajo (el
+            // suelo del cuarto), así que NO se desliza; la de encima puede
+            // deslizarse UNA celda al piso como migaja-señuelo. Es el cartel
+            // natural de la veta ("aquí hay algo pardo") sin regalarla ni
+            // enterrar máquinas -- ver el docblock de VetaTurbaX0/X1.
+            for (int y = VetaTurbaY0; y <= VetaTurbaY0 + 2 && y <= VetaTurbaY1; y++)
+            {
+                if (CellGrid.InBounds(VetaTurbaCaraX, y) && grid.GetMat(VetaTurbaCaraX, y) == MaterialId.Stone)
+                {
+                    grid.SetCell(VetaTurbaCaraX, y, turba);
+                    celdas++;
+                }
+            }
+
+            // (a propósito, NUNCA RegistrarObra aquí) el rect de la veta NO se
+            // registra como Obra del Taller: ese registro es lo que
+            // Game/Cincel.cs consulta para BLOQUEAR el tallado sobre
+            // mampostería de máquina (EsObraDelTaller). La veta es
+            // exactamente lo contrario -- piedra normal, tallable desde el
+            // arranque -- así que debe quedar FUERA de esa lista o el cincel
+            // rebotaría contra ella (el mismo bug que ya reportó Cesar en el
+            // playtest 26 para las estaciones, pero al revés: aquí el bug
+            // sería no poder tallar nunca).
+
+#if UNITY_EDITOR
+            UnityEngine.Debug.Assert(celdas >= 250 && celdas <= 500,
+                $"[ChaosAlchemy][SemillaCero] La veta de turba talló {celdas} celdas (banda esperada 250-500, contrato §1a) -- si el número real se sale de la banda, ajustar VetaTurbaAncho/Y0/Y1 o los porcentajes de VetaTurbaCuelloPct/VetaTurbaBordeSaltoPct.");
+#endif
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Veta de turba tallada: {celdas} celdas en x[{VetaTurbaX0}..{VetaTurbaX1}] y[{VetaTurbaY0}..{VetaTurbaY1}], muro izquierdo del cuarto (junto a CrisolX={CrisolX}).");
+#endif
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>

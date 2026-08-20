@@ -196,6 +196,40 @@ namespace Alkahest.Game
     /// cierra la deuda que este mismo docblock anotaba desde el playtest 4:
     /// "escribe _sim.Grid.temp[] directamente en vez de pasar por una API
     /// dedicada").
+    ///
+    /// ---------------------------------------------------------------------
+    /// LA "N ROJA" SE RETIRA (playtest 48, CONTRATO_RONDA48.md §3a: "el
+    /// calentador de la N roja es horrible")
+    /// ---------------------------------------------------------------------
+    /// El chasis metálico remachado con la ventana de resistencias en
+    /// zigzag (<c>MaquinariaSprites.ChasisPlaca</c>/<c>ResistenciasPlaca</c>,
+    /// IDEA DESCARTADA, regla 15 de CLAUDE.md -- ver el docblock de esas dos
+    /// funciones, renombradas <see cref="MaquinariaSprites.LosaPlaca"/> y
+    /// <see cref="MaquinariaSprites.LechoBrasasPlaca"/>, para el porqué
+    /// completo) se sustituye por una LOSA DE PIEDRA con un LECHO DE BRASAS
+    /// incrustado en un nicho recesado -- mismo lenguaje visual que las
+    /// brasas reales del hogar/Crisol (playtest 39/41) y misma construcción
+    /// por bloques con juntas que <see cref="ChillStone"/> (misma fórmula de
+    /// tamaño, mismo <c>Escala</c>): las dos placas de zona se leen ahora
+    /// como HERMANAS de una sola familia. Apagada, las brasas quedan en
+    /// ceniza gris tenue (nunca del todo negras: sigue habiendo un rescoldo
+    /// mínimo, mismo criterio que el hogar del Crisol -- un fuego que se ve
+    /// encendido cuando no lo está miente sobre el estado de la máquina);
+    /// encendida (Templada o Ardiente), late en naranja-rojo profundo con un
+    /// shimmer suave en el filete de contacto superior (donde se apoya la
+    /// cuba) -- ver <see cref="MaquinariaSprites.LechoBrasasPlaca"/> para el
+    /// porqué el shimmer no cuesta ninguna animación aparte. El campo
+    /// <c>_resistencias</c>/los métodos <c>ColorResistencia</c>/
+    /// <c>AnimarResistencias</c> se quedan con el mismo nombre (regla de
+    /// mínimo diff: son la MISMA capa, solo cambia lo que dibuja el sprite
+    /// que sostienen) -- lo que cambió es el sprite, no el mecanismo de
+    /// tinte/latido, que ya era correcto.
+    ///
+    /// EL RÓTULO DE OFICIO (§3b): <see cref="ChapaNombre"/> pasa de "placa
+    /// ígnea" a la frase que describe lo que HACE ("PLACA DE CALOR -- entibia
+    /// la ZONA de encima"), y la chapa de ESTADO cambia de
+    /// "TEMPLADA 64°"/"ARDIENTE 220°" a un VERBO + temperatura
+    /// ("calentando · 64°") -- ver <see cref="RebuildChapaEstado"/>.
     /// </summary>
     public sealed class HeatPlate : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
@@ -278,7 +312,8 @@ namespace Alkahest.Game
         /// <summary>Chapa del anillo de ESTADO, cacheada: solo se reconstruye al cambiar de estado (nunca dentro de OnGUI, regla de cero asignaciones por frame).</summary>
         private string _chapaEstado;
 
-        private const string ChapaNombre = "placa ígnea";
+        /// <summary>(playtest 48, CONTRATO_RONDA48.md §3b: "cada fuego dice su oficio") Ya no es solo un nombre -- dice lo que HACE.</summary>
+        private const string ChapaNombre = "PLACA DE CALOR — entibia la ZONA de encima";
 
         // Foco de interacción: solo el aparato MÁS CERCANO responde a E y
         // muestra su prompt (ver Game/MachineFocus.cs).
@@ -424,14 +459,14 @@ namespace Alkahest.Game
             // ser mayor asoma por los bordes del chasis como un halo. Se crea
             // UNA vez aquí; en Update solo se le cambia el color (cero
             // allocs/frame).
-            _resalte = MaquinariaSprites.CrearCapa(transform, "Resalte", MaquinariaSprites.ChasisPlaca(spanCeldas), 16,
+            _resalte = MaquinariaSprites.CrearCapa(transform, "Resalte", MaquinariaSprites.LosaPlaca(spanCeldas), 16,
                 anchoMundo * 1.15f, altoMundo * 1.35f);
             _resalte.color = new Color(UiStyles.Oro.r, UiStyles.Oro.g, UiStyles.Oro.b, 0f);
 
-            MaquinariaSprites.CrearCapa(transform, "Chasis", MaquinariaSprites.ChasisPlaca(spanCeldas), 18,
+            MaquinariaSprites.CrearCapa(transform, "Losa", MaquinariaSprites.LosaPlaca(spanCeldas), 18,
                 anchoMundo, altoMundo);
-            _resistencias = MaquinariaSprites.CrearCapa(transform, "Resistencias",
-                MaquinariaSprites.ResistenciasPlaca(spanCeldas), 19, anchoMundo, altoMundo);
+            _resistencias = MaquinariaSprites.CrearCapa(transform, "LechoBrasas",
+                MaquinariaSprites.LechoBrasasPlaca(spanCeldas), 19, anchoMundo, altoMundo);
         }
 
         private void Update()
@@ -608,11 +643,13 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// Las resistencias respiran: apagadas son metal frío, templadas laten
-        /// ámbar, ardientes laten blanco-naranja. Ya se llama en TODOS los
-        /// frames (a diferencia de ChillStone, aquí no vivía dentro de la rama
-        /// "encendida"), así que basta con colgarle el resalte de foco al final
-        /// para que también lata siempre (restaurado playtest 7).
+        /// Las brasas respiran: apagadas son ceniza gris tenue (un rescoldo
+        /// mínimo, nunca del todo negras -- playtest 48, ver el docblock de
+        /// la clase), templadas laten ámbar, ardientes laten blanco-naranja.
+        /// Ya se llama en TODOS los frames (a diferencia de ChillStone, aquí
+        /// no vivía dentro de la rama "encendida"), así que basta con
+        /// colgarle el resalte de foco al final para que también lata
+        /// siempre (restaurado playtest 7).
         /// </summary>
         private void AnimarResistencias()
         {
@@ -648,7 +685,12 @@ namespace Alkahest.Game
             {
                 case State.Ardiente: return new Color(1f, 0.52f * pulso, 0.22f * pulso, 1f);
                 case State.Templada: return new Color(1f * pulso, 0.58f * pulso, 0.16f * pulso, 1f);
-                default: return new Color(0.30f, 0.26f, 0.25f, 1f);
+                // (playtest 48) Apagada: CENIZA gris tenue, no metal -- el
+                // lecho de brasas sigue ahí (LechoBrasasPlaca lo dibuja
+                // siempre, ver su docblock), este tinte solo decide qué tan
+                // vivo se ve. Ligero matiz cálido residual (rescoldo mínimo),
+                // nunca un gris puro ni negro.
+                default: return new Color(0.24f, 0.21f, 0.19f, 1f);
             }
         }
 
@@ -670,9 +712,15 @@ namespace Alkahest.Game
         /// </summary>
         private void RebuildChapaEstado()
         {
+            // (playtest 48, CONTRATO_RONDA48.md §3a) VERBO + temperatura en
+            // vez del nombre de estado crudo: "calentando · 64°" dice lo que
+            // el aparato está HACIENDO, no un identificador interno
+            // (TEMPLADA/ARDIENTE sigue vivo en StateLabel() para el log
+            // técnico de CycleState() y para el color del rótulo, que ya
+            // distingue Templada/Ardiente por sí solo -- ver OnGUI).
             _chapaEstado = _state == State.Off
                 ? null // apagada: nada que anunciar de lejos.
-                : $"{StateLabel()} {CellGrid.RawToC(TargetRaw())}°";
+                : "calentando · " + CellGrid.RawToC(TargetRaw()) + "°";
         }
 
         /// <summary>

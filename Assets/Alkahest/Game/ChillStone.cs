@@ -302,6 +302,27 @@ namespace Alkahest.Game
     /// exactos. Escrituras migradas a
     /// <see cref="AlkahestSim.InyectarTemperatura"/> (Paint discipline,
     /// cierra la deuda que este mismo docblock anotaba desde el playtest 4).
+    ///
+    /// ---------------------------------------------------------------------
+    /// ARMONIZADA CON SU HERMANA (playtest 48, CONTRATO_RONDA48.md §3a):
+    /// "la ChillStone conserva su bandeja pero se armoniza"
+    /// ---------------------------------------------------------------------
+    /// <see cref="HeatPlate"/> sustituyó su chasis metálico remachado por
+    /// una losa de piedra con lecho de brasas (ver el docblock de esa
+    /// clase); esta piedra YA era piedra con juntas de sillería
+    /// (<see cref="MaquinariaSprites.BloqueGelido"/>, sin cambios de
+    /// construcción) -- <c>BloqueGelido</c>/<c>CristalesGelidos</c> se
+    /// quedan con sus nombres. Dos ajustes de afinado para que las dos
+    /// lean como una sola familia de "placas de zona": (1) los DIENTES DE
+    /// ESCARCHA de <see cref="MaquinariaSprites.CristalesGelidos"/> pasan a
+    /// ser más finos (paso 8->6 px, semi-anchura /3->/4, ver el docblock de
+    /// esa función); (2) el rótulo de reconocimiento (<see cref="ChapaNombre"/>)
+    /// pasa de un nombre desnudo ("piedra gélida") a la frase de OFICIO
+    /// ("PIEDRA GÉLIDA — enfría la ZONA de encima", §3b), mismo criterio que
+    /// <see cref="HeatPlate.ChapaNombre"/>. El LATIDO azul hielo mientras
+    /// trabaja (<see cref="ColorCristal"/>, <see cref="AnimarCristales"/>)
+    /// ya existía desde el playtest 13 -- no se tocó, cumplía el contrato
+    /// de fábrica.
     /// </summary>
     public sealed class ChillStone : MonoBehaviour, IMaquinaInteractiva, IMovible, IMaquinaUsableRemota
     {
@@ -421,7 +442,8 @@ namespace Alkahest.Game
         /// <summary>Chapa del anillo de ESTADO, cacheada: solo se reconstruye al cambiar de estado (nunca dentro de OnGUI, regla de cero asignaciones por frame).</summary>
         private string _chapaEstado;
 
-        private const string ChapaNombre = "piedra gélida";
+        /// <summary>(playtest 48, CONTRATO_RONDA48.md §3b: "cada fuego dice su oficio") Ya no es solo un nombre -- dice lo que HACE.</summary>
+        private const string ChapaNombre = "PIEDRA GÉLIDA — enfría la ZONA de encima";
 
         // Foco de interacción: en _centroBloque, el propio centro del
         // aparato -- desde el fix playtest 14 es TAMBIÉN el punto del que

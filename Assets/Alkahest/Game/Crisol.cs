@@ -164,10 +164,40 @@ namespace Alkahest.Game
         public const int BocaFilas = 11;
         /// <summary>Cuánto se abre cada pared de la boca, en celdas, de abajo a arriba. La boca acaba midiendo 13+2*6 = 25 celdas de luz.</summary>
         public const int BocaVuelo = 6;
-        /// <summary>Ancho del hueco interior del brasero.</summary>
-        public const int BraseroAncho = 5;
-        /// <summary>Alto del hueco interior del brasero: CHATO a propósito (la cámara mide 9) -- las dos bocas no se parecen ni en silueta ni en altura.</summary>
-        public const int BraseroAlto = 6;
+        /// <summary>
+        /// Ancho del hueco interior del brasero. 5 -&gt; **7** (playtest 48,
+        /// CONTRATO_RONDA48.md §3c: "el brasero del crisol es chiquitito y
+        /// no comunica qué entró como material" / "al menos +60% de área
+        /// visible del cesto"). Ver <see cref="BraseroAlto"/> para la cuenta
+        /// completa de área.
+        /// </summary>
+        public const int BraseroAncho = 7;
+        /// <summary>
+        /// Alto del hueco interior del brasero: CHATO a propósito (la cámara
+        /// mide 9, y <c>BraseroAlto</c> se queda POR DEBAJO a propósito) --
+        /// las dos bocas no se parecen ni en silueta ni en altura. 6 -&gt;
+        /// **7** (playtest 48, §3c): junto con <see cref="BraseroAncho"/>
+        /// (5-&gt;7), el área real del cesto (medida contra las proporciones
+        /// reales que lee <see cref="MaquinariaSprites.CestoBrasero"/>, regla
+        /// 39 de CLAUDE.md, nunca a ojo) pasa de **5x6 = 30 celdas** a
+        /// **7x7 = 49 celdas**, un **+63.3%** -- por encima del +60% mínimo
+        /// del contrato, con margen. El combustible cargado sigue siendo
+        /// materia SIMULADA de verdad, visible a través del recorte de
+        /// cámara de <c>CestoBrasero</c> (<see cref="RecortarCamara"/>): con
+        /// el hueco más grande, la PILA de combustible que el jugador vierte
+        /// se ve más grande sin ningún sprite nuevo. Impacto en la huella
+        /// del aparato (verificado, no a ojo): el ancho total del horno
+        /// (<c>_outX1-_outX0+1</c>, ver <see cref="Calcular"/>) crece
+        /// EXACTAMENTE lo que crece <c>BraseroAncho</c> (37-&gt;39 celdas,
+        /// +2), porque <c>OutX1 = BraX1+MuroGrosor</c> sigue a <c>BraX1</c>
+        /// al milímetro -- el colchón de aire hasta la Prensa
+        /// (<see cref="BraseroSeparacion"/>, documentado abajo como "8
+        /// celdas de aire limpio") baja a 6, todavía de sobra. La altura no
+        /// afecta la huella total (<c>OutY1</c> lo fija la boca embudada de
+        /// la cámara, no el brasero -- ver <see cref="Calcular"/>): 6-&gt;7
+        /// cabe entera muy por debajo del labio de la boca sin tocar nada.
+        /// </summary>
+        public const int BraseroAlto = 7;
         /// <summary>
         /// (segunda pasada) Celdas que el SPRITE del cuerpo sobresale de la
         /// mampostería por cada lado. El muro de piedra mide 2 celdas: a la
@@ -191,8 +221,12 @@ namespace Alkahest.Game
         /// parte de la prensa. La duda original de Cesar ("mucho menos sé
         /// dónde poner el combustible") habría sobrevivido intacta. Con 6, el
         /// cesto se mete debajo del flanco derecho de la boca embudada: los
-        /// dos recintos se leen como UN horno con DOS bocas, y quedan 8
-        /// celdas de aire limpio hasta la Prensa.
+        /// dos recintos se leen como UN horno con DOS bocas, y quedaban 8
+        /// celdas de aire limpio hasta la Prensa. (playtest 48, §3c) Con el
+        /// brasero agrandado (<see cref="BraseroAncho"/> 5-&gt;7), la huella
+        /// total del horno crece 2 celdas y ese colchón baja a **6** --
+        /// verificado con la aritmética de <see cref="Calcular"/>, todavía
+        /// muy por encima de tocar la jamba de la Prensa.
         /// </summary>
         public const int BraseroSeparacion = 6;
 
@@ -509,6 +543,21 @@ namespace Alkahest.Game
         private readonly MaquinariaSprites.Destello _acuseCesto = new MaquinariaSprites.Destello();
         private int _celdasCamaraPrev, _celdasCestoPrev;
 
+        // ---------------------------------------------------------------
+        // RÓTULO DE CARGA (playtest 48, CONTRATO_RONDA48.md §3c): "el
+        // jugador tiene que saber QUÉ entró como material y QUÉ como
+        // combustible sin adivinar". Dos chapas cacheadas, reconstruidas
+        // SOLO cuando cambia la FIRMA (material+conteo) de cada boca --
+        // nunca en OnGUI (regla de cero asignaciones por frame). Ver
+        // RebuildChapaCarga.
+        // ---------------------------------------------------------------
+        private byte _cargaCamaraMatCache = MaterialId.Empty;
+        private int _cargaCamaraCountCache = -1; // -1: fuerza la primera reconstrucción aunque la cámara siga vacía.
+        private string _chapaCargaCamara;
+        private byte _cargaCestoMatCache = MaterialId.Empty;
+        private int _cargaCestoCountCache = -1;
+        private string _chapaCargaCesto;
+
         // El pulso de la clase AffordanceGlow, en su destino aprobado: TRABAJANDO.
         private readonly MaquinariaSprites.AffordanceGlow _pulsoTrabajo = new MaquinariaSprites.AffordanceGlow();
 
@@ -518,6 +567,8 @@ namespace Alkahest.Game
         private const float RangoNombreDesvanece = 4.6f;
         private bool _yaConocida;
         private const string ChapaNombre = "el crisol";
+        /// <summary>(playtest 48, §3b) El consejo "el crisol TRANSFORMA por hornadas; la placa solo CALIENTA la zona" se muestra UNA sola vez por partida, por el canal de avisos existente (Rotular) -- ver OnGUI.</summary>
+        private bool _avisoOficioMostrado;
 
         public Vector3 PuntoFoco => _centroCamara;
         public float RangoFoco => ProximityRange;
@@ -1011,6 +1062,21 @@ namespace Alkahest.Game
                 }
             }
 
+            // (playtest 48, §3c) Cuenta EXACTA de celdas del combustible
+            // identificado (no del cesto entero, que puede llevar residuos
+            // de otra materia): "turba ×4" tiene que contar turba, no
+            // "lo que sea que haya en el cesto". Bucle aparte, acotado al
+            // footprint del cesto (49 celdas como mucho tras el playtest 48,
+            // ver BraseroAncho/BraseroAlto) -- barato, y solo corre cuando
+            // hay combustible que contar.
+            int fuelCount = 0;
+            if (fuel != MaterialId.Empty)
+            {
+                for (int y = _braY0; y <= _braY1; y++)
+                    for (int x = _braX0; x <= _braX1; x++)
+                        if (grid.GetMat(x, y) == fuel) fuelCount++;
+            }
+
             if (nCam > _celdasCamaraPrev) _acuseCamara.Disparar();
             if (nCesto > _celdasCestoPrev) _acuseCesto.Disparar();
             _celdasCamaraPrev = nCam;
@@ -1023,12 +1089,62 @@ namespace Alkahest.Game
             _cargaCamaraCount = nCam;
             _fuelMat = fuel;
 
+            RebuildChapaCarga(universe, fuel, fuelCount);
+
             // El resultado ya no está solo en la cámara: o el jugador lo
             // recogió (cámara vacía) o le echó materia nueva encima. En los
             // dos casos el crisol vuelve a REPOSO, para que el rótulo diga la
             // verdad ("cargado · E para encender") en vez de seguir anunciando
             // una hornada que ya no describe lo que hay dentro.
             if (_fase == Fase.Lista && (!_camaraTieneAlgo || _dominanteCamara != _hornadaSalida)) VolverAReposo();
+        }
+
+        /// <summary>
+        /// (playtest 48, CONTRATO_RONDA48.md §3c) RÓTULO DE CARGA: dice
+        /// explícitamente qué material hay en la cámara (con el % de la
+        /// capacidad total, <see cref="CamaraAncho"/>x<see cref="CamaraAlto"/>
+        /// celdas) y qué combustible hay en el cesto (con la cuenta de
+        /// celdas y la temperatura que alcanza) -- el jugador ya no tiene
+        /// que ADIVINAR qué acaba de verter ni asomarse a contar celdas de
+        /// memoria; es literalmente el pedido de Cesar. Se reconstruye SOLO
+        /// cuando cambia la FIRMA (material+conteo) de cada boca -- nunca en
+        /// OnGUI (regla de cero asignaciones por frame): compara ids y
+        /// conteos contra el último valor cacheado antes de tocar ninguna
+        /// string.
+        /// </summary>
+        private void RebuildChapaCarga(Universe universe, byte fuel, int fuelCount)
+        {
+            if (_dominanteCamara != _cargaCamaraMatCache || _cargaCamaraCount != _cargaCamaraCountCache)
+            {
+                _cargaCamaraMatCache = _dominanteCamara;
+                _cargaCamaraCountCache = _cargaCamaraCount;
+                if (_cargaCamaraCount <= 0)
+                {
+                    _chapaCargaCamara = null; // nada que reportar: la cámara vacía ya lo dice EtiquetaCamara().
+                }
+                else
+                {
+                    string nombre = _conocimiento != null ? _conocimiento.NombreParaHud(_dominanteCamara) : "???";
+                    int pct = _cargaCamaraCount * 100 / (CamaraAncho * CamaraAlto);
+                    _chapaCargaCamara = "cámara: " + nombre + " · " + pct + "%";
+                }
+            }
+
+            if (fuel != _cargaCestoMatCache || fuelCount != _cargaCestoCountCache)
+            {
+                _cargaCestoMatCache = fuel;
+                _cargaCestoCountCache = fuelCount;
+                if (fuel == MaterialId.Empty)
+                {
+                    _chapaCargaCesto = null; // nada que reportar: el cesto vacío ya lo dice EtiquetaCesto().
+                }
+                else
+                {
+                    string nombre = _conocimiento != null ? _conocimiento.NombreParaHud(fuel) : "???";
+                    int tempC = universe != null ? CellGrid.RawToC(universe.TempCombustibleRaw(fuel)) : 0;
+                    _chapaCargaCesto = "cesto: " + nombre + " ×" + fuelCount + " → fuego hasta ~" + tempC + "°";
+                }
+            }
         }
 
         /// <summary>(playtest 47, ENCARGO C) ¿La cámara tiene ahora mismo una MEZCLA relevante para la tabla de cruces -- dominante + secundario, con el secundario cubriendo al menos el 20% de la carga (contrato §1b, literal)?</summary>
@@ -1828,8 +1944,8 @@ namespace Alkahest.Game
 
             // ---- EL CESTO DEL BRASERO, aparte y con otra silueta.
             int muroCesto = MuroGrosor + VueloCesto;       // 4
-            int spanCesto = BraseroAncho + 2 * muroCesto;  // 13
-            int altoCesto = BraseroAlto + 2;               // 8
+            int spanCesto = BraseroAncho + 2 * muroCesto;  // 15 (playtest 48: BraseroAncho 5->7)
+            int altoCesto = BraseroAlto + 2;               // 9 (playtest 48: BraseroAlto 6->7)
             float anchoCestoW = spanCesto * c, altoCestoW = altoCesto * c;
             var cestoGo = new GameObject("CrisolBrasero");
             cestoGo.transform.SetParent(transform, false);
@@ -1904,7 +2020,7 @@ namespace Alkahest.Game
             // eso arregla de paso la lámpara del Banco de Chispa y los
             // destellos de las redomas, que Cesar citó por su nombre.
             // =============================================================
-            int muroSpan = _outX1 - _outX0 + 1;                 // 37 celdas: la huella real, no un número a ojo.
+            int muroSpan = _outX1 - _outX0 + 1;                 // 39 celdas (playtest 48: 37->39, BraseroAncho 5->7): la huella real, no un número a ojo.
             int muroY0 = _baseY - HogarFilas;                   // la primera fila del hogar, bajo la panza.
             int muroY1 = _bocaY1;                               // LA CORNISA: por encima de aquí no hay horno que alumbrar.
             int muroAlto = muroY1 - muroY0 + 1;
@@ -1923,7 +2039,7 @@ namespace Alkahest.Game
                 new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_baseY + BraseroAlto * 0.35f) * c, 0f),
                 11f * c, new Color(1f, 0.48f, 0.16f));
 
-            int cestoSpan = BraseroAncho + 2 * muroCesto;       // 13, el mismo que ya usa el sprite del cesto arriba.
+            int cestoSpan = BraseroAncho + 2 * muroCesto;       // 15, el mismo que ya usa el sprite del cesto arriba.
             int cestoY0 = _baseY - HogarFilas;
             int cestoY1 = _baseY + BraseroAlto + 1;             // el labio del cesto: su cornisa.
             int cestoAlto = cestoY1 - cestoY0 + 1;
@@ -2129,6 +2245,21 @@ namespace Alkahest.Game
 
             UiStyles.Preparar();
 
+            // (playtest 48, CONTRATO_RONDA48.md §3b) EL OFICIO DE CADA FUEGO,
+            // UNA VEZ POR PARTIDA: "el crisol TRANSFORMA por hornadas; la
+            // placa solo CALIENTA la zona" -- reutiliza el canal de avisos
+            // YA EXISTENTE (Rotular/_aviso, el mismo que "este fuego no le
+            // hace nada"), nunca un cartel permanente. Dispara la primera
+            // vez que el aprendiz está cerca del crisol EN REPOSO (antes de
+            // su primera hornada, cuando la duda "¿en qué se diferencia de
+            // la placa?" tiene más sentido) -- guardado por
+            // _avisoOficioMostrado para que no repita.
+            if (!_avisoOficioMostrado && _fase == Fase.Reposo && cercEstado > 0f)
+            {
+                _avisoOficioMostrado = true;
+                Rotular("el crisol TRANSFORMA por hornadas; la placa solo CALIENTA la zona", UiStyles.TextoTenue);
+            }
+
             if (cercEstado > 0f)
             {
                 Color color = _fase == Fase.Corriendo ? UiStyles.Peligro
@@ -2136,6 +2267,17 @@ namespace Alkahest.Game
                             : (_aviso != null && Time.time < _avisoHasta ? _avisoColor : UiStyles.Aviso));
                 UiStyles.PlacaMundo(_centroBoca, EtiquetaCamara(),
                     new Color(color.r, color.g, color.b, color.a * cercEstado), -UiStyles.S(6f));
+
+                // (playtest 48, §3c) EL RÓTULO DE CARGA -- línea 1, la cámara:
+                // qué material entró y qué fracción de la capacidad ocupa.
+                // Solo cuando hay algo que reportar (_chapaCargaCamara es
+                // null con la cámara vacía, ver RebuildChapaCarga).
+                if (_chapaCargaCamara != null)
+                {
+                    Color tenueCamara = UiStyles.TextoTenue;
+                    UiStyles.PlacaMundo(_centroBoca, _chapaCargaCamara,
+                        new Color(tenueCamara.r, tenueCamara.g, tenueCamara.b, tenueCamara.a * cercEstado), -UiStyles.S(40f));
+                }
             }
 
             // La chapa del brasero cuelga DE SU PROPIA BOCA, nunca de la del
@@ -2146,6 +2288,16 @@ namespace Alkahest.Game
                 Color colorCesto = _cestoArdiendo ? UiStyles.Peligro : UiStyles.TextoTenue;
                 UiStyles.PlacaMundo(_centroBrasero, EtiquetaCesto(),
                     new Color(colorCesto.r, colorCesto.g, colorCesto.b, colorCesto.a * cercCesto), -UiStyles.S(24f));
+
+                // (playtest 48, §3c) EL RÓTULO DE CARGA -- línea 2, el cesto:
+                // qué combustible entró, cuántas celdas y hasta qué
+                // temperatura llega. Solo cuando hay combustible que reportar.
+                if (_chapaCargaCesto != null)
+                {
+                    Color tenueCesto = UiStyles.TextoTenue;
+                    UiStyles.PlacaMundo(_centroBrasero, _chapaCargaCesto,
+                        new Color(tenueCesto.r, tenueCesto.g, tenueCesto.b, tenueCesto.a * cercCesto), -UiStyles.S(41f));
+                }
             }
 
             if (!_yaConocida && cercNombre > 0f)

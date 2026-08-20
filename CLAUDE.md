@@ -462,6 +462,20 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     Awake/Start/Update/OnGUI. Ante un reporte de "todo roto de golpe", buscar
     TypeInitializationException en la consola ANTES que nada.
 
+57. **UNA ESCALERA CON PICKER ARGMAX SE VERIFICA CON LA SEMÁNTICA DEL PICKER (playtest 48, el
+    eclipse de la veta)**: la extracción del Crisol elige "la banda MÁS ALTA ≤ cima", y el
+    override 1 de Semilla Cero empujó la base combustible garantizada POR DEBAJO de la arena:
+    eclipse permanente — sin turba no hay carbón, sin carbón la calcinación (130) es inalcanzable
+    a rescoldo (120), y el arco entero muere en el beat 4 sin un solo error. Es la regla 51 con
+    apellido: la garantía G1 comprobaba "existe una base combustible extraíble" pero el picker
+    solo toma el máximo. Toda cadena de progresión cuyo siguiente peldaño lo elige un argmax se
+    audita simulando el argmax (¿quién GANA a cada cima?), jamás con "existe un candidato". En
+    una seed DE AUTOR, además, los peldaños se fijan POR DECRETO (bandas 100/124/136/158 contra
+    cimas 120/130/145/~185), no se heredan del sorteo: lo que el guion promete no puede depender
+    de una permutación con jitter. Corolario D2 de la misma ronda: si el diseño dice "la arena no
+    se disuelve", el flag físico (`SolubleBase`) tiene que decirlo TAMBIÉN — omitir la entrada de
+    identidad no apaga la física, solo le pone un nombre pobre al resultado ("tinte").
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa
