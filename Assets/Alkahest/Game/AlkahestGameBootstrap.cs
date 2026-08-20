@@ -99,6 +99,18 @@ namespace Alkahest.Game
         // </summary>
         public static bool ModoSemillaCero;
 
+        /// <summary>
+        /// (RONDA 60, GDD v0.3 §5 -- EL INICIO OSCURO, greybox) La FUNDACIÓN de
+        /// TEN THOUSAND YEARS: mundo casi vacío (SimLevelBuilder.BuildFundacion),
+        /// física de la seed de autor (los mismos overrides por decreto de
+        /// Semilla Cero: comparte seed 777002), y un spawn MÍNIMO -- aprendiz,
+        /// encargos, diario y Game/FundacionDirector.cs; ni estaciones, ni
+        /// caños, ni buzón, ni muestras (nada existe hasta que un favor lo
+        /// trae, principio rector del GDD). Excluyente con ModoSemillaCero:
+        /// los botones del Título fijan uno y apagan el otro.
+        /// </summary>
+        public static bool ModoFundacion;
+
         private AlkahestSim _sim;
         private bool _spawned;
 
@@ -384,6 +396,9 @@ namespace Alkahest.Game
             // registrar las máquinas nuevas.
             MachineFocus.Limpiar();
             Balda.ResetGuardaEstatica(); Anclaje.ResetGuardaEstatica(); Pila.ResetGuardaEstatica(); // (integración pt54) la fuga de paridad solo/multi -- ver esos métodos.
+
+            // (RONDA 60) LA FUNDACIÓN: rama mínima y retorno -- ver SpawnFundacion.
+            if (ModoFundacion) { SpawnFundacion(); return; }
 
             var apprentice = SpawnApprentice();
             var flask = apprentice.GetComponent<Flask>();
@@ -936,6 +951,41 @@ namespace Alkahest.Game
             _spawned = true;
             Debug.Log("[ChaosAlchemy][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio" +
                       (ModoSemillaCero ? " (SEMILLA CERO compartida: arco guiado por Game/SemillaCero.cs)." : "."));
+        }
+
+        /// <summary>
+        /// (RONDA 60, GDD v0.3 §5) El spawn de la FUNDACIÓN: lo MÍNIMO. El
+        /// aprendiz (con sus herramientas de siempre -- frasco/cincel/mudanza/
+        /// termómetro: existir no es estorbar, y el guion las ignora hasta que
+        /// tocan), el sistema de encargos (checklist del director), el diario,
+        /// el audio y Game/FundacionDirector.cs. NADA más: ni estaciones, ni
+        /// caños, ni buzón, ni muestras, ni pistas -- el principio rector del
+        /// GDD es que nada exista sin favor, préstamo o manos.
+        /// </summary>
+        private void SpawnFundacion()
+        {
+            var apprentice = SpawnApprentice();
+            // Reposicionar al rincón de la fundación (SpawnApprentice nace en
+            // AprendizX/Y del cuarto íntimo clásico, que en este plano es
+            // piedra maciza -- regla 47: coordenadas explícitas, no la
+            // constante de otro plano).
+            float celda = SimRenderer.CellWorldSize;
+            apprentice.transform.position = new Vector3(
+                (SimLevelBuilder.FundacionAprendizX + 0.5f) * celda,
+                (SimLevelBuilder.FundacionAprendizY + 0.5f) * celda, 0f);
+
+            var flask = apprentice.GetComponent<Flask>();
+            var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
+            var orderSystem = SpawnOrderSystem(knowledge);
+            SpawnJournalHud(knowledge);
+            SpawnOrdersHud(orderSystem);
+            SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
+
+            var director = new GameObject("FundacionDirector").AddComponent<FundacionDirector>();
+            director.Init(_sim, orderSystem, flask, apprentice.transform);
+
+            _spawned = true;
+            Debug.Log("[ChaosAlchemy] FUNDACIÓN (greybox ronda 60): mundo vacío, rincón del Maestro, director de beats.");
         }
 
         private ApprenticeController SpawnApprentice()

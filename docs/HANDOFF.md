@@ -3635,3 +3635,53 @@ ActiveOrders vacío + "La mufla se construyó en 55,138" + Crisol_Mufla
 spawneado. Lección para la 49: cuando un método "no-op si no está activo" se
 llama desde un camino compartido, el comentario que jura quién lo activa se
 verifica leyendo TODOS los llamantes del activador, no el docblock.
+
+## Rondas 57-60 — EL GIRO FINAL: TEN THOUSAND YEARS (nombre nuevo, GDD, limpieza L1 y el greybox del inicio oscuro)
+
+**57**: fix del beat de la columna ("¿Por qué esto queda ENCIMA?" ahora enseña
+experimento + criterio + lugar de entrega, con la turba como camino nombrado);
+INFORME_VISION_FINAL.md (pronóstico bifurcado por arte, nombres).
+**57b**: INFORME_OPINION_GIRO.md — feedback profundo del giro de Cesar (mundo
+vacío, trueque, libro mayor, asimetría "lo que pides tarda / lo que te piden
+espera", volátiles con 3 guardas, fuera el Favor, las EDADES).
+**58-59**: GDD_TEN_THOUSAND_YEARS.md v0.1→v0.3 (NORMATIVO — leerlo antes que
+este HANDOFF para todo lo nuevo). Nombre sellado: TEN THOUSAND YEARS +
+"Rebuild human knowledge from mud, fire, and observation". Decisiones: inicio
+oscuro minimalista, 3 slots de guardado, dos buzones simétricos, stock por
+tiempo, un solo precio por objeto (alquilar/poseer aparcado), semilla de
+autor, caótico como promesa bloqueada, patentes apagadas, repo→TenThousandYears.
+
+**60 (nocturna en autónomo, Cesar descansando)**:
+- LIMPIEZA L1: el Favor FUERA de todo HUD (OrdersHud solo+replicado: línea
+  "N ★", barra dorada, "+N ★" por fila y en cabecera de compuesto — la
+  mecánica interna sigue viva SOLO para el caótico legado, ver bloque regla-15
+  donde vivía ActualizarFavorTexto); PATENTES apagadas
+  (Hornada.PatentesActivas=false, ring sigue grabando). Las pantallas de
+  jornada del caótico (DayCycle 1193/1345/1440) conservan sus Favor a
+  propósito: mueren con el rediseño del caótico, no antes.
+- EL GREYBOX DEL INICIO OSCURO (GDD §5, F1 parcial): ModoFundacion (bootstrap,
+  excluyente con ModoSemillaCero, botón "EL INICIO — fundación (greybox)" en
+  el Título), SimLevelBuilder.BuildFundacion (mundo de piedra maciza + UNA
+  caverna x340..460 y140..200: mesa del Maestro, hogar de brasas x424..428,
+  GOTERA en x426 desde la bóveda, montón de arcilla x352..364, cuenco de agua
+  x372..385), y Game/FundacionDirector.cs: beats Mirar→Saludo→Gotera→Barro→Fin,
+  viñeta de oscuridad IMGUI (depth 50, radio por beat, amanece al final),
+  brasas mantenidas a 165raw con WakeChunk (regla 55b), gota por PaintStable
+  cada 1.15s QUE SE EVAPORA DE VERDAD contra las brasas (verificado: vapor=4
+  en el primer sondeo — la primera reacción es sim pura, cero teatro), pedidos
+  como checklist con Progreso espejando el frasco (sin Buzón aún — el atajo se
+  retira cuando la fundación gane su Buzón de Entrada), y LA GOTERA DOMADA:
+  al entregarla nace Grifo_Fundacion sobre el cuenco ("los fenómenos no se
+  eliminan: se DOMESTICAN" — la tesis del juego en un gesto).
+- VERIFICADO EN VIVO (Unity MCP, arco entero): mundo construido (agua=69,
+  arcilla=52, brasa=227raw), HUD dormido en beat 0 (gate
+  FundacionDirector.HudPermitido en DetectarPrimeraAccion), saludo por
+  proximidad despierta el HUD, gotera 15/15 → grifo en (37.45,15.25) + drip
+  parado, barro 12/12 → fin con pedidos limpios y amanecer (radio 2910).
+- Compilador fiel reconstruido 2 VECES esta sesión (el sandbox perdió /home
+  dos veces — regla 6b más viva que nunca; el zip de refs vive en
+  _to_delete/_unityrefs.zip del disco de Cesar, re-stagear de ahí).
+- PENDIENTE F1: fogón propio (turba prestada + asomo de veta), vidrio+estante,
+  frasco propio de cerámica REAL (hoy el saludo/frasco es teatro), Buzón de
+  Entrada de la fundación, y el tag `ultimo-clasico` que crea
+  ca_playtest60.cmd ANTES de commitear esta ronda.

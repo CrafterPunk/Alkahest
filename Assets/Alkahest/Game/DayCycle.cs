@@ -435,9 +435,19 @@ namespace Alkahest.Game
         /// jugador escribe un nombre, solo confirma algo que ApprenticeController
         /// o Flask ya iban a hacer con la misma pulsación.
         /// </summary>
+        /// <summary>
+        /// (RONDA 60, FUNDACIÓN greybox) El HUD de la fundación NO despierta por
+        /// moverse: el encuadre cero queda limpio hasta que el Maestro presta el
+        /// frasco (Game/FundacionDirector.cs sube HudPermitido y llama a
+        /// <see cref="DespertarHudFundacion"/> él mismo). Fuera de ModoFundacion
+        /// este método no cambia ni una línea.
+        /// </summary>
+        public static void DespertarHudFundacion() => HudSilenciado = false;
+
         private void DetectarPrimeraAccion()
         {
             if (!HudSilenciado) return;
+            if (AlkahestGameBootstrap.ModoFundacion && !FundacionDirector.HudPermitido) return; // ver DespertarHudFundacion.
 
             var kb = Keyboard.current;
             bool movimiento = kb != null && (
@@ -535,7 +545,10 @@ namespace Alkahest.Game
             // sin llamarse desde Update (regla 26/11 de CLAUDE.md, "no tocar
             // lo que puede volver"), para el día en que el gate de cavado
             // regrese en otra dirección de diseño.
-            HudSilenciado = false;
+            // (RONDA 60, FUNDACIÓN) En el inicio oscuro el HUD SIGUE silenciado:
+            // lo despierta el director al prestar el frasco (DespertarHudFundacion),
+            // no el arranque de jornada. Fuera de ese modo, igual que siempre.
+            HudSilenciado = AlkahestGameBootstrap.ModoFundacion;
             // (fix ronda 56, EL BUG DEL COMPUESTO) En SEMILLA CERO el arco de "LO QUE
             // PERSISTE" NO se genera: el director (Game/SemillaCero.cs) dicta sus
             // propios pedidos guiados uno a uno. Antes se generaba igual y quedaba
@@ -543,8 +556,9 @@ namespace Alkahest.Game
             // docblock de OrderSystem.EncolarPedidoGuiado para la autopsia completa
             // (una línea de compuesto completada vaciaba ActiveOrders y pagaba el
             // grupo entero). Mismo criterio que ya usa la rama anfitrión del multi en
-            // AlkahestGameBootstrap.TrySpawnRed.
-            if (_orderSystem != null && !AlkahestGameBootstrap.ModoSemillaCero)
+            // AlkahestGameBootstrap.TrySpawnRed. (Ronda 60: la FUNDACIÓN tampoco lo
+            // genera -- su director encola sus propios pedidos, mismo patrón.)
+            if (_orderSystem != null && !AlkahestGameBootstrap.ModoSemillaCero && !AlkahestGameBootstrap.ModoFundacion)
                 _orderSystem.GenerateOrdersPersiste();
         }
 
@@ -958,9 +972,23 @@ namespace Alkahest.Game
             // del botón y el flag que deja apagado.
             // =================================================================
             GUILayout.Space(UiStyles.S(18f));
+            // (RONDA 60, GDD v0.3 §5/§14) EL INICIO OSCURO en greybox: la
+            // fundación de TEN THOUSAND YEARS, para probar con testers antes
+            // del arte. Misma seed de autor que Semilla Cero (los decretos
+            // aplican, ver AlkahestSim.CrearMundoInterno), plano y guion
+            // propios (SimLevelBuilder.BuildFundacion + FundacionDirector).
+            if (GUILayout.Button("EL INICIO — fundación (greybox)", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
+            {
+                AlkahestGameBootstrap.ModoFundacion = true;
+                AlkahestGameBootstrap.ModoSemillaCero = false;
+                RestartRun((int)Universe.SemillaCero);
+            }
+
+            GUILayout.Space(UiStyles.S(10f));
             if (GUILayout.Button("SEMILLA CERO — tu primer taller", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
             {
                 AlkahestGameBootstrap.ModoSemillaCero = true;
+                AlkahestGameBootstrap.ModoFundacion = false;
                 RestartRun((int)Universe.SemillaCero);
             }
 
@@ -977,6 +1005,7 @@ namespace Alkahest.Game
             if (GUILayout.Button("MODO CAÓTICO — entrar con esta semilla", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
             {
                 AlkahestGameBootstrap.ModoSemillaCero = false;
+                AlkahestGameBootstrap.ModoFundacion = false;
                 RestartRun(ParseSeedField());
             }
             // (ENCARGO M, CONTRATO_FASE_A.md §2) "botón AJUSTES bajo el
@@ -1468,6 +1497,7 @@ namespace Alkahest.Game
                 // mismo universo" NO lo toca a propósito: misma seed = el
                 // arco entero se puede volver a jugar.
                 AlkahestGameBootstrap.ModoSemillaCero = false;
+                AlkahestGameBootstrap.ModoFundacion = false; // (ronda 60) mismo criterio: partida nueva = caótico limpio.
                 RestartRun(null);
             }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))

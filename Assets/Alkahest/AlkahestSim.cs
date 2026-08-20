@@ -221,7 +221,12 @@ namespace Alkahest
             // (ver SimSync.AlRecibirChunks) -- así que para cuando se llega
             // aquí el flag YA está en su valor final para este proceso, y
             // basta con leerlo sin distinguir host/invitado/un jugador.
-            if (AlkahestGameBootstrap.ModoSemillaCero) Universe.AplicarOverridesSemillaCero(_universe);
+            // (RONDA 60) ModoFundacion comparte la seed de autor Y sus decretos
+            // (regla 57: lo que el guion promete no depende del sorteo) -- la
+            // barbotina del beat 3, p. ej., existe porque el Override 6b hace
+            // soluble a la arcilla POR DECRETO.
+            if (AlkahestGameBootstrap.ModoSemillaCero || AlkahestGameBootstrap.ModoFundacion)
+                Universe.AplicarOverridesSemillaCero(_universe);
             _grid = new CellGrid();
             // (playtest 21, EL PIVOT) La partida arranca en el CUARTO ÍNTIMO,
             // no en el taller clásico -- "el cuarto íntimo pasa a ser EL
@@ -232,7 +237,12 @@ namespace Alkahest
             // decide qué plano construir, para el día en que el taller
             // clásico vuelva a excavarse de verdad en vez de generarse de
             // fábrica ya abierto.
-            SimLevelBuilder.BuildCuartoIntimo(_grid);
+            // (RONDA 60, GDD v0.3 §5) LA FUNDACIÓN construye SU plano (mundo
+            // casi vacío) en vez del cuarto íntimo. Mismo criterio que la rama
+            // BuildTestLevel de arriba: este es el único sitio del proyecto
+            // donde se decide qué plano construir.
+            if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
+            else SimLevelBuilder.BuildCuartoIntimo(_grid);
             // (playtest 40, SEMILLA CERO) Tapiado de las cuatro salas por
             // pregunta -- API CONGELADA (SimLevelBuilder.TapiarSalasSemillaCero,
             // ver su docblock). Después de BuildCuartoIntimo (necesita que las

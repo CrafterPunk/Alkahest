@@ -142,9 +142,8 @@ namespace Alkahest.Game
         }
         private readonly Dictionary<int, FilaCache> _filaCache = new Dictionary<int, FilaCache>(8);
 
-        private int _favorCacheado = int.MinValue;
-        private int _metaCacheada = -1;
-        private string _favorTexto = "";
+        // (L1, fuera el Favor) Aquí vivían _favorCacheado/_metaCacheada/_favorTexto,
+        // el caché de la línea de Favor de la cabecera -- retirados con ella.
 
         /// <summary>
         /// Inyección de dependencias desde AlkahestGameBootstrap. `orderSystem`
@@ -210,27 +209,23 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>Reconstruye <see cref="_favorTexto"/> SOLO si Favor o el escalón vigente cambiaron desde el frame anterior.</summary>
-        private void ActualizarFavorTexto()
-        {
-            int favor = _orderSystem.Favor;
-            bool hayEscalon = OrderSystem.TryGetNextTier(favor, out int meta, out string nombre);
-            int metaEfectiva = hayEscalon ? meta : -1;
-            if (favor == _favorCacheado && metaEfectiva == _metaCacheada) return;
-
-            _favorCacheado = favor;
-            _metaCacheada = metaEfectiva;
-            _favorTexto = hayEscalon
-                ? favor + " ★  →  " + nombre + " " + meta
-                : favor + " ★  ·  máximo";
-        }
+        // (LIMPIEZA L1, ronda 60, GDD v0.3 §6 -- FUERA EL FAVOR) Aquí vivía
+        // ActualizarFavorTexto(): la línea "N ★ → escalón" + su barra dorada, cabecera
+        // del panel desde el playtest 8. El Favor salió del juego por decisión de
+        // Cesar ("no nos sirve de momento ni como moneda ni como nada, fue un ensayo
+        // antiguo"): la economía nueva es el TRUEQUE físico (GDD §6) y las recompensas
+        // pasan a ser materia/obras/páginas del Libro Mayor. La MECÁNICA interna
+        // (OrderSystem.Favor/AddFavor/TryGetNextTier) sigue viva SOLO como soporte del
+        // modo caótico legado (bloqueado, pendiente de rediseño post-Fest) -- este HUD
+        // simplemente ya no la enseña en ningún modo. Regla 15: si alguien quiere
+        // "ver el Favor de vuelta", que lea esto primero.
 
         /// <summary>Fila de cache de texto para `o.Id`, creándola si es la primera vez y refrescando el progreso SOLO si cambió (nunca reconstruye si el frame no trajo nada nuevo).</summary>
         private FilaCache ObtenerFila(Order o)
         {
             if (!_filaCache.TryGetValue(o.Id, out var fila))
             {
-                fila = new FilaCache { TextoRecompensa = "+" + o.Recompensa + " ★" };
+                fila = new FilaCache { TextoRecompensa = "" }; // (L1, fuera el Favor) antes: "+" + o.Recompensa + " ★"
                 _filaCache[o.Id] = fila;
             }
             if (fila.Progreso != o.Progreso || fila.Completado != o.Completado)
@@ -365,9 +360,9 @@ namespace Alkahest.Game
         {
             var cabecera = orders[i];
 
-            GUI.Label(new Rect(x, y, interior - anchoRecompensa, altoLinea), cabecera.GrupoNombreCorto, UiStyles.Titulo);
-            GUI.Label(new Rect(x + interior - anchoRecompensa, y, anchoRecompensa, altoLinea),
-                "+" + cabecera.GrupoRecompensaTotal + " ★", UiStyles.Numero);
+            // (L1, fuera el Favor) La cabecera del compuesto mostraba "+N ★" a la
+            // derecha (GrupoRecompensaTotal) -- retirado; el nombre usa el ancho entero.
+            GUI.Label(new Rect(x, y, interior, altoLinea), cabecera.GrupoNombreCorto, UiStyles.Titulo);
             y += altoLinea;
 
             if (expandido)
@@ -426,7 +421,6 @@ namespace Alkahest.Game
             }
 
             UiStyles.Preparar();
-            ActualizarFavorTexto();
 
             bool expandido = Expandido;
             var orders = _orderSystem.ActiveOrders;
@@ -452,16 +446,16 @@ namespace Alkahest.Game
             float anchoTextoProgreso = interior - xTextoDesde - anchoRecompensa;
 
             float altoLinea = UiStyles.S(17f);
-            float altoBarraFavor = UiStyles.S(5f);
             float altoBarra = UiStyles.S(8f);
             float gapChico = UiStyles.S(3f);
             float gapFila = UiStyles.S(5f);
 
             // ---- 1) Medir ----
+            // (L1, fuera el Favor) La cabecera medía además una línea "N ★ → escalón"
+            // y su barra dorada (altoBarraFavor) -- retiradas, ver el bloque regla-15
+            // donde vivía ActualizarFavorTexto.
             float alto = pad
                        + altoLinea                    // "ENCARGOS · O expande/pliega"
-                       + gapChico + altoLinea          // Favor + escalón, una sola línea
-                       + gapChico + altoBarraFavor
                        + gapFila;
             for (int i = 0; i < orders.Count; i++)
             {
@@ -503,17 +497,10 @@ namespace Alkahest.Game
             float y = panel.y + pad;
 
             GUI.Label(new Rect(x, y, interior, altoLinea), expandido ? TituloExpandido : TituloColapsado, UiStyles.Titulo);
-            y += altoLinea + gapChico;
-
-            // Favor + escalón vigente en una sola línea (balance playtest 8:
-            // la meta reescalada al escalón todavía no alcanzado -- ver
-            // ActualizarFavorTexto/OrderSystem.TryGetNextTier).
-            GUI.Label(new Rect(x, y, interior, altoLinea), _favorTexto, UiStyles.Numero);
-            y += altoLinea + gapChico;
-
-            float fracFavor = _metaCacheada > 0 ? (float)_orderSystem.Favor / _metaCacheada : 1f;
-            UiStyles.Barra(new Rect(x, y, interior, altoBarraFavor), fracFavor, UiStyles.Oro);
-            y += altoBarraFavor + gapFila;
+            y += altoLinea + gapFila;
+            // (L1, fuera el Favor) Aquí se dibujaban la línea "N ★ → escalón" y la
+            // barra dorada de progreso al siguiente tier -- retiradas (regla 15,
+            // ver el bloque donde vivía ActualizarFavorTexto).
 
             // (playtest 23) Cero encargos: decirlo. Ver el comentario de la medición.
             if (orders.Count == 0)
@@ -653,9 +640,10 @@ namespace Alkahest.Game
             float gapChico = UiStyles.S(3f);
             float gapFila = UiStyles.S(5f);
 
-            string favorTexto = saber.FavorReplicado.Value + " ★";
-
-            float alto = pad + altoLinea + gapChico + altoLinea + gapFila;
+            // (L1, fuera el Favor) Aquí se leía saber.FavorReplicado para la línea
+            // "N ★" del invitado -- retirada; la NetworkVariable sigue existiendo en
+            // SaberSync (inofensiva) hasta la limpieza del caótico.
+            float alto = pad + altoLinea + gapFila;
             for (int i = 0; i < n; i++)
             {
                 alto += altoLinea;
@@ -686,9 +674,6 @@ namespace Alkahest.Game
             float y = panel.y + pad;
 
             GUI.Label(new Rect(x, y, interior, altoLinea), expandido ? TituloExpandido : TituloColapsado, UiStyles.Titulo);
-            y += altoLinea + gapChico;
-
-            GUI.Label(new Rect(x, y, interior, altoLinea), favorTexto, UiStyles.Numero);
             y += altoLinea + gapFila;
 
             if (n == 0)
@@ -714,7 +699,7 @@ namespace Alkahest.Game
                 string textoProgreso = e.completado ? "hecho" : (e.progreso + "/" + e.minCells);
                 GUI.Label(new Rect(xTexto, y, anchoTextoProgreso, altoLinea), textoProgreso,
                     e.completado ? UiStyles.CuerpoTenue : UiStyles.CuerpoLinea);
-                GUI.Label(new Rect(xTexto + anchoTextoProgreso, y, anchoRecompensa, altoLinea), "+" + e.recompensa + " ★", UiStyles.Numero);
+                // (L1, fuera el Favor) Aquí se dibujaba "+N ★" (e.recompensa) -- retirado.
                 y += altoLinea;
 
                 if (expandido)

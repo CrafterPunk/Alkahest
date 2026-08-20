@@ -931,6 +931,15 @@ namespace Alkahest.Game
         /// <see cref="OrderType.FlotaInsoluble"/> para la de la columna, contrato §1 beat 5)
         /// cuando el pedido deba resolverse por la vía YA existente de esos tipos.
         /// </summary>
+        /// <summary>
+        /// (ronda 60, FUNDACIÓN greybox) Vacía la lista de pedidos activos sin
+        /// tocar ningún otro estado. Lo usa Game/FundacionDirector.cs al cerrar
+        /// el greybox ("fin del ensayo": panel de encargos limpio a propósito,
+        /// OrdersHud ya sabe pintar TextoVacio). Mismo efecto que el Clear que
+        /// todo Encolar* hace antes de añadir, solo que sin añadir nada.
+        /// </summary>
+        public void LimpiarPedidos() => ActiveOrders.Clear();
+
         public void EncolarPedidoGuiado(OrderType tipo, int minCells, int recompensa, string descripcion,
             byte? targetMat = null, int? minTempC = null)
         {

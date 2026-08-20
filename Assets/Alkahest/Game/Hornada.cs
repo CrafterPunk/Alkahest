@@ -115,6 +115,19 @@ namespace Alkahest.Game
             PatentesVersion = 0;
         }
 
+        /// <summary>
+        /// (LIMPIEZA L1, ronda 60, GDD v0.3 §14 -- PATENTES APAGADAS) Decisión de
+        /// Cesar: el sistema de patentes de procesos ("el procedimiento por escrito",
+        /// playtest 25) queda APAGADO por ahora -- pertenece a la dirección vieja y no
+        /// tiene papel en la economía del trueque. El código se conserva entero
+        /// dormido (regla 15); si el concepto vuelve, volverá como páginas del Libro
+        /// Mayor, no como sistema paralelo. Con el flag en false, el ring de ops SIGUE
+        /// grabando (es barato y es historia útil para depurar), pero ninguna patente
+        /// se congela y la sección PROCEDIMIENTOS del diario ya no las muestra (cero
+        /// patentes = cero filas; la sección sigue mostrando las leyes).
+        /// </summary>
+        public static bool PatentesActivas = false;
+
         /// <summary>API CONGELADA (contrato §6.3): la llama B desde Crisol/Prensa/BancoChispa cada vez que una operación transforma materia de verdad.</summary>
         public static void RegistrarOp(string maquina, byte matEntrada, byte matSalida, string condicion)
         {
@@ -127,6 +140,7 @@ namespace Alkahest.Game
             // una máquina (p.ej. la prensa "resistiendo" sobre piedra) nunca
             // dispara una patente: no son el descubrimiento que el diseño
             // quiere premiar.
+            if (!PatentesActivas) return; // (L1) patentes apagadas -- ver el docblock del flag.
             if (matSalida >= MaterialId.Count || !MaterialId.EsBaseEstado(matSalida)) return;
             if (_producido[matSalida]) return; // ya se produjo esta partida -- solo la PRIMERA vez patenta.
 

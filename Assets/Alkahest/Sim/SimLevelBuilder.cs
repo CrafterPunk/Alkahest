@@ -2837,6 +2837,66 @@ namespace Alkahest.Sim
         }
 
         /// <summary>TODO el mundo, borde incluido: no hace falta un FillBorder aparte (como en BuildTestLevel) porque la cámara íntima (CuartoX0..X1/Y0..Y1, muy dentro de 0..767/0..287) nunca toca el borde real del mundo -- se queda macizo por construcción, sin una pasada extra.</summary>
+        // =====================================================================
+        // (RONDA 60, GDD v0.3 §5 -- EL INICIO OSCURO, greybox) EL PLANO DE LA
+        // FUNDACIÓN: el mundo casi vacío donde arranca TEN THOUSAND YEARS.
+        // Piedra maciza en todo el grid salvo UNA caverna; dentro, solo el
+        // rincón del Maestro (mesa + hogar de brasas), la GOTERA que cae sobre
+        // las brasas (la primera reacción del juego, ocurriendo sola antes de
+        // que el jugador toque nada -- pedido literal de Cesar), un montón de
+        // polvo de arcilla y un charquito de agua. NADA MÁS: el principio
+        // rector del GDD es que nada exista en pantalla que no haya entrado
+        // por un favor, un préstamo o las manos del jugador. La secuencia de
+        // beats vive en Game/FundacionDirector.cs; este método solo talla.
+        // El goteo y el calor de las brasas son RUNTIME (los mantiene el
+        // director), aquí solo se deja la geometría que los recibe.
+        // =====================================================================
+        public const int FundacionX0 = 340, FundacionX1 = 460; // interior de la caverna (121 celdas de ancho).
+        public const int FundacionY0 = 140, FundacionY1 = 200; // suelo interior en Y0, bóveda plana en Y1 (61 de alto).
+        public const int FundacionMesaX0 = 434, FundacionMesaX1 = 446, FundacionMesaTopY = 143; // la mesa del Maestro (bloque macizo).
+        public const int FundacionBrasasX0 = 424, FundacionBrasasX1 = 428, FundacionBrasasY = 141; // el hogar: 5 celdas que el director mantiene al rojo.
+        public const int FundacionGoteraX = 426, FundacionGoteraDripY = 197; // la gotera nace pegada a la bóveda, cae sobre las brasas.
+        public const int FundacionArcillaX0 = 352, FundacionArcillaX1 = 364; // el montón de polvo de arcilla (se asienta solo en los primeros ticks).
+        public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // el charquito (cuenco tallado bajo el nivel del suelo).
+        public const int FundacionAprendizX = 352, FundacionAprendizY = 152; // spawn: en la penumbra, con el fuego a la derecha.
+
+        public static void BuildFundacion(CellGrid grid)
+        {
+            ObraDelTaller.Clear();
+            FillWorldStone(grid);
+
+            // La caverna.
+            DrawSolidRect(grid, FundacionX0, FundacionY0, FundacionX1 - FundacionX0 + 1,
+                FundacionY1 - FundacionY0 + 1, MaterialId.Empty);
+
+            // La mesa del Maestro (bloque macizo, anticincel).
+            DrawSolidRect(grid, FundacionMesaX0, FundacionY0, FundacionMesaX1 - FundacionMesaX0 + 1,
+                FundacionMesaTopY - FundacionY0 + 1, MaterialId.Stone);
+            RegistrarObra(FundacionMesaX0, FundacionY0, FundacionMesaX1, FundacionMesaTopY);
+
+            // El hogar de las brasas: dos muretes bajos conteniendo el lecho.
+            DrawSolidRect(grid, FundacionBrasasX0 - 1, FundacionY0, 1, 4, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionBrasasX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
+            RegistrarObra(FundacionBrasasX0 - 1, FundacionY0, FundacionBrasasX1 + 1, FundacionY0 + 3);
+
+            // El montón de arcilla: un rectángulo de polvo que la propia sim
+            // asienta en montículo en los primeros ticks (SetCell, no
+            // PaintStable: construcción de nivel -- PaintClimate de abajo deja
+            // el mundo entero a ambiente y el polvo es estable a 20°C).
+            for (int x = FundacionArcillaX0; x <= FundacionArcillaX1; x++)
+                for (int y = FundacionY0; y <= FundacionY0 + 3; y++)
+                    grid.SetCell(x, y, MaterialId.MatDe(1, EstadoMateria.Polvo));
+
+            // El charquito: cuenco tallado 3 celdas bajo el nivel del suelo,
+            // lleno de agua, con la piedra sin tallar como paredes.
+            DrawSolidRect(grid, FundacionCharcoX0, FundacionY0 - 3, FundacionCharcoX1 - FundacionCharcoX0 + 1, 3, MaterialId.Empty);
+            for (int x = FundacionCharcoX0; x <= FundacionCharcoX1; x++)
+                for (int y = FundacionY0 - 3; y <= FundacionY0 - 1; y++)
+                    grid.SetCell(x, y, MaterialId.Water);
+
+            PaintClimate(grid); // mismo ambiente uniforme de siempre (regla 31).
+        }
+
         private static void FillWorldStone(CellGrid grid)
         {
             for (int y = 0; y < CellGrid.H; y++)
