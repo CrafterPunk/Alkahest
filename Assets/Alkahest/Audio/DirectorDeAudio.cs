@@ -181,17 +181,26 @@ namespace Alkahest.Audio
         // ===================================================================
         public static float VolumenEfectos
         {
-            get => _volumenEfectos;
+            // (hotfix pt47) CARGA PEREZOSA con centinela -1: PlayerPrefs está
+            // PROHIBIDO en inicializadores de campo estático (el .cctor
+            // lanza y envenena el tipo -- el mismo bug que tumbó DayCycle,
+            // ver su docblock gemelo). El primer acceso real llega desde
+            // Update/OnGUI/propiedades en runtime: contexto permitido.
+            get
+            {
+                if (_volumenEfectos < 0f) _volumenEfectos = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolEfectos, 1f));
+                return _volumenEfectos;
+            }
             set
             {
                 float v = Mathf.Clamp01(value);
-                if (Mathf.Approximately(v, _volumenEfectos)) return;
+                if (Mathf.Approximately(v, VolumenEfectos)) return;
                 _volumenEfectos = v;
                 PlayerPrefs.SetFloat(PrefKeyVolEfectos, _volumenEfectos);
                 PlayerPrefs.Save();
             }
         }
-        private static float _volumenEfectos = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolEfectos, 1f));
+        private static float _volumenEfectos = -1f; // -1 = aún no cargado de PlayerPrefs (ver el docblock de VolumenEfectos: hotfix pt47).
 
         // ===================================================================
         // PRESUPUESTO DE MEZCLA (fix playtest 9, causa 1c del popeo)

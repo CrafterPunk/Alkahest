@@ -453,6 +453,15 @@ Estado detallado y siguientes pasos: `docs/HANDOFF.md`. Detalles de la sim: `doc
     si depende de que OTROS despierten su chunk, una racha del RNG lo congela en silencio a
     mitad de proceso (el charco a medio arder como estatua, la brasa eterna).
 
+56. **JAMÁS API DE UNITY EN INICIALIZADORES ESTÁTICOS (playtest 47, visto en vivo)**: un
+    inicializador de campo estático (o .cctor) que llama a PlayerPrefs/AudioListener/
+    Application/etc. lanza UnityException, el TIPO queda envenenado (TypeInitializationException)
+    y TODO lo que lo toque explota en cascada — el juego entero "sale roto" sin un solo error de
+    compilación, porque es una restricción de RUNTIME que el compilador fiel (regla 53) no puede
+    cazar. El patrón correcto: centinela (-1/null) + carga perezosa en el primer acceso desde
+    Awake/Start/Update/OnGUI. Ante un reporte de "todo roto de golpe", buscar
+    TypeInitializationException en la consola ANTES que nada.
+
 ## Estado (última sesión) y prioridades
 HECHO: M1 sim ✅ · M2 interacción ✅ · M3 leyes/reacciones/cultivo ✅ · M4 loop completo ✅ ·
 M5 parcial (audio + aprendiz imp). Playtest 12: campo morfológico. Playtest 13: afinado de esa

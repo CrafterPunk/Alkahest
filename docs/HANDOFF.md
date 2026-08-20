@@ -3137,3 +3137,17 @@ de AlkahestLab.
 **Deudas**: pausa multi sin probar en vivo (dos ventanas = prueba de Cesar); cruces solo en
 Semilla Cero; la matriz completa material×operación (~350 celdas) sigue pendiente como encargo
 propio; el slider comparte textura de riel con los campos de texto.
+
+---
+
+## Playtest 47b → HOTFIX: el tipo envenenado (regla 56 nueva)
+
+Cesar probó la Fase A y "salió roto": sin título, sin HUD, mundo a medias. Consola (leída por
+el MCP de Unity): `PlayerPrefs.GetFloat is not allowed to be called from a MonoBehaviour
+constructor... DayCycle.cctor → TypeInitializationException` en cascada sobre CADA OnGUI que
+consulta DayCycle.InputLocked. El encargo M cargó los volúmenes en INICIALIZADORES DE CAMPO
+ESTÁTICO (DayCycle._volGeneral y DirectorDeAudio._volumenEfectos) — Unity lo prohíbe en
+runtime y el compilador fiel no puede cazarlo (regla 53 no cubre restricciones de runtime).
+FIX: centinela -1 + carga perezosa en el primer acceso (Awake/OnGUI son contextos permitidos),
+ambos archivos, con docblocks espejo. Barrido del resto del proyecto: ningún otro inicializador
+estático llama API de Unity. REGLA 56 nueva en CLAUDE.md. Verificado en vivo tras redeploy.

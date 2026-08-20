@@ -271,13 +271,27 @@ namespace Alkahest.Game
 
         private const string PrefKeyVolGeneral = "ChaosAlchemy_VolGeneral";
         /// <summary>
-        /// Volumen general (AudioListener.volume), 0..1. Inicializador de
-        /// campo ESTÁTICO: se carga de PlayerPrefs la primera vez que algo
-        /// toca esta clase (mismo criterio que DirectorDeAudio.VolumenEfectos),
-        /// así que el slider del Título ve el valor persistido incluso antes
-        /// de que exista ninguna instancia de DayCycle.
+        /// Volumen general (AudioListener.volume), 0..1. CARGA PEREZOSA
+        /// (hotfix pt47, visto EN VIVO): la versión anterior lo cargaba en el
+        /// inicializador de campo estático, y Unity PROHÍBE PlayerPrefs ahí
+        /// -- el .cctor lanzaba, el TIPO DayCycle quedaba envenenado
+        /// (TypeInitializationException) y TODO lo que consultaba
+        /// DayCycle.InputLocked (cada OnGUI del juego) explotaba en cascada:
+        /// sin título, sin HUD, "me sale roto". El centinela -1 marca "aún no
+        /// leído"; la primera lectura real ocurre desde Awake/OnGUI, que son
+        /// contextos permitidos. NUNCA volver a llamar API de Unity en un
+        /// inicializador estático (vale también para AudioListener,
+        /// Application.*, etc.).
         /// </summary>
-        private static float _volGeneral = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolGeneral, 1f));
+        private static float _volGeneral = -1f;
+        private static float VolGeneral
+        {
+            get
+            {
+                if (_volGeneral < 0f) _volGeneral = Mathf.Clamp01(PlayerPrefs.GetFloat(PrefKeyVolGeneral, 1f));
+                return _volGeneral;
+            }
+        }
 
         /// <summary>Nombre de la escena CLÁSICA (Título -> 3 jornadas), para "VOLVER AL TÍTULO" desde la escena MULTI -- ver <see cref="VolverAlTitulo"/>. Decisión fuera de contrato: no existía una constante compartida para este nombre; si la escena se renombrara algún día sin tocar este archivo, `SceneManager.LoadScene` falla con un solo error de consola, nada revienta en juego.</summary>
         private const string SceneNameClasica = "AlkahestLab";
@@ -294,13 +308,13 @@ namespace Alkahest.Game
             // componente en existir de la partida. Si alguna vez hubiera dos
             // instancias a la vez (no debería), reaplicar el mismo valor es
             // un no-op inocuo.
-            AudioListener.volume = _volGeneral;
+            AudioListener.volume = VolGeneral;
         }
 
         private static void SetVolGeneral(float v)
         {
             v = Mathf.Clamp01(v);
-            if (Mathf.Approximately(v, _volGeneral)) return;
+            if (Mathf.Approximately(v, VolGeneral)) return;
             _volGeneral = v;
             AudioListener.volume = _volGeneral;
             PlayerPrefs.SetFloat(PrefKeyVolGeneral, _volGeneral);
@@ -962,8 +976,8 @@ namespace Alkahest.Game
                 UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
 
             GUILayout.Space(UiStyles.S(14f));
-            GUILayout.Label("Volumen general — " + Mathf.RoundToInt(_volGeneral * 100f) + "%", UiStyles.Cuerpo);
-            float nuevoGeneral = GUILayout.HorizontalSlider(_volGeneral, 0f, 1f, UiStyles.Slider, UiStyles.SliderThumb,
+            GUILayout.Label("Volumen general — " + Mathf.RoundToInt(VolGeneral * 100f) + "%", UiStyles.Cuerpo);
+            float nuevoGeneral = GUILayout.HorizontalSlider(VolGeneral, 0f, 1f, UiStyles.Slider, UiStyles.SliderThumb,
                 GUILayout.Height(UiStyles.S(20f)));
             if (!Mathf.Approximately(nuevoGeneral, _volGeneral)) SetVolGeneral(nuevoGeneral);
 
