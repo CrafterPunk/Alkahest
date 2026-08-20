@@ -239,6 +239,68 @@ namespace Alkahest.EditorTools
             return saved;
         }
 
+        /// <summary>
+        /// (playtest 50b) Ver el bloque de comentarios en BuildMultiScene: a
+        /// cada NetworkObject DE ESCENA se le regenera el GlobalObjectIdHash
+        /// DESPUÉS del primer guardado (cuando su GlobalObjectId ya es
+        /// válido), vía el generador interno de NGO por reflexión; si aun así
+        /// queda 0 o duplicado, se sella un hash determinista FNV-1a del
+        /// nombre (ambos lados cargan el MISMO .unity, así que cualquier
+        /// valor estable y único sirve para el emparejamiento de
+        /// ScenePlacedObjects). Siempre imprime la tabla final: un hash que
+        /// no se puede leer no protege nada (regla 51).
+        /// </summary>
+        private static void SellarGlobalObjectIdHashes(Scene scene)
+        {
+            var netObjs = Object.FindObjectsByType<Unity.Netcode.NetworkObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var vistos = new System.Collections.Generic.HashSet<uint>();
+            var tabla = new System.Text.StringBuilder("[ChaosAlchemy] GlobalObjectIdHash sellados:");
+            var gen = typeof(Unity.Netcode.NetworkObject).GetMethod("GenerateGlobalObjectIdHash",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            bool cambio = false;
+
+            foreach (var no in netObjs)
+            {
+                // 1) El generador oficial de NGO, ahora que el objeto persiste.
+                if (gen != null) gen.Invoke(no, null);
+
+                var so = new SerializedObject(no);
+                var prop = so.FindProperty("GlobalObjectIdHash");
+                if (prop == null)
+                {
+                    Debug.LogError("[ChaosAlchemy] NetworkObject sin propiedad serializada GlobalObjectIdHash (¿cambió NGO?): " + no.name);
+                    return;
+                }
+                uint hash = (uint)prop.longValue;
+
+                // 2) Fallback determinista si sigue en 0 o colisiona.
+                if (hash == 0u || vistos.Contains(hash))
+                {
+                    uint fnv = 2166136261u;
+                    string clave = "AlkahestLabMulti/" + no.name;
+                    for (int i = 0; i < clave.Length; i++) { fnv ^= clave[i]; fnv *= 16777619u; }
+                    if (fnv == 0u) fnv = 1u;
+                    while (vistos.Contains(fnv)) fnv++;
+                    prop.longValue = fnv;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                    hash = fnv;
+                }
+
+                vistos.Add(hash);
+                EditorUtility.SetDirty(no);
+                cambio = true;
+                tabla.Append(' ').Append(no.name).Append('=').Append(hash);
+            }
+
+            Debug.Log(tabla.ToString());
+            if (cambio)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene, MultiScenePath))
+                    Debug.LogError("[ChaosAlchemy] No se pudo re-guardar la escena MULTI con los hashes sellados.");
+            }
+        }
+
         // =================================================================
         // LA ESCENA
         // =================================================================
@@ -259,6 +321,26 @@ namespace Alkahest.EditorTools
                 Debug.LogError("[ChaosAlchemy] No se pudo guardar la escena MULTI en " + MultiScenePath);
                 return;
             }
+
+            // =============================================================
+            // (playtest 50b, LA PISTOLA HUMEANTE DEL MULTI) EL HASH CERO:
+            // los NetworkObject creados por ESTE script y guardados en la
+            // misma pasada quedaban serializados con GlobalObjectIdHash = 0
+            // -- un objeto aún no persistido no tiene GlobalObjectId válido,
+            // así que el OnValidate de NGO no podía calcularle identidad.
+            // Con DOS objetos a hash 0 (AlkahestSimSync y AlkahestMaquinaSync),
+            // PopulateScenePlacedObjects lanza "already contains the same
+            // GlobalObjectIdHash value 0" DENTRO de HostServerInitialize, NGO
+            // se traga la excepción y StartHost devuelve false MUDO: el bug
+            // intermitente de "ANFITRIÓN no arranca" que perseguimos desde el
+            // playtest 42. Intermitente porque recién generada (objetos vivos
+            // en memoria con OnValidate corrido) la escena FUNCIONA -- y al
+            // reabrir Unity los ceros vuelven del archivo. El sello: guardar
+            // PRIMERO (los objetos ya persisten, su GlobalObjectId ya vale),
+            // regenerar el hash de cada NetworkObject de escena, verificar
+            // unicidad != 0, y guardar OTRA VEZ.
+            // =============================================================
+            SellarGlobalObjectIdHashes(scene);
 
             RegistrarEnBuildSettings();
         }

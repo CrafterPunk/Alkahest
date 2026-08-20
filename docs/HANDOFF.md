@@ -3370,3 +3370,32 @@ Contrato: docs/CONTRATO_RONDA50.md. Cuatro encargos paralelos + integración.
 Deudas nuevas: ensanchar AlcobaFriaAncho para el par térmico adyacente;
 réplicas multi de las placas nuevas sin verificar en sesión; TallarArcoPasillo
 sin gate en seed 0 (efecto inerte, documentado).
+
+### Playtest 50b — LA PISTOLA HUMEANTE DEL MULTI (el hash cero)
+
+Cesar probó multi con un amigo y ANFITRIÓN volvió a fallar — pero esta vez el
+fallo fue LIMPIO (mensaje veraz, guardas del pt48 impidiendo el auto-join) y la
+consola entregó por fin la excepción que NGO se tragaba:
+`AlkahestMaquinaSync tried to register with ScenePlacedObjects which already
+contains the same GlobalObjectIdHash value 0 for AlkahestSimSync`.
+
+CAUSA RAÍZ DE TODA LA SAGA "StartHost devolvió false" (pt42→47b→50): el
+generador de la escena MULTI crea los NetworkObject por código y guardaba el
+.unity en la misma pasada — un objeto AÚN NO PERSISTIDO no tiene
+GlobalObjectId válido, así que su GlobalObjectIdHash se serializaba en 0. Dos
+objetos a 0 → PopulateScenePlacedObjects lanza DENTRO de HostServerInitialize
+→ NGO traga la excepción → StartHost false mudo. INTERMITENTE porque recién
+generada la escena (objetos vivos, OnValidate corrido) FUNCIONA — mis
+verificaciones en vivo del pt48/50 pasaban — y al REABRIR Unity los ceros
+vuelven del archivo y revienta: por eso a Cesar le fallaba y a mí no.
+
+FIX (`AlkahestNetSceneBuilder.SellarGlobalObjectIdHashes`): guardar la escena
+PRIMERO (los objetos ya persisten), regenerar el hash de cada NetworkObject
+(generador interno de NGO por reflexión; fallback FNV-1a determinista del
+nombre si quedara 0/duplicado), verificar unicidad, guardar OTRA VEZ, e
+imprimir la tabla (regla 51). Verificado: el .unity en disco quedó con
+hashes únicos no-cero (3765942628 / 969867961, los ceros restantes son el
+campo InScenePlacedSource..., normal) y StartHost(Steam) por comando arrancó
+a la primera: "Anfitrión listo: sim, máquinas, encargos y avatar propio".
+La escena sellada YA está en el disco de Cesar; el fix del builder viaja en
+ca_playtest50b.cmd.
