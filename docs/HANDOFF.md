@@ -3485,3 +3485,33 @@ con su "E — prensar" sobre el muro sellado.
   AprendizNet/OrderSystem/MachineFocus/DirectorDeAudio — pieza propia.
   WORKAROUND mientras tanto: tras salir de una sesión, VOLVER AL TÍTULO y
   reentrar a la escena multi antes de re-hostear.
+
+## Playtest 54 — SOBRIEDAD Y PARIDAD (el buzón del Maestro)
+
+Feedback de Cesar (capturas solo vs multi de la seed 0): las dos versiones no
+eran iguales; las redomas del estante eran ruido; y la Tolva cercana partía el
+camino con jambas doradas, flecha flotante y letrerote — "la única cosa que
+necesito investigar al inicio es el crisol".
+
+- **LA FUGA DE PARIDAD (causa raíz)**: Balda/Anclaje/Pila guardaban una
+  bandera estática "ya creadas" SIN reset — quien entraba SEGUNDO a un modo
+  en el mismo proceso se quedaba sin esos muebles (por eso el multi salía
+  decorado y el solo pelado, o al revés según el orden). Fix de integración:
+  ResetGuardaEstatica() en los tres, llamado junto a MachineFocus.Limpiar()
+  en ambos arranques de mundo del bootstrap.
+- **La mitad de soportes**: galerías 10→5, BaldaPlan 17→8 (-53%), alternando
+  por índice para repartir; anclajes y pilas intactos.
+- **Redomas fuera de la seed 0**: StorageRack.Init gana `visible` —
+  componente vivo (MaquinaSync exige estantes>=1 para publicar el registro
+  multi) pero sin sprites ni redomas en Semilla Cero. Vuelven en el caótico.
+- **EL BUZÓN DEL MAESTRO** (ex Tolva cercana): reubicado ELEVADO y lateral
+  (x97..106, base y198, la cota del ex-estante, cerca del alambique), fuera
+  del paso; jambas doradas, triángulo flotante y letrero permanente
+  RETIRADOS; ahora es un buzón de piedra con marco de latón fino, bandejita
+  y relieve de pergamino/sello (comunica "entregas" sin letras); rótulo solo
+  de proximidad ("BUZÓN DEL MAESTRO — vierte aquí lo pedido"); halo de
+  pedido activo a mitad de intensidad; la flecha del panel de encargos lee
+  la posición real y apunta sola al sitio nuevo. Consejos del HintSystem
+  renombrados a Buzón (integración). El caótico conserva su Tolva clásica.
+- Deuda menor: TryFlechaTolva nunca emite "↑" (dominan ←/→ salvo justo
+  debajo del buzón).

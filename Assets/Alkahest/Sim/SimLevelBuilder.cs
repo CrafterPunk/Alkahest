@@ -1449,6 +1449,111 @@ namespace Alkahest.Sim
         public const int EstanteBaseY = AlambiqueBaseY + Alambique.MatrazAlto + Alambique.DomoAlto + 1 + EstanteMargenSobreAlambique; // 193 (techo real del domo) + 5 = 198.
 
         // =================================================================
+        // (CONTRATO_RONDA54.md, playtest 54) EL BUZÓN DEL MAESTRO -- SOLO
+        // SEMILLA CERO. Reemplaza a la TOLVA CERCANA del playtest 50
+        // (<see cref="BuildTolvaCercana"/>, constantes `TolvaCercana*` más
+        // abajo, RETIRADA de la llamada de <see cref="BuildCuartoIntimo"/>
+        // pero conservada intacta -- regla 15 de CLAUDE.md): Cesar, sobre
+        // esa versión, "atravesarla con esa flecha amarilla y letrero
+        // grande... en medio del camino, alejándome de la única cosa que
+        // necesito investigar al inicio [el Crisol]... algo que
+        // GRÁFICAMENTE comunique que tengo que dejar pedidos, no una flecha
+        // amarilla y un letrerote" -- y sugirió el sitio: "de repente en
+        // algún lugar de arriba y mucho menos llamativo... una alcoba
+        // pequeña en el muro sobre la zona del crisol, o en la repisa
+        // superior izquierda cerca del alambique".
+        //
+        // EL SITIO, LEÍDO DEL PLANO (regla 39/47 de CLAUDE.md): la Tolva
+        // vieja vivía en el HUECO DE SUELO x129..138 (el paso caminable
+        // Crisol->Prensa) -- exactamente lo que Cesar señaló como el
+        // problema. El sitio nuevo es <see cref="EstanteBaseY"/>=198 (la
+        // cota YA VALIDADA "5 celdas sobre el domo real del Alambique",
+        // <see cref="EstanteMargenSobreAlambique"/>, ver el párrafo de
+        // arriba) -- que en Semilla Cero queda VACANTE porque el estante de
+        // redomas no se hace visible ahí (ver
+        // `AlkahestGameBootstrap.SpawnStorageRack`, gate nuevo de esta
+        // ronda: el componente sigue vivo por Net/MaquinaSync.cs, pero no
+        // construye ni un solo sprite). El Buzón ocupa ese mismo aire en
+        // vez de dejarlo huérfano: ELEVADO (60 celdas sobre el suelo del
+        // Crisol, 138), LATERAL (fuera del paso Crisol<->Prensa, que vuelve
+        // a ser suelo limpio) y "a segundos de vuelo" (mismo eje X que el
+        // Crisol/Alambique, <see cref="BuzonX0"/> derivado de
+        // <see cref="CrisolX"/>, no de un literal).
+        //
+        // A diferencia de <see cref="BuildTolvaCercana"/> (que reutilizaba
+        // el suelo YA sólido del cuarto, `BuildCuartoFloor`), aquí NO hay
+        // piedra por defecto -- a esta altura el cuarto está hueco
+        // (`ExcavateCuarto`) -- así que <see cref="BuildBuzonMaestro"/>
+        // maciza el bloque entero (mismo criterio que
+        // <see cref="BuildAlcobaFria"/>: sólido primero, ranura vacía
+        // después) antes de vaciar la ranura.
+        //
+        // GEOMETRÍA: MISMO ancho funcional que la Tolva que sustituye
+        // (<see cref="BuzonBocaAncho"/>=6, igual que la vieja
+        // `TolvaCercanaBocaAncho`) pero MUCHO más baja
+        // (<see cref="BuzonBocaAlto"/>=8 contra 20): ya no es un pozo de
+        // suelo a techo, es una hornacina de pared -- "ranura horizontal
+        // oscura" (contrato, textual), no un tiro vertical. Tres filas
+        // libres por encima de la ranura para el relieve de pergamino/sello
+        // (puramente decorativo, un sprite sobre la piedra -- Game/
+        // DeliveryChute.cs lo pinta, este archivo no talla nada extra ahí).
+        //
+        // Registrada como Obra (anticincel) y DELIBERADAMENTE fuera de
+        // `RegistrarObraSemillaCero` -- el Buzón NUNCA se tapia, mismo
+        // criterio que la Tolva vieja: tiene que estar descubrible desde el
+        // minuto 0 (late con el primer pedido, ver Game/DeliveryChute.cs).
+        //
+        // SIN COLISIÓN VERIFICADA (regla 39, medido contra constantes
+        // reales, no a ojo): el depósito de 6 anclajes de
+        // Game/Anclaje.cs::SpawnDeposito nace en `EstanteBaseY +
+        // DepositoDesnivel` = 198+14 = 212 -- <see cref="BuzonBlockTopY"/>
+        // (209) deja 2 filas de aire libres (210-211) antes de tocarlo. Por
+        // el oeste, la galería de baldas "ala izquierda" (`_galeriasOriginales`
+        // tras la reducción de esta ronda, X0=84..93, Y=178) queda muy por
+        // debajo (178<198) y 4 columnas a la izquierda de `BuzonX0`=97: sin
+        // solape en ninguno de los dos ejes.
+        // =================================================================
+        /// <summary>Ancho de cada jamba de piedra que flanquea la ranura del Buzón.</summary>
+        public const int BuzonMuro = 2;
+        /// <summary>Ancho de la ranura interior -- MISMO ancho funcional que la Tolva Cercana que sustituye (TolvaCercanaBocaAncho=6).</summary>
+        public const int BuzonBocaAncho = 6;
+        /// <summary>Alto de la ranura interior, en celdas -- una hornacina de pared, no un pozo de suelo a techo (contraste con TolvaCercanaAlto=20). 3 filas de sillar (Game/DeliveryChute.cs::ChuteSillRows) + margen de caída visible de sobra para lo que vierte un pedido de Semilla Cero.</summary>
+        public const int BuzonBocaAlto = 8;
+        /// <summary>Jamba izquierda, borde exterior del bloque -- centrado sobre el Crisol/Alambique (misma X, CrisolX=102): 102-5=97.</summary>
+        public const int BuzonX0 = CrisolX - 5;
+        /// <summary>Jamba derecha, borde exterior. 97 + 2*2 + 6 - 1 = 106.</summary>
+        public const int BuzonX1 = BuzonX0 + BuzonMuro * 2 + BuzonBocaAncho - 1;
+        /// <summary>Ranura, borde izquierdo (dentro de la jamba). 99.</summary>
+        public const int BuzonMouthX0 = BuzonX0 + BuzonMuro;
+        /// <summary>Ranura, borde derecho (dentro de la jamba). 104.</summary>
+        public const int BuzonMouthX1 = BuzonX1 - BuzonMuro;
+        /// <summary>Última fila maciza de la base del bloque -- reutiliza EXACTAMENTE EstanteBaseY (198, "5 celdas sobre el domo del Alambique"), vacante en Semilla Cero porque el estante no se hace visible ahí.</summary>
+        public const int BuzonBaseY = EstanteBaseY;
+        /// <summary>Ranura, primera fila de aire (justo sobre la base sólida). 199.</summary>
+        public const int BuzonMouthY0 = BuzonBaseY + 1;
+        /// <summary>Ranura, última fila de aire (el labio). 206.</summary>
+        public const int BuzonMouthY1 = BuzonMouthY0 + BuzonBocaAlto - 1;
+        /// <summary>Techo del bloque de piedra -- 3 filas por encima de la ranura para el relieve de pergamino/sello (decorativo, Game/DeliveryChute.cs lo pinta encima de esta piedra).</summary>
+        public const int BuzonBlockTopY = BuzonMouthY1 + 3;
+
+        /// <summary>
+        /// Talla el Buzón (ver el bloque de constantes de arriba para el
+        /// porqué exacto del sitio): maciza el bloque entero (a diferencia
+        /// de <see cref="BuildTolvaCercana"/>, aquí NO hay suelo previo del
+        /// que partir) y vacía la ranura interior. SOLO se llama desde
+        /// <see cref="BuildCuartoIntimo"/> bajo el gate de
+        /// <see cref="AlkahestGameBootstrap.ModoSemillaCero"/>.
+        /// </summary>
+        private static void BuildBuzonMaestro(CellGrid grid)
+        {
+            DrawSolidRect(grid, BuzonX0, BuzonBaseY, BuzonX1 - BuzonX0 + 1, BuzonBlockTopY - BuzonBaseY + 1, MaterialId.Stone);
+
+            DrawSolidRect(grid, BuzonMouthX0, BuzonMouthY0, BuzonMouthX1 - BuzonMouthX0 + 1, BuzonMouthY1 - BuzonMouthY0 + 1, MaterialId.Empty);
+
+            RegistrarObra(BuzonX0, BuzonBaseY, BuzonX1, BuzonBlockTopY);
+        }
+
+        // =================================================================
         // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4.5) --
         // el REAMUEBLADO del cuarto íntimo. PÁRRAFO HISTÓRICO (playtest 26 lo
         // CORRIGE, ver el bloque siguiente): en el playtest 25, Crisol/
@@ -2298,7 +2403,11 @@ namespace Alkahest.Sim
             // (contrato §3e): sigue tallando la de siempre, sin la cercana.
             if (AlkahestGameBootstrap.ModoSemillaCero)
             {
-                BuildTolvaCercana(grid); // registra su propia Obra ANTES de AdornarCuarto -- ver el docblock.
+                // (playtest 54) BuildTolvaCercana YA NO SE LLAMA AQUÍ -- ver
+                // el bloque de constantes `Buzon*` junto a EstanteBaseY para
+                // el porqué completo. El método y sus constantes se
+                // CONSERVAN intactos, sin llamantes (regla 15 de CLAUDE.md).
+                BuildBuzonMaestro(grid); // registra su propia Obra ANTES de AdornarCuarto -- mismo criterio que la Tolva vieja.
             }
             else
             {
@@ -2870,6 +2979,80 @@ namespace Alkahest.Sim
         /// hasta <see cref="BaldaLargoMax"/> celdas. Ya NO se talla
         /// directamente: cada entrada es la "media crujía" original que se
         /// reparte entre 1-2 baldas más cortas con un hueco entre medias.
+        ///
+        /// (playtest 54, PARIDAD SOLO/MULTI + "REDUCIR LOS SOPORTES A LA
+        /// MITAD") Cesar, comparando capturas multi vs. un jugador de
+        /// Semilla Cero 0: "reducir los soportes movibles como a la mitad
+        /// para que no esté tan cargado, y que ambas versiones estén
+        /// IGUALES". INVESTIGACIÓN DE LA DISPARIDAD (regla 43 de CLAUDE.md,
+        /// conteo exacto): esta tabla y `BuildCuartoIntimo` (que la talla
+        /// vía `TallarRepisas`) NO tienen ninguna rama por `SimSync.EnEscena`
+        /// -- `AlkahestSim.CrearMundoInterno` llama a
+        /// `SimLevelBuilder.BuildCuartoIntimo` exactamente una vez, IGUAL en
+        /// el proceso de un jugador y en el del anfitrión del multi (grep
+        /// confirmado: ningún `if (SimSync...)` en este archivo más allá de
+        /// los gates de `ModoSemillaCero`, que valen igual en los dos
+        /// modos). Los DOS caminos de spawn de las instancias reales
+        /// (`AlkahestGameBootstrap.TrySpawn` para un jugador,
+        /// `.TrySpawnRed` para el anfitrión) llaman al MISMO
+        /// `Mudanza.Init(_sim)` (línea 878 y ~vía `Net/AprendizNet.cs::Cablear`
+        /// respectivamente), que llama al MISMO
+        /// `SpawnBaldasYAnclajesSiCorresponde()` (`Game/Mudanza.cs`), que
+        /// llama a los MISMOS `Balda.SpawnTodas`/`Anclaje.SpawnDeposito`/
+        /// `Pila.SpawnTodas` -- el plano y el código de spawn YA ESTÁN
+        /// UNIFICADOS, sin ninguna decisión de diseño que los separe.
+        ///
+        /// CAUSA REAL DE LA DISPARIDAD OBSERVADA (archivos AJENOS a este
+        /// encargo, fuera de mi lista de archivos exclusivos -- documentado
+        /// aquí para el director, NO corregido en esta ronda):
+        /// `Game/Balda.cs:144` (`private static bool _todasCreadas`),
+        /// `Game/Anclaje.cs:195` (`private static bool _yaCreado`) y
+        /// `Game/Pila.cs:190` (`private static bool _todasCreadas`) son
+        /// banderas ESTÁTICAS DE PROCESO sin ningún reset (ni en
+        /// `DayCycle.RestartRun`, ni al cambiar de escena, ni en ningún
+        /// `OnNetworkDespawn`). En una build de reparto (o en una sesión de
+        /// Editor que navegue Título->Lab->Título->Multi SIN detener el
+        /// Play, ver regla 6b de CLAUDE.md sobre por qué el sandbox insiste
+        /// en volver a un clon fresco) el dominio NO se recarga entre
+        /// escenas: quien entra SEGUNDO a un modo dentro del MISMO proceso
+        /// encuentra la bandera ya en `true` y `SpawnTodas`/`SpawnDeposito`
+        /// retornan sin tallar nada -- ninguna balda, ningún anclaje,
+        /// ninguna pila para ESE modo, en ESA sesión. Encaja EXACTAMENTE
+        /// con el reporte ("1 = multi... 2 = un jugador", el multi
+        /// decorado, el solo pelado): jugar multi primero deja las tres
+        /// banderas en `true`, y la sesión de un jugador que sigue en el
+        /// MISMO proceso las encuentra ya gastadas. Esto NO es una
+        /// diferencia de DISEÑO entre modos (que es lo que este archivo
+        /// controla) -- es una fuga de estado de proceso en tres archivos
+        /// que no están en mi lista de archivos exclusivos de esta ronda
+        /// (`Sim/SimLevelBuilder.cs`, `Game/DeliveryChute.cs`,
+        /// `Game/AlkahestGameBootstrap.cs`, `Game/MaquinariaSprites.cs`,
+        /// `Game/StorageRack.cs`). DEUDA PRIORITARIA para quien posea
+        /// `Game/Balda.cs`/`Game/Anclaje.cs`/`Game/Pila.cs`: resetear las
+        /// tres banderas en el mismo sitio que ya limpia
+        /// `MachineFocus.Limpiar()` (la primera línea de
+        /// `AlkahestGameBootstrap.TrySpawn`/`TrySpawnRed`, ver ese archivo),
+        /// que es justo donde el proyecto ya reconoce este problema para
+        /// OTRO registro estático.
+        ///
+        /// LO QUE SÍ HACE ESTA RONDA, dentro de mis archivos: LA MITAD de
+        /// las galerías (5 de 10, alternas por índice -- ni un tramo
+        /// contiguo del cuarto se queda sin ninguna, criterio de
+        /// composición "reparte, no amontones") se retiran de la tabla.
+        /// CONTEO EXACTO (regla 43): 10 galerías -> 17 `BaldaPlan`
+        /// troceados (<see cref="ComputeBaldaPlanes"/>, `BaldaLargoMax`=12,
+        /// `BaldaHueco`=3) ANTES; 5 galerías -> 8 troceados DESPUÉS (-53%).
+        /// Se retiraron (X0..X1, filas trozadas): 111..120 (1), 144..170
+        /// (2), 200..228 (2, la galería sobre el estante de redomas --
+        /// coherente con que el estante deja de hacerse visible en Semilla
+        /// Cero, ver AlkahestGameBootstrap.SpawnStorageRack), 258..280 (2),
+        /// 318..344 (2) = 9 troceados retirados. Se conservan: 84..93 (1),
+        /// 128..139 (1), 176..192 (2), 234..254 (2), 290..314 (2) = 8.
+        /// Como el plano es la ÚNICA fuente de esta geometría (ver el
+        /// párrafo de arriba), el recorte se aplica IGUAL en un jugador y en
+        /// el anfitrión del multi sin ninguna rama nueva -- una vez
+        /// corregida la fuga de arriba, "ambas versiones estarán IGUALES"
+        /// de verdad, no solo en el plano sino en lo que el jugador ve.
         /// </summary>
         private static readonly RepisaPlan[] _galeriasOriginales =
         {
@@ -2884,16 +3067,22 @@ namespace Alkahest.Sim
             // altura relativa sobre la maquinaria (que es lo que las hace
             // alcanzables y útiles) en vez de quedarse clavadas a una cota
             // absoluta que el cuarto ya no usa (regla 47 de CLAUDE.md).
+            //
+            // (playtest 54) MITAD RETIRADA -- ver el docblock de arriba para
+            // el conteo exacto y el criterio (alternas por índice). Las
+            // cinco líneas retiradas NO se borran del historial: quedan
+            // comentadas, en su sitio original, para que quien las busque
+            // por playtest 34 las encuentre.
             new RepisaPlan { X0 =  84, X1 =  93, Y = CuartoY0 + 42 }, // ALA IZQUIERDA de "la línea" del horno (flanquea el plinto del Alambique).
-            new RepisaPlan { X0 = 111, X1 = 120, Y = CuartoY0 + 42 }, // ALA DERECHA  de "la línea" del horno.
+            //  RETIRADA (playtest 54): new RepisaPlan { X0 = 111, X1 = 120, Y = CuartoY0 + 42 }, // ALA DERECHA de "la línea" del horno.
             new RepisaPlan { X0 = 128, X1 = 139, Y = CuartoY0 + 54 }, // paso crisol -> prensa (corta: el hueco solo da para eso).
-            new RepisaPlan { X0 = 144, X1 = 170, Y = CuartoY0 + 72 }, // galería alta sobre la Prensa.
+            //  RETIRADA (playtest 54): new RepisaPlan { X0 = 144, X1 = 170, Y = CuartoY0 + 72 }, // galería alta sobre la Prensa.
             new RepisaPlan { X0 = 176, X1 = 192, Y = CuartoY0 + 46 }, // el umbral donde nace el aprendiz: una balda BAJA, a mano.
-            new RepisaPlan { X0 = 200, X1 = 228, Y = CuartoY0 + 60 }, // galería del CENTRO, sobre el estante de redomas y el depósito de anclajes.
+            //  RETIRADA (playtest 54): new RepisaPlan { X0 = 200, X1 = 228, Y = CuartoY0 + 60 }, // galería del CENTRO, sobre el estante de redomas (que deja de verse en Semilla Cero) y el depósito de anclajes.
             new RepisaPlan { X0 = 234, X1 = 254, Y = CuartoY0 + 52 }, // sobre la escalinata: el descansillo entre transformar y observar.
-            new RepisaPlan { X0 = 258, X1 = 280, Y = CuartoY0 + 62 }, // galería de la alcoba, sobre la Columna.
+            //  RETIRADA (playtest 54): new RepisaPlan { X0 = 258, X1 = 280, Y = CuartoY0 + 62 }, // galería de la alcoba, sobre la Columna.
             new RepisaPlan { X0 = 290, X1 = 314, Y = CuartoY0 + 76 }, // galería alta de la alcoba, sobre el Banco de Chispa.
-            new RepisaPlan { X0 = 318, X1 = 344, Y = CuartoY0 + 60 }, // galería del atrio del Maestro.
+            //  RETIRADA (playtest 54): new RepisaPlan { X0 = 318, X1 = 344, Y = CuartoY0 + 60 }, // galería del atrio del Maestro.
         };
 
         /// <summary>Una balda ya troceada: UNA fila maciza (Y), de X0 a X1 inclusive -- ver <see cref="BaldaPlanes"/>.</summary>
@@ -3421,6 +3610,23 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, RackX0, RackY0, RackX1 - RackX0 + 1, RackHeight, MaterialId.Stone);
         }
 
+        // =================================================================
+        // (playtest 54, REGLA 15 DE CLAUDE.md) RETIRADA DE LA LLAMADA, NO
+        // BORRADA. `BuildCuartoIntimo` ya NO invoca `BuildTolvaCercana` --
+        // el bloque de constantes `Buzon*` (junto a `EstanteBaseY`, más
+        // arriba en este archivo) y `BuildBuzonMaestro` la sustituyen
+        // ENTERA en Semilla Cero. Motivo: Cesar, sobre esta boca, "de
+        // repente atravesarla con esa flecha amarilla y letrero grande --
+        // dos barras amarillas que no tienen nada de tolva -- en medio del
+        // camino, alejándome de la única cosa que necesito investigar al
+        // inicio [el Crisol], es muy mala decisión" -- el hueco de suelo
+        // x129..138 que tallaba esta función ES LITERALMENTE el paso
+        // caminable Crisol->Prensa (ver el bloque "EL SITIO" más abajo,
+        // todavía correcto como registro histórico de por qué se eligió
+        // ese hueco en su día). Todo el bloque de abajo (constantes +
+        // método) se conserva intacto y compilable por si un diseño futuro
+        // quisiera una boca a ras de suelo en ese mismo hueco -- no se ha
+        // detectado ningún otro llamante.
         // =================================================================
         // (CONTRATO_RONDA50.md §3b, ENCARGO G, playtest 50) LA TOLVA CERCANA
         // -- SOLO SEMILLA CERO (diagnóstico D4, "EL TRAYECTO MUDO"). Cesar,

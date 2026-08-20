@@ -12,18 +12,25 @@ namespace Alkahest.Game
     /// de <see cref="OrderSystem"/>.
     ///
     /// DOS BOCAS POSIBLES, UNA SOLA POR PARTIDA (CONTRATO_RONDA50.md §3b,
-    /// ENCARGO G, playtest 50, diagnóstico D4 "EL TRAYECTO MUDO"): en modo
-    /// CAÓTICO/MULTI esta clase sigue tallando/usando la boca CLÁSICA de
-    /// siempre (lejos, tras el pasillo -- contrato §3e, "el caótico NO
-    /// cambia"). En Semilla Cero usa la TOLVA CERCANA, tallada DENTRO del
-    /// cuarto íntimo a segundos de vuelo del Crisol
-    /// (<see cref="SimLevelBuilder.BuildTolvaCercana"/>, ver el docblock de
-    /// esas constantes para el sitio exacto y por qué). La elección la hace
-    /// <see cref="Init"/>, leyendo <see cref="AlkahestGameBootstrap.ModoSemillaCero"/>
-    /// UNA sola vez -- ver <see cref="_zoneX0"/>/<see cref="_zoneFloorY1"/>,
-    /// que dejaron de ser `const` por eso. Todo lo demás de esta clase (el
-    /// arrastre, el consumo, el marco dorado, la flecha) es IDÉNTICO para
-    /// las dos bocas: solo cambia DÓNDE viven.
+    /// ENCARGO G, playtest 50, diagnóstico D4 "EL TRAYECTO MUDO"; visual
+    /// rediseñada en el playtest 54, ver "REDISEÑO DEL BUZÓN" más abajo):
+    /// en modo CAÓTICO/MULTI esta clase sigue tallando/usando la boca
+    /// CLÁSICA de siempre (lejos, tras el pasillo -- contrato §3e, "el
+    /// caótico NO cambia"). En Semilla Cero usa EL BUZÓN DEL MAESTRO,
+    /// tallado DENTRO del cuarto íntimo, ELEVADO Y LATERAL sobre la zona
+    /// del Crisol/Alambique (<see cref="SimLevelBuilder.BuildBuzonMaestro"/>,
+    /// ver el docblock de las constantes `Buzon*` para el sitio exacto y
+    /// por qué -- sustituye a la TOLVA CERCANA del playtest 50,
+    /// <see cref="SimLevelBuilder.BuildTolvaCercana"/>, RETIRADA de este
+    /// camino pero conservada intacta, regla 15 de CLAUDE.md). La elección
+    /// la hace <see cref="Init"/>, leyendo
+    /// <see cref="AlkahestGameBootstrap.ModoSemillaCero"/> UNA sola vez --
+    /// ver <see cref="_zoneX0"/>/<see cref="_zoneFloorY1"/>, que dejaron de
+    /// ser `const` por eso. El arrastre y el consumo (más abajo) son
+    /// IDÉNTICOS para las dos bocas: solo cambia DÓNDE viven. El marco
+    /// visual y el rótulo YA NO son idénticos desde el playtest 54 -- ver
+    /// "REDISEÑO DEL BUZÓN" para las tres diferencias, todas SOLO en
+    /// Semilla Cero.
     ///
     /// FAVOR SOLO POR ENCARGOS (fix playtest 9): antes, lo que no encajaba con
     /// ningún encargo incompleto se contaba como "chatarra" y daba 1 Favor
@@ -180,6 +187,70 @@ namespace Alkahest.Game
     ///    se retira tras dos usos como en el taller clásico, sino que sigue
     ///    disponible siempre que no haya destello/aviso activo -- si acaso
     ///    RESPALDA la "recompensa de cavar" en vez de arriesgarla.
+    ///
+    /// =====================================================================
+    /// REDISEÑO DEL BUZÓN (PLAYTEST 54) -- SOLO SEMILLA CERO
+    /// =====================================================================
+    /// Feedback de Cesar sobre el rediseño del pt50 (la "Tolva Cercana"):
+    /// "El coso arriba de la tolva que aún no funciona" (el triángulo/
+    /// embudo amarillo -- <see cref="SpriteFlecha"/> cabeceando sobre la
+    /// boca) es "ruido"; y sobre el sitio en sí: "atravesarla con esa
+    /// flecha amarilla y letrero grande -- dos barras amarillas que no
+    /// tienen nada de tolva -- en medio del camino, alejándome de la única
+    /// cosa que necesito investigar al inicio [el Crisol], es muy mala
+    /// decisión... algo que GRÁFICAMENTE comunique que tengo que dejar
+    /// pedidos, no una flecha amarilla y un letrerote".
+    ///
+    /// TRES CAMBIOS, SOLO EN LA RAMA <see cref="_esBuzonSemillaCero"/> (el
+    /// caótico/multi sigue siendo LA TOLVA CLÁSICA de siempre, ni un píxel
+    /// distinto -- <see cref="BuildVisualClasica"/>/las ramas `else` de
+    /// <see cref="AnimarMarco"/>/<see cref="OnGUI"/>):
+    ///  1. SITIO: <see cref="SimLevelBuilder.BuzonMouthX0"/>..<c>Y1</c>, un
+    ///     hueco ELEVADO Y LATERAL sobre la zona del Crisol/Alambique (ver
+    ///     el docblock grande de las constantes `Buzon*` en
+    ///     Sim/SimLevelBuilder.cs) -- ya NO parte en dos el paso caminable
+    ///     Crisol->Prensa (ese hueco de suelo, x129..138, vuelve a ser
+    ///     suelo limpio).
+    ///  2. VISUAL: <see cref="BuildVisualBuzon"/> sustituye jambas
+    ///     doradas+labio+flecha por un marco de LATÓN discreto (más fino,
+    ///     `UiStyles.Laton` en vez de `UiStyles.Oro`), una bandejita fija
+    ///     que NO pulsa, y un relieve de pergamino/sello ESTÁTICO -- ningún
+    ///     elemento nuevo se anima salvo el color/alfa por cercanía y
+    ///     destello (mismo criterio que el resto del taller). El halo de
+    ///     "pedido activo" (<see cref="_luzPedido"/>) SE QUEDA -- Cesar:
+    ///     "es la señal buena" -- pero a la MITAD de intensidad
+    ///     (<see cref="AnimarMarco"/>: centro/amplitud 0.30/0.22 ->
+    ///     0.15/0.11).
+    ///  3. RÓTULO: <see cref="OnGUI"/> deja de gatear el texto permanente
+    ///     por <c>MachineFocus.MostrarPromptE</c> (el criterio de "tutorial
+    ///     aprendido tras 2 usos" del taller clásico) -- pasa a ser SOLO DE
+    ///     PROXIMIDAD, vía <see cref="UiStyles.PlacaMundo"/> (el mismo
+    ///     patrón de desvanecimiento por cercanía que ya usa el resto del
+    ///     taller, regla 28 de CLAUDE.md), con el texto acortado "BUZÓN DEL
+    ///     MAESTRO — vierte aquí lo pedido" (ya no repite el gesto completo
+    ///     en el cuerpo del rótulo permanente -- eso lo enseña el consejo
+    ///     de primer pedido de Game/SemillaCero.cs, sin cambios).
+    ///
+    /// LA FLECHA DEL ORDERSHUD (glifo ←/→/↓ en el panel de encargos,
+    /// playtest 50, `Game/OrdersHud.cs::TryFlechaTolva`, archivo AJENO a
+    /// este encargo) SE QUEDA SIN TOCAR -- verificado que sigue apuntando
+    /// al sitio correcto: lee <c>_tolva.transform.position</c> de ESTE
+    /// componente, y <see cref="Init"/> sigue fijando ese transform al
+    /// centro del labio de la boca activa (ver el bloque de arriba, "El
+    /// transform se ancla al CENTRO DEL LABIO") -- solo que ahora esa boca
+    /// es el Buzón. HALLAZGO, NO CORREGIBLE DESDE AQUÍ (archivo ajeno):
+    /// `TryFlechaTolva` solo emite "↓" cuando el objetivo está por DEBAJO
+    /// del aprendiz, NUNCA "arriba" (contrato pt50, textual: "solo
+    /// izquierda/derecha/abajo") -- con el Buzón ahora POR ENCIMA del
+    /// spawn, ese caso "arriba" cae al `else` de X (`→`/`←`). Verificado
+    /// que esto NO produce una flecha engañosa en la práctica: desde
+    /// <see cref="SimLevelBuilder.AprendizX"/>=186 hasta
+    /// <see cref="SimLevelBuilder.BuzonX0"/>≈97 el desnivel en X (~85-89
+    /// celdas) domina siempre al desnivel en Y (~46 celdas), así que
+    /// <c>ax &gt; ay</c> y la flecha muestra "←" -- correcto. Solo se
+    /// degrada (residual "←"/"→" en vez de "arriba") si el jugador llega a
+    /// pararse casi exactamente bajo el Buzón, un caso raro y de bajo
+    /// coste que no justifica tocar un archivo ajeno.
     /// </summary>
     public sealed class DeliveryChute : MonoBehaviour
     {
@@ -232,10 +303,12 @@ namespace Alkahest.Game
         /// instante antes de desaparecer (feedback de "esto SÍ ha llegado"),
         /// sin alargar la espera de un encargo grande. En la boca clásica
         /// deja ChuteMouthY1 - ChuteMouthY0 + 1 - 3 = 26 filas de pozo real
-        /// donde arrastrar (22 columnas x 26 filas); en la Tolva cercana
-        /// (TolvaCercanaAlto=20, TolvaCercanaBocaAncho=6) deja 17 filas de
+        /// donde arrastrar (22 columnas x 26 filas); en el Buzón del Maestro
+        /// (playtest 54, BuzonBocaAlto=8, BuzonBocaAncho=6) deja 5 filas de
         /// pozo -- de sobra igual, ningún encargo de Semilla 0 vierte más de
-        /// un puñado de celdas por chorro.
+        /// un puñado de celdas por chorro, y el Buzón es una hornacina de
+        /// pared compacta, no un pozo de suelo a techo (contraste con la
+        /// Tolva Cercana retirada, TolvaCercanaAlto=20, que dejaba 17).
         /// </summary>
         private const int ChuteSillRows = 3;
         private int _zoneFloorY1;
@@ -277,12 +350,24 @@ namespace Alkahest.Game
         // avisado sigan mostrando el motivo correcto en el rótulo breve.
         private bool _lastMismatchWasCompletedOrder;
 
+        // --- Marco CLÁSICO (caótico/multi -- SIN CAMBIOS, regla "el caótico
+        // no cambia" del contrato pt50, ver el docblock de la clase). ---
         private SpriteRenderer _jambaIzq;
         private SpriteRenderer _jambaDer;
         private SpriteRenderer _labio;
         private SpriteRenderer _flecha;
         private Transform _flechaTr;
         private float _flechaY;
+
+        // --- EL BUZÓN DEL MAESTRO (playtest 54, SOLO Semilla Cero) -- ver el
+        // docblock grande al final de esta clase, "REDISEÑO DEL BUZÓN
+        // (PLAYTEST 54)", y SimLevelBuilder.BuildBuzonMaestro para el sitio. ---
+        private bool _esBuzonSemillaCero;
+        private SpriteRenderer _boMarcoIzq;
+        private SpriteRenderer _boMarcoDer;
+        private SpriteRenderer _boMarcoSup;
+        private SpriteRenderer _boBandeja;
+        private float _boRotuloY;
 
         private float _flashHasta;
         private bool _flashAceptado;
@@ -305,16 +390,19 @@ namespace Alkahest.Game
             _orderSystem = orderSystem;
             _player = FindAnyObjectByType<ApprenticeController>()?.transform; // (fix playtest 16, ver doc del campo _player)
 
-            // (CONTRATO_RONDA50.md §3b, ENCARGO G) LA BOCA QUE TOCA: cercana
-            // en Semilla Cero (tallada por SimLevelBuilder.BuildTolvaCercana,
-            // ver el docblock de esas constantes), clásica en caótico/multi
-            // -- decidido UNA vez aquí, nunca por frame.
+            // (playtest 54) LA BOCA QUE TOCA: el BUZÓN DEL MAESTRO en Semilla
+            // Cero (tallado por SimLevelBuilder.BuildBuzonMaestro -- ver el
+            // docblock de las constantes Buzon* para el porqué del sitio y
+            // el rediseño; sustituye a la Tolva Cercana del playtest 50,
+            // RETIRADA de este camino pero conservada intacta, regla 15),
+            // clásica en caótico/multi -- decidido UNA vez aquí, nunca por
+            // frame.
             if (AlkahestGameBootstrap.ModoSemillaCero)
             {
-                _zoneX0 = SimLevelBuilder.TolvaCercanaMouthX0;
-                _zoneX1 = SimLevelBuilder.TolvaCercanaMouthX1;
-                _zoneY0 = SimLevelBuilder.TolvaCercanaMouthY0;
-                _zoneY1 = SimLevelBuilder.TolvaCercanaMouthY1;
+                _zoneX0 = SimLevelBuilder.BuzonMouthX0;
+                _zoneX1 = SimLevelBuilder.BuzonMouthX1;
+                _zoneY0 = SimLevelBuilder.BuzonMouthY0;
+                _zoneY1 = SimLevelBuilder.BuzonMouthY1;
             }
             else
             {
@@ -325,6 +413,12 @@ namespace Alkahest.Game
             }
             _zoneFloorY1 = _zoneY0 + ChuteSillRows - 1;
 
+            // (playtest 54) Decidido UNA vez aquí, nunca por frame -- mismo
+            // criterio que la elección de boca de arriba. Distingue las DOS
+            // vistas completamente distintas de BuildVisual/AnimarMarco/OnGUI
+            // de más abajo.
+            _esBuzonSemillaCero = AlkahestGameBootstrap.ModoSemillaCero;
+
             // El transform se ancla al CENTRO DEL LABIO de la boca: es el punto
             // al que apuntan flecha y rótulo.
             transform.position = new Vector3(
@@ -332,13 +426,16 @@ namespace Alkahest.Game
                 (_zoneY1 + 1) * SimRenderer.CellWorldSize,
                 0f);
 
-            BuildVisual();
+            if (_esBuzonSemillaCero) BuildVisualBuzon();
+            else BuildVisualClasica();
         }
 
         // -----------------------------------------------------------------
-        // Visual: marco dorado + flecha, todo generado por código.
+        // Visual CLÁSICA (caótico/multi): marco dorado + flecha, SIN
+        // CAMBIOS respecto al playtest 3/16 -- "el caótico no cambia"
+        // (contrato pt50 §3e), ver el docblock grande al final de la clase.
         // -----------------------------------------------------------------
-        private void BuildVisual()
+        private void BuildVisualClasica()
         {
             float celda = SimRenderer.CellWorldSize;
             float bocaIzq = _zoneX0 * celda;
@@ -382,6 +479,92 @@ namespace Alkahest.Game
             // apagado (Luz.Crear siempre nace así): que encienda es decisión
             // de AnimarMarco, nunca de aquí.
             _luzPedido = MaquinariaSprites.Luz.CrearOvalada(transform, "LuzPedidoTolva",
+                new Vector3((bocaIzq + bocaDer) * 0.5f, centroY, 0f),
+                (bocaDer - bocaIzq) * 1.6f, bocaAlto * 1.3f, UiStyles.Oro);
+        }
+
+        // -----------------------------------------------------------------
+        // Visual del BUZÓN DEL MAESTRO (playtest 54, SOLO Semilla Cero):
+        // ver "REDISEÑO DEL BUZÓN (PLAYTEST 54)" al final de la clase para
+        // el porqué completo. CUATRO piezas, ninguna una flecha ni un
+        // letrero:
+        //  1. Un marco de LATÓN discreto (UiStyles.Laton, no UiStyles.Oro --
+        //     "más apagado que Oro", ver el docblock de esa constante en
+        //     UiStyles.cs) alrededor de la ranura -- mucho más fino
+        //     (grosor 0.10 contra 0.26 de las jambas clásicas) que "las dos
+        //     barras amarillas" que criticó Cesar.
+        //  2. Una bandejita: una repisa fina que sobresale bajo la ranura
+        //     (UiStyles.LatonOscuro, estática, sin animar).
+        //  3. Un relieve de pergamino (UiStyles.Pergamino) con un pequeño
+        //     sello de latón encima (UiStyles.LatonOscuro), DENTRO del
+        //     margen de piedra que SimLevelBuilder.BuildBuzonMaestro deja
+        //     sobre la ranura (BuzonBlockTopY - BuzonMouthY1 = 3 filas) --
+        //     comunica "aquí se entregan encargos" sin una sola letra
+        //     (contrato, textual: "algo que GRÁFICAMENTE comunique").
+        //  4. El mismo halo ovalado de "hay pedido activo" de siempre
+        //     (Luz.CrearOvalada, API sin cambios), con intensidad a la
+        //     MITAD en AnimarMarco (contrato: "baja su intensidad a ~la
+        //     mitad; es la señal buena").
+        // -----------------------------------------------------------------
+        private void BuildVisualBuzon()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            float bocaIzq = _zoneX0 * celda;
+            float bocaDer = (_zoneX1 + 1) * celda;
+            float bocaAlto = (_zoneY1 + 1 - _zoneY0) * celda;
+            float centroY = (_zoneY0 * celda + (_zoneY1 + 1) * celda) * 0.5f;
+            float grosorMarco = 0.10f; // discreto -- contraste deliberado con el `grosor=0.26f` de las jambas clásicas.
+
+            var solido = SpriteSolido();
+
+            // El marco: tres tramos (dos jambas + lintel superior). La base
+            // de la ranura la hace `_boBandeja` más abajo, que además
+            // sobresale (lee como repisa, no como cuarta jamba).
+            _boMarcoIzq = CrearSprite("BuzonMarcoIzq", solido, 19,
+                new Vector3(bocaIzq - grosorMarco * 0.5f, centroY, 0f),
+                new Vector3(grosorMarco, bocaAlto + grosorMarco, 1f));
+            _boMarcoDer = CrearSprite("BuzonMarcoDer", solido, 19,
+                new Vector3(bocaDer + grosorMarco * 0.5f, centroY, 0f),
+                new Vector3(grosorMarco, bocaAlto + grosorMarco, 1f));
+            _boMarcoSup = CrearSprite("BuzonMarcoSup", solido, 19,
+                new Vector3((bocaIzq + bocaDer) * 0.5f, (_zoneY1 + 1) * celda, 0f),
+                new Vector3(bocaDer - bocaIzq + grosorMarco * 2f, grosorMarco, 1f));
+
+            // La bandejita: repisa de latón viejo, fija, que sobresale un
+            // poco hacia el jugador -- NO pulsa como el labio clásico (esa
+            // era la "barra amarilla" que se leía como carril de aterrizaje;
+            // aquí el pulso lo lleva el halo del pedido, más discreto).
+            _boBandeja = CrearSprite("BuzonBandeja", solido, 19,
+                new Vector3((bocaIzq + bocaDer) * 0.5f, _zoneY0 * celda - 0.05f, 0f),
+                new Vector3(bocaDer - bocaIzq + grosorMarco * 3f, grosorMarco * 1.6f, 1f));
+            _boBandeja.color = UiStyles.LatonOscuro;
+
+            // El relieve de pergamino/sello: DENTRO del margen de piedra que
+            // el plano ya deja libre sobre la ranura -- puramente
+            // decorativo y ESTÁTICO (no lo toca AnimarMarco): la señal que
+            // SÍ cambia con el tiempo es el halo del pedido, no esta placa.
+            _boRotuloY = (_zoneY1 + 1) * celda + 0.55f;
+            var pergaminoGo = new GameObject("BuzonPergamino");
+            pergaminoGo.transform.SetParent(transform, false);
+            pergaminoGo.transform.position = new Vector3((bocaIzq + bocaDer) * 0.5f, _boRotuloY, 0f);
+            pergaminoGo.transform.localScale = new Vector3((bocaDer - bocaIzq) * 0.62f, 0.42f, 1f);
+            var pergaminoSr = pergaminoGo.AddComponent<SpriteRenderer>();
+            pergaminoSr.sprite = solido;
+            pergaminoSr.sortingOrder = 17;
+            pergaminoSr.color = UiStyles.Pergamino;
+
+            var selloGo = new GameObject("BuzonSello");
+            selloGo.transform.SetParent(transform, false);
+            selloGo.transform.position = new Vector3((bocaIzq + bocaDer) * 0.5f, _boRotuloY, 0f);
+            selloGo.transform.localScale = new Vector3(0.20f, 0.20f, 1f);
+            var selloSr = selloGo.AddComponent<SpriteRenderer>();
+            selloSr.sprite = solido;
+            selloSr.sortingOrder = 18;
+            selloSr.color = UiStyles.LatonOscuro;
+
+            // Mismo halo ovalado de siempre (API sin cambios) -- ver
+            // AnimarMarco para la intensidad a la mitad de esta ronda.
+            _luzPedido = MaquinariaSprites.Luz.CrearOvalada(transform, "LuzPedidoBuzon",
                 new Vector3((bocaIzq + bocaDer) * 0.5f, centroY, 0f),
                 (bocaDer - bocaIzq) * 1.6f, bocaAlto * 1.3f, UiStyles.Oro);
         }
@@ -517,20 +700,46 @@ namespace Alkahest.Game
             float cercania = UiStyles.Cercania(transform.position, _player, BrilloRangoPleno, BrilloRangoDesvanece);
             float brillo = Mathf.Lerp(BrilloLejos, 1f, cercania);
 
-            Color oro = UiStyles.Oro;
-            Color acento = destello ? (_flashAceptado ? UiStyles.Exito : UiStyles.Aviso) : oro;
+            // (playtest 54) EL TONO BASE distingue las dos vistas: Laton
+            // (marco discreto) para el Buzón, Oro (marco clásico) para la
+            // Tolva caótica -- SIN CAMBIOS de comportamiento para esta
+            // última. El destello de aceptado/rechazado (Exito/Aviso) es
+            // IDÉNTICO en los dos: esa señal tiene que leerse a plena
+            // intensidad pase lo que pase, es la animación de volcado
+            // validada y no se toca.
+            Color tono = _esBuzonSemillaCero ? UiStyles.Laton : UiStyles.Oro;
+            Color acento = destello ? (_flashAceptado ? UiStyles.Exito : UiStyles.Aviso) : tono;
 
-            if (_jambaIzq != null) _jambaIzq.color = destello ? acento : new Color(oro.r, oro.g, oro.b, 0.85f * brillo);
-            if (_jambaDer != null) _jambaDer.color = _jambaIzq != null ? _jambaIzq.color : oro;
-            if (_labio != null) _labio.color = new Color(acento.r, acento.g, acento.b, destello ? 1f : (0.35f + 0.55f * pulso) * brillo);
-
-            if (_flechaTr != null)
+            if (_esBuzonSemillaCero)
             {
-                Vector3 p = _flechaTr.position;
-                p.y = _flechaY + Mathf.Sin(t * 2.6f) * 0.16f;
-                _flechaTr.position = p;
+                // EL BUZÓN (playtest 54): marco fino, ESTÁTICO en posición
+                // (nada bobea, no hay flecha) -- solo el color/alfa
+                // responden a cercanía y destello, igual que el resto del
+                // taller (halo de foco de las cinco estaciones).
+                Color marco = destello ? acento : new Color(tono.r, tono.g, tono.b, 0.85f * brillo);
+                if (_boMarcoIzq != null) _boMarcoIzq.color = marco;
+                if (_boMarcoDer != null) _boMarcoDer.color = marco;
+                if (_boMarcoSup != null) _boMarcoSup.color = marco;
+                // La bandejita NO pulsa (ver su docblock en BuildVisualBuzon)
+                // -- sí participa del destello aceptado/rechazado, que debe
+                // leerse desde cualquier pieza del marco.
+                if (_boBandeja != null) _boBandeja.color = destello ? acento : UiStyles.LatonOscuro;
             }
-            if (_flecha != null) _flecha.color = new Color(acento.r, acento.g, acento.b, (0.55f + 0.45f * pulso) * (destello ? 1f : brillo));
+            else
+            {
+                // LA TOLVA CLÁSICA (caótico/multi) -- SIN CAMBIOS.
+                if (_jambaIzq != null) _jambaIzq.color = destello ? acento : new Color(tono.r, tono.g, tono.b, 0.85f * brillo);
+                if (_jambaDer != null) _jambaDer.color = _jambaIzq != null ? _jambaIzq.color : tono;
+                if (_labio != null) _labio.color = new Color(acento.r, acento.g, acento.b, destello ? 1f : (0.35f + 0.55f * pulso) * brillo);
+
+                if (_flechaTr != null)
+                {
+                    Vector3 p = _flechaTr.position;
+                    p.y = _flechaY + Mathf.Sin(t * 2.6f) * 0.16f;
+                    _flechaTr.position = p;
+                }
+                if (_flecha != null) _flecha.color = new Color(acento.r, acento.g, acento.b, (0.55f + 0.45f * pulso) * (destello ? 1f : brillo));
+            }
 
             // (CONTRATO_RONDA50.md §3c) LA TOLVA LATE CON PEDIDO ACTIVO --
             // SOLO Semilla Cero (contrato §3e), y solo mientras exista un
@@ -542,9 +751,18 @@ namespace Alkahest.Game
             // Latido INDEPENDIENTE de la cercanía (a diferencia de jambas/
             // labio/flecha de arriba): es la señal que se lee DESDE LEJOS,
             // "hay algo pendiente en esa boca", no la de "ya estás cerca".
+            //
+            // (playtest 54) INTENSIDAD A LA MITAD (centro/amplitud
+            // 0.30/0.22 -> 0.15/0.11, rango resultante 0.04..0.26 contra el
+            // 0.08..0.52 de antes; misma cadencia, hz=0.55 sin tocar) --
+            // Cesar: "el latido de luz con pedido activo SE QUEDA pero
+            // sutil... es la señal buena". Aplica IGUAL en las dos vistas
+            // (la luz siempre fue "SOLO Semilla Cero" -- en caótico
+            // `pedidoActivo` es `false` y esta línea no hace nada, como
+            // siempre).
             bool pedidoActivo = AlkahestGameBootstrap.ModoSemillaCero && _orderSystem != null
                 && _orderSystem.ActiveOrders.Count > 0 && !_orderSystem.ActiveOrders[0].Completado;
-            if (pedidoActivo) _luzPedido?.Latir(0.30f, 0.22f, 0.55f);
+            if (pedidoActivo) _luzPedido?.Latir(0.15f, 0.11f, 0.55f);
             else _luzPedido?.Intensidad(0f);
         }
 
@@ -692,6 +910,32 @@ namespace Alkahest.Game
                     : "material equivocado (ningún encargo lo pide)";
                 color = _flashAceptado ? UiStyles.Exito : UiStyles.Aviso;
             }
+            else if (_esBuzonSemillaCero)
+            {
+                // (playtest 54) EL BUZÓN: rótulo SOLO DE PROXIMIDAD (contrato
+                // textual: "que aparezca... con desvanecimiento, patrón
+                // existente"), ya no gateado por MachineFocus.MostrarPromptE
+                // -- ese era el criterio de "tutorial aprendido tras 2 usos"
+                // del taller clásico (regla 12 nunca lo exigió aquí, era una
+                // elección del playtest 16); el Buzón es la ÚNICA vía de
+                // entrega del arco guiado, así que se señala siempre que el
+                // jugador esté cerca, toda la partida, no solo las primeras
+                // veces. UiStyles.PlacaMundo YA se desvanece sola por
+                // AlfaMinimaVisible (regla 28 de CLAUDE.md) y por estar fuera
+                // de cuadro (mismo criterio que EtiquetaMundo, fix playtest
+                // 16) -- no hace falta ningún `return` manual por distancia.
+                // Texto acortado (contrato, textual): ya NO explica el gesto
+                // completo ("vierte con clic derecho") en el CUERPO del
+                // rótulo permanente -- esa instrucción vive ahora en el
+                // consejo de primer pedido de Game/SemillaCero.cs (pt50,
+                // archivo ajeno, sin cambios).
+                float cercaniaTexto = UiStyles.Cercania(transform.position, _player, BrilloRangoPleno, BrilloRangoDesvanece);
+                Color oro = UiStyles.Oro;
+                UiStyles.PlacaMundo(new Vector3(transform.position.x, _boRotuloY, 0f),
+                    "BUZÓN DEL MAESTRO — vierte aquí lo pedido",
+                    new Color(oro.r, oro.g, oro.b, cercaniaTexto), UiStyles.S(30f));
+                return; // PlacaMundo ya decidió si dibujar o no -- no caer al EtiquetaMundo clásico de abajo.
+            }
             else if (MachineFocus.MostrarPromptE)
             {
                 // (fix playtest 16: "debería desaparecer tras unas pocas
@@ -704,14 +948,11 @@ namespace Alkahest.Game
                 // tutorial en CUALQUIER aparato del taller; en cuanto lo hace,
                 // esta rama deja de alcanzarse para el resto de la partida.
                 //
-                // (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50) EN SEMILLA
-                // CERO el rótulo cambia al texto EXACTO del contrato -- nombra
-                // el GESTO completo (vierte con clic derecho), no solo el
-                // sitio. El caótico conserva su rótulo de siempre (contrato
-                // §3e).
-                texto = AlkahestGameBootstrap.ModoSemillaCero
-                    ? "TOLVA — deja aquí lo pedido (vierte con clic derecho)"
-                    : "TOLVA DEL MAESTRO — vierte AQUÍ";
+                // (playtest 54) SOLO CAÓTICO/MULTI llega aquí ahora -- Semilla
+                // Cero se resuelve en la rama de arriba (_esBuzonSemillaCero).
+                // El texto/color de la Tolva clásica quedan SIN CAMBIOS
+                // (contrato "el caótico no cambia").
+                texto = "TOLVA DEL MAESTRO — vierte AQUÍ";
                 color = UiStyles.Oro;
             }
             else
@@ -724,13 +965,22 @@ namespace Alkahest.Game
                 return;
             }
 
-            // Anclado sobre la flecha. UiStyles YA NO acota el rótulo al borde
-            // de la pantalla (fix playtest 16, ver UiStyles.cs): con la cámara
-            // siguiendo al aprendiz, la boca -pegadísima al muro derecho- pasa
-            // buena parte del tiempo fuera de cuadro, y ahora su rótulo
+            // Solo llegan aquí abajo el aviso educativo y el destello corto
+            // (ambos SIN CAMBIOS en las dos vistas, ver arriba) -- la rama
+            // Buzón ya retornó desde su propio bloque. Ancla sobre la flecha
+            // en la vista clásica, sobre el relieve de pergamino en el
+            // Buzón (playtest 54: `_flechaY` nunca se fija en
+            // BuildVisualBuzon, así que hay que leer `_boRotuloY` ahí en vez
+            // de dejarlo en su valor por defecto 0).
+            //
+            // UiStyles YA NO acota el rótulo al borde de la pantalla (fix
+            // playtest 16, ver UiStyles.cs): con la cámara siguiendo al
+            // aprendiz, la boca -pegadísima al muro derecho en el caótico-
+            // pasa buena parte del tiempo fuera de cuadro, y ahora su rótulo
             // simplemente no se dibuja en ese caso, en vez de perseguir al
             // jugador clavado en el borde de la pantalla.
-            UiStyles.EtiquetaMundo(new Vector3(transform.position.x, _flechaY, 0f), texto, color, UiStyles.S(26f));
+            float anclaY = _esBuzonSemillaCero ? _boRotuloY : _flechaY;
+            UiStyles.EtiquetaMundo(new Vector3(transform.position.x, anclaY, 0f), texto, color, UiStyles.S(26f));
         }
     }
 }

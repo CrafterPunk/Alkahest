@@ -152,7 +152,7 @@ namespace Alkahest.Game
             // consejo de esta lista explicaba cómo LLEVAR lo aspirado hasta la
             // Tolva -- justo el hueco que Cesar señaló ("un trayecto muy grande
             // para dejarlas en la tolva SIN NADA QUE ME LO ENSEÑE").
-            "Aspira tu arena (clic izq.), vuela a la TOLVA que brilla y viértela dentro (clic der.).",
+            "Aspira tu arena (clic izq.), vuela al BUZÓN del muro que brilla y viértela dentro (clic der.).",
             // (beat 4) la misma sugerencia que dispara la trampa del tostado -- no la
             // desactiva, la ENSEÑA: el fracaso coreografiado enseña más que acertar a la
             // primera (contrato §1 beat 4/diseño enmienda 2).
@@ -169,7 +169,7 @@ namespace Alkahest.Game
             // encargo) de pasada: la sonda es cómo el jugador VALIDA que ya se
             // congeló sin adivinar, sin convertir esto en dos consejos.
             "Congela agua sobre la placa fría (E) -- pincha una sonda (G) para ver el grado exacto.",
-            "Con el hielo ya listo, corre a la Tolva: el frío no espera, se derrite si te demoras.",
+            "Con el hielo ya listo, vuela al Buzón del Maestro: el frío no espera, se derrite si te demoras.",
             // (playtest 47, ENCARGO C, CONTRATO_FASE_A.md §1e, consejo pedido literal por el
             // contrato) LA MEZCLA EN CUBETA: sin este consejo, el jugador que ya domina la
             // escalera de un solo material no tiene ninguna pista de que verter DOS cosas a la

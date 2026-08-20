@@ -194,6 +194,16 @@ namespace Alkahest.Game
         /// </summary>
         private static bool _yaCreado;
 
+        /// <summary>
+        /// (integración pt54, LA FUGA DE PARIDAD) Resetea la guarda estática
+        /// "ya creadas". Sin esto, quien entrara SEGUNDO a un modo dentro del
+        /// mismo proceso (solo→multi o viceversa, sin recarga de dominio) se
+        /// quedaba sin estos muebles: la causa raíz de "las dos versiones de
+        /// la seed 0 no son iguales" que reportó Cesar. Lo llama el bootstrap
+        /// junto a MachineFocus.Limpiar() en cada arranque de mundo.
+        /// </summary>
+        public static void ResetGuardaEstatica() { _yaCreado = false; }
+
         private const int DepositoDesnivel = 14; // celdas por encima de EstanteBaseY -- ver doc de arriba.
         private const int DepositoCount = 6;
         private const int DepositoPaso = Lado + 1; // 2 celdas de anclaje + 1 de respiro entre cada uno.

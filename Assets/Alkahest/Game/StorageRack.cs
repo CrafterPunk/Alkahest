@@ -164,6 +164,19 @@ namespace Alkahest.Game
 
         private static StorageRack _instancia;
 
+        /// <summary>
+        /// (playtest 54, ENCARGO "LAS REDOMAS FUERA DE SEMILLA CERO", ARCHIVO
+        /// TOCADO SOLO PORQUE EL GATING LO EXIGE -- ver el docblock de
+        /// <see cref="Init"/>) `false` en Semilla Cero: el mueble NO SE
+        /// CONSTRUYE (ver el corte temprano en Init) y este componente pasa
+        /// a ser una cáscara vacía que solo existe para que
+        /// `Net/MaquinaSync.cs::IntentarEscanear` (archivo ajeno, exige
+        /// `estantes.Length >= 1` para publicar el registro replicado
+        /// ENTERO) encuentre algo. `true` en caótico/multi: comportamiento
+        /// IDÉNTICO al de siempre, ni una línea nueva en el camino visible.
+        /// </summary>
+        private bool _visible = true;
+
         private AlkahestSim _sim;
         private Flask _frasco;
         private SubstanceKnowledge _saber;
@@ -192,15 +205,36 @@ namespace Alkahest.Game
         private int _mascaraAncho;
         private int _mascaraAlto;
 
-        /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
+        /// <summary>
+        /// Inyección de dependencias desde AlkahestGameBootstrap.
+        ///
+        /// (playtest 54) `visible=false` (Semilla Cero, ver el docblock de
+        /// <see cref="AlkahestGameBootstrap.SpawnStorageRack"/> para el
+        /// porqué completo -- Cesar: "no entiendo qué hacen ahí los
+        /// frascos... más ruido visual") corta ANTES de
+        /// <see cref="BuildVisual"/>: cero sprites (listón/redomas/tapones/
+        /// brillos), cero registro en <see cref="Mudanza.RegistrarMovible"/>
+        /// (nada que arrastrar con V). `_instancia` SÍ se fija igual que
+        /// siempre -- `Net/MaquinaSync.cs::IntentarEscanear` (archivo ajeno)
+        /// solo necesita `FindObjectsByType&lt;StorageRack&gt;()` para
+        /// encontrar el COMPONENTE, no le importa si construyó su vista.
+        /// `RatonSobreRedoma()`/`RedomaBajoCursor()` ya son seguros con
+        /// <see cref="_redomas"/> vacío (recorren el array y saltan los
+        /// `null`, ver esos métodos): no hace falta ningún guardián extra
+        /// ahí, solo en <see cref="Update"/>/<see cref="OnGUI"/> (evita el
+        /// coste de `ActualizarAnimacionContenidos`/el raycast del hover
+        /// para un mueble que nadie puede ver).
+        /// </summary>
         public void Init(AlkahestSim sim, Flask frasco, SubstanceKnowledge saber, Transform jugador,
-            int cellX0, int cellX1, int cellYBase)
+            int cellX0, int cellX1, int cellYBase, bool visible = true)
         {
             _sim = sim;
             _frasco = frasco;
             _saber = saber;
             _jugador = jugador;
             _instancia = this;
+            _visible = visible;
+            if (!visible) return;
 
             BuildVisual(cellX0, cellX1, cellYBase);
 
@@ -608,7 +642,7 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void Update()
         {
-            if (_sim == null || _frasco == null) return;
+            if (!_visible || _sim == null || _frasco == null) return; // (playtest 54) mueble sin construir en Semilla Cero -- ver Init.
 
             // (fix playtest 13) La animación de las redomas es puramente visual
             // y NO consume input: se mantiene corriendo SIEMPRE (incluso con el
@@ -723,6 +757,7 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void OnGUI()
         {
+            if (!_visible) return; // (playtest 54) mueble sin construir en Semilla Cero -- ver Init.
             if (_sim == null || DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
 
             UiStyles.Preparar();

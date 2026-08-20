@@ -234,6 +234,59 @@ namespace Alkahest.Game
             }
         }
 
+        // =====================================================================
+        // (playtest 54, ENCARGO "PARIDAD SOLO<->MULTI") INVESTIGACIÓN: ¿POR QUÉ
+        // DIFIEREN LAS DOS SEMILLA 0?
+        // =====================================================================
+        // Cesar, comparando capturas (multi co-op seed 0 vs. un jugador seed
+        // 0): "no son iguales -- me parece mejor que estén los soportes
+        // movibles y decorados [los del multi] que los del solo player".
+        //
+        // VEREDICTO: el PLANO y el CÓDIGO DE SPAWN de este archivo YA ESTÁN
+        // UNIFICADOS -- no hay ninguna decisión de diseño que separe los dos
+        // modos en la geometría fija de las baldas/anclajes/pilas/estante:
+        //   1) `Sim/SimLevelBuilder.BuildCuartoIntimo` se llama UNA sola vez
+        //      por proceso, desde `AlkahestSim.CrearMundoInterno`, sin
+        //      ninguna rama por `SimSync.EnEscena` más allá de los gates de
+        //      `ModoSemillaCero` (que valen igual en los dos modos, ver el
+        //      grep documentado en el docblock de
+        //      `SimLevelBuilder._galeriasOriginales`) -- el plano tallado es
+        //      BIT A BIT el mismo en un jugador y en el anfitrión del multi.
+        //   2) `TrySpawn()` (un jugador) y `TrySpawnRed()` (anfitrión del
+        //      multi, más abajo) llaman a `SpawnStorageRack`/`SpawnCrisol`/
+        //      etc. con los MISMOS argumentos, y las dos rutas de creación
+        //      del avatar (`SpawnApprentice()` aquí abajo, para un jugador;
+        //      `Net/AprendizNet.cs::Cablear`, para el multi) llaman al MISMO
+        //      `Mudanza.Init(_sim)`.
+        //
+        // CAUSA REAL, ENCONTRADA Y NO CORREGIBLE DESDE AQUÍ: `Mudanza.Init`
+        // llama a `SpawnBaldasYAnclajesSiCorresponde()` (`Game/Mudanza.cs`),
+        // que llama a `Balda.SpawnTodas`/`Anclaje.SpawnDeposito`/
+        // `Pila.SpawnTodas` -- las tres guardadas por una bandera ESTÁTICA DE
+        // PROCESO sin ningún reset (`Game/Balda.cs:144`, `Game/Anclaje.cs:195`,
+        // `Game/Pila.cs:190`). Ninguno de esos tres archivos está en la lista
+        // de archivos exclusivos de este encargo (`Sim/SimLevelBuilder.cs`,
+        // `Game/DeliveryChute.cs`, `Game/AlkahestGameBootstrap.cs`,
+        // `Game/MaquinariaSprites.cs`, `Game/StorageRack.cs`), así que el fix
+        // de raíz (resetear las tres banderas, mismo sitio que
+        // `MachineFocus.Limpiar()` ya limpia para OTRO registro estático,
+        // ver la primera línea de `TrySpawn`/`TrySpawnRed`) queda anotado
+        // como DEUDA PRIORITARIA para quien posea esos archivos, no
+        // resuelto en esta ronda. Encaja con el reporte: sin recarga de
+        // dominio entre escenas (una build de reparto, o una sesión de
+        // Editor que navegue entre modos sin detener Play), quien entra
+        // SEGUNDO a un modo dentro del MISMO proceso encuentra las banderas
+        // ya en `true` y se queda sin baldas/anclajes/pilas -- si Cesar jugó
+        // multi antes que un jugador en la misma sesión, es EXACTAMENTE el
+        // patrón que reportó.
+        //
+        // LO QUE SÍ SE HIZO en esta ronda, dentro de mis archivos: reducir a
+        // la MITAD el catálogo de galerías de baldas en
+        // `Sim/SimLevelBuilder._galeriasOriginales` (17 -> 8 `BaldaPlan`
+        // troceados, ver el conteo exacto en su docblock) -- una vez
+        // corregida la fuga de arriba, las dos versiones tallarán/spawnearán
+        // EXACTAMENTE lo mismo, con la mitad de soportes que antes.
+        // =====================================================================
         private void TrySpawn()
         {
             // (playtest 28, EL TALLER COMPARTIDO) LA BIFURCACIÓN, en la
@@ -273,6 +326,7 @@ namespace Alkahest.Game
             // que hace DayCycle entre partidas: hay que vaciarlo antes de
             // registrar las máquinas nuevas.
             MachineFocus.Limpiar();
+            Balda.ResetGuardaEstatica(); Anclaje.ResetGuardaEstatica(); Pila.ResetGuardaEstatica(); // (integración pt54) la fuga de paridad solo/multi -- ver esos métodos.
 
             var apprentice = SpawnApprentice();
             var flask = apprentice.GetComponent<Flask>();
@@ -583,6 +637,7 @@ namespace Alkahest.Game
             bool anfitrion = SimSync.EsServidor;
 
             MachineFocus.Limpiar();
+            Balda.ResetGuardaEstatica(); Anclaje.ResetGuardaEstatica(); Pila.ResetGuardaEstatica(); // (integración pt54) la fuga de paridad solo/multi -- ver esos métodos.
             // (playtest 48, D4/§2e) DayCycle.ForzarDesbloqueoSesion() YA NO
             // se llama aquí -- se movió a la primerísima pasada de
             // TrySpawn() que detecta SimSync.EnEscena (antes de este método
@@ -1122,17 +1177,47 @@ namespace Alkahest.Game
         /// <see cref="SimLevelBuilder.EstanteX0"/>/<see cref="SimLevelBuilder.EstanteX1"/>/
         /// <see cref="SimLevelBuilder.EstanteBaseY"/> -- ver el docblock junto
         /// a esas constantes para por qué no son las viejas
-        /// RackX0/RackX1/RackTopY. Game/StorageRack.cs::Init tiene la MISMA
-        /// firma de siempre (`(sim, frasco, saber, jugador, cellX0, cellX1,
-        /// cellYBase)`), verificada contra el archivo actual: no hace falta
-        /// tocarlo, solo darle coordenadas nuevas.
+        /// RackX0/RackX1/RackTopY.
+        ///
+        /// (playtest 54, ENCARGO "LAS REDOMAS FUERA DE SEMILLA CERO") Cesar,
+        /// sobre las capturas de Semilla Cero: "no entiendo qué hacen ahí
+        /// los frascos -- más ruido visual, que es lo que menos
+        /// necesitamos". El estante de redomas es mobiliario del CAÓTICO
+        /// (donde el diario ya lleva rondas de descubrimientos que guardar);
+        /// en Semilla Cero, con el arco guiado del director
+        /// (Game/SemillaCero.cs) recién empezando, no tiene ningún papel
+        /// todavía -- vuelve con el caótico, o el día que el diseño del arco
+        /// le dé uno (p. ej. un beat que pida "guarda esto para más
+        /// tarde").
+        ///
+        /// GATE, NO BORRADO: `visible=false` (nuevo parámetro de
+        /// Game/StorageRack.cs::Init, archivo tocado SOLO porque este gate
+        /// lo exige -- ver su propio docblock) en vez de saltarse el spawn
+        /// entero. RAZÓN, no elección: `Net/MaquinaSync.cs::IntentarEscanear`
+        /// (archivo AJENO, no tocable en este encargo) exige `estantes.Length
+        /// >= 1` antes de publicar el registro replicado ENTERO -- crisol y
+        /// grifos incluidos, no solo el estante. Si `TrySpawnRed` (el
+        /// anfitrión del multi) dejara de instanciar el componente en
+        /// Semilla Cero, el invitado se quedaría SIN NINGUNA máquina
+        /// replicada, para siempre, en ese modo -- una regresión mucho peor
+        /// que el "ruido visual" que se está corrigiendo. Con `visible=false`
+        /// el componente EXISTE (el escaneo lo encuentra) pero
+        /// `StorageRack.Init` corta antes de `BuildVisual`/
+        /// `Mudanza.RegistrarMovible`: cero sprites, cero redomas, cero
+        /// entrada en el registro de movibles, `Update`/`OnGUI` cortan en su
+        /// primera línea. MISMO gate en los dos caminos (`TrySpawn` de un
+        /// jugador y `TrySpawnRed` del anfitrión, este mismo método sirve a
+        /// los dos) -- coherente con el punto 1 de esta ronda (paridad
+        /// solo/multi): ambos modos ven EXACTAMENTE lo mismo (nada) en
+        /// Semilla Cero.
         /// </summary>
         private void SpawnStorageRack(Transform player, Flask flask, SubstanceKnowledge knowledge)
         {
             var go = new GameObject("StorageRack");
             var rack = go.AddComponent<StorageRack>();
             rack.Init(_sim, flask, knowledge, player,
-                SimLevelBuilder.EstanteX0, SimLevelBuilder.EstanteX1, SimLevelBuilder.EstanteBaseY);
+                SimLevelBuilder.EstanteX0, SimLevelBuilder.EstanteX1, SimLevelBuilder.EstanteBaseY,
+                visible: !ModoSemillaCero);
         }
 
         /// <summary>
