@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1023206449
+--- !u!1 &554988888
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,61 +127,62 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1023206453}
-  - component: {fileID: 1023206452}
-  - component: {fileID: 1023206451}
-  - component: {fileID: 1023206450}
+  - component: {fileID: 554988891}
+  - component: {fileID: 554988890}
+  - component: {fileID: 554988889}
   m_Layer: 0
-  m_Name: Alkahest
+  m_Name: AlkahestSimSync
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1023206450
+--- !u!114 &554988889
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1023206449}
+  m_GameObject: {fileID: 554988888}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 31ec692aa47fa9c45a4ca1034bb3fa30, type: 3}
+  m_Script: {fileID: 11500000, guid: 71fd0fecb212c5d47bcc054c4486c640, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Game.AlkahestGameBootstrap
---- !u!114 &1023206451
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Net.SimSync
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &554988890
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1023206449}
+  m_GameObject: {fileID: 554988888}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3294a9d855f210444805917cfa0f5c8c, type: 3}
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.AlkahestSim
-  seed: 0
---- !u!114 &1023206452
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1023206449}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b2867a3157fa38d47aab9c15f4012d94, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Sim.SimRenderer
---- !u!4 &1023206453
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2325087770
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  m_InScenePlaced: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!4 &554988891
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1023206449}
+  m_GameObject: {fileID: 554988888}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -190,7 +191,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1046066699
+--- !u!1 &671295038
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -198,15 +199,87 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1046066708}
-  - component: {fileID: 1046066707}
-  - component: {fileID: 1046066706}
-  - component: {fileID: 1046066705}
-  - component: {fileID: 1046066704}
-  - component: {fileID: 1046066703}
-  - component: {fileID: 1046066702}
-  - component: {fileID: 1046066701}
-  - component: {fileID: 1046066700}
+  - component: {fileID: 671295041}
+  - component: {fileID: 671295040}
+  - component: {fileID: 671295039}
+  m_Layer: 0
+  m_Name: AlkahestMaquinaSync
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &671295039
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 671295038}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ae506dce7644b0bad87b5e43c6336b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Net.MaquinaSync
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &671295040
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 671295038}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1399235729
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  m_InScenePlaced: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!4 &671295041
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 671295038}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &834315011
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 834315020}
+  - component: {fileID: 834315019}
+  - component: {fileID: 834315018}
+  - component: {fileID: 834315017}
+  - component: {fileID: 834315016}
+  - component: {fileID: 834315015}
+  - component: {fileID: 834315014}
+  - component: {fileID: 834315013}
+  - component: {fileID: 834315012}
   m_Layer: 0
   m_Name: AlkahestRed
   m_TagString: Untagged
@@ -214,26 +287,26 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1046066700
+--- !u!114 &834315012
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 56b45d7e4af5b854bad26e7a122440e3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Net.TallerSesionHud
-  sessionCoordinator: {fileID: 1046066702}
---- !u!114 &1046066701
+  sessionCoordinator: {fileID: 834315014}
+--- !u!114 &834315013
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cfe745b706e96bd4ab8267c9ee8d2e98, type: 3}
@@ -241,54 +314,54 @@ MonoBehaviour:
   m_EditorClassIdentifier: FriendsLoop.Runtime::FriendsLoop.Networking.NetDiagnostics
   enableInReleaseBuilds: 0
   statusPollSeconds: 15
---- !u!114 &1046066702
+--- !u!114 &834315014
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 16feee27accdf69449a99ac29fac1f20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FriendsLoop.Runtime::FriendsLoop.Networking.SessionCoordinator
-  networkManager: {fileID: 1046066707}
-  unityTransport: {fileID: 1046066706}
-  steamTransport: {fileID: 1046066705}
-  steamLobbyService: {fileID: 1046066703}
---- !u!114 &1046066703
+  networkManager: {fileID: 834315019}
+  unityTransport: {fileID: 834315018}
+  steamTransport: {fileID: 834315017}
+  steamLobbyService: {fileID: 834315015}
+--- !u!114 &834315015
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 07e60db4ef4293649a73d4ad0af391e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FriendsLoop.Runtime::FriendsLoop.Session.SteamLobbyService
   gameKey: com.friendsloop.template
---- !u!114 &1046066704
+--- !u!114 &834315016
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e757fdad50c6340449abfc832700400c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FriendsLoop.Runtime::FriendsLoop.Platform.SteamBootstrap
---- !u!114 &1046066705
+--- !u!114 &834315017
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc4ccaff1920208429cca7c350560301, type: 3}
@@ -296,13 +369,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: SteamNetworkingSockets Transport for Netcode for GameObjects::Netcode.Transports.SteamNetworkingSocketsTransport
   ConnectToSteamID: 0
   options: []
---- !u!114 &1046066706
+--- !u!114 &834315018
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6960e84d07fb87f47956e7a81d71c4e6, type: 3}
@@ -327,13 +400,13 @@ MonoBehaviour:
     PacketDelayMS: 0
     PacketJitterMS: 0
     PacketDropRate: 0
---- !u!114 &1046066707
+--- !u!114 &834315019
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 593a2fe42fa9d37498c96f9a383b6521, type: 3}
@@ -342,7 +415,7 @@ MonoBehaviour:
   NetworkManagerExpanded: 0
   NetworkConfig:
     ProtocolVersion: 0
-    NetworkTransport: {fileID: 1046066706}
+    NetworkTransport: {fileID: 834315018}
     PlayerPrefab: {fileID: 1967448866514389565, guid: ff95ad45d1128cf4e9994cd04f2641ad, type: 3}
     Prefabs:
       NetworkPrefabsLists: []
@@ -368,13 +441,13 @@ MonoBehaviour:
     OldPrefabList: []
   RunInBackground: 1
   LogLevel: 1
---- !u!4 &1046066708
+--- !u!4 &834315020
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1046066699}
+  m_GameObject: {fileID: 834315011}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -383,7 +456,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1266128923
+--- !u!1 &889237565
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -391,81 +464,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1266128926}
-  - component: {fileID: 1266128925}
-  - component: {fileID: 1266128924}
-  m_Layer: 0
-  m_Name: AlkahestSimSync
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1266128924
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1266128923}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 71fd0fecb212c5d47bcc054c4486c640, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Net.SimSync
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &1266128925
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1266128923}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4293367885
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  m_InScenePlaced: 1
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
---- !u!4 &1266128926
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1266128923}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1332143179
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1332143182}
-  - component: {fileID: 1332143181}
-  - component: {fileID: 1332143180}
+  - component: {fileID: 889237568}
+  - component: {fileID: 889237567}
+  - component: {fileID: 889237566}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -473,21 +474,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &1332143180
+--- !u!81 &889237566
 AudioListener:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1332143179}
+  m_GameObject: {fileID: 889237565}
   m_Enabled: 1
---- !u!20 &1332143181
+--- !u!20 &889237567
 Camera:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1332143179}
+  m_GameObject: {fileID: 889237565}
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
@@ -532,13 +533,13 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!4 &1332143182
+--- !u!4 &889237568
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1332143179}
+  m_GameObject: {fileID: 889237565}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 38.4, y: 14.400001, z: -10}
@@ -547,7 +548,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1849469123
+--- !u!1 &1363583917
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -555,62 +556,61 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1849469126}
-  - component: {fileID: 1849469125}
-  - component: {fileID: 1849469124}
+  - component: {fileID: 1363583921}
+  - component: {fileID: 1363583920}
+  - component: {fileID: 1363583919}
+  - component: {fileID: 1363583918}
   m_Layer: 0
-  m_Name: AlkahestMaquinaSync
+  m_Name: Alkahest
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1849469124
+--- !u!114 &1363583918
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1849469123}
+  m_GameObject: {fileID: 1363583917}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ae506dce7644b0bad87b5e43c6336b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 31ec692aa47fa9c45a4ca1034bb3fa30, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Net.MaquinaSync
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &1849469125
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Game.AlkahestGameBootstrap
+--- !u!114 &1363583919
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1849469123}
+  m_GameObject: {fileID: 1363583917}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Script: {fileID: 11500000, guid: 3294a9d855f210444805917cfa0f5c8c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2699123493
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  m_InScenePlaced: 1
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
---- !u!4 &1849469126
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.AlkahestSim
+  seed: 0
+--- !u!114 &1363583920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1363583917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2867a3157fa38d47aab9c15f4012d94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Sim.SimRenderer
+--- !u!4 &1363583921
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1849469123}
+  m_GameObject: {fileID: 1363583917}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -623,8 +623,8 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1332143182}
-  - {fileID: 1023206453}
-  - {fileID: 1266128926}
-  - {fileID: 1849469126}
-  - {fileID: 1046066708}
+  - {fileID: 889237568}
+  - {fileID: 1363583921}
+  - {fileID: 554988891}
+  - {fileID: 671295041}
+  - {fileID: 834315020}

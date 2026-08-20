@@ -3457,3 +3457,31 @@ destapado y corre EL ARCO GUIADO:
 - Deudas: flecha a la Tolva omitida en el invitado (DeliveryChute no es
   NetworkObject); verificar host→salir→host SIN cerrar el juego (¿AlkahestSim
   re-crea el mundo?); HintSystem/JournalHud aún mencionan TEMPLADA.
+
+## Playtest 53 — EL REGISTRO INCREMENTAL (las máquinas ya no flotan sobre sus muros)
+
+Captura de Cesar en el co-op: las salas selladas EN LA GRILLA, pero los
+SPRITES de las 6 estaciones (nacidas todas al inicio por la limitación del
+registro, pt52 costura #1) dibujados encima de la piedra — la Prensa flotando
+con su "E — prensar" sobre el muro sellado.
+
+- **MaquinaSync acepta ALTAS TARDÍAS**: el primer lote publica solo las
+  familias que siempre nacen juntas (crisol/grifos/balda/anclaje/rack/
+  alambique/pilas) + las tapiables SI existen (caótico); las que falten las
+  añade `SondearAltasTardias` (mismo acumulador de 0.5s, se auto-apaga con
+  `_altasTardiasCompletas` al completar las 6). El registro solo CRECE
+  (NetworkList.Add — los índices publicados son identidad). Lado invitado:
+  CERO código nuevo (AlCambiarRegistro ya manejaba Add en vivo).
+- **El co-op spawnea POR BEAT otra vez**: revertido el bloque del pt52 en
+  TrySpawnRed — mismo patrón condicional `SalaDestapada` que un jugador;
+  PollDestapesSemillaCero hace el resto. Ventana muro-cae→réplica-aparece:
+  ≤0.5s + RTT. El caótico multi, sin cambios.
+- Invitado tardío: el catch-up del NetworkList trae el registro crecido
+  completo (verificado por diseño). Un jugador: cero cambios.
+- **FUGA CONFIRMADA, NO CERRADA (deuda prioritaria)**: host que sale de la
+  sesión y re-hostea SIN cerrar el juego — `_spawned` (bootstrap:103) y el
+  estado de MaquinaSync (:418) nunca se resetean; `SessionEvents.RaiseSessionLeft`
+  no tiene suscriptores en Assets/Alkahest. El fix real toca SimSync/
+  AprendizNet/OrderSystem/MachineFocus/DirectorDeAudio — pieza propia.
+  WORKAROUND mientras tanto: tras salir de una sesión, VOLVER AL TÍTULO y
+  reentrar a la escena multi antes de re-hostear.

@@ -32,15 +32,70 @@ namespace Alkahest.Net
     /// pero este componente NO reutiliza esa lista de Mudanza (privada, y
     /// pensada para "qué puede agarrar el jugador", no para "qué existe").
     /// En vez de eso escanea la escena con `FindObjectsByType` de cada tipo
-    /// concreto UNA vez, tan pronto como las máquinas existen (el anfitrión
-    /// las crea con un frame o más de retraso respecto al spawn de este
-    /// objeto, ver <see cref="IntentarEscanear"/>), y a partir de ahí SONDEA
-    /// el `AnclaCelda` de cada una cada <see cref="IntervaloSondeoSeg"/>
-    /// (0.5s) -- sondeo barato: son 5+2 aparatos, comparar un Vector2Int no
-    /// cuesta nada, y machacar el registro entero cada frame sí notaría en
-    /// el ancho de banda (el mismo razonamiento de "cuota" que ya aplica
+    /// concreto, tan pronto como las máquinas existen (el anfitrión las crea
+    /// con un frame o más de retraso respecto al spawn de este objeto, ver
+    /// <see cref="IntentarEscanear"/>), y a partir de ahí SONDEA el
+    /// `AnclaCelda` de cada una cada <see cref="IntervaloSondeoSeg"/> (0.5s)
+    /// -- sondeo barato: son ~13 tipos, comparar un Vector2Int no cuesta
+    /// nada, y machacar el registro entero cada frame sí notaría en el ancho
+    /// de banda (el mismo razonamiento de "cuota" que ya aplica
     /// Net/SimSync.cs a los chunks de la sim, aquí sin necesidad de cuota
-    /// porque son 7 elementos, no 864).
+    /// porque son ≤40 elementos, no 864).
+    ///
+    /// =====================================================================
+    /// ALTAS TARDÍAS (playtest 53, LA CURA DE RAÍZ del defecto cosmético del
+    /// playtest 52) -- EL REGISTRO YA NO ES "SE LLENA UNA VEZ Y SE ACABÓ".
+    /// =====================================================================
+    /// NACIÓ de-una-sola-vez en el playtest 31 ("máquinas en red con
+    /// réplicas+mudanza de invitados"): en ese momento las siete máquinas
+    /// (cinco estaciones + dos grifos) SIEMPRE nacían juntas, síncronas, al
+    /// arrancar la partida -- no había ningún escenario en que una llegara
+    /// más tarde que las demás, así que "escanear una vez y congelar" era la
+    /// opción más simple posible, no una limitación pensada a propósito
+    /// (mismo espíritu de cautela que la regla 36 de CLAUDE.md contra volver
+    /// a tocar el Init de un aparato ya vivo: menos casos, menos riesgo).
+    ///
+    /// El playtest 40 (SEMILLA CERO) introdujo un modo un-jugador donde
+    /// Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro/HeatPlate/ChillStone
+    /// nacen TARDE, una por beat, al destaparse su sala (ver
+    /// `Game/AlkahestGameBootstrap.PollDestapesSemillaCero`) -- pero ese
+    /// modo no existía en MULTI todavía, así que este archivo no lo notó. El
+    /// playtest 50/52 lo trajo a MULTI ("SEMILLA CERO COMPARTIDA" / "CO-OP
+    /// GUIADO") y con él, el conflicto: `IntentarEscanear` exigía las TRECE
+    /// familias completas antes de publicar NADA (todo-o-nada), así que si
+    /// las seis tapiables nacían tarde, el registro NUNCA se publicaba --
+    /// ni siquiera para el Crisol o los grifos, que sí existen desde el
+    /// minuto 0. `Game/AlkahestGameBootstrap.cs` no podía tocar este archivo
+    /// esa ronda (encargo ajeno), así que la única salida documentada fue
+    /// una COSTURA: las seis estaciones tapiables nacían TODAS DE UNA en el
+    /// anfitrión del multi (rompiendo la paridad con un-jugador), y el
+    /// invitado veía sus sprites y su "E -- usar" flotando sobre salas
+    /// TODAVÍA selladas de piedra -- el bug de esta ronda, reportado por
+    /// Cesar tras probar con su amigo ("se intentaron bloquear algunas
+    /// cosas pero quedó raro").
+    ///
+    /// LA CURA: el registro admite ALTAS TARDÍAS. `IntentarEscanear` sigue
+    /// exigiendo el arranque de las familias que SIEMPRE nacen juntas y
+    /// síncronas (Crisol/Dispenser/Balda/Anclaje/Rack/Alambique/Pila -- ver
+    /// el gate reducido dentro del método) para el PRIMER publicado, pero ya
+    /// no bloquea ese primer publicado a que las seis potencialmente
+    /// tapiables también existan: si ya están (multi CAÓTICO, donde siguen
+    /// naciendo todas de una), entran en la misma pasada; si no, entran
+    /// UNA A UNA cuando `SondearAltasTardias` (mismo acumulador de 0.5s que
+    /// ya usaba `SondearCambiosDePosicion`, sondeo barato: compara CONTEOS
+    /// antes de reconstruir nada, y deja de correr en cuanto las seis están
+    /// dentro -- coste cero el resto de la sesión) las encuentre. Cada alta
+    /// se AÑADE al final del registro (`NetworkList.Add`, nunca `Insert`,
+    /// nunca reordena lo existente): los índices ya publicados son la
+    /// IDENTIDAD de una entrada (ver <see cref="MaquinaReplica.Coincide"/> y
+    /// el uso de índice paralelo en <see cref="_replicas"/>/<see cref="_fuentes"/>),
+    /// así que tocar uno ya asignado rompería la réplica de todo el mundo
+    /// que ya la conoce. Del lado del invitado: CERO código nuevo --
+    /// `AlCambiarRegistro` ya manejaba `NetworkListEvent.Add` en cualquier
+    /// momento de la partida (no solo en el arranque), y
+    /// `CrearOActualizarReplica` ya crea una réplica nueva cada vez que
+    /// `index == _replicas.Count`, sea el primer Add de la sesión o el
+    /// último de un director de beats a mitad de partida.
     ///
     /// =====================================================================
     /// EL PROTOCOLO DE MUDANZA DE UN INVITADO
@@ -259,7 +314,22 @@ namespace Alkahest.Net
         /// <summary>En paralelo por índice con <see cref="_registro"/> (host) -- ver PublicarRegistroInicial/SondearCambiosDePosicion.</summary>
         private readonly List<Fuente> _fuentes = new List<Fuente>(8);
 
+        /// <summary>El PRIMER publicado (ver <see cref="IntentarEscanear"/>) ya ocurrió -- de ahí en adelante el registro solo crece por altas tardías (ver <see cref="SondearAltasTardias"/>), nunca se re-publica desde cero.</summary>
         private bool _escaneado;
+
+        /// <summary>
+        /// (playtest 53, ALTAS TARDÍAS) `true` cuando las seis familias
+        /// potencialmente tapiables (Prensa/BancoChispa/ColumnaEnsayo/
+        /// EnsayoMaestro/PlacaCalor/PlacaFria) ya están TODAS dentro del
+        /// registro -- deja de sondear del todo (<see cref="SondearAltasTardias"/>
+        /// se salta entera): en multi CAÓTICO esto queda `true` desde el
+        /// primer escaneo (nacen todas de una, como siempre); en Semilla
+        /// Cero co-op queda `false` hasta que el director destape la última
+        /// sala (el Ensayo, típicamente el beat final del arco) -- de ahí en
+        /// adelante, coste cero el resto de la sesión.
+        /// </summary>
+        private bool _altasTardiasCompletas;
+        private bool _prensaVista, _chispaVista, _columnaVista, _ensayoVista, _placaCalorVista, _placaFriaVista;
 
         private const float IntervaloSondeoSeg = 0.5f;
         private float _acumuladorSondeo;
@@ -390,6 +460,27 @@ namespace Alkahest.Net
             {
                 _acumuladorSondeo -= IntervaloSondeoSeg; // resta, no reset a 0: evita deriva si un frame tarda más que el intervalo.
                 SondearCambiosDePosicion();
+
+                // (playtest 53, ALTAS TARDÍAS) MISMO acumulador de 0.5s que
+                // la posición -- reutiliza el sondeo barato ya existente en
+                // vez de sumar un tercer temporizador (el contrato de esta
+                // ronda pide exactamente eso: "el sondeo de 0.5s existente o
+                // el patrón más barato que ya tenga"). Se salta entera en
+                // cuanto las seis tapiables ya están dentro (coste cero el
+                // resto de la sesión, ver el docblock del campo).
+                if (!_altasTardiasCompletas)
+                {
+                    // Mismo criterio exception-safe que IntentarEscanear: esto
+                    // toca IMovible de objetos ajenos (Prensa/.../PlacaFria).
+                    try
+                    {
+                        SondearAltasTardias();
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError("[ChaosAlchemy][Red] MaquinaSync: excepción durante el sondeo de altas tardías (se reintentará el próximo sondeo): " + ex);
+                    }
+                }
             }
 
             _acumuladorEstado += Time.deltaTime;
@@ -401,66 +492,71 @@ namespace Alkahest.Net
         }
 
         // =================================================================
-        // ANFITRIÓN: descubrimiento (UNA vez, en cuanto exista qué escanear)
+        // ANFITRIÓN: descubrimiento. El PRIMER publicado espera solo a las
+        // familias que SIEMPRE nacen juntas y síncronas; las potencialmente
+        // tapiables entran en la misma pasada SI YA EXISTEN, y si no, las
+        // recoge SondearAltasTardias más abajo (playtest 53).
         // =================================================================
 
         /// <summary>
-        /// AlkahestGameBootstrap.TrySpawnRed crea las siete máquinas en varias
+        /// AlkahestGameBootstrap.TrySpawnRed crea las máquinas base en varias
         /// llamadas repartidas a lo largo de unos cuantos Update tras el
         /// spawn de este objeto (espera a que el avatar local esté cableado,
         /// ver ese archivo) -- así que un escaneo único en OnNetworkSpawn
         /// encontraría la escena vacía. Se reintenta aquí hasta que las
-        /// SIETE existan (cinco estaciones + dos grifos): publicar un
-        /// registro a medias no tiene arreglo después, porque el registro
-        /// solo se llena UNA vez (ver PublicarRegistroInicial).
+        /// familias que SIEMPRE nacen juntas y síncronas existan: Crisol
+        /// (nunca tapiado, contrato §3), los dos grifos, Balda/Anclaje/Rack/
+        /// Alambique/Pila (mobiliario, ver los comentarios de cada uno más
+        /// abajo). Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro/PlacaCalor/
+        /// PlacaFria YA NO forman parte de esta condición (playtest 53,
+        /// deshace la costura del playtest 52: MaquinaSync ya no exige que
+        /// las seis tapiables de Semilla Cero existan para publicar el
+        /// primer registro) -- se incluyen en esta misma pasada SOLO si ya
+        /// existen (multi CAÓTICO, donde nacen todas de una, igual que
+        /// siempre); si no, <see cref="SondearAltasTardias"/> las recoge una
+        /// a una según el director de Semilla Cero destapa cada sala.
         /// </summary>
         private void IntentarEscanear()
         {
             var crisoles = FindObjectsByType<Crisol>();
+            var grifos = FindObjectsByType<Dispenser>();
+            // (fix Cesar playtest 33) Baldas/anclajes: los crea
+            // Game/Mudanza.cs en su propio Init (host-only, ver el docblock
+            // de ese archivo) -- pueden tardar uno o más Update en existir,
+            // así que este escaneo se reintenta hasta que también estén.
+            // `>=1` basta como señal de "ya terminó de crearlas": el spawn es
+            // una sola pasada síncrona (Balda.SpawnTodas/Anclaje.SpawnDeposito),
+            // nunca a medias, nunca tapiado.
+            var baldas = FindObjectsByType<Balda>();
+            var anclajes = FindObjectsByType<Anclaje>();
+            // (fix Cesar playtest 34) Estante de redomas + Alambique: los crea
+            // AlkahestGameBootstrap.TrySpawnRed, siempre al arrancar, nunca
+            // tapiados. Pilas: las crea Game/Mudanza.cs, mismo sitio y mismo
+            // guardián que Balda/Anclaje (ver Game/Pila.cs::SpawnTodas).
+            // Mismo criterio de longitud fija que `grifos.Length < 2`:
+            // siempre hay exactamente 1 estante, 1 alambique y 2 pilas.
+            var estantes = FindObjectsByType<StorageRack>();
+            var alambiques = FindObjectsByType<Alambique>();
+            var pilas = FindObjectsByType<Pila>();
+
+            if (crisoles.Length < 1 || grifos.Length < 2 ||
+                baldas.Length < 1 || anclajes.Length < 1 ||
+                estantes.Length < 1 || alambiques.Length < 1 || pilas.Length < 2)
+            {
+                return; // el taller base del anfitrión sigue a mitad de construir -- se reintenta el próximo Update.
+            }
+
+            // Las seis potencialmente tapiables (playtest 53): se escanean
+            // aquí TAMBIÉN, pero sin exigirlas -- si ya existen entran en el
+            // primer publicado (multi CAÓTICO); si no (Semilla Cero co-op,
+            // sus salas todavía selladas), quedan en 0 y SondearAltasTardias
+            // las añade cuando el director las destape.
             var prensas = FindObjectsByType<Prensa>();
             var chispas = FindObjectsByType<BancoChispa>();
             var columnas = FindObjectsByType<ColumnaEnsayo>();
             var ensayos = FindObjectsByType<EnsayoMaestro>();
-            var grifos = FindObjectsByType<Dispenser>();
-            // (fix Cesar playtest 33) Baldas/anclajes: los crea
-            // Game/Mudanza.cs en su propio Init (host-only, ver el docblock
-            // de ese archivo) -- igual que las siete de arriba, pueden tardar
-            // uno o más Update en existir, así que este escaneo se reintenta
-            // hasta que también estén. `>=1` basta como señal de "ya
-            // terminó de crearlas": el spawn es una sola pasada síncrona
-            // (Balda.SpawnTodas/Anclaje.SpawnDeposito), nunca a medias.
-            var baldas = FindObjectsByType<Balda>();
-            var anclajes = FindObjectsByType<Anclaje>();
-            // (fix Cesar playtest 34) Estante de redomas + Alambique: los crea
-            // AlkahestGameBootstrap.TrySpawnRed (ver ese archivo, fix de esta
-            // misma ronda -- antes NUNCA se llamaban ahí, la causa raíz del
-            // reporte "en multi no aparecen las redomas ni el alambique").
-            // Pilas: las crea Game/Mudanza.cs, mismo sitio y mismo guardián
-            // que Balda/Anclaje (ver Game/Pila.cs::SpawnTodas). Mismo criterio
-            // de longitud fija que `grifos.Length < 2`: siempre hay
-            // exactamente 1 estante, 1 alambique y 2 pilas (agua/limo).
-            var estantes = FindObjectsByType<StorageRack>();
-            var alambiques = FindObjectsByType<Alambique>();
-            var pilas = FindObjectsByType<Pila>();
-            // (CONTRATO_TERMICA.md §3b, ENCARGO I) LAS DOS PLACAS: en MULTI
-            // (única escena donde corre este archivo) las crea
-            // AlkahestGameBootstrap.TrySpawnRed sin condición de Semilla Cero
-            // (esa escena nunca la activa, ver el docblock de esa clase) --
-            // así que, a diferencia de las cinco estaciones tapiables de
-            // Semilla Cero (que NO existen en esta escena), siempre hay
-            // exactamente 1 de cada, mismo criterio de longitud fija que
-            // alambiques/estantes.
             var placasCalor = FindObjectsByType<HeatPlate>();
             var placasFrias = FindObjectsByType<ChillStone>();
-
-            if (crisoles.Length < 1 || prensas.Length < 1 || chispas.Length < 1 ||
-                columnas.Length < 1 || ensayos.Length < 1 || grifos.Length < 2 ||
-                baldas.Length < 1 || anclajes.Length < 1 ||
-                estantes.Length < 1 || alambiques.Length < 1 || pilas.Length < 2 ||
-                placasCalor.Length < 1 || placasFrias.Length < 1)
-            {
-                return; // el taller del anfitrión sigue a mitad de construir -- se reintenta el próximo Update.
-            }
 
             _fuentes.Clear();
             AgregarTipo(TipoMaquina.Crisol, crisoles);
@@ -479,7 +575,22 @@ namespace Alkahest.Net
 
             PublicarRegistroInicial();
             _escaneado = true;
-            Debug.Log("[ChaosAlchemy][Red] MaquinaSync: registro publicado (" + _fuentes.Count + " máquinas).");
+
+            // (playtest 53) Marca ya vistas las tapiables que llegaron
+            // completas en ESTE primer escaneo -- así SondearAltasTardias no
+            // las vuelve a añadir por duplicado (violaría "nunca reordena ni
+            // duplica" del docblock de la clase).
+            _prensaVista = prensas.Length >= 1;
+            _chispaVista = chispas.Length >= 1;
+            _columnaVista = columnas.Length >= 1;
+            _ensayoVista = ensayos.Length >= 1;
+            _placaCalorVista = placasCalor.Length >= 1;
+            _placaFriaVista = placasFrias.Length >= 1;
+            _altasTardiasCompletas = _prensaVista && _chispaVista && _columnaVista &&
+                                      _ensayoVista && _placaCalorVista && _placaFriaVista;
+
+            Debug.Log("[ChaosAlchemy][Red] MaquinaSync: registro publicado (" + _fuentes.Count + " máquinas" +
+                (_altasTardiasCompletas ? "" : ", con estaciones tapiables pendientes de alta tardía") + ").");
         }
 
         /// <summary>
@@ -488,7 +599,12 @@ namespace Alkahest.Net
         /// asignado sea DETERMINISTA -- importante sobre todo para los dos
         /// grifos, que si no podrían intercambiar de índice entre partidas
         /// según el orden (no documentado como estable) en que Unity los
-        /// devuelva.
+        /// devuelva. Solo se llama con el lote COMPLETO de un tipo la
+        /// primera vez que se ve ese tipo (el primer escaneo, o -- para las
+        /// seis tapiables -- <see cref="RegistrarAltaUnica"/> vía un lote de
+        /// tamaño 1): nunca se re-invoca sobre un tipo ya presente en
+        /// <see cref="_fuentes"/>, así que no hay riesgo de reasignar el
+        /// índice de una entrada ya publicada.
         /// </summary>
         private void AgregarTipo<T>(TipoMaquina tipo, T[] instancias) where T : Component, IMovible
         {
@@ -519,6 +635,68 @@ namespace Alkahest.Net
                 _registro.Add(ConstruirEntrada(_fuentes[i], 0)); // estadoVivo=0: el primer sondeo (SondearEstadoVivo) lo pone al día en ≤0.25s.
                 _bloqueos.Add(SinBloqueo); // nace libre -- ver el docblock de _bloqueos.
             }
+        }
+
+        // =================================================================
+        // (playtest 53, ALTAS TARDÍAS) ANFITRIÓN: las seis estaciones
+        // potencialmente tapiables de Semilla Cero, recogidas UNA A UNA
+        // conforme el director (Game/SemillaCero.cs, vía
+        // Game/AlkahestGameBootstrap.PollDestapesSemillaCero) las spawnea al
+        // destaparse su sala. Sondeado desde el MISMO acumulador de 0.5s que
+        // SondearCambiosDePosicion (ver Update()) -- sondeo barato: 6
+        // llamadas a FindObjectsByType como mucho, y cada una se SALTA en
+        // cuanto su tipo ya fue visto (`_xVista`), así que el coste cae a
+        // cero según avanza el arco y desaparece del todo cuando las seis
+        // están dentro (`_altasTardiasCompletas`, y Update() deja de llamar
+        // a este método).
+        // =================================================================
+        private void SondearAltasTardias()
+        {
+            if (!_prensaVista) _prensaVista = RegistrarAltaUnica(TipoMaquina.Prensa, FindObjectsByType<Prensa>());
+            if (!_chispaVista) _chispaVista = RegistrarAltaUnica(TipoMaquina.BancoChispa, FindObjectsByType<BancoChispa>());
+            if (!_columnaVista) _columnaVista = RegistrarAltaUnica(TipoMaquina.ColumnaEnsayo, FindObjectsByType<ColumnaEnsayo>());
+            if (!_ensayoVista) _ensayoVista = RegistrarAltaUnica(TipoMaquina.EnsayoMaestro, FindObjectsByType<EnsayoMaestro>());
+            if (!_placaCalorVista) _placaCalorVista = RegistrarAltaUnica(TipoMaquina.PlacaCalor, FindObjectsByType<HeatPlate>());
+            if (!_placaFriaVista) _placaFriaVista = RegistrarAltaUnica(TipoMaquina.PlacaFria, FindObjectsByType<ChillStone>());
+
+            if (_prensaVista && _chispaVista && _columnaVista && _ensayoVista && _placaCalorVista && _placaFriaVista)
+            {
+                _altasTardiasCompletas = true;
+                Debug.Log("[ChaosAlchemy][Red] MaquinaSync: última alta tardía recibida -- registro completo (" + _fuentes.Count + " máquinas), sondeo de altas detenido.");
+            }
+        }
+
+        /// <summary>
+        /// `tipo` tiene, por diseño del arco de Semilla Cero, EXACTAMENTE una
+        /// instancia (ver <see cref="TipoMaquina"/>: Prensa/BancoChispa/
+        /// ColumnaEnsayo/EnsayoMaestro/PlacaCalor/PlacaFria son estaciones
+        /// únicas, nunca 0 ni 2 a la vez que este método se llame -- si ya
+        /// pasó por aquí una vez con éxito, el llamante no vuelve a invocarlo
+        /// para ese tipo, ver los guardas `_xVista` en <see cref="SondearAltasTardias"/>).
+        /// `instancias.Length &lt; 1` es "todavía no, la sala sigue tapiada
+        /// de piedra" -- se reintenta el próximo sondeo, sin coste (el índice
+        /// que se le asigna al aparecer es SIEMPRE 0: primera y única
+        /// entrada de su tipo, se AÑADE al final del registro (`Add`, nunca
+        /// `Insert`) sin tocar ni reordenar ninguna entrada ya publicada.
+        /// </summary>
+        private bool RegistrarAltaUnica<T>(TipoMaquina tipo, T[] instancias) where T : Component, IMovible
+        {
+            if (instancias.Length < 1) return false;
+
+            var f = new Fuente
+            {
+                tipo = (byte)tipo,
+                indice = 0,
+                movible = instancias[0],
+                anclaAnterior = instancias[0].AnclaCelda,
+            };
+            _fuentes.Add(f);
+            _registro.Add(ConstruirEntrada(f, 0)); // estadoVivo=0: SondearEstadoVivo lo pone al día en ≤0.25s, igual que una entrada del primer publicado.
+            _bloqueos.Add(SinBloqueo); // nace libre, mismo criterio que PublicarRegistroInicial.
+
+            Debug.Log("[ChaosAlchemy][Red] MaquinaSync: alta tardía -- " + tipo + " recién destapada, añadida al registro (índice " +
+                (_fuentes.Count - 1) + ").");
+            return true;
         }
 
         /// <summary>
@@ -961,9 +1139,12 @@ namespace Alkahest.Net
                     CrearOActualizarReplica(ev.Index, ev.Value);
                     break;
                 // Insert/Remove/RemoveAt/Clear/Full no se usan: el registro
-                // solo CRECE una vez al arrancar (PublicarRegistroInicial) y
-                // luego solo cambia POR VALOR -- ninguna máquina se destruye
-                // en mitad de una partida. Se ignoran a propósito.
+                // CRECE por el final (PublicarRegistroInicial al arrancar, y
+                // desde el playtest 53 también RegistrarAltaUnica cuando una
+                // estación tapiable nace tarde -- ambos son siempre `Add`,
+                // nunca `Insert`) y luego cada entrada solo cambia POR VALOR
+                // -- ninguna máquina se destruye ni se reordena en mitad de
+                // una partida. Se ignoran a propósito.
             }
         }
 

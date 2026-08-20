@@ -155,19 +155,22 @@ namespace Alkahest.Game
         private void Update()
         {
             if (!_spawned) { TrySpawn(); return; }
-            // (playtest 40, SEMILLA CERO; ENMENDADO playtest 52, CO-OP GUIADO)
-            // Comparaciones de bool por frame, cero allocs -- el mismo
-            // presupuesto que cualquier otro polling barato del proyecto. En
-            // caótico (`ModoSemillaCero` false) esto no hace nada, sea cual
-            // sea la escena. `!SimSync.EnEscena` cubre el modo un jugador
-            // (siempre "anfitrión" de su propia partida, donde este poll
-            // SIGUE haciendo el spawn tardío real, sin cambios); `SimSync.EsServidor`
-            // cubre el anfitrión del multi -- ahí, con la costura de
-            // Net/MaquinaSync.cs documentada en TrySpawnRed (las seis
-            // estaciones ya nacieron todas de una), esta llamada es hoy un
-            // NO-OP inofensivo (`_salaSpawneadaSemillaCero` llega todo en
-            // `true`) que se deja preparado para el día en que esa costura se
-            // cierre. El INVITADO nunca entra aquí: no tiene
+            // (playtest 40, SEMILLA CERO; ENMENDADO playtest 52, CO-OP
+            // GUIADO; REVERTIDO playtest 53) Comparaciones de bool por frame,
+            // cero allocs -- el mismo presupuesto que cualquier otro polling
+            // barato del proyecto. En caótico (`ModoSemillaCero` false) esto
+            // no hace nada, sea cual sea la escena. `!SimSync.EnEscena` cubre
+            // el modo un jugador (siempre "anfitrión" de su propia partida,
+            // donde este poll SIEMPRE hizo el spawn tardío real);
+            // `SimSync.EsServidor` cubre el anfitrión del multi -- desde el
+            // playtest 53 (con `Net/MaquinaSync.cs` admitiendo altas tardías,
+            // ver su docblock) esta llamada vuelve a hacer trabajo REAL ahí
+            // también: `TrySpawnRed` deja de spawnear las seis estaciones
+            // tapiables todas de una (revertida la costura del playtest 52),
+            // así que `_salaSpawneadaSemillaCero` llega con lo que de verdad
+            // esté destapado al arrancar (normalmente nada) y este poll las
+            // va completando sala a sala, igual que en un jugador. El
+            // INVITADO nunca entra aquí: no tiene
             // `_playerSemillaCero`/`_knowledgeSemillaCero`/
             // `_orderSystemSemillaCero` propios (esta clase no los cachea en
             // la rama invitado de TrySpawnRed, ver ese método) y sus
@@ -692,18 +695,12 @@ namespace Alkahest.Game
             SpawnAlbumReal(knowledge);
             SpawnOrdersHud(orderSystem);
 
-            // (playtest 52, CO-OP GUIADO) Referencias cacheadas -- mismos
-            // campos que usa TrySpawn (modo un jugador) para
-            // PollDestapesSemillaCero. En la rama anfitrión del multi, con
-            // ModoSemillaCero, las seis estaciones tapiables nacen TODAS DE
-            // UNA más abajo (ver el bloque "COSTURA DOCUMENTADA": MaquinaSync
-            // no admite altas tardías, archivo ajeno a este encargo) en vez
-            // de una por beat -- así que estas tres referencias, en la
-            // práctica, solo las usa `Game/SemillaCero.cs::Init` (recibe
-            // `knowledge`/`orderSystem` por parámetro directo, no de aquí) y
-            // quedan cacheadas por si una ronda futura cierra esa costura y
-            // PollDestapesSemillaCero vuelve a hacer falta de verdad en
-            // multi.
+            // (playtest 52, CO-OP GUIADO; REVERTIDO playtest 53) Referencias
+            // cacheadas -- mismos campos que usa TrySpawn (modo un jugador)
+            // para PollDestapesSemillaCero. Desde el playtest 53 estas TRES
+            // referencias vuelven a usarse DE VERDAD en la rama anfitrión del
+            // multi (ver el bloque "REVERSIÓN DE LA COSTURA" más abajo): ya
+            // no es solo `Game/SemillaCero.cs::Init` quien las consumía.
             _playerSemillaCero = apprentice.transform;
             _knowledgeSemillaCero = knowledge;
             _orderSystemSemillaCero = orderSystem;
@@ -711,72 +708,70 @@ namespace Alkahest.Game
             SpawnCrisol(apprentice.transform, knowledge); // NUNCA tapiado (contrato §3), en multi igual que en un jugador.
 
             // =============================================================
-            // (playtest 52, CO-OP GUIADO) COSTURA DOCUMENTADA -- DECISIÓN
-            // FUERA DE CONTRATO EXPLÍCITA. El contrato de esta ronda pide
-            // "las estaciones se spawnean TARDE, cuando el director las
-            // destape" -- MISMO patrón que TrySpawn (modo un jugador), donde
-            // Prensa/BancoChispa/ColumnaEnsayo/EnsayoMaestro/HeatPlate/
-            // ChillStone solo nacen cuando `PollDestapesSemillaCero` ve
-            // `SimLevelBuilder.SalaDestapada(n)` en true. EN MULTI ESO NO ES
-            // SEGURO: `Net/MaquinaSync.cs` (archivo AJENO a este encargo,
-            // propiedad de otra ronda) escanea UNA SOLA VEZ
-            // (`IntentarEscanear`, `_escaneado` pasa a `true` para siempre) y
-            // exige que las SIETE estaciones+grifos existan YA -- si
-            // Prensa/Chispa/Columna/Ensayo/PlacaCalor/PlacaFría nacieran
-            // tarde (una por beat, el último en el beat 5.4, cerca del final
-            // del arco), el registro replicado NUNCA se publicaría hasta ese
-            // momento -- ni siquiera el Crisol o los grifos, que SÍ existen
-            // desde el minuto 0, porque el escaneo es TODO-O-NADA. El
-            // invitado se quedaría sin UNA SOLA máquina replicada (sin
-            // animaciones, sin "E — usar", sin nada) durante la mayor parte
-            // de la sesión -- justo lo contrario del mandato central de esta
-            // ronda ("que a él también le aparezcan... y todo aunque no sea
-            // host"). MaquinaSync.cs no está en la lista de archivos de este
-            // encargo (no se toca): no tiene ningún mecanismo de "alta
-            // tardía" (append tras el primer escaneo) que se pueda enganchar
-            // sin editarlo.
+            // (playtest 53, LA CURA DE RAÍZ) REVERSIÓN DE LA COSTURA DEL
+            // PLAYTEST 52. Aquella ronda documentó, con las SEIS estaciones
+            // tapiables naciendo TODAS DE UNA en vez de una por beat, que
+            // `Net/MaquinaSync.cs` (archivo ajeno a ese encargo) escaneaba
+            // UNA SOLA VEZ y exigía las siete estaciones+grifos completas
+            // antes de publicar NADA -- si las seis hubieran nacido tarde,
+            // el registro replicado nunca se habría publicado, dejando al
+            // invitado sin una sola máquina replicada. El costo aceptado
+            // entonces era puramente cosmético ("una chapa 'E — usar'
+            // pegándose mucho a un muro sellado", las salas SEGUÍAN
+            // tapiadas de piedra) -- pero Cesar probó el arco guiado en
+            // co-op y lo reportó igual: los SPRITES de las seis estaciones
+            // se dibujaban por encima de la piedra sellada (la Prensa con su
+            // "E — prensar", el banco de chispa, el arco del Ensayo, el
+            // alambique flotando sobre muros que el jugador ni había
+            // destapado) -- rompía la progresión visual del arco.
             //
-            // LA DECISIÓN: las SEIS estaciones nacen TODAS DE UNA, sin
-            // condición, aquí mismo -- igual que en multi CAÓTICO, y que como
-            // vivía este archivo ANTES de esta ronda -- para que
-            // `MaquinaSync.IntentarEscanear` tenga éxito desde el primer
-            // Update y el invitado vea TODO replicado desde el minuto 0. Lo
-            // que SÍ se conserva del arco guiado: las SALAS siguen TAPIADAS
-            // de piedra (`Sim/AlkahestSim.cs`/`SimLevelBuilder.TapiarSalasSemillaCero`,
-            // gate revertido esta ronda -- ver ese archivo) y el director
-            // (más abajo) las va destapando sala a sala con
-            // `SimLevelBuilder.DestaparSala` según el jugador progresa por
-            // los beats -- así que NINGÚN jugador (host o invitado) puede
-            // FÍSICAMENTE alcanzar ni completar la Prensa/Columna/Chispa/
-            // Ensayo/alcoba fría antes de tiempo, que es la parte de la
-            // progresión que de verdad importa para el arco. Lo único que se
-            // sacrifica es la garantía cosmética de M (playtest 40): con la
-            // estación ya viva detrás del muro, su foco de proximidad
-            // (`MachineFocus`, sin oclusión por pared -- puramente
-            // distancia) podría, en teoría, mostrar su chapa "E — usar" a un
-            // jugador que se acerque MUCHO al tapiado antes de que su beat la
-            // destape (rango típico ~3.6 celdas, ver `Prensa.ProximityRange`)
-            // -- un defecto cosmético menor, nunca un atajo real (la piedra
-            // sigue bloqueando el paso). `PollDestapesSemillaCero` (más abajo
-            // en Update()) queda como NO-OP inofensivo en este camino: todas
-            // las `_salaSpawneadaSemillaCero[n]` se marcan `true` aquí mismo
-            // para que nunca intente re-spawnear (evitaría el bug de
-            // `BuildVisual` no idempotente, regla 36 de CLAUDE.md).
-            //
-            // DEUDA para Fable, prioridad alta: extender `Net/MaquinaSync.cs`
-            // con un escaneo INCREMENTAL (publicar lo que ya existe, seguir
-            // escaneando lo que falta) desharía esta costura y permitiría el
-            // spawn tardío fiel al modo un jugador sin dejar al invitado a
-            // ciegas mientras tanto.
+            // Esta ronda (playtest 53) cierra la deuda que el playtest 52
+            // dejó anotada ("extender Net/MaquinaSync.cs con un escaneo
+            // INCREMENTAL... desharía esta costura"): `Net/MaquinaSync.cs`
+            // ahora admite ALTAS TARDÍAS (ver su docblock,
+            // `SondearAltasTardias`/`RegistrarAltaUnica`) -- publica el
+            // registro con lo que ya existe y va AÑADIENDO cada estación
+            // tapiable al registro (nunca borra ni reordena lo ya publicado)
+            // en cuanto `IntentarEscanear`/`SondearAltasTardias` la
+            // encuentran, con el mismo sondeo barato de 0.5s que ya tenía.
+            // Eso deshace la costura de raíz: esta rama vuelve a ser
+            // EXACTAMENTE el patrón de `TrySpawn` (un jugador) --
+            // `PollDestapesSemillaCero` spawnea cada estación al destaparse
+            // su sala, y el registro replicado la recoge en ≤0.5s después
+            // (ver la verificación de timing en el informe de esta ronda).
+            // El multi CAÓTICO (`ModoSemillaCero` false) no cambia: las seis
+            // siguen naciendo todas de una, como siempre (mismo `if
+            // (!ModoSemillaCero || ...)` que usa TrySpawn).
             // =============================================================
-            SpawnHeatPlates(apprentice.transform);
-            SpawnPrensa(apprentice.transform, knowledge);
-            SpawnBancoChispa(apprentice.transform, knowledge);
-            SpawnColumnaEnsayo(apprentice.transform, knowledge);
-            SpawnChillStone(apprentice.transform);
+            if (!ModoSemillaCero) SpawnHeatPlates(apprentice.transform); // en Semilla Cero nace junto a la piedra gélida (ver PollDestapesSemillaCero, SalaFria) -- mismo criterio que TrySpawn.
+
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaPrensa))
+            {
+                SpawnPrensa(apprentice.transform, knowledge);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaPrensa] = true;
+            }
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaChispa))
+            {
+                SpawnBancoChispa(apprentice.transform, knowledge);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaChispa] = true;
+            }
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaColumna))
+            {
+                SpawnColumnaEnsayo(apprentice.transform, knowledge);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaColumna] = true;
+            }
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaFria))
+            {
+                SpawnChillStone(apprentice.transform);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] = true;
+            }
 
             var hints = new GameObject("HintSystem").AddComponent<HintSystem>();
-            SpawnEnsayoMaestro(orderSystem, apprentice.transform);
+            if (!ModoSemillaCero || SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaEnsayo))
+            {
+                SpawnEnsayoMaestro(orderSystem, apprentice.transform);
+                _salaSpawneadaSemillaCero[SimLevelBuilder.SalaEnsayo] = true;
+            }
 
             // Lo que hacía DayCycle.EnterCuartoIntimoSilencioso y aquí no
             // tiene quién lo haga (ver punto 3 del docblock). Sin
@@ -802,15 +797,20 @@ namespace Alkahest.Game
             // QUE PERSISTE" como siempre.
             if (ModoSemillaCero)
             {
-                // Las seis estaciones de arriba ya nacieron TODAS (ver el
-                // bloque "COSTURA DOCUMENTADA" más arriba) -- se marcan como
-                // "ya spawneadas" para que PollDestapesSemillaCero (sondeado
-                // desde Update() también en la rama anfitrión del multi, ver
-                // ese método) nunca intente re-spawnearlas cuando el director
-                // llame a DestaparSala: sería una segunda BuildVisual() sobre
-                // el mismo aparato (regla 36 de CLAUDE.md, NO idempotente).
-                for (int i = 0; i < _salaSpawneadaSemillaCero.Length; i++) _salaSpawneadaSemillaCero[i] = true;
-
+                // (playtest 53) YA NO se fuerza `_salaSpawneadaSemillaCero`
+                // entera a `true` aquí -- esa era la mitad "silenciar
+                // PollDestapesSemillaCero" de la costura del playtest 52,
+                // necesaria SOLO porque las seis estaciones ya habían nacido
+                // todas arriba. Revertido el spawn a "condicional por sala"
+                // (ver el bloque de arriba, idéntico a `TrySpawn`), cada
+                // entrada de `_salaSpawneadaSemillaCero[n]` ya quedó en su
+                // valor correcto (`true` solo si esa sala YA estaba destapada
+                // al arrancar -- normalmente ninguna, recién tapiadas por
+                // `TapiarSalasSemillaCero`); `PollDestapesSemillaCero` (mismo
+                // guardián `!_salaSpawneadaSemillaCero[n]` de siempre, regla
+                // 36 de CLAUDE.md contra el doble `BuildVisual`) vuelve a
+                // spawnear cada estación pendiente la primera vez que el
+                // director destape su sala, EXACTAMENTE como en un jugador.
                 var semillaCero = new GameObject("SemillaCero").AddComponent<SemillaCero>();
                 semillaCero.Init(_sim, knowledge, orderSystem);
             }
