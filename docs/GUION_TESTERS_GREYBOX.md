@@ -15,8 +15,17 @@ expliques nada antes: el silencio inicial ES la prueba.
 3. Favor 1: atrapar la gotera al vuelo (15 de agua) y traérsela → la gotera se
    DOMA: nace su grifo sobre el cuenco.
 4. Favor 2: verter polvo de la orilla en el cuenco → barbotina → traerle 12.
-5. Cierre: "dime qué sentiste al fundar tu taller" y la oscuridad se retira.
-Duración esperada: 6-10 minutos.
+5. Favor 3 (ronda 61): cargar el HOGAR VACÍO con 12 de turba (hay un puñado
+   prestado en el frasco + el goteo pardo del muro izquierdo se talla con C)
+   → el Maestro lo enciende → el hogar consume la turba a CENIZA a la vista.
+6. Favor 4: arena de la orilla + esa ceniza, juntas en el hogar → nace VIDRIO
+   → llevarle 8.
+7. El PRIMER ESTANTE nace junto a la mesa (3 redomas) → cierre → amanece...
+8. ...y (ronda 62) EL TABLÓN queda abierto junto a la mesa (E de cerca):
+   trueque real — pagas del frasco con vidrio, el pedido TARDA (50-90s) y
+   aterriza como materia física en el nicho entre el hogar y la mesa. Segunda
+   pestaña: el LIBRO MAYOR (lo tuyo, el horizonte, y las páginas cerradas).
+Duración esperada: 12-18 minutos con final abierto.
 
 ## Qué OBSERVAR sin intervenir (apunta tiempos)
 - ¿Cuánto tardan en moverse la primera vez? ¿Y en acercarse al Maestro?
@@ -40,8 +49,16 @@ Duración esperada: 6-10 minutos.
 - Al menos uno hace algo NO pedido (jugar con fuego/agua/grifo): el mundo
   invita a tocar.
 
+## Qué observar EXTRA con la economía (ronda 62)
+- Al abrir el tablón: ¿entienden solos que se paga con lo del frasco?
+- ¿La espera de la entrega genera anticipación ("voy haciendo otra cosa") o
+  frustración ("¿por qué no llega ya?")? Apunta la palabra que usen.
+- ¿Alguien revisa el Libro Mayor sin que se lo pidan? ¿Pregunta por la caliza?
+
 ## Limitaciones conocidas del greybox (no son bugs)
 Sin arte ni cuerpo del Maestro (solo la chapa); el frasco "prestado" es teatro
-(no cambia nada mecánico aún); no hay fogón propio/vidrio/estante (siguiente
-ronda de F1); la entrega es por cercanía al Maestro (el Buzón de Entrada de la
-fundación llega con la economía); guardar partida aún no existe en este modo.
+(no cambia nada mecánico aún); la cocción real del frasco de cerámica llega en
+F1; la entrega de favores es por cercanía al Maestro (el Buzón de Entrada
+físico llega después); la página de la caliza se ve pero aún no se abre (el
+contador de "20 vidrio cambiados" es de la siguiente ronda); guardar partida
+aún no existe en este modo (fase G).

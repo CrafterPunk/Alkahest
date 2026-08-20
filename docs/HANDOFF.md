@@ -3685,3 +3685,62 @@ autor, caótico como promesa bloqueada, patentes apagadas, repo→TenThousandYea
   frasco propio de cerámica REAL (hoy el saludo/frasco es teatro), Buzón de
   Entrada de la fundación, y el tag `ultimo-clasico` que crea
   ca_playtest60.cmd ANTES de commitear esta ronda.
+
+## Ronda 61 (autónoma) — LA FUNDACIÓN COMPLETA: fuego propio, vidrio y estante (beats 4-6)
+
+El greybox del inicio oscuro cubre ahora TODO el §5 del GDD. Plano: orilla de
+arena (x388..399, MatDe(0,Polvo) -- la arena de sílice del cruce, regla 47),
+HOGAR VACÍO (x404..410, lecho y140 = la fila donde el polvo reposa), bolsón de
+turba SELLADO tras la cara del muro izquierdo con asomo de 3 celdas que gotean
+acotado (lección pt48 aplicada), sitio del estante (x448..458). Director:
+beats Fogon (cargar 12 turba en el hogar, progreso espeja EL MUNDO, no el
+frasco) → Vidrio (arena+ceniza en el hogar encendido → 8 al Maestro) →
+Estante (StorageRack de 3 redomas junto a la mesa) → Fin.
+
+LA SAGA TÉRMICA (3 iteraciones en vivo, regla 50 encadenada): a 175 raw la
+turba del hogar SE FUNDÍA (retículo: 9 fundido+4 templado, cero ceniza); a
+152, también (su fusión en 777002 anda <=148); y a 132 con celda de Fire de
+ignición, TAMBIÉN (Fire nace ~240 y la cascada térmica funde la pila antes de
+que arda). VEREDICTO: la combustión abierta de turba en pila no es domable
+por temperatura de lecho. SOLUCIÓN (filosofía del brasero del Crisol real):
+el hogar encendido CONSUME su turba a ceniza por cadencia (0.7s/celda, regla
+54: el residuo queda), el lecho queda TIBIO (118), y la cima que ve
+Universe.TryCruce es FogonCimaRaw=152 -- constante del FUEGO, no de la celda,
+exactamente como el crisol aplica su cima a la hornada sin fundir la cámara.
+El cruce es LA TABLA REAL (cero física inventada).
+
+VERIFICADO EN VIVO (arco entero): saludo → gotera → grifo → barro → hogar
+cargado → encendido → censo final [ceniza]x9 [VIDRIO]x5 nacidos en el hogar →
+8 vidrio entregados → Estante_Fundacion nacido → cierre con pedidos limpios y
+amanecer. HALLAZGO OPERATIVO: sin foco de ventana el editor SUSPENDE el
+player loop (parecía un bug del director y era la PC sola) --
+Application.runInBackground=true en toda verificación remota desde ahora.
+
+PENDIENTE F1: cocción real del frasco (hoy teatro), Buzón de Entrada de la
+fundación, ficha a la vista. SIGUIENTE (en curso): F2 LA ECONOMÍA.
+
+## Ronda 62 (autónoma) — F2: LA ECONOMÍA (el tablón, el trueque y el buzón de salida)
+
+Game/Trueque.cs nuevo: el Maestro de doble entrada del GDD §6, dormido hasta
+que el arco cierra (FundacionDirector beat Fin -> Trueque.Activar, con la
+línea "MI TABLÓN queda abierto... lo que pidas tarda"). Las cinco reglas
+selladas tienen su línea (regla 49): catálogo CONST para 777002 (turba 15 por
+6 vidrio/75s, arena 15 por 4/50s, arcilla 12 por 4/50s, y CALIZA como página
+CERRADA visible-no-comprable), stock por ciclo de 180s, se paga DEL FRASCO
+(pagar vacía lo producido: la tesis en un gesto), pedidos con tiempo de
+entrega que aterrizan como MATERIA FÍSICA (PaintStable) en el BUZÓN DE
+SALIDA -- el nicho natural entre la mejilla del hogar y la mesa
+(FundacionSalidaX0..X1 = 430..433, nombrado en el plano, regla 39). Panel
+IMGUI por proximidad+E (guardas regla 12), con segunda pestaña LIBRO MAYOR
+v0: historial del arco, horizonte (la caliza con requisito legible, el
+matraz), y "...32 páginas más que aún no puedes leer" (el patrón anti-menú-
+gris del informe de opinión). Máx 4 pedidos en camino; alejarse cierra el
+panel.
+
+VERIFICADO EN VIVO: activación, pedido de arena pagando 4 vidrio del frasco
+(10->6), stock 2->1, entrega madura -> 15 de arena físicas en el nicho +
+aviso del Maestro, cola a cero; guardas de página cerrada y de pago
+insuficiente respondiendo con su frase. PENDIENTE F2: el contador real de
+"20 vidrio cambiados" que abre la página de la caliza; réplica multi del
+tablón; calibración de precios (hoy el bootstrap arena->vidrio->arena es
+circular a propósito de greybox, anotado).

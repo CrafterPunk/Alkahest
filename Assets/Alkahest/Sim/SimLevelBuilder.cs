@@ -2859,6 +2859,21 @@ namespace Alkahest.Sim
         public const int FundacionArcillaX0 = 352, FundacionArcillaX1 = 364; // el montón de polvo de arcilla (se asienta solo en los primeros ticks).
         public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // el charquito (cuenco tallado bajo el nivel del suelo).
         public const int FundacionAprendizX = 352, FundacionAprendizY = 152; // spawn: en la penumbra, con el fuego a la derecha.
+        // (RONDA 61, beats 4-6 del GDD §5) La segunda mitad de la fundación:
+        public const int FundacionArenaX0 = 388, FundacionArenaX1 = 399;   // la ORILLA de arena (MatDe(0,Polvo), la arena de sílice del cruce del vidrio) en la ribera derecha del charco.
+        public const int FundacionFogonX0 = 404, FundacionFogonX1 = 410;   // EL HOGAR VACÍO: el sitio del fuego PROPIO del jugador (dos mejillas de piedra, lecho libre).
+        public const int FundacionFogonY = 140;                            // lecho del hogar = LA FILA DONDE EL POLVO REPOSA (la primera fila de aire sobre el suelo de piedra en y139) -- verificado en vivo ronda 61: con el lecho en 141 el calor y el conteo vivían una fila POR ENCIMA de la turba asentada.
+        public const int FundacionVetaX = 340;                             // cara interior del muro izquierdo: el ASOMO de la veta de turba (3 celdas visibles; el bolsón se talla con C).
+        public const int FundacionVetaY0 = 154, FundacionVetaY1 = 158;     // franja vertical del bolsón.
+        public const int FundacionEstanteX0 = 448, FundacionEstanteX1 = 458; // el sitio del PRIMER ESTANTE (entre la mesa y el muro derecho; lo levanta el Maestro en el beat 6).
+        public const int FundacionEstanteBaseY = 142;
+        // (RONDA 62, F2 LA ECONOMÍA) EL BUZÓN DE SALIDA: el nicho natural entre
+        // la mejilla derecha del hogar (x429) y la mesa del Maestro (x434) --
+        // flanqueado de piedra por ambos lados, ahí ATERRIZA la materia de tus
+        // pedidos al tablón (Game/Trueque.cs). No se talla nada: el hueco ya
+        // existe por geometría; estas constantes solo lo NOMBRAN (regla 39:
+        // quien dependa del sitio lo lee de aquí).
+        public const int FundacionSalidaX0 = 430, FundacionSalidaX1 = 433;
 
         public static void BuildFundacion(CellGrid grid)
         {
@@ -2893,6 +2908,40 @@ namespace Alkahest.Sim
             for (int x = FundacionCharcoX0; x <= FundacionCharcoX1; x++)
                 for (int y = FundacionY0 - 3; y <= FundacionY0 - 1; y++)
                     grid.SetCell(x, y, MaterialId.Water);
+
+            // (RONDA 61) LA ORILLA DE ARENA: en la ribera derecha del charco.
+            // MatDe(0, Polvo) -- la "arena de sílice" del cruce del vidrio
+            // (Universe._cruceArenaPolvo), NO MaterialId.Sand del vocabulario
+            // clásico (regla 47: el nombre parecido no es la constante
+            // correcta; el cruce arena+ceniza->VidrioVerde busca la base 0).
+            for (int x = FundacionArenaX0; x <= FundacionArenaX1; x++)
+                for (int y = FundacionY0; y <= FundacionY0 + 2; y++)
+                    grid.SetCell(x, y, MaterialId.MatDe(0, EstadoMateria.Polvo));
+
+            // (RONDA 61) EL HOGAR VACÍO: dos mejillas de piedra y un lecho
+            // libre -- el sitio donde el jugador enciende SU fuego (beat 4).
+            DrawSolidRect(grid, FundacionFogonX0 - 1, FundacionY0, 1, 4, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionFogonX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
+            RegistrarObra(FundacionFogonX0 - 1, FundacionY0, FundacionFogonX1 + 1, FundacionY0 + 3);
+
+            // (RONDA 61) EL ASOMO DE LA VETA: un bolsón de turba dentro del
+            // muro izquierdo, con 3 celdas perforando la cara interior (mismo
+            // patrón que el asomo del pt48: se VE que ahí hay algo; el resto
+            // se gana tallando con el cincel). MatDe(SemillaCeroBaseTurbaIdx,
+            // Polvo) -- la misma turba de la veta de Semilla Cero.
+            // LECCIÓN pt48 (la veta derramada): el bolsón queda SELLADO tras la
+            // cara del muro (columna 339 intacta de piedra) -- si el polvo
+            // tocara el aire en columna, la cascada diagonal lo drenaría
+            // entero al piso. Solo 3 celdas de ASOMO perforan la cara: pueden
+            // gotear al suelo (3 celdas exactas, acotado: detrás hay piedra) y
+            // ESE goteo es la pista. El resto se gana tallando con C.
+            byte turbaFundacion = MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx, EstadoMateria.Polvo);
+            for (int x = FundacionVetaX - 6; x <= FundacionVetaX - 2; x++)
+                for (int y = FundacionVetaY0; y <= FundacionVetaY1; y++)
+                    grid.SetCell(x, y, turbaFundacion);
+            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 1, turbaFundacion);
+            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 2, turbaFundacion);
+            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 3, turbaFundacion);
 
             PaintClimate(grid); // mismo ambiente uniforme de siempre (regla 31).
         }

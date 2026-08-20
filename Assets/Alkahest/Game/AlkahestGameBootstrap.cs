@@ -982,7 +982,12 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             var director = new GameObject("FundacionDirector").AddComponent<FundacionDirector>();
-            director.Init(_sim, orderSystem, flask, apprentice.transform);
+            director.Init(_sim, orderSystem, flask, knowledge, apprentice.transform);
+
+            // (RONDA 62, F2) LA ECONOMÍA: dormida hasta que el director cierra
+            // el arco (Trueque.Activar en el beat Fin) -- ver Game/Trueque.cs.
+            var trueque = new GameObject("Trueque").AddComponent<Trueque>();
+            trueque.Init(_sim, flask, apprentice.transform);
 
             _spawned = true;
             Debug.Log("[ChaosAlchemy] FUNDACIÓN (greybox ronda 60): mundo vacío, rincón del Maestro, director de beats.");
