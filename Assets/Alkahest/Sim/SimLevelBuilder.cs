@@ -2287,8 +2287,24 @@ namespace Alkahest.Sim
             Alambique.PlintoRect(AlambiqueX, AlambiqueBaseY, out int alaX0, out int alaY0, out int alaX1, out int alaY1);
             RegistrarObra(alaX0, alaY0, alaX1, alaY1);
 
-            BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
-            CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
+            // (CONTRATO_RONDA50.md §3b, ENCARGO G, playtest 50) LA TOLVA: "una
+            // sola boca" (contrato, textual) -- en Semilla Cero la Tolva vive
+            // DENTRO del cuarto, a segundos del Crisol (ver el bloque de
+            // constantes junto a BuildTolvaCercana para el porqué exacto del
+            // sitio); la Tolva CLÁSICA lejana (BuildDeliveryNiche, tras el
+            // pasillo) NO se talla en absoluto -- ni pozo, ni pasillo, ni arco
+            // (el contrafuerte al este de CuartoX1 queda piedra maciza sin
+            // tocar, ver FillWorldStone). El modo CAÓTICO/MULTI no cambia
+            // (contrato §3e): sigue tallando la de siempre, sin la cercana.
+            if (AlkahestGameBootstrap.ModoSemillaCero)
+            {
+                BuildTolvaCercana(grid); // registra su propia Obra ANTES de AdornarCuarto -- ver el docblock.
+            }
+            else
+            {
+                BuildDeliveryNiche(grid); // SIN TOCAR: la Tolva queda sellada porque ya no hay nada excavado a su alrededor.
+                CarvePasilloTolva(grid);  // (contrato §4.5) DESPUÉS de BuildDeliveryNiche a propósito -- ver el docblock del método.
+            }
             // (playtest 31) LA ARQUITECTURA: peldaños, pilastras y el arco del
             // pasillo. VA AL FINAL, después de TODAS las estaciones, porque
             // decide dónde puede tallar leyendo `ObraDelTaller` -- que solo
@@ -3267,6 +3283,23 @@ namespace Alkahest.Sim
         /// que ya existía, así que no puede sellar el paso ni abrir uno nuevo
         /// hacia ningún sitio: el arco vive dentro de las 6 celdas de ancho
         /// que el pasillo ya ocupaba.
+        ///
+        /// (CONTRATO_RONDA50.md §3b, ENCARGO G, playtest 50) SIGUE SIN GATE
+        /// PROPIO a propósito, decisión documentada: en Semilla Cero
+        /// <see cref="CarvePasilloTolva"/> ya NO se llama (ver el bloque
+        /// Semilla Cero de <see cref="BuildCuartoIntimo"/>), así que "el
+        /// hueco que ya existía" no existe -- esta llamada sigue corriendo
+        /// (<see cref="AdornarCuarto"/> no distingue de modo) y talla un
+        /// puñado de celdas Empty AISLADAS dentro de piedra maciza, un par de
+        /// columnas al este de <see cref="CuartoX1"/> (fuera del cuarto,
+        /// nunca expuestas a su interior: <see cref="TallarArcoPasillo"/>
+        /// arranca en `CuartoX1+1`, no en `CuartoX1`). Sin cincel que llegue
+        /// ahí (el muro que las rodea sigue macizo) son inertes: no se ven,
+        /// no se alcanzan, no cambian el conteo de "una sola boca" del
+        /// contrato. Gatearlo también habría sido gratis, pero tocar
+        /// <see cref="AdornarCuarto"/> para un efecto sin jugador que lo vea
+        /// no lo justificaba -- anotado por si una ronda futura reintroduce
+        /// algo que SÍ pueda tropezar con ese bolsón sellado.
         /// </summary>
         private static readonly int[] PerfilArco = { 0, 3, 3, 4, 4, 4, 3, 3 };
 
@@ -3386,6 +3419,136 @@ namespace Alkahest.Sim
 
             DrawUShape(grid, ChillTrayX0, ChillTrayY0, ChillTrayWidth, ChillTrayHeight, WallThickness);
             DrawSolidRect(grid, RackX0, RackY0, RackX1 - RackX0 + 1, RackHeight, MaterialId.Stone);
+        }
+
+        // =================================================================
+        // (CONTRATO_RONDA50.md §3b, ENCARGO G, playtest 50) LA TOLVA CERCANA
+        // -- SOLO SEMILLA CERO (diagnóstico D4, "EL TRAYECTO MUDO"). Cesar,
+        // veredicto del pt49, textual: "un trayecto muy grande para dejarlas
+        // en la tolva SIN NADA QUE ME LO ENSEÑE". La Tolva CLÁSICA
+        // (BuildDeliveryNiche, más abajo, ChuteMouthX0..Y1, tras el pasillo
+        // fuera del cuarto) sigue existiendo tal cual para el modo CAÓTICO
+        // (contrato §3e: "el caótico NO cambia") -- en Semilla Cero esa Tolva
+        // lejana NO SE TALLA EN ABSOLUTO (ver el gate en BuildCuartoIntimo, y
+        // el docblock de TallarArcoPasillo para la única esquirla inerte que
+        // deja sin gate propio): "una sola boca" (contrato, textual), y es
+        // ESTA.
+        //
+        // EL SITIO, LEÍDO DEL PLANO (regla 39/47 de CLAUDE.md, nunca de
+        // prosa): el hueco "paso crisol -> prensa" (x125..142, ver el bloque
+        // "EL PLANO CENTRAL" junto a CuartoX0/CrisolX/PrensaX más arriba en
+        // este archivo) es la única terraza abierta DENTRO del cuarto que
+        // (a) queda pegada a la huella del Crisol (huella real 88..124, ver
+        // el docblock de EstanteX0/X1) sin pisarla -- ColumnaOcupada la
+        // protege hasta x=125, esta boca arranca en TolvaCercanaX0=129, 4
+        // columnas libres de margen --, (b) deja margen de sobra antes de la
+        // huella de la Prensa (real 143..173, protegida desde x=142 --
+        // TolvaCercanaX1=138 aquí abajo, 4 columnas libres), y (c) está a
+        // 129-79=50 columnas de la cara tallable de la veta de turba
+        // (VetaTurbaCaraX=79, y139..258): ni la toca ni se confunde con ella
+        // (contrato §3b, "sin pisar estaciones ni la veta"). No es una
+        // elección arbitraria -- el propio plano ya reservaba este hueco como
+        // "corto, solo da para eso" (ver `_galeriasOriginales[2]`, la balda
+        // en X0=128..X1=139, Y=CuartoY0+54=190, MISMO hueco): esa balda
+        // cuelga 32 celdas por encima del labio de esta boca (y=158) sin
+        // tocarla -- las dos estructuras SIEMPRE convivieron aquí, la balda
+        // arriba, la Tolva ahora abajo.
+        //
+        // "A SEGUNDOS DE VUELO DEL CRISOL" (contrato, textual): el borde
+        // oeste de la boca interior (TolvaCercanaMouthX0=131) queda a
+        // 131-124=7 columnas del borde este de la huella del Crisol (124) --
+        // de un vistazo, sin cruzar ninguna otra estación ni la Prensa.
+        //
+        // GEOMETRÍA: dos jambas de piedra (TolvaCercanaMuro=2 celdas cada
+        // una) flanqueando una boca interior de TolvaCercanaBocaAncho=6
+        // celdas, abierta por arriba TolvaCercanaAlto=20 celdas -- bien por
+        // debajo de la pilastra colgante que ya ocupa esa misma columna
+        // (X=133 cae dentro de esta boca; PilastraColumnas[0]/
+        // PilastraCaidas[0]=24 cuelga desde el techo hasta y=CuartoY1-24=238,
+        // **80 celdas por encima** del labio de esta boca en y=158: cero
+        // solapamiento, verificado contra las constantes reales, no a ojo).
+        // El SUELO de la boca es el propio suelo uniforme del cuarto
+        // (BuildCuartoFloor ya deja sólida la fila BaseYDeEstacion(x)=
+        // CuartoY0+2=138 en TODO el ancho de la sala, incluido este hueco):
+        // a diferencia de BuildAlcobaFria (que vive en la cota +6 de la
+        // alcoba de observación, otra franja de suelo), esta boca no
+        // necesita colchón propio.
+        //
+        // Registrada como Obra del taller (RegistrarObra, protección
+        // anticincel de siempre, y ANTES de AdornarCuarto para que
+        // ColumnaOcupada la respete al tallar terrazas/pilastras) pero
+        // DELIBERADAMENTE FUERA de RegistrarObraSemillaCero: la Tolva NUNCA
+        // se tapia -- tiene que estar visible y latiendo desde el minuto 0
+        // (D4), no destaparse como las cinco salas de pregunta.
+        //
+        // COSTURA PARA EL DIRECTOR (INTEGRACIÓN, encargo M/bootstrap): estas
+        // constantes son PÚBLICAS y Game/DeliveryChute.cs (mismo encargo, ver
+        // ese archivo) ya las lee DIRECTAMENTE por sí solo -- ese archivo
+        // decide en su propio Init() si usa esta boca o la clásica según
+        // AlkahestGameBootstrap.ModoSemillaCero, exactamente el mismo patrón
+        // que ya usan SimLevelBuilder.BuildVetaTurba/Game/HintSystem.cs. NO
+        // hace falta tocar Game/AlkahestGameBootstrap.cs: SpawnDeliveryChute
+        // ya llama a `DeliveryChute.Init(sim, orderSystem)` sin pasarle
+        // ningún sitio (DeliveryChute deriva su geometría sola de
+        // SimLevelBuilder, ver su propio docblock) -- se documenta aquí de
+        // todos modos porque el contrato pide expresamente exponer la
+        // constante/API del sitio seed-0 como costura reportable, aunque en
+        // este caso ya viene cableada sin que el bootstrap tenga que moverse.
+        // =================================================================
+        /// <summary>Ancho de cada jamba de piedra que flanquea la boca cercana.</summary>
+        public const int TolvaCercanaMuro = 2;
+        /// <summary>Ancho de la boca interior (por donde cae la materia), sin contar jambas.</summary>
+        public const int TolvaCercanaBocaAncho = 6;
+        /// <summary>Jamba izquierda, borde exterior.</summary>
+        public const int TolvaCercanaX0 = 129;
+        /// <summary>Jamba derecha, borde exterior. 129 + 2*2 + 6 - 1 = 138.</summary>
+        public const int TolvaCercanaX1 = TolvaCercanaX0 + TolvaCercanaMuro * 2 + TolvaCercanaBocaAncho - 1;
+        /// <summary>Boca interior, borde izquierdo (dentro de la jamba). 131.</summary>
+        public const int TolvaCercanaMouthX0 = TolvaCercanaX0 + TolvaCercanaMuro;
+        /// <summary>Boca interior, borde derecho (dentro de la jamba). 136.</summary>
+        public const int TolvaCercanaMouthX1 = TolvaCercanaX1 - TolvaCercanaMuro;
+        /// <summary>
+        /// Última fila maciza del suelo bajo esta boca -- MISMA fórmula que
+        /// <see cref="BaseYDeEstacion"/> para x&lt;250 (planta baja), escrita
+        /// a mano porque <c>BaseYDeEstacion</c> no es const-foldable
+        /// (CLAUDE.md regla 39: el valor SÍ está verificado contra el método
+        /// real -- 129&lt;250, así que <c>BaseYDeEstacion(129)</c> devuelve
+        /// exactamente esto, <c>CuartoY0+2</c>).
+        /// </summary>
+        public const int TolvaCercanaBaseY = CuartoY0 + 2; // 138.
+        /// <summary>Alto de la boca abierta, en celdas.</summary>
+        public const int TolvaCercanaAlto = 20;
+        /// <summary>Boca interior, primera fila de aire (justo sobre el suelo). 139.</summary>
+        public const int TolvaCercanaMouthY0 = TolvaCercanaBaseY + 1;
+        /// <summary>Boca interior, última fila de aire (el labio, abierto por arriba). 158.</summary>
+        public const int TolvaCercanaMouthY1 = TolvaCercanaMouthY0 + TolvaCercanaAlto - 1;
+
+        /// <summary>
+        /// Talla la Tolva cercana (ver el bloque de constantes de arriba para
+        /// el porqué exacto del sitio): dos jambas de piedra + boca vacía,
+        /// plantada en el suelo ya sólido del cuarto (sin colchón propio,
+        /// como sí necesita <see cref="BuildAlcobaFria"/>). SOLO se llama
+        /// desde <see cref="BuildCuartoIntimo"/> bajo el gate de
+        /// <see cref="AlkahestGameBootstrap.ModoSemillaCero"/>.
+        /// </summary>
+        private static void BuildTolvaCercana(CellGrid grid)
+        {
+            for (int y = TolvaCercanaMouthY0; y <= TolvaCercanaMouthY1; y++)
+            {
+                for (int t = 0; t < TolvaCercanaMuro; t++)
+                {
+                    if (CellGrid.InBounds(TolvaCercanaX0 + t, y)) grid.SetCell(TolvaCercanaX0 + t, y, MaterialId.Stone);
+                    if (CellGrid.InBounds(TolvaCercanaX1 - t, y)) grid.SetCell(TolvaCercanaX1 - t, y, MaterialId.Stone);
+                }
+            }
+
+            // La boca: vacía entre las dos jambas -- el suelo general
+            // (BuildCuartoFloor) ya deja TolvaCercanaBaseY sólido debajo de
+            // aquí, así que no hace falta repintarlo.
+            DrawSolidRect(grid, TolvaCercanaMouthX0, TolvaCercanaMouthY0,
+                TolvaCercanaMouthX1 - TolvaCercanaMouthX0 + 1, TolvaCercanaMouthY1 - TolvaCercanaMouthY0 + 1, MaterialId.Empty);
+
+            RegistrarObra(TolvaCercanaX0, TolvaCercanaMouthY0, TolvaCercanaX1, TolvaCercanaMouthY1);
         }
 
         /// <summary>

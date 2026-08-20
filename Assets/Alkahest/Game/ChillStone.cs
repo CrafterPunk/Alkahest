@@ -659,7 +659,7 @@ namespace Alkahest.Game
             // frío de más abajo NO se toca (el mundo sigue vivo con el libro abierto),
             // solo se calla el TOGGLE de encendido mientras se escribe o se lee.
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
+                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && EstaEnfocada()) // (integración pt50, regla 12) la ficha modal también bloquea E.
             {
                 CycleState();
             }
@@ -758,7 +758,7 @@ namespace Alkahest.Game
                     int idx = CellGrid.Idx(x, y);
                     int cur = grid.temp[idx];
                     int delta = fila < EmisionTermica.RadioFilas
-                        ? EmisionTermica.PasoFootprint(cur, target, fila, tick, x, y)
+                        ? EmisionTermica.PasoFootprint(cur, target, fila, tick, x, y, EmisionTermica.Direccion.SoloBaja) // (pt50, D1) LA LÍNEA: una nevera no calienta.
                         : EmisionTermica.PasoCollar(cur);
                     if (delta == 0) continue;
                     int next = Mathf.Clamp(cur + delta, 0, 255);
@@ -789,9 +789,11 @@ namespace Alkahest.Game
                 if (!CellGrid.InBounds(x, y)) continue;
                 int idx = CellGrid.Idx(x, y);
                 int cur = grid.temp[idx];
-                int next = cur > _lastActiveTarget
-                    ? Mathf.Max(_lastActiveTarget, cur - HoldStepRaw)
-                    : Mathf.Min(_lastActiveTarget, cur + HoldStepRaw);
+                // (pt50, D1) El hold también respeta el signo del aparato: si
+                // la celda YA está por debajo del último objetivo, la nevera
+                // apagada no la calienta — la suelta (el mundo la normaliza).
+                if (cur <= _lastActiveTarget) continue;
+                int next = Mathf.Max(_lastActiveTarget, cur - HoldStepRaw);
                 _sim.InyectarTemperatura(x, y, (byte)next);
             }
         }

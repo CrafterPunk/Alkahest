@@ -3,6 +3,12 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using Alkahest.Sim;
+// (CONTRATO_RONDA50.md §4b, ENCARGO M) SEMILLA CERO COMPARTIDA: este archivo
+// lee/escribe `Alkahest.Game.AlkahestGameBootstrap.ModoSemillaCero` (el
+// mismo patrón que ya usaba Game/AlkahestSim.cs desde antes de esta ronda,
+// ver su propio comentario de `using Alkahest.Game;`) para replicar el modo
+// al invitado y para resetearlo al terminar la sesión.
+using Alkahest.Game;
 
 namespace Alkahest.Net
 {
@@ -327,9 +333,48 @@ namespace Alkahest.Net
                 // EL ANFITRIÓN CONSTRUYE EL MUNDO DE VERDAD. Seed 0 = "elige
                 // una aleatoria", exactamente el mismo camino que la escena
                 // clásica (ver AlkahestSim.CrearMundo).
-                _sim.CrearMundoAnfitrion(0);
-                Debug.Log("[ChaosAlchemy][Red] Anfitrión: mundo creado, seed " +
-                          (_sim.Universe != null ? _sim.Universe.Seed.ToString() : "?") + ".");
+                //
+                // (CONTRATO_RONDA50.md §4b, ENCARGO M) SEMILLA CERO
+                // COMPARTIDA: si el lobby (Net/TallerSesionHud.cs, botón
+                // "ANFITRIÓN — SEMILLA CERO compartida") dejó el flag en
+                // `true` ANTES de StartHost, la seed pasa a ser la de autor
+                // (`Universe.SemillaCero` = 777002) en vez de 0/aleatoria —
+                // el resto de la magia (overrides, veta, salas destapadas)
+                // la aplica Game/AlkahestSim.cs::CrearMundoInterno leyendo el
+                // MISMO flag estático, ver sus comentarios.
+                int seedDeLaSesion = AlkahestGameBootstrap.ModoSemillaCero ? (int)Universe.SemillaCero : 0;
+
+                // (HANDOFF.md, Playtest 48, deuda "SimSync:330 CrearMundoAnfitrion
+                // sin try/catch, candidato #1 del fallo original") CERRADA
+                // esta ronda: antes, cualquier excepción real dentro de
+                // CrearMundoInterno (Universe.Create/BuildCuartoIntimo/etc.)
+                // se tragaba en el try/catch GENÉRICO de NGO alrededor del
+                // arranque del host (el mismo patrón mudo que R diagnosticó y
+                // cerró para StartHost en el pt48) — el jugador veía "el
+                // ANFITRIÓN no hace nada" sin ninguna pista de la causa real.
+                // Con log ruidoso aquí, la excepción de verdad queda en la
+                // consola ANTES de que nada más intente leer `_sim.Universe`/
+                // `_sim.Grid` (que se quedarían en `null`, ver
+                // AlkahestSim.CrearMundo: "CrearMundo llamado dos veces" NO
+                // aplica aquí porque la excepción corta a media construcción,
+                // así que un reintento posterior de StartHost SÍ podría
+                // volver a llamar a CrearMundoAnfitrion con `_grid` todavía
+                // null — comportamiento correcto, no hace falta guarda extra).
+                try
+                {
+                    _sim.CrearMundoAnfitrion(seedDeLaSesion);
+                    Debug.Log("[ChaosAlchemy][Red] Anfitrión: mundo creado, seed " +
+                              (_sim.Universe != null ? _sim.Universe.Seed.ToString() : "?") +
+                              (AlkahestGameBootstrap.ModoSemillaCero ? " (SEMILLA CERO compartida)." : "."));
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError("[ChaosAlchemy][Red] CrearMundoAnfitrion reventó construyendo el mundo (seed pedida " +
+                                    seedDeLaSesion + "): " + ex + " — el anfitrión se queda SIN mundo (_sim.Grid/_sim.Universe " +
+                                    "en null), la sesión no puede continuar. Esta es la costura que el playtest 48 dejó anotada " +
+                                    "como candidato #1 del multi roto: ahora la excepción real queda en la consola en vez de " +
+                                    "perderse en el try/catch mudo de NGO alrededor de StartHost.");
+                }
             }
             else
             {
@@ -354,6 +399,31 @@ namespace Alkahest.Net
             }
 
             _pinturasPendientes = 0;
+
+            // (CONTRATO_RONDA50.md §4b, ENCARGO M) LA FUGA DE ESTADO CLÁSICA:
+            // `ModoSemillaCero` es un flag ESTÁTICO (sobrevive a este objeto y
+            // a la sesión de red entera). Este despawn es el evento que
+            // marca "la sesión multi terminó" en LOS DOS LADOS (anfitrión al
+            // dejar de hospedar, invitado al desconectarse de una) — se
+            // resetea aquí SIEMPRE, incondicionalmente, sin comprobar si
+            // valía `true`: es tan barato como una asignación de bool y así
+            // ningún camino de salida puede olvidarlo. Sin este reseteo, un
+            // anfitrión que jugó una SEMILLA CERO compartida y luego abre un
+            // taller caótico normal (o un invitado que salió de ese lobby y
+            // entra a uno normal) seguiría viendo nombres reales/cruces
+            // habilitados en un universo donde no pintan nada — el mismo tipo
+            // de bug de "estado que sobrevive a la partida" contra el que ya
+            // avisa Game/DayCycle.cs (que resetea el flag en sus propios tres
+            // caminos de salida del lado de un jugador, ver "SEMILLA CERO —
+            // tu primer taller"/"MODO CAÓTICO"/"Nuevo universo": ninguno de
+            // esos tres se toca aquí, viven en un archivo que no es mío).
+            // Los botones del lobby (Net/TallerSesionHud.cs) YA ponen el
+            // flag en su valor correcto ANTES de cada StartHost nuevo, así
+            // que este reseteo no les hace falta para arrancar bien — es la
+            // red de seguridad para el jugador que NUNCA vuelve a pulsar
+            // ningún botón de host/join y solo cierra la sesión.
+            AlkahestGameBootstrap.ModoSemillaCero = false;
+
             base.OnNetworkDespawn();
         }
 
@@ -824,6 +894,39 @@ namespace Alkahest.Net
                     // camino trae el mundo entero, este delta incluido.
                     return;
                 }
+
+                // (CONTRATO_RONDA50.md §4b, ENCARGO M) SEMILLA CERO
+                // COMPARTIDA, LADO DEL INVITADO: la seed viaja en la cabecera
+                // de TODO mensaje de chunks (ver EnviarCarga) desde antes de
+                // esta ronda — este es el ÚNICO sitio donde el invitado la ve
+                // por primera vez, así que es el ÚNICO sitio donde puede
+                // detectar "el anfitrión está en el laboratorio compartido".
+                // Se fija el flag ANTES de CrearMundoEspejo (no después): ese
+                // método construye `_universe`/`_grid` con
+                // Game/AlkahestSim.cs::CrearMundoInterno, que lee
+                // `AlkahestGameBootstrap.ModoSemillaCero` para aplicar
+                // Universe.AplicarOverridesSemillaCero SOBRE ESTE MISMO
+                // Universe local (ver el comentario nuevo de ese método) —
+                // si el flag llegara tarde, el invitado tendría los ids/
+                // colores correctos (misma seed) pero NINGUNA identidad real
+                // ni umbral de autor, y SubstanceKnowledge/AlbumReal locales
+                // (que SÍ leen el flag en tiempo real, no solo al construir
+                // el mundo) mostrarían nombres provisionales mientras el
+                // anfitrión ya muestra los reales.
+                //
+                // El `else` es LA MITAD QUE SE OLVIDA FÁCIL (fuga de estado):
+                // sin él, un invitado que primero visitó un lobby Semilla
+                // Cero y luego se une a uno caótico normal (sin recargar la
+                // app) conservaría el flag en `true` de la sesión anterior —
+                // exactamente el bug que este contrato pide cerrar "en AMBOS
+                // LADOS". `OnNetworkDespawn` (más abajo) ya cubre "salir de
+                // la sesión"; este `else` cubre el caso más fino de "entrar
+                // directo a una sesión distinta sin pasar por un despawn de
+                // por medio" (imposible en la práctica con este template —
+                // no se puede unir dos veces sin desconectar — pero es la
+                // misma comprobación barata que hace este método para la
+                // seed en la rama de abajo, cero costo real).
+                AlkahestGameBootstrap.ModoSemillaCero = seed == (int)Universe.SemillaCero;
 
                 _sim.CrearMundoEspejo(seed);
                 if (_sim.Grid == null) return;

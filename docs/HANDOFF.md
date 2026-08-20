@@ -3318,3 +3318,55 @@ aguantaba menos que su propio polvo calcinado (188).
   la vez. Réplicas multi heredan el look (deuda: verificar en sesión multi).
 
 Detalle de la ronda anterior y sus deudas: sección Playtest 48.
+
+## Playtest 50 — EL REWORK DE SEMILLA CERO (guion compacto, camino enseñado, fichas que tú cierras, placas mono-función, y la tercera sección)
+
+Mandato de Cesar tras el 49: "un rework profundo para elevar la calidad" — el
+arranque traicionaba la literatura de la seed 0 (milagro en minuto 0-2, pocas
+opciones): dos fuegos indistinguibles desde el minuto 0, una placa-termostato
+que enfriaba y calentaba (irreal), descubrimientos que se desvanecían sin
+leerse, cantidades de recadero (25+15+15) y un trayecto mudo hasta la Tolva.
+Contrato: docs/CONTRATO_RONDA50.md. Cuatro encargos paralelos + integración.
+
+- **P — FÍSICA MONO-FUNCIÓN**: EmisionTermica gana dirección (enum
+  Direccion SoloSube/SoloBaja como flag del registro — NO derivado de
+  comparar con ambiente, ver el porqué en su docblock): la estufa jamás baja
+  un grado, la nevera jamás sube uno; el HOLD de apagado respeta el signo.
+  Falloff y collar intactos; cero cambios visuales.
+- **F — LAS FICHAS QUE TÚ CIERRAS**: al descubrir, la ficha-vitrina del álbum
+  se abre SOLA (nombre real + reseña + firma) y espera cierre manual
+  ("Anotado en tu álbum" / Escape / clic); la cola cede el turno al CIERRE
+  (+2s), no a un temporizador; el banner ALGO NUEVO queda de precursor solo
+  si hay un panel ocupado; los 6 innominados clásicos conservan su banner de
+  bautizo (es la única vía que enseña la T). Nuevo _bannerTeatroVisible
+  autocurativo para que banner y ficha no se pisen.
+- **G — GUION COMPACTO Y CAMINO ENSEÑADO**: cantidades beat2 25→10, beat3
+  15→8, beat4 15→8, prensa/columna 10→6, frío 8→6. LA TOLVA CERCANA en seed 0
+  (x129..138, boca 131..136, baseY 138 — el hueco crisol→prensa; la tolva
+  clásica lejana NO se talla: una sola boca); late con pedido activo (patrón
+  LuzHogar), rótulo "TOLVA — deja aquí lo pedido (vierte con clic derecho)",
+  consejo del gesto completo en el primer pedido, y FLECHA de dirección en
+  OrdersHud (glifo ←/→/↓, solo tipos que se entregan en Tolva, solo seed 0).
+  El 5.4 y la pista del Maestro dejan de presumir "resista": "algo que
+  sobreviva al rojo sin arder ni fundirse — lo bien cocido aguanta."
+- **M — EL PAR TÉRMICO Y LA TERCERA SECCIÓN**: en seed 0 la placa de calor ya
+  NO nace al arranque — nace JUNTO a la piedra gélida al destaparse la
+  SalaFria (un solo fuego en el minuto 0: el crisol; la placa conserva el
+  sitio de la pila — la alcoba mide exactamente 8 celdas y no cabe el par
+  adyacente, deuda anotada para ensanchar AlcobaFriaAncho). Y **SEMILLA CERO
+  COMPARTIDA**: botón nuevo del anfitrión en el lobby multi — mundo 777002 +
+  overrides + veta + TODAS las salas destapadas + identidades reales + cruces,
+  SIN director de beats (laboratorio para pruebas en simultáneo, pedido
+  textual de Cesar). El invitado detecta la seed en la cabecera de chunks
+  (SimSync) y aplica overrides + ModoSemillaCero en su espejo; el flag se
+  resetea en OnNetworkDespawn y en los 3 botones de host (anti-fuga);
+  TapiarSalas gana el gate !SimSync.EnEscena. COSTURA CERRADA del pt48:
+  CrearMundoAnfitrion ahora en try/catch con el error real logueado.
+- **Integración (regla 12)**: con la ficha abriéndose sola, DIEZ archivos de
+  input de mundo ganan la guarda AlbumReal.Abierto (Flask/Cincel/Mudanza
+  ocultan visuales; Crisol/HeatPlate/ChillStone/Prensa/BancoChispa/Alambique/
+  EnsayoMaestro bloquean E) — el hueco preexistente que F reportó.
+
+Deudas nuevas: ensanchar AlcobaFriaAncho para el par térmico adyacente;
+réplicas multi de las placas nuevas sin verificar en sesión; TallarArcoPasillo
+sin gate en seed 0 (efecto inerte, documentado).

@@ -470,7 +470,7 @@ namespace Alkahest.Game
                 }
 
                 if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                    && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
+                    && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && EstaEnfocada()) // (integración pt50, regla 12) la ficha modal también bloquea E.
                 {
                     IntentarConstruir();
                     MachineFocus.RegistrarUsoE(); // (ENCARGO N) sin cambios: cuenta como uso aunque falte cerámico -- ver el docblock de IntentarConstruir.

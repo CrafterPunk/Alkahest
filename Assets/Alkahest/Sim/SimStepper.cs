@@ -2874,10 +2874,32 @@ namespace Alkahest.Sim
         /// <see cref="XorShift.FromCell"/> (valor esperado exacto, sin sesgo,
         /// nunca se estanca). Nunca sobrepasa el objetivo.
         /// </summary>
-        public static int PasoFootprint(int cur, int target, int fila, uint tick, int x, int y)
+        /// <summary>
+        /// (playtest 50, D1, ENCARGO P — reaplicado por integración tras un
+        /// clobber de git stash entre encargos concurrentes, regla 26) LA
+        /// DIRECCIÓN ÚNICA: una fuente térmica tiene IDENTIDAD — la estufa
+        /// solo puede SUBIR temperaturas y la nevera solo BAJARLAS. Antes el
+        /// empuje Newton era bidireccional (termostato): la placa de calor
+        /// ENFRIABA lo que estuviera por encima de su objetivo — "la estufa
+        /// que enfría la sopa", Cesar lo vio en el playtest 49. El signo
+        /// viaja como FLAG del llamante (no se deriva de comparar target
+        /// contra AmbientRaw: el objetivo de TEMPLADA sale del centro de la
+        /// banda del vivium por seed y nada garantiza que quede siempre por
+        /// encima del ambiente — regla 47, no confiar en coincidencias de
+        /// hoy). El collar (PasoCollar) NO cambia: contener fuga hacia
+        /// ambiente es bidireccional por naturaleza.
+        /// </summary>
+        public enum Direccion : byte { SoloSube, SoloBaja }
+
+        public static int PasoFootprint(int cur, int target, int fila, uint tick, int x, int y, Direccion direccion)
         {
             int diff = target - cur;
             if (diff == 0) return 0;
+            // LA LÍNEA de "una estufa no enfría / una nevera no calienta"
+            // (regla 49): el corte va ANTES de todo cálculo fraccionario,
+            // así el redondeo (regla 9) nunca ve un signo prohibido.
+            if (direccion == Direccion.SoloSube && diff < 0) return 0;
+            if (direccion == Direccion.SoloBaja && diff > 0) return 0;
             int fall = Falloff100(fila);
             if (fall <= 0) return 0;
             double magF = NewtonK * fall / 100.0 * Math.Abs(diff);

@@ -362,7 +362,7 @@ namespace Alkahest.Game
             SondearBandeja();
 
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
+                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && EstaEnfocada()) // (integración pt50, regla 12) la ficha modal también bloquea E.
             {
                 Analizar();
                 MachineFocus.RegistrarUsoE(); // (ENCARGO N) el E local SIEMPRE cuenta como "uso enseñado" aunque la bandeja esté vacía -- sin cambios de este encargo, ver el docblock de Analizar.

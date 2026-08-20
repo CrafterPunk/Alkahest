@@ -238,7 +238,7 @@ namespace Alkahest.Game
             // está tapado por el velo: aspirar o verter a ciegas detrás del libro
             // solo puede acabar en destrozo. Además el libro pagina con Re Pág /
             // Av Pág y el jugador tiene el ratón encima del papel, no del taller.
-            if (JournalHud.Abierto) { OcultarVisualesDeMundo(); return; }
+            if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisualesDeMundo(); return; } // (integración pt50, regla 12) AlbumReal.Abierto: la ficha modal de descubrimiento (ENCARGO F) se abre sola -- aspirar/verter con ella en pantalla era el hueco reportado.
 
             // (playtest 16) EL CINCEL ES UN MODO, NO OTRO BOTÓN. Con la tecla C el
             // aprendiz cambia lo que lleva en la mano: o el frasco o el cincel,

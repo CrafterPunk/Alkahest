@@ -201,10 +201,27 @@ namespace Alkahest
             // overrides de autor corre AQUÍ, justo después de la generación
             // normal, antes de construir plano ni stepper -- así todo lo que
             // lee `_universe` después (el plano, las máquinas, el diario) ya
-            // ve el universo final. Nunca en el espejo (Semilla Cero es solo
-            // de la escena de un jugador, ver Game/SemillaCero.cs) ni cuando
-            // el flag está apagado (caótico/multi intactos).
-            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero) Universe.AplicarOverridesSemillaCero(_universe);
+            // ve el universo final.
+            //
+            // (CONTRATO_RONDA50.md §4b, ENCARGO M, SEMILLA CERO COMPARTIDA)
+            // YA NO es "nunca en el espejo": ese comentario describía la
+            // única realidad de antes de esta ronda (Semilla Cero solo
+            // existía en la escena de un jugador). Ahora el LOBBY multi
+            // (Net/TallerSesionHud.cs, botón "ANFITRIÓN — SEMILLA CERO
+            // compartida") puede poner `ModoSemillaCero` en `true` también en
+            // la escena MULTI, y el INVITADO tiene que aplicar los MISMOS
+            // overrides sobre SU PROPIO `_universe` del espejo -- si no, su
+            // Universe local tendría los ids/colores correctos (misma seed)
+            // pero las propiedades/identidades reales de autor NO (Universe
+            // es un objeto por-proceso, los overrides lo mutan en sitio, y
+            // cada lado de la red construye el suyo, ver Net/SimSync.cs). Es
+            // Net/SimSync.cs quien pone el flag en el invitado ANTES de
+            // llamar a CrearMundoEspejo, justo al detectar
+            // `seed == Universe.SemillaCero` en la cabecera del snapshot
+            // (ver SimSync.AlRecibirChunks) -- así que para cuando se llega
+            // aquí el flag YA está en su valor final para este proceso, y
+            // basta con leerlo sin distinguir host/invitado/un jugador.
+            if (AlkahestGameBootstrap.ModoSemillaCero) Universe.AplicarOverridesSemillaCero(_universe);
             _grid = new CellGrid();
             // (playtest 21, EL PIVOT) La partida arranca en el CUARTO ÍNTIMO,
             // no en el taller clásico -- "el cuarto íntimo pasa a ser EL
@@ -222,7 +239,24 @@ namespace Alkahest
             // cinco estaciones ya hayan tallado su mampostería y registrado su
             // rect en ObraDelTaller) y antes de crear el stepper/renderer (no
             // hace falta ninguno de los dos: solo escribe CellGrid).
-            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero) SimLevelBuilder.TapiarSalasSemillaCero(this);
+            //
+            // (CONTRATO_RONDA50.md §4b, ENCARGO M) `&& !SimSync.EnEscena`
+            // ES NUEVO: el laboratorio compartido pide "TODAS las salas
+            // DESTAPADAS" (contrato, textual) -- es un banco de pruebas
+            // simultáneas, no el arco guiado de un jugador, así que el
+            // anfitrión NUNCA debe tapiar nada aunque `ModoSemillaCero` esté
+            // en `true`. Sin este añadido, el botón nuevo del lobby
+            // (Net/TallerSesionHud.cs) habría dejado al anfitrión con las
+            // cinco salas amuralladas y sin ningún `Game/SemillaCero.cs` (ver
+            // TrySpawnRed en Game/AlkahestGameBootstrap.cs, que jamás lo
+            // instancia) que las fuera destapando -- un taller compartido
+            // permanentemente sellado. `!espejo` sigue excluyendo al
+            // invitado por su propia cuenta (nunca construye nada de plano
+            // por decisión propia, ver el docblock de esta clase), así que
+            // el añadido solo cambia el comportamiento del ANFITRIÓN en la
+            // escena MULTI -- el modo un jugador (`SimSync.EnEscena` siempre
+            // false ahí) no se mueve ni una línea.
+            if (!espejo && AlkahestGameBootstrap.ModoSemillaCero && !SimSync.EnEscena) SimLevelBuilder.TapiarSalasSemillaCero(this);
 
             // EL ESPEJO NO TIENE STEPPER. No es que esté pausado: NO EXISTE.
             // Es la garantía estructural de que un invitado no puede simular

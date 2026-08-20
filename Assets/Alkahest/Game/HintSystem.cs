@@ -145,6 +145,14 @@ namespace Alkahest.Game
             "El caño turbio gotea LIMO PRIMORDIAL: sírvete (E) y viértelo en la boca del crisol.",
             "Enciende el crisol con E: su fuego propio ya basta para la primera hornada.",
             "Recoge el resultado con el frasco antes de pedir la próxima hornada.",
+            // (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50, D4 "EL TRAYECTO
+            // MUDO") EL GESTO COMPLETO DE ENTREGA, texto EXACTO del contrato: el
+            // primer pedido (beat 2) ya está activo para cuando el carrusel llega
+            // aquí (índice 3, tras las dos primeras hornadas) y hasta ahora NINGÚN
+            // consejo de esta lista explicaba cómo LLEVAR lo aspirado hasta la
+            // Tolva -- justo el hueco que Cesar señaló ("un trayecto muy grande
+            // para dejarlas en la tolva SIN NADA QUE ME LO ENSEÑE").
+            "Aspira tu arena (clic izq.), vuela a la TOLVA que brilla y viértela dentro (clic der.).",
             // (beat 4) la misma sugerencia que dispara la trampa del tostado -- no la
             // desactiva, la ENSEÑA: el fracaso coreografiado enseña más que acertar a la
             // primera (contrato §1 beat 4/diseño enmienda 2).

@@ -11,6 +11,20 @@ namespace Alkahest.Game
     /// filas junto al suelo de piedra) y se evalúa contra los encargos activos
     /// de <see cref="OrderSystem"/>.
     ///
+    /// DOS BOCAS POSIBLES, UNA SOLA POR PARTIDA (CONTRATO_RONDA50.md §3b,
+    /// ENCARGO G, playtest 50, diagnóstico D4 "EL TRAYECTO MUDO"): en modo
+    /// CAÓTICO/MULTI esta clase sigue tallando/usando la boca CLÁSICA de
+    /// siempre (lejos, tras el pasillo -- contrato §3e, "el caótico NO
+    /// cambia"). En Semilla Cero usa la TOLVA CERCANA, tallada DENTRO del
+    /// cuarto íntimo a segundos de vuelo del Crisol
+    /// (<see cref="SimLevelBuilder.BuildTolvaCercana"/>, ver el docblock de
+    /// esas constantes para el sitio exacto y por qué). La elección la hace
+    /// <see cref="Init"/>, leyendo <see cref="AlkahestGameBootstrap.ModoSemillaCero"/>
+    /// UNA sola vez -- ver <see cref="_zoneX0"/>/<see cref="_zoneFloorY1"/>,
+    /// que dejaron de ser `const` por eso. Todo lo demás de esta clase (el
+    /// arrastre, el consumo, el marco dorado, la flecha) es IDÉNTICO para
+    /// las dos bocas: solo cambia DÓNDE viven.
+    ///
     /// FAVOR SOLO POR ENCARGOS (fix playtest 9): antes, lo que no encajaba con
     /// ningún encargo incompleto se contaba como "chatarra" y daba 1 Favor
     /// cada <c>ScrapPerFavor</c> celdas -- "para que experimentar nunca fuera
@@ -185,25 +199,46 @@ namespace Alkahest.Game
         /// </summary>
         private const float ScrapEducationSeconds = 2.5f;
 
-        // Geometría de la boca, tomada del constructor de nivel (nunca duplicada aquí).
-        private const int ZoneX0 = SimLevelBuilder.ChuteMouthX0;
-        private const int ZoneX1 = SimLevelBuilder.ChuteMouthX1;
-        private const int ZoneY0 = SimLevelBuilder.ChuteMouthY0;
-        private const int ZoneY1 = SimLevelBuilder.ChuteMouthY1;
+        // Geometría de la boca, tomada del constructor de nivel (nunca
+        // duplicada aquí).
+        //
+        // (CONTRATO_RONDA50.md §3b, ENCARGO G, playtest 50) YA NO SON
+        // `const`: en modo CAÓTICO/MULTI la boca sigue siendo la Tolva
+        // CLÁSICA de siempre (SimLevelBuilder.ChuteMouthX0..Y1, lejos, tras
+        // el pasillo -- contrato §3e, "el caótico NO cambia"), pero en
+        // Semilla Cero es la TOLVA CERCANA que este mismo encargo talló
+        // DENTRO del cuarto (SimLevelBuilder.TolvaCercanaMouthX0..Y1, ver el
+        // docblock de esas constantes para el porqué exacto del sitio,
+        // "a segundos de vuelo del Crisol" -- contrato, textual). La
+        // decisión se toma UNA vez, en Init(), leyendo
+        // AlkahestGameBootstrap.ModoSemillaCero -- mismo patrón exacto que ya
+        // usan Sim/SimLevelBuilder.cs::BuildVetaTurba y Game/HintSystem.cs
+        // para el mismo flag. Ya NO hace falta tocar
+        // Game/AlkahestGameBootstrap.cs (que sigue llamando a
+        // `SpawnDeliveryChute` sin pasar ningún sitio): esta clase decide
+        // sola qué boca es la suya, exactamente como ya hacía antes de esta
+        // ronda -- la única diferencia es que ahora hay DOS bocas posibles en
+        // el plano en vez de una, y el gate en SimLevelBuilder.BuildCuartoIntimo
+        // se asegura de que solo UNA de las dos se talle de verdad por
+        // partida (contrato §3b: "una sola boca").
+        private int _zoneX0, _zoneX1, _zoneY0, _zoneY1;
 
         /// <summary>
-        /// Filas del "sillar" (junto al suelo de piedra del pozo, ZoneY0 hacia
+        /// Filas del "sillar" (junto al suelo de piedra del pozo, _zoneY0 hacia
         /// arriba) donde de verdad se CONSUME. SimLevelBuilder es de solo
         /// lectura para esta tarea y no expone esta constante, así que vive
         /// aquí -- es una decisión de Game/, no de la geometría del taller.
         /// 3 filas: bastan para que el jugador vea el material posarse un
         /// instante antes de desaparecer (feedback de "esto SÍ ha llegado"),
-        /// sin alargar la espera de un encargo grande. Deja
-        /// ChuteMouthY1 - ChuteMouthY0 + 1 - 3 = 26 filas de pozo real donde
-        /// arrastrar (22 columnas x 26 filas: barato de sobra para un tick).
+        /// sin alargar la espera de un encargo grande. En la boca clásica
+        /// deja ChuteMouthY1 - ChuteMouthY0 + 1 - 3 = 26 filas de pozo real
+        /// donde arrastrar (22 columnas x 26 filas); en la Tolva cercana
+        /// (TolvaCercanaAlto=20, TolvaCercanaBocaAncho=6) deja 17 filas de
+        /// pozo -- de sobra igual, ningún encargo de Semilla 0 vierte más de
+        /// un puñado de celdas por chorro.
         /// </summary>
         private const int ChuteSillRows = 3;
-        private const int ZoneFloorY1 = ZoneY0 + ChuteSillRows - 1;
+        private int _zoneFloorY1;
 
         private AlkahestSim _sim;
         private OrderSystem _orderSystem;
@@ -252,6 +287,17 @@ namespace Alkahest.Game
         private float _flashHasta;
         private bool _flashAceptado;
 
+        /// <summary>
+        /// (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50) "LA TOLVA LATE
+        /// CON PEDIDO ACTIVO... reutilizando el patrón de luz/latido
+        /// existente" (contrato, textual) -- <see cref="MaquinariaSprites.Luz"/>
+        /// es exactamente ese patrón (ya usado por Game/Crisol.cs::_luzHogar y
+        /// media docena de máquinas más, ver <c>Latir</c>). SOLO Semilla Cero
+        /// (contrato §3e): en caótico se crea igual (barato, un halo apagado
+        /// no cuesta nada) pero nunca se enciende -- ver AnimarMarco.
+        /// </summary>
+        private MaquinariaSprites.Luz _luzPedido;
+
         /// <summary>Inyección de dependencias desde AlkahestGameBootstrap.</summary>
         public void Init(AlkahestSim sim, OrderSystem orderSystem)
         {
@@ -259,11 +305,31 @@ namespace Alkahest.Game
             _orderSystem = orderSystem;
             _player = FindAnyObjectByType<ApprenticeController>()?.transform; // (fix playtest 16, ver doc del campo _player)
 
+            // (CONTRATO_RONDA50.md §3b, ENCARGO G) LA BOCA QUE TOCA: cercana
+            // en Semilla Cero (tallada por SimLevelBuilder.BuildTolvaCercana,
+            // ver el docblock de esas constantes), clásica en caótico/multi
+            // -- decidido UNA vez aquí, nunca por frame.
+            if (AlkahestGameBootstrap.ModoSemillaCero)
+            {
+                _zoneX0 = SimLevelBuilder.TolvaCercanaMouthX0;
+                _zoneX1 = SimLevelBuilder.TolvaCercanaMouthX1;
+                _zoneY0 = SimLevelBuilder.TolvaCercanaMouthY0;
+                _zoneY1 = SimLevelBuilder.TolvaCercanaMouthY1;
+            }
+            else
+            {
+                _zoneX0 = SimLevelBuilder.ChuteMouthX0;
+                _zoneX1 = SimLevelBuilder.ChuteMouthX1;
+                _zoneY0 = SimLevelBuilder.ChuteMouthY0;
+                _zoneY1 = SimLevelBuilder.ChuteMouthY1;
+            }
+            _zoneFloorY1 = _zoneY0 + ChuteSillRows - 1;
+
             // El transform se ancla al CENTRO DEL LABIO de la boca: es el punto
             // al que apuntan flecha y rótulo.
             transform.position = new Vector3(
-                (ZoneX0 + ZoneX1 + 1) * 0.5f * SimRenderer.CellWorldSize,
-                (ZoneY1 + 1) * SimRenderer.CellWorldSize,
+                (_zoneX0 + _zoneX1 + 1) * 0.5f * SimRenderer.CellWorldSize,
+                (_zoneY1 + 1) * SimRenderer.CellWorldSize,
                 0f);
 
             BuildVisual();
@@ -275,10 +341,10 @@ namespace Alkahest.Game
         private void BuildVisual()
         {
             float celda = SimRenderer.CellWorldSize;
-            float bocaIzq = ZoneX0 * celda;
-            float bocaDer = (ZoneX1 + 1) * celda;
-            float bocaAlto = (ZoneY1 + 1 - ZoneY0) * celda;
-            float centroY = (ZoneY0 * celda + (ZoneY1 + 1) * celda) * 0.5f;
+            float bocaIzq = _zoneX0 * celda;
+            float bocaDer = (_zoneX1 + 1) * celda;
+            float bocaAlto = (_zoneY1 + 1 - _zoneY0) * celda;
+            float centroY = (_zoneY0 * celda + (_zoneY1 + 1) * celda) * 0.5f;
             float grosor = 0.26f;
 
             var solido = SpriteSolido();
@@ -294,19 +360,30 @@ namespace Alkahest.Game
             // Labio: la línea que cruza la boca. Es el elemento que PULSA — marca
             // el plano exacto donde hay que soltar el material.
             _labio = CrearSprite("Labio", solido, 20,
-                new Vector3((bocaIzq + bocaDer) * 0.5f, (ZoneY1 + 1) * celda, 0f),
+                new Vector3((bocaIzq + bocaDer) * 0.5f, (_zoneY1 + 1) * celda, 0f),
                 new Vector3(bocaDer - bocaIzq + grosor * 2f, 0.10f, 1f));
 
             // Flecha cabeceando sobre la boca.
             var flechaGO = new GameObject("Flecha");
             flechaGO.transform.SetParent(transform, false);
             _flechaTr = flechaGO.transform;
-            _flechaY = (ZoneY1 + 1) * celda + 0.75f;
+            _flechaY = (_zoneY1 + 1) * celda + 0.75f;
             _flechaTr.position = new Vector3((bocaIzq + bocaDer) * 0.5f, _flechaY, 0f);
             _flecha = flechaGO.AddComponent<SpriteRenderer>();
             _flecha.sprite = SpriteFlecha(0.95f);
             _flecha.sortingOrder = 21;
             _flecha.color = UiStyles.Oro;
+
+            // (CONTRATO_RONDA50.md §3c) EL HALO DE "HAY PEDIDO ACTIVO": un
+            // óvalo suave, más ancho que la boca, DETRÁS de jambas/labio
+            // (orden 18, uno menos que las jambas) -- late (Latir, ver
+            // AnimarMarco) en vez de brillar fijo, así se distingue del
+            // brillo por CERCANÍA que ya tienen jambas/labio/flecha. Nace
+            // apagado (Luz.Crear siempre nace así): que encienda es decisión
+            // de AnimarMarco, nunca de aquí.
+            _luzPedido = MaquinariaSprites.Luz.CrearOvalada(transform, "LuzPedidoTolva",
+                new Vector3((bocaIzq + bocaDer) * 0.5f, centroY, 0f),
+                (bocaDer - bocaIzq) * 1.6f, bocaAlto * 1.3f, UiStyles.Oro);
         }
 
         private SpriteRenderer CrearSprite(string nombre, Sprite sprite, int orden, Vector3 posicion, Vector3 escala)
@@ -454,10 +531,25 @@ namespace Alkahest.Game
                 _flechaTr.position = p;
             }
             if (_flecha != null) _flecha.color = new Color(acento.r, acento.g, acento.b, (0.55f + 0.45f * pulso) * (destello ? 1f : brillo));
+
+            // (CONTRATO_RONDA50.md §3c) LA TOLVA LATE CON PEDIDO ACTIVO --
+            // SOLO Semilla Cero (contrato §3e), y solo mientras exista un
+            // pedido sin completar (PedidoActivoCompletado ya limpia la
+            // lista entera al llegar al final abierto, ver SemillaCero.cs, y
+            // durante los huecos entre beats -- p. ej. mientras el Maestro
+            // exige el nombre -- también puede quedar en 0 un instante:
+            // apagado ahí es correcto, no hay nada que "llevar" todavía).
+            // Latido INDEPENDIENTE de la cercanía (a diferencia de jambas/
+            // labio/flecha de arriba): es la señal que se lee DESDE LEJOS,
+            // "hay algo pendiente en esa boca", no la de "ya estás cerca".
+            bool pedidoActivo = AlkahestGameBootstrap.ModoSemillaCero && _orderSystem != null
+                && _orderSystem.ActiveOrders.Count > 0 && !_orderSystem.ActiveOrders[0].Completado;
+            if (pedidoActivo) _luzPedido?.Latir(0.30f, 0.22f, 0.55f);
+            else _luzPedido?.Intensidad(0f);
         }
 
         /// <summary>
-        /// Consume SOLO en el sillar (ZoneY0..ZoneFloorY1, ver constante):
+        /// Consume SOLO en el sillar (_zoneY0.._zoneFloorY1, ver constante):
         /// aquí, y no en todo el pozo, es donde vive la caída visible que
         /// pidió el playtest anterior. Lo que hay más arriba lo trae
         /// <see cref="ArrastreTick"/> hasta aquí, arquetipo aparte -- por eso
@@ -465,9 +557,9 @@ namespace Alkahest.Game
         /// </summary>
         private void ConsumeTick()
         {
-            for (int x = ZoneX0; x <= ZoneX1; x++)
+            for (int x = _zoneX0; x <= _zoneX1; x++)
             {
-                for (int y = ZoneY0; y <= ZoneFloorY1; y++)
+                for (int y = _zoneY0; y <= _zoneFloorY1; y++)
                 {
                     byte matId = (byte)_sim.SampleMaterial(x, y);
                     if (matId == MaterialId.Empty) continue;
@@ -530,8 +622,8 @@ namespace Alkahest.Game
         /// flotando ahí para siempre esperando una regla de caída que
         /// SimStepper nunca le va a dar (StaticSolid no tiene Move()).
         ///
-        /// Recorre filas de ABAJO HACIA ARRIBA (de ZoneFloorY1+1, la primera
-        /// fuera del sillar, hasta ZoneY1, el labio): así, cuando una celda
+        /// Recorre filas de ABAJO HACIA ARRIBA (de _zoneFloorY1+1, la primera
+        /// fuera del sillar, hasta _zoneY1, el labio): así, cuando una celda
         /// baja a la fila que se acaba de procesar, esa fila ya no se vuelve
         /// a visitar este tick para ESA celda original -- ninguna celda
         /// concreta cae más de 1 fila en esta llamada. Una columna entera
@@ -552,9 +644,9 @@ namespace Alkahest.Game
             var grid = _sim.Grid;
             uint tick = _sim.Stepper.Tick;
 
-            for (int x = ZoneX0; x <= ZoneX1; x++)
+            for (int x = _zoneX0; x <= _zoneX1; x++)
             {
-                for (int y = ZoneFloorY1 + 1; y <= ZoneY1; y++)
+                for (int y = _zoneFloorY1 + 1; y <= _zoneY1; y++)
                 {
                     int idx = CellGrid.Idx(x, y);
                     if (grid.mat[idx] == MaterialId.Empty) continue;
@@ -611,7 +703,15 @@ namespace Alkahest.Game
                 // interactúa con E), solo LEE si el jugador ya se graduó del
                 // tutorial en CUALQUIER aparato del taller; en cuanto lo hace,
                 // esta rama deja de alcanzarse para el resto de la partida.
-                texto = "TOLVA DEL MAESTRO — vierte AQUÍ";
+                //
+                // (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50) EN SEMILLA
+                // CERO el rótulo cambia al texto EXACTO del contrato -- nombra
+                // el GESTO completo (vierte con clic derecho), no solo el
+                // sitio. El caótico conserva su rótulo de siempre (contrato
+                // §3e).
+                texto = AlkahestGameBootstrap.ModoSemillaCero
+                    ? "TOLVA — deja aquí lo pedido (vierte con clic derecho)"
+                    : "TOLVA DEL MAESTRO — vierte AQUÍ";
                 color = UiStyles.Oro;
             }
             else

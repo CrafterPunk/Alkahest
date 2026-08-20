@@ -286,6 +286,13 @@ namespace Alkahest.Net
                 if (GUILayout.Button("JUGAR SOLO EN ESTE PC", UiStyles.Boton, GUILayout.Height(UiStyles.S(30f))))
                 {
                     _errorMostrado = null;
+                    // (CONTRATO_RONDA50.md §4b, ENCARGO M) Reseteo explícito:
+                    // este botón es un camino de recuperación tras un fallo
+                    // de OTRO intento de host (puede haber sido el botón
+                    // SEMILLA CERO compartida, más abajo, el que dejó el flag
+                    // en `true` antes de reventar) — sin esto, "jugar solo"
+                    // podría heredar el modo equivocado de un intento previo.
+                    AlkahestGameBootstrap.ModoSemillaCero = false;
                     sessionCoordinator.StartHost(TransportMode.LocalLoopback, MaxJugadores);
                 }
                 GUILayout.Space(6f);
@@ -298,47 +305,27 @@ namespace Alkahest.Net
             // juega con amigos de verdad.
             if (GUILayout.Button("ANFITRIÓN — abre tu taller (hasta 4)", UiStyles.Boton))
             {
-                // (fix del atasco de Cesar) Si Steam NO está abierto, este
-                // botón moría con un error y "no ocurría nada": ahora cae
-                // SOLO a taller local -- jugar en solitario dándole a
-                // ANFITRIÓN es un camino válido. El aviso queda a la vista.
-                var modo = sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam);
-                bool steamListo = FriendsLoop.Platform.SteamBootstrap.Instance != null
-                    && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady;
-                // (playtest 48, §2c) LA SONDA BARATA, ANTES del StartHost de
-                // Steam: SteamBootstrap.IsSteamReady solo dice "el cliente de
-                // Steam respondió al arrancar la app" -- no dice nada del
-                // TRANSPORTE en sí (SteamNetworkingSocketsTransport.IsSupported
-                // existía desde antes, nadie lo consultaba desde este HUD).
-                // Combinar las dos reduce el número de veces que se llega a
-                // intentar StartHost(Steam) para acabar cayendo en la rama de
-                // fallo de SessionCoordinator (D3/§2a) -- más barato detectar
-                // aquí que dejar que NGO/el transporte lo descubran solos.
-                if (steamListo)
-                    steamListo = sessionCoordinator.TransporteSteamSoportado; // (integración pt48) la sonda vive en SessionCoordinator: Alkahest.Runtime no referencia el asmdef del transporte.
-                bool cayoALocal = modo == TransportMode.Steam && !steamListo;
-                if (cayoALocal) modo = TransportMode.LocalLoopback;
+                IniciarAnfitrion(semillaCero: false);
+            }
 
-                sessionCoordinator.StartHost(modo, MaxJugadores);
-
-                // (playtest 42, hotfix de la captura de Cesar: el panel decía
-                // "Abrí tu taller en modo LOCAL: puedes jugar" y JUSTO DEBAJO
-                // "Algo falló: StartHost devolvió false" -- dos mensajes
-                // contradictorios a la vez) El aviso del fallback se redacta
-                // DESPUÉS de intentar el arranque, según lo que de verdad
-                // pasó: el modo local es síncrono, así que aquí ya se sabe si
-                // Hosting o no. El diagnóstico fino del fallo (puerto ocupado
-                // por otra ventana, sesión a medio cerrar) lo pone ahora el
-                // propio coordinador en LastError -- este aviso solo evita
-                // prometer un taller que no abrió.
-                if (cayoALocal)
-                {
-                    bool abrio = sessionCoordinator.CurrentState == SessionCoordinator.ConnectionState.Hosting;
-                    _avisoLocal = abrio
-                        ? "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nAbrí tu taller en modo LOCAL: puedes jugar; para amigos, rehaz la build o abre Steam y reinicia."
-                        : "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nY el modo LOCAL tampoco pudo abrir — mira el motivo aquí abajo.";
-                    _avisoLocalHasta = Time.time + 14f;
-                }
+            // (CONTRATO_RONDA50.md §4b, ENCARGO M, "LA TERCERA SECCIÓN")
+            // "necesitamos esa tercera sección para hacer más pruebas en
+            // simultáneo" (Cesar, textual, sobre el 49) -- mismo flujo de
+            // ANFITRIÓN de arriba (Steam con sonda + fallback local, ver
+            // IniciarAnfitrion), pero el mundo nace con la seed de autor
+            // (Universe.SemillaCero = 777002) + los overrides + la veta +
+            // TODAS las salas destapadas de una vez (Net/SimSync.cs::
+            // OnNetworkSpawn y Game/AlkahestSim.cs::CrearMundoInterno leen el
+            // flag que este botón deja en `true` ANTES de StartHost) — SIN
+            // el director de beats (Game/AlkahestGameBootstrap.cs::TrySpawnRed
+            // nunca instancia Game/SemillaCero.cs, contrato pt40 §2, no
+            // tocado). Es un LABORATORIO compartido para probar la química de
+            // autor entre varios a la vez, no el arco guiado: "quizás luego
+            // lo quitemos" (Cesar, textual).
+            GUILayout.Space(4f);
+            if (GUILayout.Button("ANFITRIÓN — SEMILLA CERO compartida", UiStyles.Boton))
+            {
+                IniciarAnfitrion(semillaCero: true);
             }
 
             if (GUILayout.Button("UNIRME al taller de un amigo (Steam)", UiStyles.Boton))
@@ -370,6 +357,13 @@ namespace Alkahest.Net
             // ejecución". El anfitrión local usa loopback puro.
             if (GUILayout.Button("ANFITRIÓN en local (127.0.0.1)", UiStyles.Boton))
             {
+                // (CONTRATO_RONDA50.md §4b, ENCARGO M) Mismo reseteo
+                // explícito que "JUGAR SOLO EN ESTE PC" arriba: este botón de
+                // prueba local es otro camino de host que NO pasa por
+                // IniciarAnfitrion, así que también necesita limpiar
+                // cualquier `true` que hubiera quedado de un intento anterior
+                // de SEMILLA CERO compartida.
+                AlkahestGameBootstrap.ModoSemillaCero = false;
                 sessionCoordinator.StartHost(TransportMode.LocalLoopback, MaxJugadores);
             }
             if (GUILayout.Button("UNIRME en local (127.0.0.1)", UiStyles.Boton))
@@ -378,6 +372,74 @@ namespace Alkahest.Net
             }
 
             GUI.enabled = true;
+        }
+
+        /// <summary>
+        /// (CONTRATO_RONDA50.md §4b, ENCARGO M) Extraído de dentro del botón
+        /// "ANFITRIÓN — abre tu taller" para que el botón nuevo de SEMILLA
+        /// CERO compartida use EXACTAMENTE el mismo flujo (sonda Steam del
+        /// pt48 + fallback local + el mismo aviso de "Steam no respondió"):
+        /// el contrato lo pide explícito ("el botón nuevo respeta el flujo
+        /// ANFITRIÓN existente, incluida la sonda Steam del pt48 y el
+        /// fallback local"), y duplicar el cuerpo entero a mano habría sido
+        /// la forma más fácil de que los dos botones divergieran en un fix
+        /// futuro (uno se arregla, el otro no). Sin cambios de comportamiento
+        /// respecto al botón original salvo el parámetro nuevo.
+        /// </summary>
+        private void IniciarAnfitrion(bool semillaCero)
+        {
+            // (fix del atasco de Cesar) Si Steam NO está abierto, este botón
+            // moría con un error y "no ocurría nada": ahora cae SOLO a taller
+            // local -- jugar en solitario dándole a ANFITRIÓN es un camino
+            // válido. El aviso queda a la vista.
+            var modo = sessionCoordinator.GetDefaultTransportMode(TransportMode.Steam);
+            bool steamListo = FriendsLoop.Platform.SteamBootstrap.Instance != null
+                && FriendsLoop.Platform.SteamBootstrap.Instance.IsSteamReady;
+            // (playtest 48, §2c) LA SONDA BARATA, ANTES del StartHost de
+            // Steam: SteamBootstrap.IsSteamReady solo dice "el cliente de
+            // Steam respondió al arrancar la app" -- no dice nada del
+            // TRANSPORTE en sí (SteamNetworkingSocketsTransport.IsSupported
+            // existía desde antes, nadie lo consultaba desde este HUD).
+            // Combinar las dos reduce el número de veces que se llega a
+            // intentar StartHost(Steam) para acabar cayendo en la rama de
+            // fallo de SessionCoordinator (D3/§2a) -- más barato detectar
+            // aquí que dejar que NGO/el transporte lo descubran solos.
+            if (steamListo)
+                steamListo = sessionCoordinator.TransporteSteamSoportado; // (integración pt48) la sonda vive en SessionCoordinator: Alkahest.Runtime no referencia el asmdef del transporte.
+            bool cayoALocal = modo == TransportMode.Steam && !steamListo;
+            if (cayoALocal) modo = TransportMode.LocalLoopback;
+
+            // (CONTRATO_RONDA50.md §4b) EL FLAG SE FIJA ANTES DE StartHost:
+            // Net/SimSync.cs::OnNetworkSpawn lo lee ahí (síncrono para
+            // LocalLoopback, poco después para Steam) para decidir la seed
+            // del mundo del anfitrión -- ver ese archivo. `semillaCero: false`
+            // (el botón de siempre) también escribe el flag explícitamente
+            // en vez de dejarlo como estaba: es el mismo reseteo defensivo
+            // que "JUGAR SOLO EN ESTE PC"/"ANFITRIÓN en local" más abajo,
+            // así que CUALQUIER botón de host de este panel deja el flag en
+            // el valor correcto, sin depender de qué se pulsó antes.
+            AlkahestGameBootstrap.ModoSemillaCero = semillaCero;
+
+            sessionCoordinator.StartHost(modo, MaxJugadores);
+
+            // (playtest 42, hotfix de la captura de Cesar: el panel decía
+            // "Abrí tu taller en modo LOCAL: puedes jugar" y JUSTO DEBAJO
+            // "Algo falló: StartHost devolvió false" -- dos mensajes
+            // contradictorios a la vez) El aviso del fallback se redacta
+            // DESPUÉS de intentar el arranque, según lo que de verdad pasó:
+            // el modo local es síncrono, así que aquí ya se sabe si Hosting
+            // o no. El diagnóstico fino del fallo (puerto ocupado por otra
+            // ventana, sesión a medio cerrar) lo pone ahora el propio
+            // coordinador en LastError -- este aviso solo evita prometer un
+            // taller que no abrió.
+            if (cayoALocal)
+            {
+                bool abrio = sessionCoordinator.CurrentState == SessionCoordinator.ConnectionState.Hosting;
+                _avisoLocal = abrio
+                    ? "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nAbrí tu taller en modo LOCAL: puedes jugar; para amigos, rehaz la build o abre Steam y reinicia."
+                    : "Steam no respondió (cliente cerrado, o falta steam_appid.txt junto al .exe).\nY el modo LOCAL tampoco pudo abrir — mira el motivo aquí abajo.";
+                _avisoLocalHasta = Time.time + 14f;
+            }
         }
 
         private void DibujarConectado(SessionCoordinator.ConnectionState estado)

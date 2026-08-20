@@ -25,15 +25,30 @@ namespace Alkahest.Game
     ///     retículo base×estado -- ver <see cref="OnAlgoDescubierto"/> para
     ///     por qué los clásicos (agua, vapor...) NO generan cola: ya se
     ///     conocían desde el día 1, no hay sorpresa que celebrar. Mientras la
-    ///     cola no esté vacía, un LIBRITO CERRADO late suave (~1 Hz) junto al
-    ///     panel de encargos (borde superior derecho).
-    ///  3) LA FICHA-VITRINA: pulsar B (o clic en el librito) abre, uno a uno,
-    ///     el panel de descubrimiento -- MISMA ANATOMÍA que el rito de
-    ///     Game/NamingUi.cs (PanelRito + doble filete de latón + Cinzel
-    ///     dorado + muestra viva con la FIRMA VISUAL real + línea ceremonial),
-    ///     pero SIN campo de texto (el nombre ya es el real, o el provisional
-    ///     del jugador en caótico -- nada que escribir aquí). "Anotado en tu
-    ///     álbum" cierra y, si quedan pendientes, abre la siguiente.
+    ///     cola no esté vacía y no haya abierto ya su ficha, un LIBRITO
+    ///     CERRADO late suave (~1 Hz) junto al panel de encargos (borde
+    ///     superior derecho) -- desde la RONDA 50 es un RESPALDO, no el gesto
+    ///     principal: ver el punto 3.
+    ///  3) LA FICHA-VITRINA: (RONDA 50, ENCARGO F, CONTRATO_RONDA50.md §2/D3 --
+    ///     pedido literal de Cesar: "que me salgan en pantalla y que yo las
+    ///     tenga que cerrar") se ABRE SOLA, uno a uno, en cuanto le toca turno
+    ///     en el reloj compartido de teatro (ver <see cref="OnGUI"/> y
+    ///     Game/SubstanceKnowledge.cs::PuedeAnunciarTeatro) -- ya NO hace
+    ///     falta pulsar B para verla la primera vez; B/el librito siguen
+    ///     sirviendo para RELEERLA si el jugador la cerró rápido con ESC
+    ///     ("ahora no", ver <see cref="CerrarFicha"/>) sin haberla anotado.
+    ///     MISMA ANATOMÍA que el rito de Game/NamingUi.cs (PanelRito + doble
+    ///     filete de latón + Cinzel dorado + muestra viva con la FIRMA VISUAL
+    ///     real + línea ceremonial), pero SIN campo de texto (el nombre ya es
+    ///     el real, o el provisional del jugador en caótico -- nada que
+    ///     escribir aquí). El botón "Anotado en tu álbum" (el "seguir" del
+    ///     contrato) cierra y, si quedan pendientes, encadena la siguiente sin
+    ///     volver a pedir turno (es la MISMA ráfaga); Escape o clic fuera
+    ///     también cierran, pero SIN consumir la cola ("ahora no", no
+    ///     "leído") -- el turno del reloj compartido se cede en cualquiera de
+    ///     los dos casos, medido desde el CIERRE (+2s de respiro), no desde la
+    ///     apertura: la sim sigue corriendo mientras tanto, esto es una lámina
+    ///     encima del juego, no una pausa.
     ///
     /// =====================================================================
     /// (PLAYTEST 46) LOS TRES REPROCHES DE CESAR Y QUÉ SE HIZO CON CADA UNO
@@ -125,15 +140,19 @@ namespace Alkahest.Game
     ///     hermanos y con `clipping = Clip` en el estilo: aunque un día
     ///     alguien meta un verbo larguísimo o encoja la página, la tipografía
     ///     se recorta antes que pisar a la vecina.
-    /// DEUDA CONOCIDA: en modo CAÓTICO el banner "ALGO NUEVO" de
-    /// SubstanceKnowledge SÍ vive sus 7 s en `Screen.height*0.30f` y la ficha
-    /// se abriría encima. No se puede arreglar desde aquí (ese archivo no
-    /// entra en este encargo y no expone si hay banner en curso); la ficha al
-    /// menos se dibuja DELANTE (GUI.depth) y con velo casi opaco, así que se
-    /// vería la tarjeta limpia y el banner apagado detrás, no dos textos
-    /// mezclados. Lo correcto sería que SubstanceKnowledge consultara
-    /// <see cref="Abierto"/> en su OnGUI, una línea, cuando alguien pueda
-    /// tocarlo.
+    /// DEUDA CERRADA EN LA RONDA 47 (dejado a posteriori, para que el rastro
+    /// forense no mienta): en modo CAÓTICO el banner "ALGO NUEVO" de
+    /// SubstanceKnowledge vivía sus 7 s en `Screen.height*0.30f` y la ficha se
+    /// abría encima. La solución sugerida entonces -- que SubstanceKnowledge
+    /// consultara <see cref="Abierto"/> en su OnGUI -- es exactamente lo que
+    /// hace hoy (`if (AlbumReal.Abierto) return;`, ver SubstanceKnowledge.OnGUI):
+    /// mientras la ficha está en pantalla, el banner de esta clase no se
+    /// dibuja en absoluto (se pierde el frame de banner, no el registro).
+    /// (RONDA 50) Y desde este playtest, para el retículo base×estado, ese
+    /// banner ya ni se ENCOLA en el caso normal -- ver
+    /// SubstanceKnowledge.MarcarDescubierto: "en el caso normal la ficha ES el
+    /// anuncio" (CONTRATO_RONDA50.md §2), el banner queda solo de precursor
+    /// mientras el diario tape la pantalla.
     ///
     /// SEMILLA CERO vs. CAÓTICO (decisión documentada, fuera de la letra
     /// literal del contrato): el álbum se dibuja EXACTAMENTE IGUAL en los dos
@@ -297,17 +316,25 @@ namespace Alkahest.Game
         private float _pulsoT;
 
         /// <summary>
-        /// (RONDA 49, LA COLA CON RESPIRO -- ver el docblock largo en
-        /// Game/SubstanceKnowledge.cs junto a <see cref="SubstanceKnowledge.PuedeAnunciarTeatro"/>)
-        /// True desde el frame en que el librito YA pidió y obtuvo su turno en el reloj
-        /// compartido de teatro de descubrimiento, hasta que la cola de vitrinas se vacía del
-        /// todo. Mientras sea false y haya algo en <see cref="_cola"/>, `OnGUI` sigue
-        /// reintentando cada frame (barato: una comparación de `Time.time`) en vez de dibujar
-        /// el librito -- así el pulso NO arranca en el mismo instante que un banner "ALGO
-        /// NUEVO" de Game/SubstanceKnowledge.cs sobre el MISMO descubrimiento (en Semilla
-        /// Cero los dos canales reaccionan al mismo evento `AlDescubrir`). Se resetea a false
-        /// en cuanto <see cref="_colaCount"/> vuelve a 0: la próxima vez que llegue algo será
-        /// una ráfaga nueva y debe volver a pedir su hueco, no heredar el turno de la anterior.
+        /// (RONDA 49, LA COLA CON RESPIRO; REESCRITO EN LA RONDA 50, ENCARGO F --
+        /// CONTRATO_RONDA50.md §2/D3 -- ver el docblock largo en Game/SubstanceKnowledge.cs
+        /// junto a <see cref="SubstanceKnowledge.PuedeAnunciarTeatro"/>) True desde el frame
+        /// en que esta ráfaga YA pidió y obtuvo su turno en el reloj compartido de teatro de
+        /// descubrimiento, hasta que la cola de vitrinas se vacía del todo. Mientras sea false
+        /// y haya algo en <see cref="_cola"/>, `OnGUI` sigue reintentando cada frame (barato:
+        /// una comparación de `Time.time`) en vez de actuar -- así la vitrina NO arranca en el
+        /// mismo instante que un banner "ALGO NUEVO" de Game/SubstanceKnowledge.cs sobre el
+        /// MISMO descubrimiento (en Semilla Cero los dos canales reaccionan al mismo evento
+        /// `AlDescubrir`). Se resetea a false en cuanto <see cref="_colaCount"/> vuelve a 0: la
+        /// próxima vez que llegue algo será una ráfaga nueva y debe volver a pedir su hueco, no
+        /// heredar el turno de la anterior.
+        ///
+        /// (RONDA 50) En el playtest 49 obtener el turno solo encendía el PULSO del librito
+        /// (el jugador tenía que pulsar B para ver la ficha). Cesar pidió lo contrario ("que me
+        /// salgan en pantalla y que yo las tenga que cerrar"): ahora, obtener el turno abre la
+        /// ficha DIRECTAMENTE (<see cref="AbrirSiguienteFicha"/>) -- el librito se queda como
+        /// respaldo para el caso "el jugador cerró rápido con ESC y quedan más pendientes" (ver
+        /// `OnGUI`), no como el gesto principal de apertura.
         /// </summary>
         private bool _libritoAnunciado;
 
@@ -416,21 +443,38 @@ namespace Alkahest.Game
             _fichaAbierta = true;
         }
 
-        /// <summary>ESC: "ahora no". Cierra la vitrina SIN consumir la cola (lo pendiente sigue pendiente y el librito sigue latiendo) y devuelve el álbum a pantalla completa si estaba abierto.</summary>
+        /// <summary>
+        /// ESC/clic fuera: "ahora no". Cierra la vitrina SIN consumir la cola (lo pendiente
+        /// sigue pendiente y el librito sigue latiendo) y devuelve el álbum a pantalla completa
+        /// si estaba abierto. (RONDA 50) Cede el turno del reloj compartido AHORA MISMO -- el
+        /// jugador acaba de terminar de mirar esto (aunque queden más fichas por delante, cada
+        /// una pide de nuevo el gesto de abrirse, ver AbrirSiguienteFicha/OnGUI), así que el
+        /// respiro de <see cref="SubstanceKnowledge.RespiroTrasCierre"/> para el SIGUIENTE canal
+        /// (otro banner, u otra ráfaga) se cuenta desde este cierre, no desde que ésta se abrió.
+        /// </summary>
         private void CerrarFicha()
         {
             _fichaAbierta = false;
             _fichaIndiceRafaga = 0;
             if (_restaurarArbolAlCerrar) { _restaurarArbolAlCerrar = false; _visible = true; }
+            SubstanceKnowledge.RegistrarAnuncioTeatro();
         }
 
-        /// <summary>"Anotado en tu álbum": confirma y encadena la siguiente de la ráfaga; cuando no queda ninguna, devuelve el álbum a pantalla completa si de ahí veníamos.</summary>
+        /// <summary>
+        /// Botón "seguir"/Enter: confirma y encadena la siguiente de la ráfaga (sin pedir turno
+        /// otra vez -- es la MISMA ráfaga); cuando no queda ninguna, devuelve el álbum a
+        /// pantalla completa si de ahí veníamos. (RONDA 50) El turno se cede SOLO cuando la
+        /// ráfaga entera termina de verdad (ver el docblock de CerrarFicha): si aún queda cola,
+        /// la siguiente ficha se abre sin pasar por el reloj compartido, así que registrar aquí
+        /// habría cedido el turno de más, a mitad de ráfaga.
+        /// </summary>
         private void ConfirmarFicha()
         {
             _fichaAbierta = false;
             if (_colaCount > 0) { AbrirSiguienteFicha(); return; }
             _fichaIndiceRafaga = 0;
             if (_restaurarArbolAlCerrar) { _restaurarArbolAlCerrar = false; _visible = true; }
+            SubstanceKnowledge.RegistrarAnuncioTeatro();
         }
 
         // ===================================================================
@@ -448,6 +492,47 @@ namespace Alkahest.Game
 
             _pulsoT += Time.deltaTime;
 
+            // -----------------------------------------------------------------
+            // (RONDA 50, ENCARGO F, CONTRATO_RONDA50.md §2/D3) LA FICHA SE ABRE SOLA.
+            // Esta decisión va ANTES de fijar GUI.depth/dibujar la pantalla completa a
+            // propósito: si la cola concede turno este mismo frame, `_fichaAbierta` pasa a
+            // true AQUÍ, y el resto del método (profundidad, "los dos nunca a la vez") tiene
+            // que ver ya el estado nuevo -- calcularlo después habría dejado la ficha
+            // dibujándose un frame con la profundidad vieja (podría perder el pulso contra
+            // otro panel a depth 0 ese único frame).
+            // -----------------------------------------------------------------
+            if (_colaCount == 0)
+            {
+                _libritoAnunciado = false; // (RONDA 49) cola vacía: la próxima ráfaga es nueva, vuelve a pedir su turno.
+            }
+            else if (!_fichaAbierta && !_visible && !DayCycle.HudSilenciado && !JournalHud.Abierto)
+            {
+                // (RONDA 49, LA COLA CON RESPIRO) La vitrina NO arranca sola solo porque haya
+                // algo pendiente: tiene que pedir turno en el reloj compartido con el banner
+                // "ALGO NUEVO" de Game/SubstanceKnowledge.cs -- ver el docblock de
+                // `_libritoAnunciado` y de `SubstanceKnowledge.PuedeAnunciarTeatro`.
+                if (!_libritoAnunciado && SubstanceKnowledge.PuedeAnunciarTeatro())
+                {
+                    _libritoAnunciado = true;
+                    // (RONDA 50, D3: "que me salgan en pantalla y que yo las tenga que
+                    // cerrar") El turno concedido abre la ficha DIRECTO -- ya no un simple
+                    // pulso a la espera de B. AbrirSiguienteFicha NO pide turno de nuevo (no
+                    // llama a RegistrarAnuncioTeatro): eso ahora ocurre al CERRAR (ver
+                    // CerrarFicha/ConfirmarFicha), medido desde que el jugador de verdad
+                    // termina de mirar, no desde que la ficha se abrió (ver el docblock de
+                    // RegistrarAnuncioTeatro en Game/SubstanceKnowledge.cs).
+                    AbrirSiguienteFicha();
+                }
+                else if (_libritoAnunciado)
+                {
+                    // Turno ya concedido en un frame anterior pero no hay ficha en pantalla:
+                    // el jugador la cerró con ESC ("ahora no", ver CerrarFicha) y quedan más
+                    // pendientes en la cola -- el librito sigue pulsando para poder releerlas
+                    // con B, sin volver a pedir turno para la MISMA ráfaga.
+                    DrawLibrito();
+                }
+            }
+
             // (decisión explícita) profundidad MÁS ADELANTE que JournalHud (-1000): un
             // descubrimiento puede llegar mientras el jugador tiene el diario abierto leyendo
             // otra cosa ("también desde la pestaña del diario", diseño §3) -- la vitrina no debe
@@ -460,28 +545,6 @@ namespace Alkahest.Game
             // condición se repite aquí a propósito: es la línea que hace IMPOSIBLE el bug
             // reportado aunque alguien vuelva a tocar el estado en el futuro.
             if (_visible && !_fichaAbierta) DrawPantallaCompleta();
-
-            // El librito solo tiene sentido si NO hay ya una vitrina abierta y el jugador no
-            // está leyendo el álbum completo (ahí ya se ve todo lo nuevo con sus propios ojos).
-            if (_colaCount == 0)
-            {
-                _libritoAnunciado = false; // (RONDA 49) cola vacía: la próxima ráfaga es nueva, vuelve a pedir su turno.
-            }
-            else if (!_fichaAbierta && !_visible && !DayCycle.HudSilenciado && !JournalHud.Abierto)
-            {
-                // (RONDA 49, LA COLA CON RESPIRO) El pulso NO arranca solo porque haya algo
-                // pendiente: tiene que pedir turno en el reloj compartido con el banner "ALGO
-                // NUEVO" de Game/SubstanceKnowledge.cs -- ver el docblock de `_libritoAnunciado`
-                // y de `SubstanceKnowledge.PuedeAnunciarTeatro`. Una vez concedido el turno se
-                // queda pulsando sin volver a pedirlo (abrir/cerrar la ficha no lo reinicia,
-                // solo vaciar la cola entera lo hace).
-                if (!_libritoAnunciado && SubstanceKnowledge.PuedeAnunciarTeatro())
-                {
-                    _libritoAnunciado = true;
-                    SubstanceKnowledge.RegistrarAnuncioTeatro();
-                }
-                if (_libritoAnunciado) DrawLibrito();
-            }
 
             if (_fichaAbierta) DrawFicha();
         }

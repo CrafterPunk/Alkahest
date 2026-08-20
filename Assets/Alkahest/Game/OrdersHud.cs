@@ -59,10 +59,26 @@ namespace Alkahest.Game
     /// <see cref="FilaCache"/>/<see cref="ActualizarFavorTexto"/>): nada de
     /// concatenar strings en OnGUI cuando el texto no cambió desde el frame
     /// anterior.
+    ///
+    /// (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50) EL CAMINO SEÑALADO,
+    /// SOLO SEMILLA CERO (contrato §3e: "el caótico NO cambia"): cada fila de
+    /// encargo gana un segundo cuadrito -- una FLECHA (←/→/↓, ver
+    /// <see cref="TryFlechaTolva"/>) hacia la Tolva, sin minimapa ni vector,
+    /// solo para los tipos que de verdad se resuelven ahí (ver
+    /// <see cref="VaALaTolva"/>). En caótico <c>anchoFlechaTolva</c> vale 0 y
+    /// el layout queda idéntico al de siempre.
     /// </summary>
     public sealed class OrdersHud : MonoBehaviour
     {
         private OrderSystem _orderSystem;
+
+        // -----------------------------------------------------------------
+        // (CONTRATO_RONDA50.md §3c, ENCARGO G, playtest 50) EL CAMINO
+        // SEÑALADO -- "OrdersHud muestra una FLECHA de dirección hacia la
+        // Tolva... sin minimapa" (contrato, textual). Ver TryFlechaTolva.
+        // -----------------------------------------------------------------
+        private Transform _player;
+        private DeliveryChute _tolva;
 
         // -----------------------------------------------------------------
         // Expandir/plegar (ver docblock de la clase).
@@ -232,6 +248,44 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// ¿Este tipo de encargo se resuelve DE VERDAD en la Tolva? Conduce y
+        /// AguantaCalor NUNCA pasan por ahí (ver sus docblocks en
+        /// Game/Order.cs -- se resuelven en el Banco de Chispa/el Ensayo vía
+        /// <see cref="OrderSystem.CompletarEnsayo"/>): apuntar la flecha a la
+        /// Tolva para esos dos confundiría en vez de enseñar. Todo lo demás
+        /// (Guiado, FlotaInsoluble, y los tipos clásicos) sí se entrega ahí.
+        /// </summary>
+        private static bool VaALaTolva(OrderType tipo) => tipo != OrderType.Conduce && tipo != OrderType.AguantaCalor;
+
+        /// <summary>
+        /// (CONTRATO_RONDA50.md §3c) Glifo simple (←/→/↓), NUNCA una brújula
+        /// ni un vector -- compara la posición MUNDO del aprendiz contra la
+        /// de la Tolva (el transform de Game/DeliveryChute.cs, que ya se
+        /// ancla al "centro del labio de la boca" en su propio Init: ver ese
+        /// archivo) y elige el eje dominante. Referencias resueltas UNA vez
+        /// con <c>FindAnyObjectByType</c> (mismo patrón defensivo que ya usa
+        /// esta misma clase para <see cref="SaberSync"/> y que usa
+        /// Game/DeliveryChute.cs para su propio <c>_player</c>) y cacheadas:
+        /// esta clase no recibe ninguna de las dos por inyección.
+        /// </summary>
+        private bool TryFlechaTolva(out string glifo)
+        {
+            glifo = null;
+            if (_player == null) _player = FindAnyObjectByType<ApprenticeController>()?.transform;
+            if (_tolva == null) _tolva = FindAnyObjectByType<DeliveryChute>();
+            if (_player == null || _tolva == null) return false;
+
+            Vector3 d = _tolva.transform.position - _player.position;
+            float ax = Mathf.Abs(d.x), ay = Mathf.Abs(d.y);
+            // "abajo" solo cuando el desnivel manda Y la Tolva está POR
+            // DEBAJO del aprendiz -- nunca "arriba" (contrato: solo
+            // izquierda/derecha/abajo).
+            if (ay > ax && d.y < 0f) { glifo = "↓"; return true; }
+            glifo = d.x >= 0f ? "→" : "←";
+            return true;
+        }
+
         private void OnGUI()
         {
             // (playtest 21, EL PIVOT) HudSilenciado, hermano de InputLocked
@@ -261,7 +315,13 @@ namespace Alkahest.Game
             float interior = ancho - pad * 2f;
             float ladoCaja = UiStyles.S(14f);
             float anchoRecompensa = UiStyles.S(48f);
-            float xTextoDesde = ladoCaja + UiStyles.S(6f);
+            // (CONTRATO_RONDA50.md §3c) SOLO Semilla Cero reserva un segundo
+            // cuadrito para la flecha (contrato §3e: "el caótico NO
+            // cambia") -- en caótico `anchoFlechaTolva`=0 y el layout entero
+            // queda BIT A BIT igual que antes de esta ronda.
+            bool modoSemillaCero = AlkahestGameBootstrap.ModoSemillaCero;
+            float anchoFlechaTolva = modoSemillaCero ? ladoCaja + UiStyles.S(4f) : 0f;
+            float xTextoDesde = ladoCaja + anchoFlechaTolva + UiStyles.S(6f);
             float anchoTextoProgreso = interior - xTextoDesde - anchoRecompensa;
 
             float altoLinea = UiStyles.S(17f);
@@ -338,6 +398,23 @@ namespace Alkahest.Game
                 UiStyles.ChipMini.normal.textColor = new Color(0f, 0f, 0f, 0.82f); // contraste oscuro sobre el cuadrito claro.
                 GUI.Label(cajaRect, glifo, UiStyles.ChipMini);
                 UiStyles.ChipMini.normal.textColor = previoColorChip;
+
+                // (CONTRATO_RONDA50.md §3c) LA FLECHA A LA TOLVA -- segundo
+                // cuadrito, mismo criterio visual que el de arriba, SOLO en
+                // Semilla Cero y SOLO para encargos que de verdad se
+                // resuelven en la Tolva (ver VaALaTolva/TryFlechaTolva). Sin
+                // jugador/Tolva encontrados todavía (un frame de arranque),
+                // el hueco reservado se queda en blanco -- no rompe el
+                // layout, solo no dice nada ese frame.
+                if (modoSemillaCero && !order.Completado && VaALaTolva(order.Tipo) && TryFlechaTolva(out string flechaGlifo))
+                {
+                    var flechaRect = new Rect(x + ladoCaja + UiStyles.S(3f), y + (altoLinea - ladoCaja) * 0.5f, ladoCaja, ladoCaja);
+                    UiStyles.Rellenar(flechaRect, UiStyles.Oro);
+                    var previoColorFlecha = UiStyles.ChipMini.normal.textColor;
+                    UiStyles.ChipMini.normal.textColor = new Color(0f, 0f, 0f, 0.82f);
+                    GUI.Label(flechaRect, flechaGlifo, UiStyles.ChipMini);
+                    UiStyles.ChipMini.normal.textColor = previoColorFlecha;
+                }
 
                 float xTexto = x + xTextoDesde;
                 GUI.Label(new Rect(xTexto, y, anchoTextoProgreso, altoLinea), fila.TextoProgreso,

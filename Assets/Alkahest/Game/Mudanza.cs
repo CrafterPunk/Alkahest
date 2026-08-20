@@ -454,7 +454,7 @@ namespace Alkahest.Game
             if (DayCycle.InputLocked) { OcultarVisuales(); return; }
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisuales(); return; }
             if (UiStyles.EscribiendoTexto) { OcultarVisuales(); return; }
-            if (JournalHud.Abierto) { OcultarVisuales(); return; }
+            if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisuales(); return; } // (integración pt50, regla 12) también la ficha modal del álbum.
 
             var kb = Keyboard.current;
             var mouse = Mouse.current;

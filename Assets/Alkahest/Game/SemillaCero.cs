@@ -113,21 +113,32 @@ namespace Alkahest.Game
         private const int SalaFria = 4;
 
         // -----------------------------------------------------------------
-        // CANTIDADES Y RECOMPENSAS DEL ARCO. El contrato fija el número exacto SOLO
-        // del beat 2 (25) y da el orden de magnitud del resto ("15-20 el resto");
-        // los valores concretos de abajo son DECISIÓN de este encargo, documentada
-        // en el informe de la ronda -- no hay balance de Favor/desenlace clásico
-        // que proteger aquí (Semilla 0 no corre el ciclo de jornadas de 3 días).
+        // CANTIDADES Y RECOMPENSAS DEL ARCO.
+        //
+        // (CONTRATO_RONDA50.md §3a, ENCARGO G, playtest 50) EL GUION SE
+        // COMPACTA -- Cesar, veredicto pt49, textual: "si sigo teniendo 4-6
+        // materiales 5 minutos experimentando y aún sin develar ninguna
+        // máquina... debería haber un STORYTELLING MUY CLARO Y DE POCAS
+        // OPCIONES". El contrato fija los números EXACTOS que hay que ver en
+        // pantalla (regla 43 de CLAUDE.md, "un cambio que el jugador no puede
+        // distinguir de 'no pasó nada' es, para él, un cambio que no
+        // ocurrió"): beat2 25→10, beat3 15→8, beat4 15→8, prensa/columna
+        // 10→6, frío 8→6 (este último ya estaba en 8 antes de esta ronda --
+        // baja a 6 igual, mismo criterio de "cantidades de milagro, no de
+        // recadero"). Las RECOMPENSAS no las fija el contrato -- se quedan
+        // como estaban (decisión de una ronda anterior, sin tocar: Semilla 0
+        // no corre el ciclo de Favor/desenlace clásico, así que su escala
+        // absoluta no protege ningún balance).
         // -----------------------------------------------------------------
-        private const int Beat2Cantidad = 25, Beat2Recompensa = 20;
-        private const int Beat3Cantidad = 15, Beat3Recompensa = 25;
-        private const int Beat4Cantidad = 15, Beat4Recompensa = 30;
-        private const int Beat5CantidadPrensa = 10;
-        private const int Beat5CantidadColumna = 10;
+        private const int Beat2Cantidad = 10, Beat2Recompensa = 20;
+        private const int Beat3Cantidad = 8, Beat3Recompensa = 25;
+        private const int Beat4Cantidad = 8, Beat4Recompensa = 30;
+        private const int Beat5CantidadPrensa = 6;
+        private const int Beat5CantidadColumna = 6;
         private const int Beat5Recompensa = 20;
         private const int Beat5RecompensaEnsayo = 25;
-        /// <summary>(CONTRATO_TERMICA.md §3c) Cantidad EXACTA fijada por el contrato ("cantidad 8"); recompensa por orden de magnitud con sus hermanas Prensa/Columna (mismo tipo de pedido: Guiado, se resuelve en la Tolva).</summary>
-        private const int Beat5CantidadFrio = 8;
+        /// <summary>(CONTRATO_RONDA50.md §3a) 8→6, mismo criterio de compactación que sus hermanas Prensa/Columna (mismo tipo de pedido: Guiado, se resuelve en la Tolva).</summary>
+        private const int Beat5CantidadFrio = 6;
         private const int Beat5RecompensaFrio = 20;
 
         /// <summary>Cadencia de sondeo de TODA la máquina de estados (discovery/pedidos/autonomía) -- nunca por frame.</summary>
@@ -598,7 +609,19 @@ namespace Alkahest.Game
             // (diario/resistencias, cocido, en frío) las da MaestroDice al segundo fallo (ver
             // SondeoPreguntaEnsayo); esta línea del pedido da el primer empujón, visible desde
             // el minuto uno en el panel de encargos, sin esperar a que el jugador falle dos veces.
-            _orders.EncolarPedidoGuiado(OrderType.AguantaCalor, 1, Beat5RecompensaEnsayo, "¿DE VERDAD aguanta? Trae al Ensayo algo que resista el rojo.");
+            //
+            // (CONTRATO_RONDA50.md §3d, ENCARGO G, playtest 50) YA NO PRESUME LA
+            // PALABRA "resista": Cesar, veredicto pt49, textual: "aún no descifro qué
+            // significa que resista el crisol". El texto EXACTO del contrato sustituye
+            // la coletilla ("...algo que resista el rojo") por la descripción del
+            // GESTO ("sin arder ni fundirse") y la ENSEÑANZA de la regla del oficio
+            // ("lo bien cocido aguanta") -- se ENSEÑA la palabra, no se presupone. Se
+            // conserva "¿DE VERDAD aguanta?" como apertura: es la PREGUNTA del beat
+            // (contrato de literatura, CONTRATO_SEMILLA.md §1, "el texto del pedido ES
+            // la pregunta") y no usa la palabra "resista" tampoco, así que sigue siendo
+            // coherente con el pedido rehecho.
+            _orders.EncolarPedidoGuiado(OrderType.AguantaCalor, 1, Beat5RecompensaEnsayo,
+                "¿DE VERDAD aguanta? Trae al ENSAYO (la sala recién abierta) algo que sobreviva al rojo sin arder ni fundirse -- lo bien cocido aguanta.");
             Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.3→5.4: se destapa el Ensayo -- idea TEMPERATURA, cierra el fracaso del beat 4.");
         }
 
@@ -626,7 +649,12 @@ namespace Alkahest.Game
                 if (_ensayo != null && _ensayo.FallosAguantaCalor >= FallosEnsayoParaComentario)
                 {
                     _ensayoComentado = true;
-                    MaestroDice("Lo suelto arde o revienta. Busca en tu diario lo que ya te dijo 'resiste este fuego' -- lo bien COCIDO aguanta. Y deja ENFRIAR la muestra antes de presentarla.", 9f);
+                    // (CONTRATO_RONDA50.md §3d) REESCRITA, coherente con el pedido de
+                    // EntrarPreguntaEnsayo: ya no cita "resiste este fuego" (palabra
+                    // que el pedido tampoco usa ya) -- describe el GESTO que hay que
+                    // buscar en el diario ("sobrevivir al rojo sin arder ni fundirse")
+                    // y ENSEÑA la palabra del oficio en vez de presuponerla.
+                    MaestroDice("Lo suelto arde o revienta. Busca en tu diario lo que ya viste sobrevivir al rojo sin arder ni fundirse -- lo bien COCIDO aguanta. Y deja ENFRIAR la muestra antes de presentarla.", 9f);
                 }
             }
 

@@ -399,7 +399,7 @@ namespace Alkahest.Game
             SondearLecho();
 
             if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && EstaEnfocada())
+                && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && EstaEnfocada()) // (integración pt50, regla 12) la ficha modal también bloquea E.
             {
                 if (IntentarPrensar()) MachineFocus.RegistrarUsoE();
             }

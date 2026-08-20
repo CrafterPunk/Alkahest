@@ -190,8 +190,19 @@ namespace Alkahest.Game
             // llama a `SimLevelBuilder.DestaparSala(SalaFria)` cuando el
             // Maestro pregunta "¿Y si lo ENFRÍAS?" -- este poll la spawnea la
             // primera vez que eso ocurre, igual que las otras cuatro salas.
+            //
+            // (CONTRATO_RONDA50.md §4a, ENCARGO M) EL PAR TÉRMICO LLEGA
+            // JUNTO: `SpawnHeatPlates` se mudó aquí desde `TrySpawn` (ver su
+            // docblock más abajo) -- las dos máquinas nacen en el MISMO
+            // frame, disparadas por el MISMO destape, así que el jugador las
+            // descubre a la vez ("una placa que solo calienta y una piedra
+            // que solo enfría, lado a lado" -- la lección de temperatura por
+            // zonas del contrato). El orden de las dos llamadas no importa
+            // (ninguna lee a la otra), se listan calor-antes-que-frío por
+            // simetría con el orden de siempre en `TrySpawn`.
             if (!_salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] && SimLevelBuilder.SalaDestapada(SimLevelBuilder.SalaFria))
             {
+                SpawnHeatPlates(_playerSemillaCero);
                 SpawnChillStone(_playerSemillaCero);
                 _salaSpawneadaSemillaCero[SimLevelBuilder.SalaFria] = true;
             }
@@ -358,7 +369,22 @@ namespace Alkahest.Game
             // cumplida en su docblock). NUNCA tapiada, igual que el Crisol
             // -- Cesar, textual: "podemos iniciar con la placa de calor
             // también" (en Semilla Cero, desde el beat 1).
-            SpawnHeatPlates(apprentice.transform);
+            //
+            // (CONTRATO_RONDA50.md §4a, ENCARGO M, D2 "DOS FUEGOS AL
+            // ARRANCAR") ESO CAMBIÓ: Cesar vio el crisol Y la placa como DOS
+            // fuegos simultáneos en el minuto 0 sin poder distinguir sus
+            // oficios ("¿por qué tengo dos máquinas de fuego?"). En modo
+            // Semilla Cero la placa YA NO nace aquí -- nace junto a la piedra
+            // gélida cuando `Game/SemillaCero.cs` destapa `SalaFria` (el beat
+            // del frío), ver `PollDestapesSemillaCero`/`SpawnHeatPlates` más
+            // abajo: el arranque se queda con el CRISOL como único fuego, y
+            // el par frío/calor llega completo y junto, como pidió el
+            // mandato original ("el PAR frío/calor como aparatos
+            // didácticos — no dos fuegos simultáneos en el minuto 0"). En
+            // CAÓTICO (`!ModoSemillaCero`) NO CAMBIA NADA: la placa sigue
+            // naciendo aquí mismo, en el mismo instante que el resto de esta
+            // lista (regla dura del contrato §3e-M: "el caótico no cambia").
+            if (!ModoSemillaCero) SpawnHeatPlates(apprentice.transform);
             // (playtest 40, SEMILLA CERO) LAS CUATRO SALAS POR PREGUNTA: en
             // modo Semilla Cero, con el mundo recién tapiado
             // (`Sim/SimLevelBuilder.TapiarSalasSemillaCero`, llamado desde
@@ -767,6 +793,35 @@ namespace Alkahest.Game
         /// HeatPlate.RecalcularCentro las necesita (`plateRow - WallThickness
         /// + 1`) -- comprobado a mano, no a ojo (regla 39 de CLAUDE.md): CERO
         /// carving nuevo hace falta en SimLevelBuilder para este sitio.
+        ///
+        /// EL SITIO EN SEMILLA CERO (CONTRATO_RONDA50.md §4a, ENCARGO M) SE
+        /// QUEDA AQUÍ, SOLO CAMBIA EL MOMENTO -- decisión de M, documentada
+        /// (el contrato ofrecía dos opciones: "la alcoba fría o junto a
+        /// ella"). Medido en el plano real ANTES de decidir (regla 39): la
+        /// alcoba fría (<see cref="SimLevelBuilder.AlcobaFriaX0"/>..
+        /// <see cref="SimLevelBuilder.AlcobaFriaX1"/>, 8 celdas EXACTAS) la
+        /// consume ENTERA la piedra gélida sola -- tanto HeatPlate como
+        /// ChillStone fuerzan un ancho MÍNIMO de 8 celdas
+        /// (<c>Mathf.Max(8, spanTotal*FootprintFraction)</c> en las dos
+        /// clases), así que no cabe una segunda máquina dentro. Y no hay
+        /// margen "junto a ella" tampoco: por el oeste la Columna la pisa
+        /// hasta su propio borde (huella hasta 280, la alcoba empieza en
+        /// 281) y por el este el Banco de Chispa hace lo mismo (huella desde
+        /// 289, la alcoba termina en 288) -- CERO celdas de margen a los dos
+        /// lados, verificado contra las constantes reales de
+        /// Sim/SimLevelBuilder.cs (SOLO LEÍDAS, no tocadas). Ensanchar la
+        /// alcoba para que quepan las dos máquinas es un cambio de PLANO
+        /// (fuera de los archivos de este encargo) -- queda anotado para el
+        /// director/el encargo que posea SimLevelBuilder.cs. Mientras tanto,
+        /// el objeto CONSERVA el sitio de la Pila de Agua (probado, sin
+        /// riesgo de colisión) y lo que cambia es SOLO cuándo aparece: ver la
+        /// llamada nueva en <see cref="PollDestapesSemillaCero"/>, disparada
+        /// por el mismo destape de <see cref="SimLevelBuilder.SalaFria"/> que
+        /// revela la piedra gélida, así que el jugador las descubre juntas EN
+        /// EL TIEMPO aunque no compartan la misma pared -- cumple la parte
+        /// que sí está en mis archivos (D2: un solo fuego en el minuto 0) sin
+        /// inventar mampostería nueva por mi cuenta. El nombre del objeto NO
+        /// cambia (sigue siendo la Pila de Agua de verdad).
         /// </summary>
         private void SpawnHeatPlates(Transform player)
         {
