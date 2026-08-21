@@ -2840,27 +2840,50 @@ namespace Alkahest.Sim
         // =====================================================================
         // (RONDA 60, GDD v0.3 §5 -- EL INICIO OSCURO, greybox) EL PLANO DE LA
         // FUNDACIÓN: el mundo casi vacío donde arranca TEN THOUSAND YEARS.
-        // Piedra maciza en todo el grid salvo UNA caverna; dentro, solo el
-        // rincón del Maestro (mesa + hogar de brasas), la GOTERA que cae sobre
-        // las brasas (la primera reacción del juego, ocurriendo sola antes de
-        // que el jugador toque nada -- pedido literal de Cesar), un montón de
-        // polvo de arcilla y un charquito de agua. NADA MÁS: el principio
-        // rector del GDD es que nada exista en pantalla que no haya entrado
-        // por un favor, un préstamo o las manos del jugador. La secuencia de
-        // beats vive en Game/FundacionDirector.cs; este método solo talla.
-        // El goteo y el calor de las brasas son RUNTIME (los mantiene el
-        // director), aquí solo se deja la geometría que los recibe.
+        // Piedra maciza en todo el grid salvo UNA caverna; dentro, SOLO
+        // GEOMETRÍA: el rincón del Maestro (mesa + hogar), el hogar vacío del
+        // jugador, la poza SECA y la veta sellada en el muro. Ni un grano de
+        // material suelto (ronda 64, veto expreso de Cesar: "nada de material
+        // tirado") -- el agua la trae la GOTERA delante del jugador, y la
+        // arcilla y la arena las entrega el Maestro en su beat, cayendo a la
+        // vista. El principio rector del GDD: nada existe en pantalla que no
+        // haya entrado por un favor, un préstamo o las manos del jugador.
+        // La secuencia de beats vive en Game/FundacionDirector.cs; este
+        // método solo talla. El goteo, el fuego real del hogar y los vertidos
+        // del Maestro son RUNTIME (los mantiene el director).
         // =====================================================================
         public const int FundacionX0 = 340, FundacionX1 = 460; // interior de la caverna (121 celdas de ancho).
         public const int FundacionY0 = 140, FundacionY1 = 200; // suelo interior en Y0, bóveda plana en Y1 (61 de alto).
         public const int FundacionMesaX0 = 434, FundacionMesaX1 = 446, FundacionMesaTopY = 143; // la mesa del Maestro (bloque macizo).
         public const int FundacionBrasasX0 = 424, FundacionBrasasX1 = 428, FundacionBrasasY = 141; // el hogar: 5 celdas que el director mantiene al rojo.
-        public const int FundacionGoteraX = 426, FundacionGoteraDripY = 197; // la gotera nace pegada a la bóveda, cae sobre las brasas.
-        public const int FundacionArcillaX0 = 352, FundacionArcillaX1 = 364; // el montón de polvo de arcilla (se asienta solo en los primeros ticks).
-        public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // el charquito (cuenco tallado bajo el nivel del suelo).
-        public const int FundacionAprendizX = 352, FundacionAprendizY = 152; // spawn: en la penumbra, con el fuego a la derecha.
+        // (RONDA 64, feedback pt64 de Cesar) LA GOTERA CAE EN LA POZA, no sobre
+        // las brasas: la versión anterior (GoteraX=426, encima del hogar) hacía
+        // hervir cada gota -- vapor, charcos de agua hirviendo, "eso no es una
+        // gotera". Ahora nace pegada a la bóveda y cae 57 celdas hasta la poza
+        // seca: la primera imagen es el fuego crepitando y un hilo de agua
+        // inundando el cuenco, plip... plip. El objetivo del beat 2 pasa a ser
+        // "recoge lo que se está inundando".
+        public const int FundacionGoteraX = 379, FundacionGoteraDripY = 197;
+        public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // LA POZA: cuenco tallado bajo el nivel del suelo. Nace SECA (ronda 64) -- la llena la gotera delante del jugador.
+        // (RONDA 64) PUNTOS DE ENTREGA del Maestro: donde CAE el material que
+        // él da en cada beat (arcilla al abrir el barro, arena al encender el
+        // fogón). Sustituyen al montón de arcilla y a la orilla de arena
+        // pre-colocados -- Cesar, pt64: "expresamente pedí nada de material
+        // tirado; si me lo da el Maestro, que caiga en ese momento".
+        public const int FundacionDropArcillaX = 366; // ribera izquierda de la poza.
+        public const int FundacionDropArenaX = 400;   // pegado a la mejilla izquierda del fogón (x403).
+        public const int FundacionDropY = 158;        // altura del vertido: cae ~18 celdas a la vista.
+        // (RONDA 64, afinado con capturas) El spawn entra al resplandor del
+        // fuego: antes (x352, y luego x388) el aprendiz nacía FUERA del óvalo
+        // de luz o en su anillo oscuro -- invisible para sí mismo. Ahora
+        // despierta en la penumbra cálida junto al hogar vacío: el fuego del
+        // Maestro a su derecha, la gotera goteando en la poza a su
+        // izquierda, él como silueta.
+        public const int FundacionAprendizX = 400, FundacionAprendizY = 150;
         // (RONDA 61, beats 4-6 del GDD §5) La segunda mitad de la fundación:
-        public const int FundacionArenaX0 = 388, FundacionArenaX1 = 399;   // la ORILLA de arena (MatDe(0,Polvo), la arena de sílice del cruce del vidrio) en la ribera derecha del charco.
+        // (la ORILLA de arena pre-colocada x388-399 se retiró en la ronda 64:
+        // la arena la entrega el Maestro al encenderse el fogón, cayendo en
+        // FundacionDropArenaX -- ver arriba.)
         public const int FundacionFogonX0 = 404, FundacionFogonX1 = 410;   // EL HOGAR VACÍO: el sitio del fuego PROPIO del jugador (dos mejillas de piedra, lecho libre).
         public const int FundacionFogonY = 140;                            // lecho del hogar = LA FILA DONDE EL POLVO REPOSA (la primera fila de aire sobre el suelo de piedra en y139) -- verificado en vivo ronda 61: con el lecho en 141 el calor y el conteo vivían una fila POR ENCIMA de la turba asentada.
         public const int FundacionVetaX = 340;                             // cara interior del muro izquierdo: el ASOMO de la veta de turba (3 celdas visibles; el bolsón se talla con C).
@@ -2894,35 +2917,34 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, FundacionBrasasX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
             RegistrarObra(FundacionBrasasX0 - 1, FundacionY0, FundacionBrasasX1 + 1, FundacionY0 + 3);
 
-            // El montón de arcilla: un rectángulo de polvo que la propia sim
-            // asienta en montículo en los primeros ticks (SetCell, no
-            // PaintStable: construcción de nivel -- PaintClimate de abajo deja
-            // el mundo entero a ambiente y el polvo es estable a 20°C).
-            for (int x = FundacionArcillaX0; x <= FundacionArcillaX1; x++)
-                for (int y = FundacionY0; y <= FundacionY0 + 3; y++)
-                    grid.SetCell(x, y, MaterialId.MatDe(1, EstadoMateria.Polvo));
+            // (RONDA 64: el montón de arcilla y la orilla de arena
+            // pre-colocados SE RETIRARON -- "nada de material tirado". El
+            // Maestro los entrega en su beat, cayendo a la vista, desde
+            // Game/FundacionDirector.TickVertidoDelMaestro. La geometría que
+            // los recibe sí es del plano:)
 
-            // El charquito: cuenco tallado 3 celdas bajo el nivel del suelo,
-            // lleno de agua, con la piedra sin tallar como paredes.
+            // LA POZA: cuenco tallado 3 celdas bajo el nivel del suelo, con la
+            // piedra sin tallar como paredes. Nace SECA (ronda 64): la llena
+            // la GOTERA delante del jugador, y recogerla es el beat 2.
             DrawSolidRect(grid, FundacionCharcoX0, FundacionY0 - 3, FundacionCharcoX1 - FundacionCharcoX0 + 1, 3, MaterialId.Empty);
-            for (int x = FundacionCharcoX0; x <= FundacionCharcoX1; x++)
-                for (int y = FundacionY0 - 3; y <= FundacionY0 - 1; y++)
-                    grid.SetCell(x, y, MaterialId.Water);
 
-            // (RONDA 61) LA ORILLA DE ARENA: en la ribera derecha del charco.
-            // MatDe(0, Polvo) -- la "arena de sílice" del cruce del vidrio
-            // (Universe._cruceArenaPolvo), NO MaterialId.Sand del vocabulario
-            // clásico (regla 47: el nombre parecido no es la constante
-            // correcta; el cruce arena+ceniza->VidrioVerde busca la base 0).
-            for (int x = FundacionArenaX0; x <= FundacionArenaX1; x++)
-                for (int y = FundacionY0; y <= FundacionY0 + 2; y++)
-                    grid.SetCell(x, y, MaterialId.MatDe(0, EstadoMateria.Polvo));
+            // (RONDA 64, directiva Opus #3) LA ESTALACTITA: de dónde gotea.
+            // Una púa de piedra colgando de la bóveda sobre la poza -- la gota
+            // ya no aparece "de la nada": nace de una punta visible si alzas
+            // el vuelo, y su hilo de 3 celdas se ve cruzar la caverna.
+            grid.SetCell(FundacionGoteraX - 1, FundacionY1, MaterialId.Stone);
+            grid.SetCell(FundacionGoteraX, FundacionY1, MaterialId.Stone);
+            grid.SetCell(FundacionGoteraX + 1, FundacionY1, MaterialId.Stone);
+            grid.SetCell(FundacionGoteraX, FundacionY1 - 1, MaterialId.Stone);
+            grid.SetCell(FundacionGoteraX, FundacionY1 - 2, MaterialId.Stone);
 
-            // (RONDA 61) EL HOGAR VACÍO: dos mejillas de piedra y un lecho
-            // libre -- el sitio donde el jugador enciende SU fuego (beat 4).
-            DrawSolidRect(grid, FundacionFogonX0 - 1, FundacionY0, 1, 4, MaterialId.Stone);
-            DrawSolidRect(grid, FundacionFogonX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
-            RegistrarObra(FundacionFogonX0 - 1, FundacionY0, FundacionFogonX1 + 1, FundacionY0 + 3);
+            // (RONDA 61; MEJILLAS DOBLES desde la ronda 64, directiva Opus
+            // #10: "dos palitos grises de 1 celda no leen como fogón") EL
+            // HOGAR VACÍO: dos mejillas de piedra de 2x3 y un lecho libre --
+            // el sitio donde el jugador enciende SU fuego (beat 4).
+            DrawSolidRect(grid, FundacionFogonX0 - 2, FundacionY0, 2, 3, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionFogonX1 + 1, FundacionY0, 2, 3, MaterialId.Stone);
+            RegistrarObra(FundacionFogonX0 - 2, FundacionY0, FundacionFogonX1 + 2, FundacionY0 + 2);
 
             // (RONDA 61) EL ASOMO DE LA VETA: un bolsón de turba dentro del
             // muro izquierdo, con 3 celdas perforando la cara interior (mismo
@@ -2935,13 +2957,17 @@ namespace Alkahest.Sim
             // entero al piso. Solo 3 celdas de ASOMO perforan la cara: pueden
             // gotear al suelo (3 celdas exactas, acotado: detrás hay piedra) y
             // ESE goteo es la pista. El resto se gana tallando con C.
+            // (RONDA 64) El ASOMO de 3 celdas se retiró: esas 3 celdas de polvo
+            // resbalaban por la diagonal al piso y quedaban como "material
+            // tirado" (el veto expreso de Cesar en el pt64). El bolsón queda
+            // SELLADO por completo tras la cara del muro (columna 339 intacta);
+            // el descubrimiento pasa a ser un CARTEL de mundo ("VETA -- talla
+            // con C") que el director enciende en el beat del fogón, más la
+            // línea del Maestro. A prueba de burros > sutileza, mandato pt64.
             byte turbaFundacion = MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx, EstadoMateria.Polvo);
             for (int x = FundacionVetaX - 6; x <= FundacionVetaX - 2; x++)
                 for (int y = FundacionVetaY0; y <= FundacionVetaY1; y++)
                     grid.SetCell(x, y, turbaFundacion);
-            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 1, turbaFundacion);
-            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 2, turbaFundacion);
-            grid.SetCell(FundacionVetaX - 1, FundacionVetaY0 + 3, turbaFundacion);
 
             PaintClimate(grid); // mismo ambiente uniforme de siempre (regla 31).
         }

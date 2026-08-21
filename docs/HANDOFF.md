@@ -3803,3 +3803,85 @@ OrdersHud.TextoVacio ahora da "(nada por ahora)" también en ModoFundacion
 caótico legado lo conserva hasta su rediseño). NOTA para el testeo: el panel
 del tablón se AUTOCIERRA al alejarse del nicho (>10 celdas) -- es guarda, no
 bug.
+
+## Ronda 64 — LA PRIMERA EXPERIENCIA, A PRUEBA DE BURROS (feedback pt64 + pase Opus con runtime)
+
+Cesar probó el greybox y lo destrozó con razón: "empezó 1 segundo bien y
+luego se fue todo al carajo". Sus reclamos, uno a uno, y lo que se hizo:
+
+1. "LA GOTERA NO ES GOTERA: pozos de agua, agua hirviendo, vapor". Causa:
+   GoteraX=426 caía SOBRE las brasas (165 raw): cada gota hervía. Ahora cae
+   en LA POZA (x379, cuenco 372-385 que nace SECO) desde una ESTALACTITA de
+   piedra en la bóveda; el objetivo del beat 2 es "recoger lo que se está
+   inundando". Gota = hilo de 3 celdas cada 0.95s. La poza REZUMA
+   (RezumarPoza: el agua sobre 34 celdas se filtra por el fondo, 1
+   celda/frame) así que EL HILO NUNCA SE APAGA y jamás desborda — la primera
+   versión la PAUSABA al llenarse y Opus la cazó con runtime: la gotera
+   moría a los 39s (el reclamo original, reintroducido por la guarda).
+   VERIFICADO con datos: a t=45s+ dripTimer corriendo y agua clavada en 34.
+2. "TEXTOS LARGOS, DESAPARECEN RÁPIDO, MALA UBICACIÓN... como novelas
+   visuales, que presione siguiente". La banda temporizada MURIÓ para el
+   guion: DIÁLOGO POR PÁGINAS abajo-centro en PanelRito (línea del bautizo),
+   UNA frase corta por página, avanza con CLIC/E/ESPACIO/ENTER, pie
+   "clic izquierdo — continuar/cerrar · n/m". Mientras está abierto,
+   UiStyles.EscribiendoTexto bloquea TODO el mundo (regla 12): el clic de
+   avanzar jamás aspira. [NonSerialized] en _paginas/_pagina/_alCerrar: el
+   hot-reload del editor resucitaba el array null como VACÍO y OnGUI
+   indexaba -1 cada frame (visto en vivo: 50 IndexOutOfRange/s tras Ctrl+R).
+   DibujarBandaMaestro SIGUE VIVA solo para los avisos del tendero (Trueque).
+3. "GARANTIZAR la primera experiencia, que me avise que presione clic
+   izquierdo". BANDA DE OBJETIVO persistente abajo-centro, patrón único
+   (directiva Opus #6): `GESTO — objeto · n/m`, gesto SIEMPRE primero en
+   #FFD159 negrita (richText). Orden pedagógico del barro corregido: enseña
+   CLIC DERECHO (verter) antes que aspirar una crema que aún no existe.
+4. "MATERIAL TIRADO POR AHÍ, NO PUEDE SER... que me lo dé el Maestro y caiga
+   en ese momento". BuildFundacion ya no coloca arcilla/charco/orilla de
+   arena; el asomo derramable de la veta también murió (3 celdas resbalaban
+   al piso) — la señala un cartel de mundo "VETA — talla con C" desde el
+   beat del fogón. El Maestro VIERTE: TickVertidoDelMaestro deja caer
+   arcilla (30, x366) y arena (20, x400) POR PROXIMIDAD (≤25 celdas,
+   1 celda/0.15s) — la primera versión vertía al cerrar el diálogo y Opus
+   confirmó con runtime que caía en zona oscura sin nadie mirando.
+5. "ESA ANIMACIÓN HORRIBLE DE LUZ... tenemos física reeaaal... que esté
+   ardiendo de verdad y sea la única fuente de luz, titilante". FUERA el
+   glow radial pintado (textura _glow, RIP). El hogar del Maestro es BRASA
+   REAL (MaterialId.Brasa, 2 filas autocurativas con vida repuesta — el
+   motor inyecta el calor) con ~3 lenguas de Fire REALES mantenidas
+   (mueren solas a ~16 ticks: el parpadeo ES la sim) y TIRO corto (una
+   llama sobre +6 filas se apaga: a esa altura el Fire agónico parecía
+   "arena subiendo"). El titileo de la viñeta se DERIVA del número de
+   celdas de Fire vivas (_luzFuego). La luz tiene causa física o no existe.
+6. HALLAZGO EN VIVO: el aprendiz NUNCA tuvo colisión con piedra (solo clamp
+   a bordes del mundo) — a oscuras, 2s de vuelo contra el muro = tester
+   perdido DENTRO de la roca (me pasó). CorralDelGreybox lo contiene a la
+   caverna (+9 celdas de gracia hacia la veta). Colisión real = deuda
+   post-Fest.
+7. SILUETA DEL MAESTRO (Opus #4: "no hay Maestro, el rótulo señala ladrillo
+   vacío"): túnica encapuchada 6x8 celdas generada por código, sentada a la
+   mesa, dos brasas por ojos; la chapa EL MAESTRO sube a MesaTopY+11 (encima
+   de la capucha) y SE OCULTA a <14 celdas (le caía en la cara al jugador).
+8. Más directivas Opus aplicadas: tipografía RELATIVA a Screen.height
+   (PrepararEstilosPropios; cuerpo diálogo 2.7% del alto, objetivo 2.1%),
+   cuerpo del diálogo a la IZQUIERDA, pie #D8C89A, guiones — reales,
+   UiStyles.Exito verde neón→MUSGO (0.55,0.70,0.42), viñeta exterior
+   #0d0906→#150f0b (el jugador era invisible fuera del cono) y foco de la
+   luz 0.65→0.85 hacia el jugador (tu atención es tu lámpara), spawn a
+   (400,150) como SILUETA en la penumbra junto al fuego (radio inicial
+   S(240)→S(280)), mejillas del fogón 2x3 ("dos palitos no leen como
+   fogón"), grifo montado a +8 (levitaba a +12), ración 24 (45 desbordaba
+   la poza), estalactita 5 celdas.
+VETOS RAZONADOS a Opus (anotados, no perdidos): SuckRatePerTick/ReachWorld
+   del Flask NO se tocaron (globales de TODO el juego, y el reclamo de Cesar
+   era que aspirar costaba DEMASIADO — decisión suya post-test); BrasaVida
+   90→52 rechazado (perilla equivocada: la vida de la brasa no gobierna la
+   lengua). PENDIENTES del acta: /900 del HUD del frasco, "?" del encargo
+   colapsado, subtítulo del frasco con fade a los 12s, alpha del MENÚ·Esc,
+   botón "omitir intro" para partidas repetidas (pedido de Cesar).
+OPERATIVA: sandbox se REINICIÓ en plena ronda (2ª vez en dos días) y revirtió
+   a 63b; se recuperó TODO desde el disco de Cesar (device_stage_files de los
+   3 archivos recién desplegados) — regla 6b salvó la ronda por minutos.
+   Snapshot local a6259ca. Verificado JUGANDO: frame cero (fuego + silueta +
+   banner), diálogo 5 páginas con clics, aspirado 42 de agua en 5s, entrega
+   15/15, grifo + costal de arcilla, gotera inmortal a t=45s.
+ARCHIVOS: FundacionDirector.cs (reescrito ~900 líneas), SimLevelBuilder.cs
+   (plano fundación), UiStyles.cs (Exito). ca_playtest65.cmd barre la ronda.

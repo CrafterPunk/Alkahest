@@ -40,7 +40,10 @@ namespace Alkahest.Game
         public static readonly Color TextoTenue = new Color(0.70f, 0.66f, 0.62f, 1f);
         public static readonly Color Aviso = new Color(1.00f, 0.62f, 0.32f, 1f);
         public static readonly Color Peligro = new Color(1.00f, 0.40f, 0.34f, 1f);
-        public static readonly Color Exito = new Color(0.52f, 0.92f, 0.60f, 1f);
+        // (RONDA 64, directiva Opus 4.5) De verde neón (0.52,0.92,0.60) a verde
+        // MUSGO: era el único saturado en un taller entero de sepia y ámbar --
+        // "el verde chillón" delataba el borrador. Sigue leyendo "éxito".
+        public static readonly Color Exito = new Color(0.55f, 0.70f, 0.42f, 1f);
         public static readonly Color Frio = new Color(0.55f, 0.85f, 1.00f, 1f);
         public static readonly Color Hueco = new Color(0f, 0f, 0f, 0.55f);
 
