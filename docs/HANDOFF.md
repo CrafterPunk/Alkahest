@@ -3917,3 +3917,68 @@ NOTA DE ARTE (para el futuro, NO ahora): la silueta greybox actual es
 placeholder; el diseño final apunta a escala gigante (una MANO en cuadro
 puede bastar). Anotado, sin construir.
 ca_playtest66.cmd barre la ronda.
+
+## Ronda 66 — LA FALSA PROFUNDIDAD 2.5D, v1 (dirección de Cesar + imagen aspiracional)
+
+Mandato: capa de profundidad visual por planos SIN tocar la sim 2D. Los 6
+niveles quedaron NOMBRADOS en Game/Capas.cs (tabla única, regla 39; los
+valores históricos NO se renumeraron). Lo implementado y VERIFICADO en vivo:
+
+1. ROCA MADRE CON CUERPO (SimRenderer.ComputeCellColor, StaticSolid):
+   - canto DERECHO por fin sombreado (-12%; existía solo el izquierdo),
+   - INTERIOR de masa -8% (celda sin caras al aire): el borde queda como aro
+     iluminado y varias celdas chicas se leen como UNA roca ("lógica
+     pequeña, apariencia más grande" -- el autotiling correcto aquí no son
+     tiles: la lógica YA es 1 celda = 1 téxel),
+   - ESQUINAS (2+ caras al aire) -12%: redondeo percibido, marching-squares
+     gratis.
+2. EL LABIO FRONTAL (Nivel 4): segunda textura del mismo grid
+   (_frontTexture, sprite orden 55 = Capas.ArquitecturaFrente), rellenada en
+   el MISMO barrido por chunks. Pinta SOLO el anillo de AIRE pegado a
+   roca/piso (pardo #18130f, alfa 150): el aprendiz (orden 50) pasa POR
+   DETRÁS al rozar muros = oclusión = profundidad. SOLO sobre vacío a
+   propósito: si materia entra a la celda, el labio desaparece ahí (las
+   reacciones jamás se tapan). La colisión NUNCA viene de aquí.
+3. PISO ESTRUCTURAL (MaterialId.PisoEstructural=65, Count 65->66):
+   StaticSolid que JAMÁS cae (arquitectura, regla 7), casi inmune al calor
+   (245 raw), vocabulario ("piso estructural", no se bautiza). Se dibuja
+   FABRIL: viguetas horizontales de 3 filas + remache cada 6 columnas, sin
+   grano -- recto contra lo orgánico. Se coloca con el CINCEL: X alterna
+   piedra/piso, y el piso REEMPLAZA roca madre al colocarse (verificado:
+   losa flotante en el aire que no cae + columna de piso incrustada en el
+   muro). Nunca sobre materia viva ni obra del taller. Tallable como la
+   piedra.
+4. COLISIÓN DEL APRENDIZ (ApprenticeController.ColisionConEstructura,
+   global): caja 2x3 celdas por eje con SUBPASOS de 0.06u (a 11.2 u/s un
+   frame son ~2 celdas: sin subpasos tunelaba pisos de 1 celda). Solo
+   bloquean roca/piso; polvos/líquidos/gases se atraviesan. Si el frame
+   arranca ya-dentro-de-sólido, la colisión se suspende ese frame (jamás
+   quedas clavado). VERIFICADO: 2.2s empujando contra el muro = clavado en
+   la celda 341 (antes: celda 170, dentro de la roca). El corral del
+   greybox de la fundación SE RETIRÓ (prohibía la fantasía de tallar
+   túneles; la colisión lo reemplaza).
+5. CINCEL: alcance PROPIO de 22 celdas (ReachWorldCincel=2.2f; heredaba las
+   60 del frasco) + LÍNEA DE VISIÓN Bresenham (PrimerSolidoEnRayo): solo se
+   edita la cara que VES; editar detrás de pared avisa "hay pared de por
+   medio — abre camino primero". La velocidad de tallado NO cambió.
+   VERIFICADO: muesca en disco de 3-4 celdas tallada en la cara del muro.
+   Sobre los "restos que no se come" (pt64): el disco por anillos SÍ cubre
+   completo (round(dist)); las causas reales conocidas son la obra del
+   taller (ya avisa desde pt43) y el borde del alcance -- con alcance corto
+   + LOS esa clase de síntoma se encoge; si Cesar lo vuelve a ver, pedir
+   captura con F3.
+OPINIÓN DEL BOSQUEJO (registrada en chat): 8/10 como meta, alcanza para
+   demo digna con 3 podas (toda máquina enseña su interior simulado o no
+   entra; máx 2 tokens de clutter por pantalla; paleta fija de ~16 colores
+   para consistencia entre sprites generados). La paleta pardo-latón-ámbar
+   coincide con la UI del bautizo ya hecha.
+DIFERIDO (siguiente pasada de esta dirección): vidrio frontal
+   MachineBack->Sim->MachineFront por máquina (Capas.MaquinaFrente=35 ya
+   reservado); chequeo de superficie válida al soltar máquinas con V
+   (Mudanza); sprites de Niveles 0-2 (repisas/carteles/lámparas de pared);
+   oscurecer el backdrop; migrar literales viejos a Capas.
+RIESGO UX ABIERTO (reportar Cesar tras probar): sensación de la colisión
+   (¿estorba volar?) y del alcance corto del cincel (¿22 celdas basta?).
+OPERATIVA: verificado en vivo vía MCP con datos de grilla (mapas de celdas
+   # / P / o) + capturas con amanecer forzado. Snapshot local 111e241.
+   ca_playtest67.cmd barre la ronda.

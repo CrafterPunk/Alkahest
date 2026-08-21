@@ -94,7 +94,19 @@ namespace Alkahest.Sim
         /// <summary>"clínker" -- caliza molida + arcilla, fuego pleno. El id PROPIO del cruce (ver el bloque de comentarios de arriba); NO confundir con MatDe(2,Ceramico) ("cal sobrecocida", la caliza sobrecocida SOLA). Ver Universe.TryCruce.</summary>
         public const byte Clinker = 64;
 
-        public const int Count = 65; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47)
+        /// <summary>
+        /// (RONDA 66, dirección 2.5D de Cesar) PISO ESTRUCTURAL: la primera
+        /// pieza de arquitectura LIMPIA del jugador -- recto y fabril frente a
+        /// la roca madre orgánica. Funciona como piso o techo, es superficie
+        /// válida para máquinas, y se coloca con el cincel (tecla X alterna
+        /// piedra/piso) REEMPLAZANDO roca o vacío: "tallo el espacio bruto y
+        /// lo termino con estructura limpia". Como la piedra: StaticSolid que
+        /// JAMÁS cae (caeSolido=false -- es arquitectura, regla 7), tallable,
+        /// y VOCABULARIO (no se bautiza, regla 17: se ve igual en toda seed).
+        /// </summary>
+        public const byte PisoEstructural = 65;
+
+        public const int Count = 66; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -1025,6 +1037,25 @@ namespace Alkahest.Sim
                 density = 235,
                 caeSolido = true,
                 cohesionCeldas = 8, // el techo de la familia: caliza y arcilla cocidas a fuego pleno, tan duro como el Cerámico real.
+                patron = PatronMorfologico.Liso,
+                borde = BordeMorfologico.Neto,
+            };
+            // (RONDA 66) EL PISO ESTRUCTURAL -- ver el docblock de
+            // MaterialId.PisoEstructural. Como la PIEDRA (caeSolido=false:
+            // arquitectura que jamás cae), pero más claro y tibio para que el
+            // contraste recto-vs-orgánico se lea a escala de juego (regla 52:
+            // el color se juzga contra sus vecinos). La banda de remaches y el
+            // canto recto los pinta SimRenderer por hash posicional -- el
+            // material es Liso a propósito, su firma es la GEOMETRÍA.
+            mats[MaterialId.PisoEstructural] = new MaterialDef
+            {
+                id = MaterialId.PisoEstructural,
+                devName = "PisoEstructural",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(148, 134, 112, 255), // piedra labrada tibia: más clara que la roca madre, más sorda que el latón.
+                colorJitter = 5,                             // casi uniforme: lo fabril no tiene el ruido de lo orgánico.
+                density = 240,
+                caeSolido = false, // arquitectura: JAMÁS cae, como la piedra (regla 7).
                 patron = PatronMorfologico.Liso,
                 borde = BordeMorfologico.Neto,
             };
@@ -2984,6 +3015,10 @@ namespace Alkahest.Sim
             Rellenar(MaterialId.Hormigon, 210, RespuestaPrensa.Resistir);
             Rellenar(MaterialId.Esmaltado, 235, RespuestaPrensa.Resistir);
             Rellenar(MaterialId.Clinker, 230, RespuestaPrensa.Resistir);
+            // (ronda 66) El piso estructural es arquitectura: prácticamente
+            // inmune al calor (245 raw, por encima de todo combustible real)
+            // y resiste la prensa, mismo hueco documentado que Brasa/cruces.
+            Rellenar(MaterialId.PisoEstructural, 245, RespuestaPrensa.Resistir);
         }
 
         // ===================================================================

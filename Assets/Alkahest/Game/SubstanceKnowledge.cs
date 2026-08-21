@@ -765,6 +765,7 @@ namespace Alkahest.Game
                 // "lo innominado" nuevo -- ver NombreDe/NombreParaHud/
                 // Bautizar para cómo se nombran (por BASE, no por matId).
                 case MaterialId.Limo: return "limo primordial"; // (playtest 28) "Limo Primordial" a pedido de Cesar, para la prueba con sus amigos de Steam.
+                case MaterialId.PisoEstructural: return "piso estructural"; // (ronda 66) arquitectura del jugador: vocabulario, no se bautiza.
                 default: return null; // lo innominado: Slime, Azoth, CrystalSeed, Vivium, Crystal, Acid, y las 40 variantes base×estado.
             }
         }

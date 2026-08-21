@@ -270,6 +270,9 @@ namespace Alkahest.Sim
         private uint[] _chunkLastRenderTick;
         private bool[] _chunkEverRendered;
         private Transform _quad;
+        // (ronda 66) El labio frontal de la roca -- ver Init y ComputeFrontRim.
+        private Texture2D _frontTexture;
+        private Color32[] _frontScratch;
 
         private int _frameCounter;
 
@@ -299,6 +302,23 @@ namespace Alkahest.Sim
 
             _pixels = new Color32[CellGrid.W * CellGrid.H];
             _chunkScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
+
+            // (RONDA 66, dirección 2.5D) EL LABIO FRONTAL DE LA ROCA: segunda
+            // textura del mismo tamaño, dibujada POR DELANTE del aprendiz
+            // (ver BuildQuad). Solo pinta el anillo de aire pegado a la roca
+            // madre / piso estructural -- la "cara" de la masa más cercana a
+            // cámara. Volar pegado al muro = el labio te tapa un poco =
+            // profundidad, sin tocar una sola regla de la sim (la colisión
+            // sigue viniendo de la grilla, mandato de Cesar). Se rellena en el
+            // MISMO barrido por chunks que la textura principal: mismo coste
+            // de viewport, una subida extra por chunk sucio.
+            _frontTexture = new Texture2D(CellGrid.W, CellGrid.H, TextureFormat.RGBA32, false, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                name = "AlkahestRocaFrenteTexture",
+            };
+            _frontScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
             _chunkContinuousAnim = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
             _chunkLastRenderTick = new uint[CellGrid.ChunksX * CellGrid.ChunksY];
             // (playtest 15) `_chunkEverRendered` arranca todo en false por
@@ -337,6 +357,8 @@ namespace Alkahest.Sim
             for (int i = 0; i < _pixels.Length; i++) _pixels[i] = default;
             _texture.SetPixels32(_pixels);
             _texture.Apply(false);
+            _frontTexture.SetPixels32(_pixels); // mismo buffer limpio: arranca transparente.
+            _frontTexture.Apply(false);
 
             BuildQuad();
 
@@ -566,6 +588,18 @@ namespace Alkahest.Sim
             _quad = go.transform;
             _quad.SetParent(transform, false);
             _quad.position = Vector3.zero; // pivot en (0,0): el sprite cubre 25.6 x 14.4 exacto (256x144 celdas de 0.1).
+
+            // (RONDA 66) EL SPRITE DEL LABIO FRONTAL: misma geometría, orden 55
+            // (= Game/Capas.ArquitecturaFrente -- el literal se repite aquí a
+            // propósito: Sim/ no depende de Game/): por DELANTE del aprendiz
+            // (50) y de los halos (40), por DETRÁS del frasco en mano (60).
+            var goFrente = new GameObject("AlkahestRocaFrenteSprite");
+            var srFrente = goFrente.AddComponent<SpriteRenderer>();
+            srFrente.sprite = Sprite.Create(_frontTexture, new Rect(0, 0, CellGrid.W, CellGrid.H),
+                Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
+            srFrente.sortingOrder = 55;
+            goFrente.transform.SetParent(transform, false);
+            goFrente.transform.position = Vector3.zero;
         }
 
         /// <summary>
@@ -707,6 +741,7 @@ namespace Alkahest.Sim
             if (anyDrawn)
             {
                 _texture.Apply(false);
+                _frontTexture.Apply(false); // el labio va al mismo ritmo que la textura principal.
             }
         }
 
@@ -867,7 +902,9 @@ namespace Alkahest.Sim
                     Color32 c = ComputeCellColor(x, y, idx, t, out bool continuo);
                     if (continuo) chunkAnimado = true;
                     _pixels[idx] = c;
-                    scratch[scratchI++] = c;
+                    scratch[scratchI] = c;
+                    _frontScratch[scratchI] = ComputeFrontRim(x, y, idx);
+                    scratchI++;
                 }
             }
             _chunkContinuousAnim[chunkIndex] = chunkAnimado;
@@ -880,7 +917,38 @@ namespace Alkahest.Sim
             _chunkEverRendered[chunkIndex] = true;
 
             _texture.SetPixels32(x0, y0, w, h, scratch);
+            _frontTexture.SetPixels32(x0, y0, w, h, _frontScratch);
         }
+
+        /// <summary>
+        /// (RONDA 66) EL LABIO FRONTAL: para una celda de AIRE pegada a roca
+        /// madre o piso estructural, devuelve la sombra de la "cara" de esa
+        /// masa hacia cámara; para todo lo demás, transparente. SOLO sobre
+        /// vacío a propósito: en cuanto materia real entra a la celda, el
+        /// labio desaparece ahí -- las reacciones son protagonistas y nada
+        /// las tapa (mandato de Cesar). El aprendiz (sprite, no celda) sí
+        /// queda parcialmente detrás: esa oclusión ES la profundidad.
+        /// </summary>
+        private Color32 ComputeFrontRim(int x, int y, int idx)
+        {
+            if (_grid.mat[idx] != MaterialId.Empty) return default;
+
+            bool junto =
+                (x > 0 && EsEstructuraFrontal(_grid.mat[idx - 1])) ||
+                (x < CellGrid.W - 1 && EsEstructuraFrontal(_grid.mat[idx + 1])) ||
+                (y > 0 && EsEstructuraFrontal(_grid.mat[idx - CellGrid.W])) ||
+                (y < CellGrid.H - 1 && EsEstructuraFrontal(_grid.mat[idx + CellGrid.W]));
+            if (!junto) return default;
+
+            // Pardo profundo con variación estable por celda (nunca animado):
+            // se lee como el canto en sombra de la masa, no como un contorno
+            // dibujado. Alfa moderado: oscurece, no tapa.
+            int j = (int)(Hash2D(x, y) % 7) - 3;
+            return new Color32(ClampByte(24 + j), ClampByte(19 + j), ClampByte(15 + j), 150);
+        }
+
+        private static bool EsEstructuraFrontal(byte mat)
+            => mat == MaterialId.Stone || mat == MaterialId.PisoEstructural;
 
         private Color32 ComputeCellColor(int x, int y, int idx, int tick, out bool continuousAnim)
         {
@@ -986,22 +1054,43 @@ namespace Alkahest.Sim
             // Todo estable por (x,y) vía Hash2D/Hash3D -- nada de UnityEngine.Random.
             if (def.archetype == MaterialArchetype.StaticSolid)
             {
-                const int BlockW = 8, BlockH = 4;
-                int hilada = y / BlockH;
-                int sx = x + ((hilada & 1) != 0 ? BlockW / 2 : 0); // hiladas impares desplazadas medio bloque
-                int localX = sx % BlockW;
-                int blockX = sx / BlockW;
-
-                int tono = (int)(Hash2D(blockX, hilada) % 13) - 6; // ±6%
-                r = ClampByte(r + r * tono / 100);
-                g = ClampByte(g + g * tono / 100);
-                b = ClampByte(b + b * tono / 100);
-
-                if (localX == 0 || (y % BlockH) == 0) // junta de sillería (borde del bloque): -22%
+                bool esPiso = matId == MaterialId.PisoEstructural;
+                if (esPiso)
                 {
-                    r = (byte)(r * 78 / 100);
-                    g = (byte)(g * 78 / 100);
-                    b = (byte)(b * 78 / 100);
+                    // (RONDA 66) EL PISO ESTRUCTURAL SE DIBUJA FABRIL: viguetas
+                    // horizontales de 3 filas con junta oscura y un remache cada
+                    // 6 columnas -- recto y repetido, el contraste exacto contra
+                    // la sillería orgánica de la roca ("recto y estructural, en
+                    // contraste con la roca madre", mandato de Cesar). Cero
+                    // tono por bloque: lo fabricado es uniforme.
+                    if ((y % 3) == 0)
+                    {
+                        r = (byte)(r * 80 / 100); g = (byte)(g * 80 / 100); b = (byte)(b * 80 / 100);
+                    }
+                    else if ((x % 6) == 3 && (y % 3) == 2)
+                    {
+                        r = (byte)(r * 68 / 100); g = (byte)(g * 68 / 100); b = (byte)(b * 68 / 100); // remache.
+                    }
+                }
+                else
+                {
+                    const int BlockW = 8, BlockH = 4;
+                    int hilada = y / BlockH;
+                    int sx = x + ((hilada & 1) != 0 ? BlockW / 2 : 0); // hiladas impares desplazadas medio bloque
+                    int localX = sx % BlockW;
+                    int blockX = sx / BlockW;
+
+                    int tono = (int)(Hash2D(blockX, hilada) % 13) - 6; // ±6%
+                    r = ClampByte(r + r * tono / 100);
+                    g = ClampByte(g + g * tono / 100);
+                    b = ClampByte(b + b * tono / 100);
+
+                    if (localX == 0 || (y % BlockH) == 0) // junta de sillería (borde del bloque): -22%
+                    {
+                        r = (byte)(r * 78 / 100);
+                        g = (byte)(g * 78 / 100);
+                        b = (byte)(b * 78 / 100);
+                    }
                 }
 
                 // idx+W = celda de ARRIBA (y+1), idx-W = celda de ABAJO (y-1): ver
@@ -1010,6 +1099,7 @@ namespace Alkahest.Sim
                 bool arribaVacia = y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty;
                 bool abajoVacia = y > 0 && _grid.mat[idx - CellGrid.W] == MaterialId.Empty;
                 bool izqVacia = x > 0 && _grid.mat[idx - 1] == MaterialId.Empty;
+                bool derVacia = x < CellGrid.W - 1 && _grid.mat[idx + 1] == MaterialId.Empty; // (ronda 66) el canto derecho existía sin sombra: masa asimétrica.
                 if (arribaVacia)
                 {
                     r = ClampByte(r + r * 28 / 100);
@@ -1028,11 +1118,40 @@ namespace Alkahest.Sim
                     g = ClampByte(g + g * 10 / 100);
                     b = ClampByte(b + b * 10 / 100);
                 }
+                if (derVacia)
+                {
+                    r = (byte)(r * 88 / 100);
+                    g = (byte)(g * 88 / 100);
+                    b = (byte)(b * 88 / 100);
+                }
 
-                int grano = (int)(Hash3D(x, y, 97) % 9) - 4; // ±4, hash distinto al del bloque y sin componente de tiempo (la piedra no se anima)
-                r = ClampByte(r + grano);
-                g = ClampByte(g + grano);
-                b = ClampByte(b + grano);
+                // (RONDA 66, la clave del "autotiling" percibido) VOLUMEN DE
+                // MASA: el interior sin caras al aire se hunde un 8% -- el
+                // borde queda como aro iluminado y varias celdas chicas se
+                // leen como UNA roca grande ("lógica pequeña, apariencia más
+                // grande"). Y una celda con 2+ caras expuestas (esquina) se
+                // apaga un 12%: el ojo la redondea, marching-squares gratis.
+                int carasAlAire = (arribaVacia ? 1 : 0) + (abajoVacia ? 1 : 0) + (izqVacia ? 1 : 0) + (derVacia ? 1 : 0);
+                if (carasAlAire == 0)
+                {
+                    r = (byte)(r * 92 / 100);
+                    g = (byte)(g * 92 / 100);
+                    b = (byte)(b * 92 / 100);
+                }
+                else if (carasAlAire >= 2)
+                {
+                    r = (byte)(r * 88 / 100);
+                    g = (byte)(g * 88 / 100);
+                    b = (byte)(b * 88 / 100);
+                }
+
+                if (!esPiso) // el piso fabril es liso: sin grano.
+                {
+                    int grano = (int)(Hash3D(x, y, 97) % 9) - 4; // ±4, hash distinto al del bloque y sin componente de tiempo (la piedra no se anima)
+                    r = ClampByte(r + grano);
+                    g = ClampByte(g + grano);
+                    b = ClampByte(b + grano);
+                }
             }
 
             // POWDERS (fix playtest 6: baja resolución): aclarado de canto superior

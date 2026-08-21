@@ -307,13 +307,104 @@ namespace Alkahest.Game
             _velocity = Vector2.MoveTowards(_velocity, target, acceleration * Time.deltaTime);
 
             Vector3 pos = transform.position;
-            pos.x = Mathf.Clamp(pos.x + _velocity.x * Time.deltaTime, WorldMinX, WorldMaxX);
-            pos.y = Mathf.Clamp(pos.y + _velocity.y * Time.deltaTime, WorldMinY, WorldMaxY);
+            MoverConColision(ref pos, _velocity * Time.deltaTime);
             pos.z = 0f;
             transform.position = pos;
 
             if (input.x > 0.01f) _facingRight = true;
             else if (input.x < -0.01f) _facingRight = false;
+        }
+
+        // =================================================================
+        // (RONDA 66, dirección 2.5D de Cesar) COLISIÓN CON LA ARQUITECTURA:
+        // "a partir de esta dirección, el personaje ya no atraviesa roca
+        // madre; colisiona con roca y plataformas estructurales; puede seguir
+        // volando". El imp voló como fantasma desde el día 1 (solo el Clamp a
+        // los bordes del MUNDO lo sujetaba) -- a oscuras eso era un tester
+        // perdido dentro de la piedra (visto en vivo, ronda 64). Diseño:
+        //  · SOLO bloquean los sólidos ESTRUCTURALES (roca madre y piso
+        //    estructural, la obra del taller incluida por ser piedra):
+        //    polvos, líquidos, gases y productos se atraviesan igual que
+        //    siempre -- puedes zambullirte en el agua o cruzar el humo.
+        //  · Caja de ~2x3 celdas resuelta POR EJE (deslizas por las paredes
+        //    en vez de frenar en seco) y en SUBPASOS de 0.06u: a la velocidad
+        //    máxima (11.2 u/s) un frame recorre casi 2 celdas y sin subpasos
+        //    se tunelaría un piso de 1 celda.
+        //  · Si el frame ARRANCA con la caja ya dentro de sólido (teleport de
+        //    debug, spawn legado, roca construida encima), la colisión se
+        //    SUSPENDE ese frame: siempre puedes salir nadando de la piedra,
+        //    jamás quedas clavado (pariente de la regla 38: la vuelta atrás
+        //    barata antes que la trampa).
+        // La bandera estática permite apagarla de un plumazo si una escena
+        // vieja la necesitara fuera (hoy nadie la apaga).
+        // =================================================================
+        public static bool ColisionConEstructura = true;
+
+        private const float MedioAnchoColision = 0.10f;  // 1 celda a cada lado del centro.
+        private const float MedioAltoColision = 0.14f;   // ~3 celdas de alto total.
+        private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
+
+        private AlkahestSim _simColision;
+
+        private void MoverConColision(ref Vector3 pos, Vector2 delta)
+        {
+            float nx = Mathf.Clamp(pos.x + delta.x, WorldMinX, WorldMaxX);
+            float ny = Mathf.Clamp(pos.y + delta.y, WorldMinY, WorldMaxY);
+
+            if (!ColisionConEstructura)
+            {
+                pos.x = nx; pos.y = ny;
+                return;
+            }
+
+            if (_simColision == null)
+            {
+                _simColision = FindAnyObjectByType<AlkahestSim>();
+                if (_simColision == null) { pos.x = nx; pos.y = ny; return; }
+            }
+
+            // Ya-dentro-de-sólido: colisión suspendida este frame (ver doc).
+            if (CajaChoca(pos.x, pos.y)) { pos.x = nx; pos.y = ny; return; }
+
+            float restX = nx - pos.x, restY = ny - pos.y;
+            int pasos = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(Mathf.Abs(restX), Mathf.Abs(restY)) / SubPaso));
+            float pasoX = restX / pasos, pasoY = restY / pasos;
+            for (int i = 0; i < pasos; i++)
+            {
+                if (pasoX != 0f)
+                {
+                    float px = pos.x + pasoX;
+                    if (CajaChoca(px, pos.y)) { pasoX = 0f; _velocity.x = 0f; }
+                    else pos.x = px;
+                }
+                if (pasoY != 0f)
+                {
+                    float py = pos.y + pasoY;
+                    if (CajaChoca(pos.x, py)) { pasoY = 0f; _velocity.y = 0f; }
+                    else pos.y = py;
+                }
+                if (pasoX == 0f && pasoY == 0f) break;
+            }
+        }
+
+        /// <summary>true si la caja del imp centrada en (cx,cy) pisa algún sólido estructural. Muestrea las 4 esquinas + 2 puntos medios laterales (alto 3 celdas: el centro lateral evita colarse por un diente de 1 celda).</summary>
+        private bool CajaChoca(float cx, float cy)
+        {
+            return PuntoChoca(cx - MedioAnchoColision, cy - MedioAltoColision)
+                || PuntoChoca(cx + MedioAnchoColision, cy - MedioAltoColision)
+                || PuntoChoca(cx - MedioAnchoColision, cy + MedioAltoColision)
+                || PuntoChoca(cx + MedioAnchoColision, cy + MedioAltoColision)
+                || PuntoChoca(cx - MedioAnchoColision, cy)
+                || PuntoChoca(cx + MedioAnchoColision, cy);
+        }
+
+        private bool PuntoChoca(float wx, float wy)
+        {
+            int x = Mathf.FloorToInt(wx / SimRenderer.CellWorldSize);
+            int y = Mathf.FloorToInt(wy / SimRenderer.CellWorldSize);
+            if (!CellGrid.InBounds(x, y)) return false;
+            int m = _simColision.SampleMaterial(x, y);
+            return m == MaterialId.Stone || m == MaterialId.PisoEstructural;
         }
 
         /// <summary>

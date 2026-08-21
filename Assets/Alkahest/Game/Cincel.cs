@@ -60,15 +60,15 @@ namespace Alkahest.Game
     /// todo aunque se mantenga el clic, así que recortar una forma exige
     /// pasadas, no un solo golpe.
     ///
-    /// ALCANCE: literalmente <see cref="Flask.ReachWorld"/> -- es la MISMA
-    /// mano del MISMO personaje, así que reutilizar la constante (no
-    /// duplicarla con un número propio) es la única forma de que "hasta dónde
-    /// llego" no diverja entre herramientas si algún día cambia. El aviso de
-    /// "demasiado lejos" también se reutiliza literalmente: <see
-    /// cref="Flask.Avisar"/> es el canal público que Game/StorageRack.cs ya
-    /// usa para avisar "junto al cursor y no en su propia esquina" -- el
-    /// Cincel es el segundo consumidor de ese canal, exactamente para lo que
-    /// se diseñó.
+    /// ALCANCE (REESCRITO EN LA RONDA 66): hasta el playtest 65 heredaba
+    /// literalmente <see cref="Flask.ReachWorld"/> (6f = 60 celdas) -- se
+    /// podía editar roca desde la otra punta del cuarto. Por dirección de
+    /// Cesar ("editar roca únicamente dentro de un rango razonablemente
+    /// corto; no destruir ni construir A TRAVÉS de una pared") ahora tiene
+    /// alcance PROPIO (<see cref="ReachWorldCincel"/> = 22 celdas) y LÍNEA DE
+    /// VISIÓN celda a celda (PrimerSolidoEnRayo): solo se edita la cara que
+    /// ves. El aviso de "demasiado lejos" sigue saliendo por
+    /// <see cref="Flask.Avisar"/>, el canal compartido de siempre.
     ///
     /// SOLO PIEDRA, Y NUNCA EL BORDE: TALLAR solo actúa si la celda bajo el
     /// disco es EXACTAMENTE MaterialId.Stone (nunca agua/aceite/cristal/
@@ -144,6 +144,20 @@ namespace Alkahest.Game
         private const int FillRadius = 2;
         private const int FillRatePerTick = 3;
 
+        // (RONDA 66, dirección de Cesar: "editar roca únicamente dentro de un
+        // rango razonablemente corto") El cincel deja de heredar las 60 celdas
+        // del frasco (Flask.ReachWorld=6f: se podía tallar desde la otra punta
+        // del cuarto) y gana alcance propio: 22 celdas. La VELOCIDAD de
+        // tallado no cambia -- la dificultad está en diseñar el espacio, no en
+        // picar despacio.
+        private const float ReachWorldCincel = 2.2f;
+
+        // (RONDA 66) Lo que coloca el clic derecho: piedra (de siempre) o PISO
+        // ESTRUCTURAL (tecla X alterna). El piso REEMPLAZA roca madre al
+        // colocarse ("tallo el espacio bruto y lo termino con estructura
+        // limpia" -- no exige haber excavado un hueco perfecto antes).
+        private bool _rellenaPiso;
+
         private AlkahestSim _sim;
         private ApprenticeController _apprentice;
         private Flask _flask; // solo para Avisar(): el canal de feedback compartido (ver doc de clase).
@@ -204,10 +218,24 @@ namespace Alkahest.Game
                 if (_flask != null)
                 {
                     _flask.Avisar(ModoActivo
-                        ? "cincel en mano — clic izq. talla, clic der. rellena"
+                        ? "cincel en mano — clic izq. talla · clic der. construye · X: piedra/piso"
                         : "frasco en mano");
                 }
                 if (!ModoActivo) OcultarVisuales();
+            }
+
+            // (RONDA 66) X alterna QUÉ construye el clic derecho: piedra o
+            // PISO ESTRUCTURAL. Mismo régimen de guardas que la C (ya
+            // pasadas); solo responde con el cincel en mano.
+            if (ModoActivo && kb != null && kb.xKey.wasPressedThisFrame)
+            {
+                _rellenaPiso = !_rellenaPiso;
+                if (_flask != null)
+                {
+                    _flask.Avisar(_rellenaPiso
+                        ? "cincel: clic der. coloca PISO ESTRUCTURAL (reemplaza roca)"
+                        : "cincel: clic der. rellena piedra");
+                }
             }
 
             if (!ModoActivo) { OcultarVisuales(); return; } // el frasco manda: el Cincel no toca la grilla ni pinta nada.
@@ -265,8 +293,50 @@ namespace Alkahest.Game
 
         private float ReachCellsSq()
         {
-            float reachCells = Flask.ReachWorld / SimRenderer.CellWorldSize;
+            // (ronda 66) Alcance PROPIO del cincel, ya no el del frasco -- ver
+            // el docblock de ReachWorldCincel.
+            float reachCells = ReachWorldCincel / SimRenderer.CellWorldSize;
             return reachCells * reachCells;
+        }
+
+        /// <summary>
+        /// (RONDA 66) LÍNEA DE VISIÓN: camina el rayo aprendiz->cursor celda a
+        /// celda (Bresenham) y devuelve el PRIMER sólido estructural que toca
+        /// (roca madre o piso), sin contar la celda del propio aprendiz.
+        /// false = camino despejado. La regla del mandato: "no puedes destruir
+        /// o construir A TRAVÉS de una pared sólida -- primero abre camino":
+        /// editar la CARA que ves siempre vale (el bloqueo cae dentro del
+        /// disco del cursor); editar detrás de ella, no.
+        /// </summary>
+        private bool PrimerSolidoEnRayo(Vector2Int desde, Vector2Int hasta, out Vector2Int solido)
+        {
+            solido = default;
+            int x = desde.x, y = desde.y;
+            int dx = Mathf.Abs(hasta.x - x), dy = -Mathf.Abs(hasta.y - y);
+            int sx = x < hasta.x ? 1 : -1, sy = y < hasta.y ? 1 : -1;
+            int err = dx + dy;
+            while (x != hasta.x || y != hasta.y)
+            {
+                int e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x += sx; }
+                if (e2 <= dx) { err += dx; y += sy; }
+                if (!CellGrid.InBounds(x, y)) return false;
+                int m = _sim.SampleMaterial(x, y);
+                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural)
+                {
+                    solido = new Vector2Int(x, y);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>true si el bloqueo de línea de visión está tan cerca del cursor que cuenta como "la cara que ves" (editable); false = hay pared de por medio.</summary>
+        private static bool BloqueoEsLaCara(Vector2Int bloqueo, Vector2Int cursor, int radioDisco)
+        {
+            int bdx = bloqueo.x - cursor.x, bdy = bloqueo.y - cursor.y;
+            int margen = radioDisco + 1;
+            return bdx * bdx + bdy * bdy <= margen * margen;
         }
 
         // ---------------------------------------------------------------------------------
@@ -281,6 +351,15 @@ namespace Alkahest.Game
             if (cdxCursor * cdxCursor + cdyCursor * cdyCursor > reachCellsSq)
             {
                 if (_flask != null) _flask.Avisar("demasiado lejos — acércate");
+                return;
+            }
+
+            // (ronda 66) Línea de visión: se talla la cara que VES, jamás la
+            // roca detrás de una pared -- abre camino primero.
+            if (PrimerSolidoEnRayo(apprenticeCell, cursor, out Vector2Int bloqueo)
+                && !BloqueoEsLaCara(bloqueo, cursor, CarveRadius))
+            {
+                if (_flask != null) _flask.Avisar("hay pared de por medio — abre camino primero");
                 return;
             }
 
@@ -312,10 +391,12 @@ namespace Alkahest.Game
                         int cdx = x - apprenticeCell.x, cdy = y - apprenticeCell.y;
                         if (cdx * cdx + cdy * cdy > reachCellsSq) continue;
 
-                        // SOLO piedra: nunca materia de la simulación (agua,
-                        // aceite, cristal, vivium...) -- para eso está el
-                        // frasco, con su propio filtro de aspirado.
-                        if (_sim.SampleMaterial(x, y) != MaterialId.Stone) continue;
+                        // SOLO piedra y piso estructural (ronda 66: tu propia
+                        // arquitectura también se pica): nunca materia de la
+                        // simulación (agua, aceite, cristal, vivium...) --
+                        // para eso está el frasco, con su propio filtro.
+                        int matAqui = _sim.SampleMaterial(x, y);
+                        if (matAqui != MaterialId.Stone && matAqui != MaterialId.PisoEstructural) continue;
 
                         // (playtest 27) LA OBRA DEL TALLER NO CEDE AL CINCEL:
                         // Cesar, probando el 26, se llevó parte de la
@@ -365,6 +446,15 @@ namespace Alkahest.Game
                 return;
             }
 
+            // (ronda 66) Misma línea de visión que TallarTick: no se
+            // construye a través de una pared sólida.
+            if (PrimerSolidoEnRayo(apprenticeCell, cursor, out Vector2Int bloqueo)
+                && !BloqueoEsLaCara(bloqueo, cursor, FillRadius))
+            {
+                if (_flask != null) _flask.Avisar("hay pared de por medio — abre camino primero");
+                return;
+            }
+
             int budget = FillRatePerTick;
 
             for (int r = 0; r <= FillRadius && budget > 0; r++)
@@ -385,15 +475,23 @@ namespace Alkahest.Game
                         int cdx = x - apprenticeCell.x, cdy = y - apprenticeCell.y;
                         if (cdx * cdx + cdy * cdy > reachCellsSq) continue;
 
-                        // Solo sobre celdas VACÍAS: rellenar no debe poder
-                        // tragarse agua/aceite/etc. -- solo cierra huecos.
-                        if (_sim.SampleMaterial(x, y) != MaterialId.Empty) continue;
+                        // PIEDRA: solo sobre celdas VACÍAS (rellenar no debe
+                        // tragarse agua/aceite/etc. -- solo cierra huecos).
+                        // PISO (ronda 66): sobre vacío O sobre roca madre --
+                        // la estructura limpia REEMPLAZA lo bruto (mandato:
+                        // "no requiere haber excavado un hueco perfecto").
+                        // Nunca sobre materia viva ni sobre obra del taller.
+                        int mAqui = _sim.SampleMaterial(x, y);
+                        bool colocable = _rellenaPiso
+                            ? (mAqui == MaterialId.Empty || (mAqui == MaterialId.Stone && !SimLevelBuilder.EsObraDelTaller(x, y)))
+                            : mAqui == MaterialId.Empty;
+                        if (!colocable) continue;
 
                         // PaintStable, no Paint/PaintCell (regla 22 de
                         // CLAUDE.md): la celda nace a la temperatura en la que
-                        // Piedra es estable en vez de heredar lo que hubiera
-                        // antes ahí.
-                        _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                        // el material es estable en vez de heredar lo que
+                        // hubiera antes ahí.
+                        _sim.PaintStable(x, y, 0, _rellenaPiso ? MaterialId.PisoEstructural : MaterialId.Stone);
                         budget--;
                     }
                 }

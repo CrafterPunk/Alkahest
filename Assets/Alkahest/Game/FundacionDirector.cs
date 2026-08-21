@@ -206,28 +206,13 @@ namespace Alkahest.Game
 
             _radio = Mathf.Lerp(_radio, _radioObjetivo, Time.deltaTime * 1.6f);
 
-            CorralDelGreybox();
-        }
-
-        /// <summary>
-        /// (ronda 64, visto en vivo) EL CORRAL: el aprendiz NUNCA tuvo
-        /// colisión con la piedra -- ApprenticeController solo lo sujeta a
-        /// los bordes del MUNDO (Clamp a WorldMin/Max), así que atraviesa
-        /// cualquier muro. En el taller clásico casi no se notaba; aquí, a
-        /// oscuras, dos segundos de vuelo contra el muro y el tester
-        /// desaparece DENTRO de la roca sin saber volver (me pasó a mí en la
-        /// verificación). Greybox: contenerlo al interior de la caverna, con
-        /// 9 celdas de gracia a la izquierda para poder entrar al hueco de
-        /// la veta cuando la talle. La colisión real contra sólidos es deuda
-        /// anotada post-Fest.
-        /// </summary>
-        private void CorralDelGreybox()
-        {
-            float celda = SimRenderer.CellWorldSize;
-            Vector3 p = _aprendiz.position;
-            p.x = Mathf.Clamp(p.x, (SimLevelBuilder.FundacionX0 - 9) * celda, SimLevelBuilder.FundacionX1 * celda);
-            p.y = Mathf.Clamp(p.y, (SimLevelBuilder.FundacionY0 + 0.5f) * celda, (SimLevelBuilder.FundacionY1 - 0.5f) * celda);
-            _aprendiz.position = p;
+            // (RONDA 66) EL CORRAL DEL GREYBOX SE RETIRÓ: existió una ronda
+            // (64) porque el imp atravesaba la piedra y a oscuras eso era un
+            // tester perdido dentro de la roca. Desde la ronda 66 el aprendiz
+            // COLISIONA de verdad con la arquitectura (ver
+            // ApprenticeController.ColisionConEstructura) -- el corral no solo
+            // sobraba: prohibía la fantasía nueva de TALLAR túneles y salir de
+            // la caverna (regla 15: idea retirada, documentada).
         }
 
         // ------------------------------------------------------------------
