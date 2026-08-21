@@ -556,11 +556,8 @@ namespace Alkahest.Game
                     _radioObjetivo = UiStyles.S(340f);
                     _beat = Beat.Gotera; _tBeat = 0f; _pedidoEncolado = false;
                 },
-                    "Ah. Llegaste.",
-                    "El mundo se apagó hace mucho, aprendiz. Solo quedamos este fuego y yo.",
-                    "Toma: mi frasco viejo. Te lo PRESTO. Me lo devuelves cuando sepas hacerte uno.",
-                    "¿Oyes ese goteo? La bóveda llora sobre la poza. Si nadie la seca, esto se inunda.",
-                    "Primer favor: aspira esa agua y tráeme " + CeldasGotera + " sorbos.");
+                    "Llegaste. Toma mi frasco. Te lo PRESTO — no lo pierdas.",
+                    "Esa gotera está inundando la poza. Tráeme " + CeldasGotera + " sorbos de agua. Ya.");
             }
         }
 
@@ -576,9 +573,11 @@ namespace Alkahest.Game
                 _pedidoEncolado = true;
                 string texto = _beat switch
                 {
-                    Beat.Gotera => "Aspira el agua de la poza (clic izquierdo sostenido) y tráele " + cantidad + " sorbos al Maestro.",
-                    Beat.Vidrio => "Echa arena al fuego encendido (clic derecho dentro del hogar); aspira el vidrio que nazca y tráele " + cantidad + ".",
-                    _ => "Vierte arcilla en el agua (clic derecho): se hace crema. Aspírala y tráele " + cantidad + ".",
+                    // (ronda 65) Órdenes CORTAS: el gesto vive en la banda de
+                    // objetivo; este panel solo dice QUÉ y CUÁNTO.
+                    Beat.Gotera => "Agua de la poza — tráele " + cantidad + ".",
+                    Beat.Vidrio => "Vidrio del hogar encendido — tráele " + cantidad + ".",
+                    _ => "Crema de arcilla y agua — tráele " + cantidad + ".",
                 };
                 _orders.EncolarPedidoGuiado(OrderType.Guiado, cantidad, 0, texto, targetMat: mat);
             }
@@ -616,10 +615,8 @@ namespace Alkahest.Game
                 MaterialId.Water, _orders, 0, false, 5, racionCeldas: 24);
 
             AbrirDialogo(() => VerterDelMaestro(ArcillaPolvo, ArcillaEntregada, SimLevelBuilder.FundacionDropArcillaX),
-                "Bien. Esa gotera no era una fuga: era un grifo sin domar.",
-                "Ya es tuyo — lo monté sobre la poza. Ábrelo con E cuando necesites agua.",
-                "Los fenómenos no se eliminan, aprendiz: se DOMESTICAN.",
-                "Ahora, barro. Te dejo un costal de arcilla junto a la poza — ve y mírala caer.");
+                "La gotera ya es grifo. Sobre la poza. Se abre con E.",
+                "Ahora, barro: junto a la poza cae tu arcilla. Viértela en el agua y tráeme " + CeldasBarro + " de crema.");
             _radioObjetivo = UiStyles.S(480f);
         }
 
@@ -629,10 +626,8 @@ namespace Alkahest.Game
             _flask.Guardar(Turba, TurbaPrestada, 70);
 
             AbrirDialogo(null,
-                "Crema fina. Con esto, a su tiempo, se cuece tu propio frasco.",
-                "Pero un taller no vive de fuego prestado. Toma: turba de mi morral, ya está en tu frasco.",
-                "¿Ves el cartel del muro izquierdo? Ahí duerme una VETA de turba. Se talla con el cincel (C).",
-                "Carga el hogar vacío — a la derecha de la poza — con " + CeldasFogon + " de turba. El fuego lo pongo yo. Esta única vez.");
+                "Sirve. Toma turba: ya está en tu frasco. Hay más en la VETA del muro — se talla con C.",
+                "Carga el hogar vacío con " + CeldasFogon + " de turba. El fuego lo pongo yo. Una sola vez.");
             _radioObjetivo = UiStyles.S(560f);
         }
 
@@ -642,7 +637,7 @@ namespace Alkahest.Game
             {
                 _pedidoEncolado = true;
                 _orders.EncolarPedidoGuiado(OrderType.Guiado, CeldasFogon, 0,
-                    "Vierte " + CeldasFogon + " de turba dentro del hogar vacío (clic derecho).",
+                    "Turba al hogar vacío — " + CeldasFogon + ".",
                     targetMat: Turba);
             }
 
@@ -660,10 +655,8 @@ namespace Alkahest.Game
                 _fogonEncendido = true;
                 _beat = Beat.Vidrio; _tBeat = 0f; _pedidoEncolado = false;
                 AbrirDialogo(() => VerterDelMaestro(ArenaSilice, ArenaEntregada, SimLevelBuilder.FundacionDropArenaX),
-                    "¡Y ahí está! TU fuego.",
-                    "Míralo comerse la turba... y fíjate en lo que deja: CENIZA. Nada se pierde del todo.",
-                    "Arena y ceniza, JUNTAS en el fuego, hacen VIDRIO. Te dejo la arena junto a tu hogar — ve y mírala caer.",
-                    "Échala dentro, aspira el vidrio que nazca y tráeme " + CeldasVidrio + ".");
+                    "Arde. La turba deja CENIZA — no la tires.",
+                    "Arena y ceniza JUNTAS en el fuego dan VIDRIO. Ahí cae tu arena. Tráeme " + CeldasVidrio + ".");
                 _radioObjetivo = UiStyles.S(650f);
             }
         }
@@ -680,9 +673,8 @@ namespace Alkahest.Game
                 SimLevelBuilder.FundacionEstanteBaseY, visible: true, numRedomas: 3);
 
             AbrirDialogo(null,
-                "Vidrio de botella... del TUYO.",
-                "Esto merece un sitio: te levanté un estante junto a mi mesa.",
-                "Vierte en una redoma lo que quieras guardar.");
+                "Vidrio. Aceptable.",
+                "Ese estante junto a mi mesa es tuyo. Guarda ahí lo que valga.");
         }
 
         /// <summary>Beat 6: un respiro para ver el estante, y el cierre -- que ABRE la economía (F2): el tablón queda vivo y el greybox gana final abierto.</summary>
@@ -695,9 +687,8 @@ namespace Alkahest.Game
                 Trueque.Activar();
                 _radioObjetivo = UiStyles.S(2400f); // amanece.
             },
-                "Fuego tuyo, barro tuyo, vidrio tuyo... y dónde guardarlo. Esto ya es un taller.",
-                "Una cosa más: MI TABLÓN queda abierto, junto a la mesa. Lo que produzcas, lo cambio.",
-                "Lo que pidas... tarda. Como todo lo que llega de lejos.");
+                "Agua, barro, fuego, vidrio. Empiezas a servir.",
+                "Mi TABLÓN queda abierto, junto a la mesa. Lo que produzcas, lo cambio. Lo que pidas, tarda.");
         }
 
         // ------------------------------------------------------------------
@@ -754,7 +745,7 @@ namespace Alkahest.Game
             switch (_beat)
             {
                 case Beat.Mirar:
-                    return _tBeat > 1.2f ? Gesto("WASD / FLECHAS") + " — acércate al Maestro, junto al fuego" : null;
+                    return _tBeat > 1.2f ? Gesto("WASD / FLECHAS") + " — ve con el Maestro, junto al fuego" : null;
                 case Beat.Gotera:
                 {
                     int n = _flask.GetCount(MaterialId.Water);

@@ -3885,3 +3885,35 @@ OPERATIVA: sandbox se REINICIÓ en plena ronda (2ª vez en dos días) y revirti�
    15/15, grifo + costal de arcilla, gotera inmortal a t=45s.
 ARCHIVOS: FundacionDirector.cs (reescrito ~900 líneas), SimLevelBuilder.cs
    (plano fundación), UiStyles.cs (Exito). ca_playtest65.cmd barre la ronda.
+
+## Ronda 65 — EL MAESTRO DA ÓRDENES (feedback pt65: "insufrible, mucho texto")
+
+Cesar tras la mini-prueba del 65: "no quiero history telling, no he definido
+un lore; concéntrate en las ACCIONES y comunícalas breve pero claramente".
+Y la dirección del personaje: el Maestro será alguien GIGANTESCO (quizás
+solo se aprecie su mano) — imponente, concreto, da órdenes, es directo y NO
+respeta mucho al jugador (asistente de una raza pequeña y ultrafiel; el
+respeto se gana jugando). NO construir lore.
+
+LO QUE CAMBIÓ (solo FundacionDirector.cs, textos):
+- Diálogos de 21 páginas TOTALES a 12, todos en voz de ORDEN, cero
+  exposición. Muestras: saludo (5→2): "Llegaste. Toma mi frasco. Te lo
+  PRESTO — no lo pierdas." / "Esa gotera está inundando la poza. Tráeme 15
+  sorbos de agua. Ya." · grifo (4→2): "La gotera ya es grifo. Sobre la
+  poza. Se abre con E." · fogón encendido (4→2): "Arde. La turba deja
+  CENIZA — no la tires." · vidrio (3→2): "Vidrio. Aceptable." · fin (3→2):
+  "Agua, barro, fuego, vidrio. Empiezas a servir."
+- MUEREN las líneas de lore: "el mundo se apagó", "los fenómenos se
+  DOMESTICAN", "nada se pierde del todo", "esto ya es un taller". Si algún
+  día vuelven, será decisión de lore explícita de Cesar, no mía.
+- Panel de ENCARGOS en telegrama (el gesto ya vive en la banda de
+  objetivo): "Agua de la poza — tráele 15." / "Crema de arcilla y agua —
+  tráele 12." / "Turba al hogar vacío — 12." / "Vidrio del hogar encendido
+  — tráele 8."
+- Banner Mirar: "WASD / FLECHAS — ve con el Maestro, junto al fuego".
+VERIFICADO en vivo con capturas: saludo completo en DOS clics, tipografía
+grande, pie "continuar/cerrar · n/m" correcto, chapa oculta de cerca.
+NOTA DE ARTE (para el futuro, NO ahora): la silueta greybox actual es
+placeholder; el diseño final apunta a escala gigante (una MANO en cuadro
+puede bastar). Anotado, sin construir.
+ca_playtest66.cmd barre la ronda.
