@@ -981,6 +981,18 @@ namespace Alkahest.Game
             SpawnOrdersHud(orderSystem);
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
+            // (FIX ronda 62b, cazado por Opus-con-ojos EN PANTALLA: "el HUD no
+            // despierta jamás") Esta rama retornaba sin spawnear DayCycle:
+            // nadie corría ApplyPause y DayCycle.InputLocked se quedaba en su
+            // `true` inicial para siempre -- TODOS los OnGUI del juego
+            // (OrdersHud/FlaskHud/...) empiezan con `if (InputLocked ||
+            // HudSilenciado) return`. Con la instancia viva, la fase entra a
+            // Playing (EnterCuartoIntimoSilencioso ya respeta ModoFundacion:
+            // ni arco clásico ni HUD despierto de fábrica) y el silencio del
+            // encuadre cero sigue siendo SOLO de HudSilenciado, como se
+            // diseñó. supplies/hints = null: la fundación no los usa.
+            SpawnDayCycle(orderSystem, knowledge, null, null);
+
             var director = new GameObject("FundacionDirector").AddComponent<FundacionDirector>();
             director.Init(_sim, orderSystem, flask, knowledge, apprentice.transform);
 

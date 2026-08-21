@@ -3744,3 +3744,40 @@ insuficiente respondiendo con su frase. PENDIENTE F2: el contador real de
 "20 vidrio cambiados" que abre la página de la caliza; réplica multi del
 tablón; calibración de precios (hoy el bootstrap arena->vidrio->arena es
 circular a propósito de greybox, anotado).
+
+## Ronda 62b (autónoma) — EL PASE DE OPUS-CON-OJOS (dirección de arte UI/UX sobre capturas reales)
+
+Con permiso de pantalla de Cesar, un agente OPUS capturó los 4 estados del
+greybox en el editor real y entregó 12 directivas numéricas (acta en el
+resultado del agente; prioridades 3-1-2). Implementado y RE-VERIFICADO con
+capturas:
+- BUG BLOQUEANTE (dir. 3): la rama SpawnFundacion NO spawneaba DayCycle ->
+  nadie corría ApplyPause -> InputLocked se quedaba en su `true` inicial ->
+  NINGÚN HUD del juego se dibujaba jamás en la fundación. Fix: SpawnDayCycle
+  (supplies/hints null). Verificado: FRASCO + ENCARGOS + MENÚ·Esc despiertan
+  con el saludo, y el encuadre cero sigue limpio (solo HudSilenciado).
+- Viñeta (dir. 1/12): parda cálida (#0d0906 exterior, #1a1109 medio), dos
+  paradas 0.42/0.78, ÓVALO (squash y=0.82), foco más pegado a las brasas en
+  el beat 0 (lerp 0.25), rellenos con 2px de solape (sin costuras). En la
+  62a ya había caído el clásico Texture2D.blackTexture-tiene-alfa-cero.
+- GLOW (dir. 11): la luz tiene causa -- halo radial #ff8a2b al 18% sobre las
+  brasas del Maestro (S56) y sobre el fogón propio al encenderse (S64),
+  dibujado bajo la oscuridad.
+- LA BANDA DEL MAESTRO (dir. 4): FundacionDirector.DibujarBandaMaestro
+  estática (la consume también Trueque): banda 46% arriba-centro, filetes
+  solo arriba/abajo #8a6a30, rótulo dorado, cuerpo crema. Reemplaza a
+  SemillaCero.DibujarPanelMaestro EN LA FUNDACIÓN (seed 0 intacta).
+- CHAPAS (dir. 5): ancladas sobre su objeto y atenuadas por la luz local
+  (FundacionDirector.LuzEn(mundo) público, clamp 0.25..1).
+- EL TABLÓN (dir. 2/7/8/9/10): reescrito a layout por Rect -- scrim #0d0906
+  al 55%, panel S420 anclado arriba (top S96, nunca sobre el sujeto),
+  pergamino #100c09 con DOBLE filete dorado, título EL TABLÓN + pestañas
+  TRUEQUE/LIBRO MAYOR con estado activo/inactivo, filas con PEDIR (S64x20)
+  centrado en SU renglón, EN CAMINO degradado a etiqueta con filete, CERRAR
+  (E) chapa abajo-derecha, alto por contenido.
+PENDIENTE del acta de Opus (post-test): paleta del mundo (piedra parda
+#4a3c33, agua #2b4f7a -- toca tablas de Universe, con cuidado regla 17),
+banda del maestro con fade, dodge dinámico del panel respecto al sujeto.
+LECCIÓN OPERATIVA: los permisos de computer-use SIGUEN muriendo solos
+(regla 4) -- re-pedir sin drama; y el "escalón negro" que Opus vio era la
+costura de redondeo del óvalo, no un chunk.

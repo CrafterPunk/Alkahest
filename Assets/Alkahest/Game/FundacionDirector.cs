@@ -126,7 +126,9 @@ namespace Alkahest.Game
         private void OnDestroy()
         {
             HudPermitido = false;
+            if (_instancia == this) _instancia = null;
             if (_vineta != null) Destroy(_vineta);
+            if (_glow != null) Destroy(_glow);
         }
 
         private void Update()
@@ -446,64 +448,166 @@ namespace Alkahest.Game
         }
 
         // ------------------------------------------------------------------
-        // La viñeta + la voz.
+        // La viñeta + la voz + las chapas (RONDA 62b: el pase de dirección de
+        // arte de Opus-con-ojos -- 12 directivas sobre capturas reales, ver
+        // docs/HANDOFF.md ronda 62b. Los hex vienen de esa acta).
         // ------------------------------------------------------------------
+        private static readonly Color VinetaExterior = new Color(0.051f, 0.035f, 0.024f, 1f); // #0d0906: pardo casi negro, nunca #000 (directiva 1).
+        private static readonly Color VinetaMedia = new Color(0.102f, 0.067f, 0.035f, 1f);    // #1a1109.
+        private static readonly Color GlowBrasa = new Color(1f, 0.541f, 0.169f, 0.18f);       // #ff8a2b al 18% (directiva 11: la luz tiene CAUSA).
+        private const float VinetaSquashY = 0.82f; // óvalo, no círculo (directiva 1).
+
+        private Texture2D _glow; // radial cálido reutilizado para brasas y fogón.
+
+        /// <summary>Alfa de "cuánta luz hay" en un punto del mundo (0.25..1) -- las chapas nunca gritan a plena opacidad sobre negro (directiva 5). Lo consume también Game/Trueque.cs.</summary>
+        public static float LuzEn(Vector3 posMundo)
+        {
+            var inst = _instancia;
+            if (inst == null || inst._radio > Screen.width + Screen.height) return 1f;
+            var cam = Camera.main; if (cam == null) return 1f;
+            Vector3 f = cam.WorldToScreenPoint(inst._focoActual);
+            Vector3 p = cam.WorldToScreenPoint(posMundo);
+            float d = Vector2.Distance(new Vector2(p.x, p.y), new Vector2(f.x, f.y));
+            return Mathf.Clamp(1.3f - d / Mathf.Max(1f, inst._radio), 0.25f, 1f);
+        }
+        private static FundacionDirector _instancia;
+        private Vector3 _focoActual;
+        private void Awake() { _instancia = this; }
+
+        /// <summary>
+        /// (directiva 4) LA BANDA DEL MAESTRO: banda angosta arriba-centro, al
+        /// estilo "CONSEJO DEL MAESTRO" de los mockups -- fondo #0f0b08 al 85%,
+        /// filetes SOLO arriba y abajo (#8a6a30), rótulo en versales doradas y
+        /// cuerpo crema centrado. Estática: la usa también Game/Trueque.cs para
+        /// los avisos del tendero. Estilos cacheados (cero allocs por frame).
+        /// </summary>
+        public static void DibujarBandaMaestro(string texto)
+        {
+            UiStyles.Preparar();
+            if (_bandaTitulo == null)
+            {
+                _bandaTitulo = new GUIStyle(UiStyles.Titulo) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(UiStyles.S(9f)) };
+                _bandaTitulo.normal.textColor = new Color(0.722f, 0.529f, 0.235f, 1f); // #b8873c
+                _bandaCuerpo = new GUIStyle(UiStyles.Cuerpo) { alignment = TextAnchor.UpperCenter, wordWrap = true, fontSize = Mathf.RoundToInt(UiStyles.S(11f)) };
+                _bandaCuerpo.normal.textColor = new Color(0.937f, 0.886f, 0.776f, 1f); // #efe2c6
+            }
+            float w = Screen.width * 0.46f;
+            float x = (Screen.width - w) * 0.5f;
+            float altoTexto = _bandaCuerpo.CalcHeight(new GUIContent(texto), w - UiStyles.S(24f));
+            float h = UiStyles.S(18f) + altoTexto + UiStyles.S(8f);
+            var r = new Rect(x, UiStyles.S(18f), w, h);
+
+            var blanco = Texture2D.whiteTexture; var prev = GUI.color;
+            GUI.color = new Color(0.059f, 0.043f, 0.031f, 0.85f); // #0f0b08 al 85%.
+            GUI.DrawTexture(r, blanco);
+            GUI.color = new Color(0.541f, 0.416f, 0.188f, 1f);    // #8a6a30, filetes solo arriba/abajo.
+            GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), blanco);
+            GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), blanco);
+            GUI.color = prev;
+
+            GUI.Label(new Rect(r.x, r.y + UiStyles.S(3f), r.width, UiStyles.S(13f)), "EL MAESTRO", _bandaTitulo);
+            GUI.Label(new Rect(r.x + UiStyles.S(12f), r.y + UiStyles.S(17f), r.width - UiStyles.S(24f), altoTexto), texto, _bandaCuerpo);
+        }
+        private static GUIStyle _bandaTitulo, _bandaCuerpo;
+
         private void OnGUI()
         {
             GUI.depth = 50; // detrás de todos los HUD (depth 0), encima del mundo.
 
             DibujarVineta();
 
-            // La chapa "EL MAESTRO" sobre su mesa: en un greybox sin cuerpo ni
-            // arte, los testers necesitan saber QUIÉN es el bulto junto al
-            // fuego. Sobria (sin flecha, sin letrerote -- lección del pt54);
-            // desaparece cuando el guion termina.
+            // La chapa "EL MAESTRO": centrada SOBRE la mesa, más arriba de la
+            // cabeza de nadie (directiva 5: en el saludo se leía como el nombre
+            // del aprendiz), y atenuada con la luz local.
             if (_beat != Beat.Fin)
             {
                 float celda = SimRenderer.CellWorldSize;
-                var mesa = new Vector3((SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda,
-                    (SimLevelBuilder.FundacionMesaTopY + 1) * celda, 0f);
-                UiStyles.PlacaMundo(mesa, "EL MAESTRO", new Color(0.92f, 0.86f, 0.7f, 0.85f), UiStyles.S(26f));
+                var ancla = new Vector3((SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda,
+                    (SimLevelBuilder.FundacionMesaTopY + 6) * celda, 0f);
+                float alfa = LuzEn(ancla) * 0.85f;
+                UiStyles.PlacaMundo(ancla, "EL MAESTRO", new Color(0.92f, 0.86f, 0.7f, alfa), UiStyles.S(10f));
             }
 
             if (_maestroTexto != null && Time.time < _maestroHasta)
-                SemillaCero.DibujarPanelMaestro(_maestroTexto);
+                DibujarBandaMaestro(_maestroTexto);
         }
 
         private void DibujarVineta()
         {
-            if (_radio > Screen.width + Screen.height) return; // ya amaneció del todo.
-            if (_vineta == null) ConstruirVineta();
-
             var cam = Camera.main;
             if (cam == null) return;
+            if (_vineta == null) ConstruirVineta();
 
-            // Centro: entre el aprendiz y las brasas (sesgado al fuego), para
-            // que el encuadre cero "mire" a la primera reacción.
             float celda = SimRenderer.CellWorldSize;
             var brasas = new Vector3((SimLevelBuilder.FundacionBrasasX0 + 2.5f) * celda,
                 (SimLevelBuilder.FundacionBrasasY + 2) * celda, 0f);
-            Vector3 foco = Vector3.Lerp(brasas, _aprendiz.position, _beat == Beat.Mirar ? 0.35f : 0.65f);
-            Vector3 p = cam.WorldToScreenPoint(foco);
+
+            // (directiva 11) EL GLOW: la luz del óvalo tiene una CAUSA visible.
+            // Se dibuja ANTES de la oscuridad: dentro del óvalo se ve, fuera lo
+            // tapa la noche. El fogón propio gana el suyo al encenderse.
+            DibujarGlow(cam, brasas, UiStyles.S(56f));
+            if (_fogonEncendido)
+                DibujarGlow(cam, new Vector3((SimLevelBuilder.FundacionFogonX0 + 3.5f) * celda,
+                    (SimLevelBuilder.FundacionFogonY + 2) * celda, 0f), UiStyles.S(64f));
+
+            if (_radio > Screen.width + Screen.height) return; // ya amaneció.
+
+            // Centro sesgado al fuego (directiva 1: el encuadre cero MIRA a la
+            // primera reacción; 0.25 = más pegado a las brasas que antes).
+            _focoActual = Vector3.Lerp(brasas, _aprendiz.position, _beat == Beat.Mirar ? 0.25f : 0.65f);
+            Vector3 p = cam.WorldToScreenPoint(_focoActual);
             float cx = p.x, cy = Screen.height - p.y;
 
             float r = _radio;
-            var agujero = new Rect(cx - r, cy - r, r * 2f, r * 2f);
+            float ry = r * VinetaSquashY; // óvalo (directiva 1).
+            var agujero = new Rect(cx - r, cy - ry, r * 2f, ry * 2f);
             GUI.DrawTexture(agujero, _vineta);
 
-            // Los cuatro rectángulos macizos que completan la oscuridad
-            // alrededor del óvalo.
-            var negro = Texture2D.blackTexture;
-            var prev = GUI.color; GUI.color = Color.black;
-            if (agujero.yMin > 0) GUI.DrawTexture(new Rect(0, 0, Screen.width, agujero.yMin), negro);
-            if (agujero.yMax < Screen.height) GUI.DrawTexture(new Rect(0, agujero.yMax, Screen.width, Screen.height - agujero.yMax), negro);
-            if (agujero.xMin > 0) GUI.DrawTexture(new Rect(0, agujero.yMin, agujero.xMin, agujero.height), negro);
-            if (agujero.xMax < Screen.width) GUI.DrawTexture(new Rect(agujero.xMax, agujero.yMin, Screen.width - agujero.xMax, agujero.height), negro);
+            // Los cuatro rectángulos que completan la noche: PARDOS (#0d0906,
+            // directiva 1) y con 2px de solape sobre el óvalo para que ninguna
+            // costura de redondeo delate el greybox (directiva 12; el
+            // blackTexture-alfa-cero ya cayó en la 62a).
+            var blanco = Texture2D.whiteTexture;
+            var prev = GUI.color; GUI.color = VinetaExterior;
+            float ov = 2f;
+            if (agujero.yMin > -ov) GUI.DrawTexture(new Rect(0, 0, Screen.width, agujero.yMin + ov), blanco);
+            if (agujero.yMax < Screen.height + ov) GUI.DrawTexture(new Rect(0, agujero.yMax - ov, Screen.width, Screen.height - agujero.yMax + ov), blanco);
+            if (agujero.xMin > -ov) GUI.DrawTexture(new Rect(0, agujero.yMin, agujero.xMin + ov, agujero.height), blanco);
+            if (agujero.xMax < Screen.width + ov) GUI.DrawTexture(new Rect(agujero.xMax - ov, agujero.yMin, Screen.width - agujero.xMax + ov, agujero.height), blanco);
             GUI.color = prev;
+        }
+
+        private void DibujarGlow(Camera cam, Vector3 mundo, float radioPx)
+        {
+            if (_glow == null) ConstruirGlow();
+            Vector3 p = cam.WorldToScreenPoint(mundo);
+            var prev = GUI.color; GUI.color = GlowBrasa;
+            GUI.DrawTexture(new Rect(p.x - radioPx, Screen.height - p.y - radioPx, radioPx * 2f, radioPx * 2f), _glow);
+            GUI.color = prev;
+        }
+
+        private void ConstruirGlow()
+        {
+            const int N = 64;
+            _glow = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[N * N];
+            float half = N * 0.5f;
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+                    float a = 1f - Mathf.SmoothStep(0f, 1f, d); // pleno al centro, nada al borde.
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            _glow.SetPixels32(px);
+            _glow.Apply(false, true);
         }
 
         private void ConstruirVineta()
         {
+            // (directiva 1) Dos paradas CÁLIDAS: transparente hasta 0.42,
+            // pardo medio #1a1109 en la transición, pardo exterior #0d0906
+            // pleno desde 0.78 -- caída corta: la noche abraza, no ahoga.
             const int N = 256;
             _vineta = new Texture2D(N, N, TextureFormat.RGBA32, false);
             _vineta.wrapMode = TextureWrapMode.Clamp;
@@ -514,10 +618,10 @@ namespace Alkahest.Game
                 for (int x = 0; x < N; x++)
                 {
                     float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
-                    // Transparente en el centro, negro pleno del 62% hacia fuera
-                    // (suavizado): el "óvalo de vela" del greybox.
-                    float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 0.98f, d));
-                    px[y * N + x] = new Color32(0, 0, 0, (byte)(a * 255f));
+                    float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.78f, d));
+                    float tCol = Mathf.InverseLerp(0.42f, 1f, d);
+                    Color c = Color.Lerp(VinetaMedia, VinetaExterior, tCol);
+                    px[y * N + x] = new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(a * 255f));
                 }
             }
             _vineta.SetPixels32(px);
