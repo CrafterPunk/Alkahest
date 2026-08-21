@@ -169,41 +169,33 @@ namespace Alkahest.Game
         }
 
         // -----------------------------------------------------------------
-        // El panel (tablón + Libro Mayor) -- RONDA 62b, restilado entero por
-        // las directivas 2 y 7-10 del pase de Opus-con-ojos (docs/HANDOFF.md):
-        // scrim detrás, panel anclado arriba-centro (nunca sobre el sujeto),
-        // "pergamino oscuro" #100c09 con doble filete dorado, título en
-        // versales, pestañas con estado activo/inactivo, filas con botón
-        // PEDIR alineado a su renglón, EN CAMINO degradado a etiqueta y
-        // CERRAR (E) como chapa pequeña abajo-derecha. Layout por Rect
-        // explícito (los botones de GUILayout derivaban del eje de su fila).
+        // El panel (tablón + Libro Mayor) -- RONDA 63b, ELEVADO A LA LÍNEA DEL
+        // BAUTIZO por mandato de Cesar ("que lo tome Opus y lo eleve a la
+        // calidad del menú bautizar... para que se mantenga en la línea
+        // gráfica"): el mismo vocabulario EXACTO de Game/NamingUi.cs --
+        // UiStyles.PanelRito (vitela ahumada + marco de latón con cantoneras),
+        // TituloRito con Espaciar() (capital lapidaria), FileteRombo, muestra
+        // del MATERIAL enmarcada en latón por fila (como la muestra del rito:
+        // el jugador VE lo que pide), Ceremonial para la línea de tienda, y
+        // los botones del skin vestido. Nada de hex propios: paleta
+        // Oro/Laton/Pergamino de UiStyles, una sola fuente de verdad.
         // -----------------------------------------------------------------
-        private static readonly Color PanelFondo = new Color(0.063f, 0.047f, 0.035f, 0.96f); // #100c09
-        private static readonly Color Dorado = new Color(0.722f, 0.529f, 0.235f, 1f);        // #b8873c
-        private static readonly Color DoradoTenue = new Color(0.722f, 0.529f, 0.235f, 0.6f);
-        private static readonly Color Crema = new Color(0.937f, 0.886f, 0.776f, 1f);          // #efe2c6
-        private static readonly Color CremaTitulo = new Color(0.910f, 0.835f, 0.659f, 1f);    // #e8d5a8
-        private static readonly Color Scrim = new Color(0.051f, 0.035f, 0.024f, 0.55f);       // #0d0906 al 55% (directiva 2).
+        private static readonly Color Scrim = new Color(0.051f, 0.035f, 0.024f, 0.55f); // el velo del pase 62b (directiva 2).
 
         private string[] _lineasOferta;
-        private GUIStyle _stTitulo, _stTab, _stTabActiva, _stCuerpo, _stTenue, _stEtiqueta, _stBoton;
+        private GUIStyle _stTab, _stTabActiva, _stCuerpo, _stTenue, _stEtiqueta;
 
         private void ConstruirEstilos()
         {
-            if (_stTitulo != null) return;
-            _stTitulo = new GUIStyle(UiStyles.Titulo) { fontSize = Mathf.RoundToInt(UiStyles.S(13f)), alignment = TextAnchor.MiddleLeft };
-            _stTitulo.normal.textColor = CremaTitulo;
-            _stTab = new GUIStyle(UiStyles.Boton) { fontSize = Mathf.RoundToInt(UiStyles.S(9f)) };
-            _stTab.normal.textColor = new Color(0.549f, 0.502f, 0.443f, 1f); // #8c8071 inactiva.
-            _stTabActiva = new GUIStyle(UiStyles.Boton) { fontSize = Mathf.RoundToInt(UiStyles.S(9f)) };
-            _stTabActiva.normal.textColor = new Color(0.949f, 0.894f, 0.769f, 1f); // #f2e4c4 activa.
+            if (_stTab != null) return;
+            _stTab = new GUIStyle(UiStyles.Boton) { fontSize = Mathf.RoundToInt(UiStyles.S(10f)) };
+            _stTab.normal.textColor = UiStyles.TextoTenue;
+            _stTabActiva = new GUIStyle(UiStyles.Boton) { fontSize = Mathf.RoundToInt(UiStyles.S(10f)) };
+            _stTabActiva.normal.textColor = UiStyles.Oro;
             _stCuerpo = new GUIStyle(UiStyles.Cuerpo) { alignment = TextAnchor.MiddleLeft, wordWrap = false };
-            _stCuerpo.normal.textColor = Crema;
             _stTenue = new GUIStyle(UiStyles.CuerpoTenue) { alignment = TextAnchor.MiddleLeft, wordWrap = true };
-            _stEtiqueta = new GUIStyle(UiStyles.Titulo) { fontSize = Mathf.RoundToInt(UiStyles.S(9f)), alignment = TextAnchor.MiddleLeft };
-            _stEtiqueta.normal.textColor = Dorado;
-            _stBoton = new GUIStyle(UiStyles.Boton) { fontSize = Mathf.RoundToInt(UiStyles.S(10f)) };
-            _stBoton.normal.textColor = CremaTitulo;
+            _stEtiqueta = new GUIStyle(UiStyles.CuerpoTenue) { alignment = TextAnchor.MiddleLeft };
+            _stEtiqueta.normal.textColor = UiStyles.Laton;
         }
 
         private void ConstruirLineas()
@@ -248,104 +240,121 @@ namespace Alkahest.Game
             if (!_panelAbierto) return;
             ConstruirLineas();
 
-            // (directiva 2) EL SCRIM: un velo pardo tras el panel asienta la
-            // lectura y nadie queda partido por un borde.
+            // El velo (directiva 2 del pase 62b): asienta el rito sobre la noche.
             Filete(new Rect(0, 0, Screen.width, Screen.height), Scrim);
 
-            float w = UiStyles.S(420f);
-            float pad = UiStyles.S(14f);
-            float filaAlto = UiStyles.S(22f);
+            float w = UiStyles.S(440f);
+            float pad = UiStyles.S(22f);          // el mismo aire interior del BAUTIZO.
+            float filaAlto = UiStyles.S(26f);     // filas más altas: caben las muestras enmarcadas.
             float x0 = (Screen.width - w) * 0.5f;
-            float y0 = UiStyles.S(96f); // anclado arriba: el sujeto queda debajo, visible.
+            float y0 = UiStyles.S(86f);           // anclado arriba: el sujeto queda debajo, visible.
 
-            // ---- medir el alto por contenido (directiva 9: sin hueco muerto).
-            float alto = pad + UiStyles.S(24f) + UiStyles.S(10f); // cabecera + filete.
+            // ---- medir el alto por contenido.
+            float altoTitulo = UiStyles.TituloRito.lineHeight;
+            float alto = UiStyles.S(18f) + altoTitulo + UiStyles.S(9f) + UiStyles.S(14f); // título + filete rombo.
+            alto += UiStyles.S(24f) + UiStyles.S(10f); // pestañas.
             if (!_pestanaLibro)
             {
-                alto += UiStyles.S(16f) + UiStyles.S(6f);                       // subtítulo.
-                alto += _catalogo.Length * (filaAlto + UiStyles.S(4f));         // ofertas.
-                alto += UiStyles.S(16f) + UiStyles.S(4f);                       // etiqueta EN CAMINO.
-                alto += Mathf.Max(1, _numPendientes) * UiStyles.S(15f);         // pendientes (o el "(nada...)").
+                alto += UiStyles.Alto(UiStyles.Ceremonial, LineaTienda, w - pad * 2f) + UiStyles.S(8f);
+                alto += _catalogo.Length * (filaAlto + UiStyles.S(6f));
+                alto += UiStyles.S(18f) + UiStyles.S(4f);
+                alto += Mathf.Max(1, _numPendientes) * UiStyles.S(16f);
             }
             else
             {
-                alto += 7 * UiStyles.S(16f) + UiStyles.S(18f);
+                alto += 7 * UiStyles.S(17f) + UiStyles.S(20f);
             }
-            alto += UiStyles.S(30f) + pad; // chapa cerrar.
+            alto += UiStyles.S(40f) + pad; // gesto de cierre.
 
             var r0 = new Rect(x0, y0, w, alto);
-            // (directiva 9) Pergamino oscuro con DOBLE filete fino.
-            Filete(new Rect(r0.x - 2f, r0.y - 2f, r0.width + 4f, r0.height + 4f), DoradoTenue);
-            Filete(new Rect(r0.x - 1f, r0.y - 1f, r0.width + 2f, r0.height + 2f), Color.black);
-            Filete(r0, PanelFondo);
+            UiStyles.PanelRito(r0); // vitela ahumada + marco de latón con cantoneras: EL panel del rito.
 
-            float x = r0.x + pad, y = r0.y + pad;
+            float x = r0.x + pad, y = r0.y + UiStyles.S(18f);
             float interior = w - pad * 2f;
 
-            // ---- cabecera: título + pestañas con estado (directiva 7).
-            GUI.Label(new Rect(x, y, interior * 0.45f, UiStyles.S(24f)), "EL TABLÓN", _stTitulo);
-            float tabW = UiStyles.S(96f), tabH = UiStyles.S(20f);
-            var rTab1 = new Rect(x + interior - tabW * 2f - UiStyles.S(6f), y + UiStyles.S(2f), tabW, tabH);
-            var rTab2 = new Rect(x + interior - tabW, y + UiStyles.S(2f), tabW, tabH);
-            Filete(rTab1, _pestanaLibro ? Color.clear : new Color(0.141f, 0.102f, 0.063f, 1f));
-            Filete(rTab2, _pestanaLibro ? new Color(0.141f, 0.102f, 0.063f, 1f) : Color.clear);
-            if (GUI.Button(rTab1, "TRUEQUE", _pestanaLibro ? _stTab : _stTabActiva)) _pestanaLibro = false;
-            if (GUI.Button(rTab2, "LIBRO MAYOR", _pestanaLibro ? _stTabActiva : _stTab)) _pestanaLibro = true;
-            y += UiStyles.S(24f) + UiStyles.S(2f);
-            Filete(new Rect(x, y, interior, 1f), DoradoTenue);
-            y += UiStyles.S(8f);
+            // ---- TÍTULO: capital lapidaria espaciada con su filete, como el BAUTIZO.
+            GUI.Label(new Rect(x, y, interior, altoTitulo), UiStyles.Espaciar("EL TABLÓN"), UiStyles.TituloRito);
+            y += altoTitulo + UiStyles.S(9f);
+            UiStyles.FileteRombo(r0.x + r0.width * 0.5f, y, interior * 0.80f, UiStyles.Laton);
+            y += UiStyles.S(14f);
+
+            // ---- Pestañas del skin vestido, la activa en ORO.
+            float tabW = (interior - UiStyles.S(10f)) * 0.5f, tabH = UiStyles.S(24f);
+            if (GUI.Button(new Rect(x, y, tabW, tabH), "TRUEQUE", _pestanaLibro ? _stTab : _stTabActiva)) _pestanaLibro = false;
+            if (GUI.Button(new Rect(x + tabW + UiStyles.S(10f), y, tabW, tabH), "LIBRO MAYOR", _pestanaLibro ? _stTabActiva : _stTab)) _pestanaLibro = true;
+            Filete(new Rect(_pestanaLibro ? x + tabW + UiStyles.S(10f) : x, y + tabH + 1f, tabW, 2f), UiStyles.Oro);
+            y += tabH + UiStyles.S(10f);
 
             if (!_pestanaLibro)
             {
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "Se paga del frasco. Lo que pides, tarda — llega al buzón de salida.", _stTenue);
-                y += UiStyles.S(16f) + UiStyles.S(6f);
+                // La línea de tienda, CEREMONIAL: el tono del rito, no un tooltip.
+                float altoLinea = UiStyles.Alto(UiStyles.Ceremonial, LineaTienda, interior);
+                GUI.Label(new Rect(x, y, interior, altoLinea), LineaTienda, UiStyles.Ceremonial);
+                y += altoLinea + UiStyles.S(8f);
 
-                // (directiva 8) Filas por Rect: el botón vive centrado en SU renglón.
-                float colTexto = interior - UiStyles.S(64f) - UiStyles.S(20f);
+                // Filas con LA MUESTRA enmarcada en latón (la línea del bautizo:
+                // el jugador VE la materia que pide, no solo su nombre).
+                float lado = UiStyles.S(20f);
+                float colTexto = interior - lado - UiStyles.S(10f) - UiStyles.S(70f) - UiStyles.S(14f);
                 for (int i = 0; i < _catalogo.Length; i++)
                 {
                     var rFila = new Rect(x, y, interior, filaAlto);
-                    GUI.Label(new Rect(rFila.x, rFila.y, colTexto, filaAlto), _lineasOferta[i],
-                        _catalogo[i].PaginaCerrada ? _stTenue : _stCuerpo);
-                    if (!_catalogo[i].PaginaCerrada)
+                    bool cerrada = _catalogo[i].PaginaCerrada;
+
+                    var marco = new Rect(rFila.x, rFila.y + (filaAlto - lado) * 0.5f, lado, lado);
+                    UiStyles.Rellenar(marco, new Color(0f, 0f, 0f, 0.55f));
+                    var dentro = new Rect(marco.x + 2f, marco.y + 2f, marco.width - 4f, marco.height - 4f);
+                    Color cMat = _sim != null && _sim.Universe != null ? (Color)_sim.Universe.Get(_catalogo[i].Mat).baseColor : Color.gray;
+                    if (cerrada) cMat = Color.Lerp(cMat, Color.black, 0.55f);
+                    UiStyles.Rellenar(dentro, cMat);
+                    UiStyles.MarcoLaton(marco, UiStyles.Laton, cerrada ? 0.35f : 0.85f);
+
+                    GUI.Label(new Rect(marco.xMax + UiStyles.S(10f), rFila.y, colTexto, filaAlto), _lineasOferta[i],
+                        cerrada ? _stTenue : _stCuerpo);
+
+                    if (!cerrada)
                     {
-                        var rBtn = new Rect(rFila.xMax - UiStyles.S(64f), rFila.y + (filaAlto - UiStyles.S(20f)) * 0.5f,
-                            UiStyles.S(64f), UiStyles.S(20f));
-                        if (GUI.Button(rBtn, "PEDIR", _stBoton)) Pedir(i);
+                        var rBtn = new Rect(rFila.xMax - UiStyles.S(70f), rFila.y + (filaAlto - UiStyles.S(22f)) * 0.5f,
+                            UiStyles.S(70f), UiStyles.S(22f));
+                        if (GUI.Button(rBtn, "Pedir", UiStyles.Boton)) Pedir(i);
                     }
-                    y += filaAlto + UiStyles.S(4f);
+                    y += filaAlto + UiStyles.S(6f);
                 }
 
-                // (directiva 10) EN CAMINO como etiqueta de sección, no letrerote.
-                Filete(new Rect(x, y + UiStyles.S(2f), interior, 1f), new Color(0.227f, 0.184f, 0.133f, 1f));
+                // EN CAMINO: etiqueta de latón con su hilo.
+                Filete(new Rect(x, y + UiStyles.S(2f), interior, 1f), UiStyles.LatonOscuro);
                 GUI.Label(new Rect(x, y + UiStyles.S(5f), interior, UiStyles.S(14f)), "EN CAMINO", _stEtiqueta);
-                y += UiStyles.S(16f) + UiStyles.S(4f);
+                y += UiStyles.S(18f) + UiStyles.S(4f);
                 if (_numPendientes == 0)
                 {
-                    GUI.Label(new Rect(x, y, interior, UiStyles.S(15f)), "(nada — el buzón de salida espera tu primer pedido)", _stTenue);
-                    y += UiStyles.S(15f);
+                    GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "(nada — el buzón de salida espera tu primer pedido)", _stTenue);
+                    y += UiStyles.S(16f);
                 }
                 for (int i = 0; i < _numPendientes; i++)
                 {
                     var p = _pendientes[i];
                     int seg = Mathf.Max(0, Mathf.CeilToInt(p.ListoEn - Time.time));
-                    GUI.Label(new Rect(x, y, interior, UiStyles.S(15f)), "· " + _catalogo[p.OfertaIdx].Nombre + " — " + seg + "s", _stCuerpo);
-                    y += UiStyles.S(15f);
+                    GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "· " + _catalogo[p.OfertaIdx].Nombre + " — " + seg + "s", _stCuerpo);
+                    y += UiStyles.S(16f);
                 }
             }
             else
             {
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "LO QUE YA ES TUYO", _stEtiqueta); y += UiStyles.S(16f);
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "El grifo (la gotera domada) · tu fogón · el vidrio · el primer estante", _stCuerpo); y += UiStyles.S(16f) + UiStyles.S(6f);
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "EL HORIZONTE", _stEtiqueta); y += UiStyles.S(16f);
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "· La página de la CALIZA — cambia 20 de vidrio en este tablón.", _stCuerpo); y += UiStyles.S(16f);
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "· El matraz grande — se abre con la caliza leída.", _stTenue); y += UiStyles.S(16f) + UiStyles.S(6f);
-                GUI.Label(new Rect(x, y, interior, UiStyles.S(16f)), "...y 32 páginas más que aún no puedes leer.", _stTenue); y += UiStyles.S(16f);
+                float lh = UiStyles.S(17f);
+                GUI.Label(new Rect(x, y, interior, lh), "LO QUE YA ES TUYO", _stEtiqueta); y += lh;
+                GUI.Label(new Rect(x, y, interior, lh), "El grifo (la gotera domada) · tu fogón · el vidrio · el primer estante", _stCuerpo); y += lh + UiStyles.S(8f);
+                GUI.Label(new Rect(x, y, interior, lh), "EL HORIZONTE", _stEtiqueta); y += lh;
+                GUI.Label(new Rect(x, y, interior, lh), "· La página de la CALIZA — cambia 20 de vidrio en este tablón.", _stCuerpo); y += lh;
+                GUI.Label(new Rect(x, y, interior, lh), "· El matraz grande — se abre con la caliza leída.", _stTenue); y += lh + UiStyles.S(8f);
+                GUI.Label(new Rect(x, y, interior, lh), "...y 32 páginas más que aún no puedes leer.", _stTenue); y += lh;
             }
 
-            // (directiva 10) CERRAR (E): chapa pequeña, abajo-derecha.
-            var rCerrar = new Rect(r0.xMax - pad - UiStyles.S(96f), r0.yMax - pad - UiStyles.S(22f), UiStyles.S(96f), UiStyles.S(22f));
-            if (GUI.Button(rCerrar, "CERRAR (E)", _stBoton)) _panelAbierto = false;
+            // ---- EL GESTO DE CIERRE: botón del skin, mismo tamaño que los del rito.
+            var rCerrar = new Rect(r0.x + (r0.width - UiStyles.S(150f)) * 0.5f, r0.yMax - pad - UiStyles.S(30f),
+                UiStyles.S(150f), UiStyles.S(30f));
+            if (GUI.Button(rCerrar, "Cerrar (E)", UiStyles.Boton)) _panelAbierto = false;
         }
+
+        private const string LineaTienda = "Se paga del frasco. Lo que pides, tarda — y llega al buzón de salida.";
     }
 }

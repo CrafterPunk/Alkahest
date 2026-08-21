@@ -125,7 +125,11 @@ namespace Alkahest.Game
         /// </summary>
         private const string TextoSinEncargosSemillaCero = "(nada por ahora)";
 
-        private static string TextoVacio => AlkahestGameBootstrap.ModoSemillaCero ? TextoSinEncargosSemillaCero : TextoSinEncargos;
+        // (ronda 63b) ModoFundacion también usa "(nada por ahora)": el texto
+        // clásico habla de la Tolva sellada Y usa "os" (regla 53) -- solo el
+        // caótico legado lo conserva, hasta su rediseño.
+        private static string TextoVacio => (AlkahestGameBootstrap.ModoSemillaCero || AlkahestGameBootstrap.ModoFundacion)
+            ? TextoSinEncargosSemillaCero : TextoSinEncargos;
 
         private const string TituloColapsado = "ENCARGOS  ·  O expande";
         private const string TituloExpandido = "ENCARGOS  ·  O pliega";

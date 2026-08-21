@@ -483,30 +483,33 @@ namespace Alkahest.Game
         /// </summary>
         public static void DibujarBandaMaestro(string texto)
         {
+            // (RONDA 63b) Elevada a la LÍNEA DEL BAUTIZO (mandato de Cesar):
+            // vitela Pergamino + filetes de Latón + rótulo lapidario con
+            // Espaciar() en Oro -- el mismo metal y el mismo papel que
+            // NamingUi/PanelRito, sin un solo hex propio.
             UiStyles.Preparar();
             if (_bandaTitulo == null)
             {
                 _bandaTitulo = new GUIStyle(UiStyles.Titulo) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(UiStyles.S(9f)) };
-                _bandaTitulo.normal.textColor = new Color(0.722f, 0.529f, 0.235f, 1f); // #b8873c
+                _bandaTitulo.normal.textColor = UiStyles.Oro;
                 _bandaCuerpo = new GUIStyle(UiStyles.Cuerpo) { alignment = TextAnchor.UpperCenter, wordWrap = true, fontSize = Mathf.RoundToInt(UiStyles.S(11f)) };
-                _bandaCuerpo.normal.textColor = new Color(0.937f, 0.886f, 0.776f, 1f); // #efe2c6
             }
             float w = Screen.width * 0.46f;
             float x = (Screen.width - w) * 0.5f;
             float altoTexto = _bandaCuerpo.CalcHeight(new GUIContent(texto), w - UiStyles.S(24f));
-            float h = UiStyles.S(18f) + altoTexto + UiStyles.S(8f);
+            float h = UiStyles.S(19f) + altoTexto + UiStyles.S(9f);
             var r = new Rect(x, UiStyles.S(18f), w, h);
 
             var blanco = Texture2D.whiteTexture; var prev = GUI.color;
-            GUI.color = new Color(0.059f, 0.043f, 0.031f, 0.85f); // #0f0b08 al 85%.
+            GUI.color = new Color(UiStyles.Pergamino.r, UiStyles.Pergamino.g, UiStyles.Pergamino.b, 0.92f);
             GUI.DrawTexture(r, blanco);
-            GUI.color = new Color(0.541f, 0.416f, 0.188f, 1f);    // #8a6a30, filetes solo arriba/abajo.
+            GUI.color = UiStyles.Laton;
             GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), blanco);
             GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), blanco);
             GUI.color = prev;
 
-            GUI.Label(new Rect(r.x, r.y + UiStyles.S(3f), r.width, UiStyles.S(13f)), "EL MAESTRO", _bandaTitulo);
-            GUI.Label(new Rect(r.x + UiStyles.S(12f), r.y + UiStyles.S(17f), r.width - UiStyles.S(24f), altoTexto), texto, _bandaCuerpo);
+            GUI.Label(new Rect(r.x, r.y + UiStyles.S(3f), r.width, UiStyles.S(13f)), UiStyles.Espaciar("EL MAESTRO"), _bandaTitulo);
+            GUI.Label(new Rect(r.x + UiStyles.S(12f), r.y + UiStyles.S(18f), r.width - UiStyles.S(24f), altoTexto), texto, _bandaCuerpo);
         }
         private static GUIStyle _bandaTitulo, _bandaCuerpo;
 

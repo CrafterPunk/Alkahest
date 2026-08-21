@@ -3781,3 +3781,25 @@ banda del maestro con fade, dodge dinámico del panel respecto al sujeto.
 LECCIÓN OPERATIVA: los permisos de computer-use SIGUEN muriendo solos
 (regla 4) -- re-pedir sin drama; y el "escalón negro" que Opus vio era la
 costura de redondeo del óvalo, no un chunk.
+
+## Ronda 63b (autónoma) — EL TABLÓN ELEVADO A LA LÍNEA DEL BAUTIZO
+
+Mandato de Cesar ("el menú de interacción con el mago era horrible... que lo
+tome Opus y lo eleve a la calidad del menú bautizar, para que se mantenga en
+la línea gráfica"). La línea del bautizo YA está codificada como API
+(UiStyles del skin vestido pt31): PanelRito (vitela ahumada + marco de latón
+con cantoneras), TituloRito + Espaciar() (capital lapidaria), FileteRombo,
+MarcoLaton, paleta Oro/Laton/Pergamino, estilo Ceremonial. El tablón de
+Trueque se REESCRIBIÓ entero sobre ese vocabulario (cero hex propios): título
+lapidario con rombo, pestañas del skin con la activa en ORO y subrayado,
+línea de tienda en Ceremonial, FILAS CON LA MUESTRA DEL MATERIAL ENMARCADA EN
+LATÓN (la muestra del rito: ves la materia que pides -- turba parda, arena
+dorada, arcilla), botones Pedir del skin alineados a su renglón, EN CAMINO
+con hilo de latón, Cerrar (E) centrado. La banda del Maestro también:
+Pergamino + filetes Laton + "EL MAESTRO" espaciado en Oro. VERIFICADO CON
+CAPTURAS en el editor real (estado de exhibición por reflexión). De paso:
+OrdersHud.TextoVacio ahora da "(nada por ahora)" también en ModoFundacion
+(el texto clásico hablaba de la Tolva sellada y usaba "os" -- regla 53; el
+caótico legado lo conserva hasta su rediseño). NOTA para el testeo: el panel
+del tablón se AUTOCIERRA al alejarse del nicho (>10 celdas) -- es guarda, no
+bug.
