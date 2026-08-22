@@ -326,7 +326,7 @@ namespace Alkahest.Game
         //    estructural, la obra del taller incluida por ser piedra):
         //    polvos, líquidos, gases y productos se atraviesan igual que
         //    siempre -- puedes zambullirte en el agua o cruzar el humo.
-        //  · Caja de ~2x3 celdas resuelta POR EJE (deslizas por las paredes
+        //  · Caja AABB (medidas: ver MedioAnchoColision) resuelta POR EJE (deslizas por las paredes
         //    en vez de frenar en seco) y en SUBPASOS de 0.06u: a la velocidad
         //    máxima (11.2 u/s) un frame recorre casi 2 celdas y sin subpasos
         //    se tunelaría un piso de 1 celda.
@@ -340,13 +340,26 @@ namespace Alkahest.Game
         // =================================================================
         public static bool ColisionConEstructura = true;
 
-        // (afinado pt67, captura de Cesar: "el personaje entra mucho en la
-        // roca") La caja creció al tamaño VISUAL del imp: ~3 celdas de ancho
-        // por ~4 de alto (el sprite mide ~3.5x5 con alas y antenas; las
-        // puntas blandas pueden rozar, el cuerpo no). Sigue cabiendo por un
-        // túnel de disco del cincel (radio 2 = ~5 celdas de luz).
-        private const float MedioAnchoColision = 0.15f;  // 3 celdas de ancho total.
-        private const float MedioAltoColision = 0.20f;   // 4 celdas de alto total.
+        // (afinado pt68, segunda pasada -- Cesar: "mejoró el colider pero AÚN
+        // es insuficiente, se sobrepone a la pared... incluso podría quedar
+        // un milímetro por detrás; al menos no debería atravesarla"). La
+        // pasada del pt67 subió la caja "al tamaño visual" A OJO (3x4 celdas)
+        // sin medir el sprite -- medido ahora contra GenerateBodyTexture: el
+        // CUERPO dibujado ocupa 44px de ancho (cabeza rx=22) por ~76px de
+        // alto a 99 ppu con pivote centrado = 4.4 x 7.7 CELDAS, más el bob
+        // vertical de ±0.04u. La caja de 3x4 dejaba ~0.7 celdas de cabeza
+        // dentro de la pared por lado y ~1.6 por arriba/abajo: exactamente lo
+        // que Cesar veía. Ahora la caja cubre el cuerpo macizo (4.2 x 6.0
+        // celdas); solo pueden rozar las PUNTAS blandas (cuernos ~1.2 celdas,
+        // la barbilla del cuerpo bajo ~0.8 con el bob) -- doctrina del pt67,
+        // pero ahora sobre medidas leídas, no prosa (regla 39).
+        // COSTE ASUMIDO (reportado a Cesar): un túnel HORIZONTAL de una sola
+        // pasada del cincel (disco radio 2 = 5 celdas de luz) ya no da la
+        // talla en vertical (6.0): hay que ensancharlo con una segunda
+        // pasada. Los pozos VERTICALES de una pasada sí siguen dando (4.2 <
+        // 5). Cesar eligió explícitamente este lado del trato.
+        private const float MedioAnchoColision = 0.21f;  // 4.2 celdas de ancho total (cuerpo: 4.4).
+        private const float MedioAltoColision = 0.30f;   // 6.0 celdas de alto total (cuerpo: 7.7 con puntas; el macizo ~6).
         private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
 
         private AlkahestSim _simColision;
@@ -392,26 +405,32 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>true si la caja del imp centrada en (cx,cy) pisa algún sólido estructural. Muestrea las 4 esquinas + los 4 puntos medios de cada lado (con la caja de 3x4 celdas, sin los medios de arriba/abajo un diente de 1 celda se colaría por el centro).</summary>
+        /// <summary>
+        /// true si la caja del imp centrada en (cx,cy) pisa algún sólido
+        /// estructural. (pt68, segunda pasada) Ya NO muestrea puntos sueltos:
+        /// recorre TODAS las celdas de la grid que la AABB toca (con la caja
+        /// a 4.2x6.0 celdas, el muestreo de 8 puntos del pt67 dejaba huecos
+        /// de hasta 3 celdas por arista -- un diente de 1-2 celdas se colaba
+        /// entre dos muestras y el imp lo "tragaba" sin chocar). Son ~5x7=35
+        /// lecturas por consulta, bucle plano sin allocs: nada para un solo
+        /// personaje, y es EXACTO por construcción, no por densidad.
+        /// </summary>
         private bool CajaChoca(float cx, float cy)
         {
-            return PuntoChoca(cx - MedioAnchoColision, cy - MedioAltoColision)
-                || PuntoChoca(cx + MedioAnchoColision, cy - MedioAltoColision)
-                || PuntoChoca(cx - MedioAnchoColision, cy + MedioAltoColision)
-                || PuntoChoca(cx + MedioAnchoColision, cy + MedioAltoColision)
-                || PuntoChoca(cx - MedioAnchoColision, cy)
-                || PuntoChoca(cx + MedioAnchoColision, cy)
-                || PuntoChoca(cx, cy + MedioAltoColision)
-                || PuntoChoca(cx, cy - MedioAltoColision);
-        }
-
-        private bool PuntoChoca(float wx, float wy)
-        {
-            int x = Mathf.FloorToInt(wx / SimRenderer.CellWorldSize);
-            int y = Mathf.FloorToInt(wy / SimRenderer.CellWorldSize);
-            if (!CellGrid.InBounds(x, y)) return false;
-            int m = _simColision.SampleMaterial(x, y);
-            return m == MaterialId.Stone || m == MaterialId.PisoEstructural;
+            int x0 = Mathf.FloorToInt((cx - MedioAnchoColision) / SimRenderer.CellWorldSize);
+            int x1 = Mathf.FloorToInt((cx + MedioAnchoColision) / SimRenderer.CellWorldSize);
+            int y0 = Mathf.FloorToInt((cy - MedioAltoColision) / SimRenderer.CellWorldSize);
+            int y1 = Mathf.FloorToInt((cy + MedioAltoColision) / SimRenderer.CellWorldSize);
+            for (int y = y0; y <= y1; y++)
+            {
+                for (int x = x0; x <= x1; x++)
+                {
+                    if (!CellGrid.InBounds(x, y)) continue;
+                    int m = _simColision.SampleMaterial(x, y);
+                    if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>

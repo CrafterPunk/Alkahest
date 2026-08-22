@@ -1882,6 +1882,33 @@ namespace Alkahest.Game
                 MaquinariaSprites.MarcoBandeja(spanCuerpo, altoCuerpo), 22, anchoCuerpo, altoCuerpoW);
             _destelloCamara.color = new Color(1f, 1f, 0.9f, 0f);
 
+            // ---- (RONDA 69) EL SÁNDWICH DEL RECIPIENTE en la cámara:
+            // MachineBack -> Sim -> MachineFront (mandato 2.5D de la ronda
+            // 66, diferido; ver el bloque homónimo en MaquinariaSprites.cs).
+            // El FONDO (orden Capas.MaquinaFondoInterior, DETRÁS de la sim)
+            // se ve por las celdas vacías de la cámara: el hueco deja de
+            // enseñar la pared del cuarto y pasa a ser "el interior del
+            // horno". El REBORDE (orden Capas.MaquinaFrente, DELANTE de la
+            // sim) solapa las 2 filas bajas de la carga: la materia queda
+            // visualmente DENTRO, sin taparla (las reacciones siguen siendo
+            // protagonistas). Ambos son hijos de cuerpoGo/transform: se
+            // mudan con la estación sin código extra (Reposicionar mueve el
+            // transform raíz, regla 36).
+            var fondoCamGo = new GameObject("FondoCamara");
+            fondoCamGo.transform.SetParent(cuerpoGo.transform, false);
+            fondoCamGo.transform.position = new Vector3((_camX0 + CamaraAncho * 0.5f) * c, (_camY0 + CamaraAlto * 0.5f) * c, 0f);
+            MaquinariaSprites.CrearCapa(fondoCamGo.transform, "Sprite",
+                MaquinariaSprites.FondoInterior(CamaraAncho, CamaraAlto),
+                Capas.MaquinaFondoInterior, CamaraAncho * c, CamaraAlto * c);
+
+            const int RebordeFilas = 2;
+            var rebordeCamGo = new GameObject("RebordeCamara");
+            rebordeCamGo.transform.SetParent(cuerpoGo.transform, false);
+            rebordeCamGo.transform.position = new Vector3((_camX0 + CamaraAncho * 0.5f) * c, (_camY0 + RebordeFilas * 0.5f) * c, 0f);
+            MaquinariaSprites.CrearCapa(rebordeCamGo.transform, "Sprite",
+                MaquinariaSprites.RebordeRecipiente(CamaraAncho, RebordeFilas),
+                Capas.MaquinaFrente, CamaraAncho * c, RebordeFilas * c);
+
             // ---- EL FUEGO, DEBAJO DEL PUCHERO. Es la imagen que todo el
             // mundo entiende sin que nadie se la explique, y es lo que hace
             // que "fuego bajo" en el rótulo sea una descripción y no una
@@ -1955,6 +1982,24 @@ namespace Alkahest.Game
             _destelloCesto = MaquinariaSprites.CrearCapa(cestoGo.transform, "AcuseCesto",
                 MaquinariaSprites.MarcoBandeja(spanCesto, altoCesto), 22, anchoCestoW, altoCestoW);
             _destelloCesto.color = new Color(1f, 0.85f, 0.6f, 0f);
+
+            // ---- (RONDA 69) El mismo sándwich en el CESTO del brasero --
+            // mismo criterio y mismas capas que la cámara (ver arriba): el
+            // combustible se ve dentro de un cesto con fondo, no flotando
+            // sobre la pared del cuarto.
+            var fondoCestoGo = new GameObject("FondoCesto");
+            fondoCestoGo.transform.SetParent(cestoGo.transform, false);
+            fondoCestoGo.transform.position = new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_braY0 + BraseroAlto * 0.5f) * c, 0f);
+            MaquinariaSprites.CrearCapa(fondoCestoGo.transform, "Sprite",
+                MaquinariaSprites.FondoInterior(BraseroAncho, BraseroAlto),
+                Capas.MaquinaFondoInterior, BraseroAncho * c, BraseroAlto * c);
+
+            var rebordeCestoGo = new GameObject("RebordeCesto");
+            rebordeCestoGo.transform.SetParent(cestoGo.transform, false);
+            rebordeCestoGo.transform.position = new Vector3((_braX0 + BraseroAncho * 0.5f) * c, (_braY0 + 1f) * c, 0f);
+            MaquinariaSprites.CrearCapa(rebordeCestoGo.transform, "Sprite",
+                MaquinariaSprites.RebordeRecipiente(BraseroAncho, 2),
+                Capas.MaquinaFrente, BraseroAncho * c, 2f * c);
 
             var cestoHogarGo = new GameObject("CrisolBraseroHogar");
             cestoHogarGo.transform.SetParent(transform, false);

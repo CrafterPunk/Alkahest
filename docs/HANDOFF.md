@@ -4030,3 +4030,76 @@ SIGUE DIFERIDO (necesita pase propio con ojos de Opus, máquina por
    máquina): vidrio frontal MachineBack->Sim->MachineFront (Capas.
    MaquinaFrente=35 reservado); sprites decorativos de Niveles 0-2.
 Snapshot local 6ee1c39. ca_playtest68.cmd barre la ronda.
+
+## Ronda 69 — LOS DOS FANTASMAS DEL PT68 + EL SÁNDWICH DEL RECIPIENTE (piloto Crisol)
+
+Feedback pt68 de Cesar: "se siente mucho mejor, suficientemente bueno por
+ahora" (bordes verticales quedan para el futuro), y DOS detalles: (1) en
+modo caos, "es obra del taller — no cede al cincel" sobre una pared que
+debería poder borrarse (captura de un bloque rocoso normal); (2) el colider
+mejoró pero AÚN insuficiente — "se sobrepone a la pared... podría quedar un
+milímetro por detrás, al menos no debería atravesarla". Y el mandato:
+"visto estos dos detalles, vamos con lo siguiente, lets go".
+
+1. EL "ES OBRA DEL TALLER" FANTASMA — tres culpables, todos de la misma
+   familia (piedra de aspecto normal protegida en silencio):
+   a) ReservarSitioMufla registraba en ObraDelTaller un rect de ~39x15
+      celdas de suelo/roca SIN NADA visible encima (la mufla "en el génesis
+      es solo piedra normal", ronda 56) — y corría en TODOS los modos,
+      cuando obra_mufla solo existe en el arco de Semilla Cero: en caótico
+      esa roca quedaba anticincel PARA SIEMPRE. Es casi seguro el bloque de
+      la captura (x41..79, la franja izquierda del cuarto).
+   b) TallarTerraza registraba su montículo (Stone de perfil irregular,
+      indistinguible de roca madre en pantalla).
+   c) TallarPilastra ídem (se lee como "pared" colgando del techo).
+   FIX: lista nueva SimLevelBuilder.ReservasDelPlano — la ven
+   ColumnaOcupada/RectOcupado (el urbanismo del génesis: nada se talla
+   encima del sitio de la mufla) pero NUNCA EsObraDelTaller (el cincel).
+   La protección real de la mufla la registra Crisol.TallarEnPlano cuando
+   la obra se construye DE VERDAD (y de paso muere el rect duplicado que
+   dejaba el diseño viejo). Terrazas y pilastras ya NO se registran (regla
+   15 documenta el porqué en cada método; verificado que ningún pase
+   posterior dependía de esos rects — el escaneo de huecos es monótono).
+   CRITERIO NUEVO: la protección anticincel es para MAMPOSTERÍA DE MÁQUINA
+   visible; la piedra decorativa cede al cincel como cualquier roca.
+   VERIFICADO en runtime (caos): 25 rects de obra, todos de estación/
+   balda/fuente; RESERVAS=1 (la mufla); EsObra(55,141)=False.
+2. COLISIÓN, SEGUNDA PASADA — la del pt67 subió la caja "al tamaño visual"
+   A OJO sin medir el sprite. Medido contra GenerateBodyTexture: el cuerpo
+   dibujado son 44x~76 px a 99ppu = 4.4x7.7 CELDAS (+bob ±0.04u); la caja
+   3x4 dejaba ~0.7 celdas de cabeza dentro de pared por lado y ~1.6 arriba/
+   abajo. Ahora: half 0.21x0.30 (4.2x6.0 celdas, cubre el macizo; solo
+   rozan las puntas blandas: cuernos y barbilla) y CajaChoca es AABB EXACTA
+   contra la grid (recorre las ~5x7 celdas tocadas; el muestreo de 8 puntos
+   dejaba huecos de 3 celdas por arista y un diente de 1-2 se colaba).
+   VERIFICADO en runtime: frontera exacta en 0.21 contra el muro (lejos
+   3.23=False / cerca 3.19=True). COSTE ASUMIDO reportado a Cesar: un túnel
+   HORIZONTAL de UNA pasada del cincel (5 celdas de luz) ya no da la talla
+   (6.0) — hay que ensancharlo con otra pasada; los pozos verticales sí
+   caben (4.2<5). Cesar eligió explícitamente este lado del trato.
+3. "LO SIGUIENTE" — EL SÁNDWICH DEL RECIPIENTE, piloto en el CRISOL
+   (MachineBack->Sim->MachineFront, diferido de la 66):
+   · Capas.MaquinaFondoInterior = -8 (entre backdrop -10 y sim -5).
+   · MaquinariaSprites.FondoInterior: panel opaco del interior (refractario
+     oscuro 0x17/13/11, oclusión perimetral, luz tenue hacia la boca,
+     hiladas insinuadas) — se ve por las celdas VACÍAS de la cámara: el
+     hueco deja de enseñar el ladrillo del cuarto.
+   · MaquinariaSprites.RebordeRecipiente: la pared CERCANA (orden
+     Capas.MaquinaFrente=35), banda de 2 filas con canto iluminado y
+     remaches que SOLAPA la base de la carga — la materia queda DENTRO sin
+     taparla (las reacciones siguen protagonistas).
+   · Montado en cámara Y cesto del brasero del Crisol (hijos del transform:
+     se mudan solos con Reposicionar, regla 36).
+   VERIFICADO JUGANDO con capturas (regla 52): cavidad oscura, arena
+   pintada dentro, reborde comiéndole ~2 filas — captura_r69_carga2.png
+   (las capturas quedaron en la raíz del proyecto, borrables).
+   PENDIENTE (si el piloto convence a Cesar): extender a Prensa/Columna/
+   Ensayo/Alambique/Pila máquina por máquina, cada una con su pase visual;
+   sprites decorativos de Niveles 0-2.
+TRUCO OPERATIVO NUEVO: captura SIN permisos de escritorio — RunCommand
+   renderiza Camera.main a RenderTexture y escribe PNG en la raíz del
+   proyecto; device_stage_files lo trae. OJO: el Play desde MCP puede
+   quedar EN PAUSA (EditorApplication.isPaused=true → la textura de la sim
+   no refresca y las capturas salen clavadas): comprobar isPaused y
+   despausar antes de diagnosticar "no se pintó nada".
+ca_playtest69.cmd barre la ronda.

@@ -2198,6 +2198,41 @@ namespace Alkahest.Sim
 
         public static readonly System.Collections.Generic.List<RectObra> ObraDelTaller = new System.Collections.Generic.List<RectObra>(16);
 
+        // =================================================================
+        // (RONDA 69, el "es obra del taller" FANTASMA -- Cesar, en modo caos:
+        // "al querer borrar una pared que debería poder borrar sin problemas
+        // me salió el mensaje 'es obra del taller'".) El registro de arriba
+        // había acumulado DOS papeles distintos que solo coincidían por
+        // pereza histórica:
+        //  1. PROTEGER del cincel la mampostería REAL de las máquinas
+        //     (su razón de nacer, pt27).
+        //  2. RESERVAR sitio para que AdornarCuarto no plante terrazas ni
+        //     pilastras encima de algo que existirá DESPUÉS (la Mufla, que
+        //     en el génesis es "solo suelo/piedra normal" -- ronda 56).
+        // El papel 2 metido en la lista del papel 1 producía el fantasma: en
+        // modo caótico la Mufla NO se construye jamás (obra_mufla es un
+        // pedido del arco de Semilla Cero), así que un rect de ~39x15 celdas
+        // de piedra de aspecto 100% normal quedaba protegido para siempre
+        // sin que nada en pantalla lo explicara. Esta lista aparte separa
+        // los papeles: las RESERVAS las ven ColumnaOcupada/RectOcupado (el
+        // urbanismo del génesis) pero NUNCA EsObraDelTaller (el cincel).
+        // Cuando la obra real se construye (ConstruirMufla ->
+        // Crisol.TallarEnPlano), ESE tallado registra su rect en
+        // ObraDelTaller como cualquier estación, y la protección aparece
+        // junto con la piedra visible -- nunca antes. Bonus: desaparece el
+        // rect DUPLICADO que dejaba el diseño viejo (reserva + registro de
+        // TallarEnPlano sobre las mismas coordenadas, con el segundo
+        // quedándose zombie si la mufla se mudaba).
+        // =================================================================
+        /// <summary>Reservas de sitio del plano (hoy: solo la Mufla). Solo urbanismo del génesis -- el cincel NO las consulta.</summary>
+        public static readonly System.Collections.Generic.List<RectObra> ReservasDelPlano = new System.Collections.Generic.List<RectObra>(4);
+
+        /// <summary>Reserva un rect para el urbanismo del génesis (AdornarCuarto no tallará terraza/pilastra encima) SIN protegerlo del cincel -- ver el bloque de la ronda 69 arriba.</summary>
+        public static void ReservarPlano(int x0, int y0, int x1, int y1)
+        {
+            ReservasDelPlano.Add(new RectObra { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
+        }
+
         /// <summary>Registra un rect exterior de mampostería protegida (x0..x1, y0..y1 inclusivos). Devuelve el HANDLE (índice en la lista) para poder actualizarlo luego con <see cref="ActualizarObra"/> cuando la estación se mueva -- ver el bloque "OBRA MOVIBLE" de arriba.</summary>
         public static int RegistrarObra(int x0, int y0, int x1, int y1)
         {
@@ -2411,6 +2446,7 @@ namespace Alkahest.Sim
         public static void BuildCuartoIntimo(CellGrid grid)
         {
             ObraDelTaller.Clear(); // (playtest 27) plano nuevo, registro nuevo -- ver el bloque OBRA DEL TALLER.
+            ReservasDelPlano.Clear(); // (ronda 69) misma vida que el registro de al lado.
             FillWorldStone(grid);
             ExcavateCuarto(grid);
             // (playtest 33) EL TECHO DEJA DE SER PLANO. Va aquí, pegado a la
@@ -2901,6 +2937,7 @@ namespace Alkahest.Sim
         public static void BuildFundacion(CellGrid grid)
         {
             ObraDelTaller.Clear();
+            ReservasDelPlano.Clear(); // (ronda 69) misma vida que el registro de al lado.
             FillWorldStone(grid);
 
             // La caverna.
@@ -3521,7 +3558,15 @@ namespace Alkahest.Sim
             int outY0 = MuflaBaseY - Crisol.HogarFilas; // mismo -HogarFilas que Crisol.TallarEnPlano pasa a RegistrarObra.
             int outY1 = bocaY1 + 1;
 
-            RegistrarObra(outX0, outY0, outX1, outY1);
+            // (ronda 69) RegistrarObra -> ReservarPlano: la reserva aparta el
+            // sitio del urbanismo del génesis SIN protegerlo del cincel --
+            // era piedra de aspecto normal protegida en silencio, y en modo
+            // caótico (donde obra_mufla no existe) lo era PARA SIEMPRE: el
+            // "es obra del taller" fantasma que Cesar reportó en el pt68.
+            // La protección real la registra Crisol.TallarEnPlano cuando la
+            // mufla se construye de verdad. Ver el bloque de la ronda 69
+            // junto a ReservasDelPlano.
+            ReservarPlano(outX0, outY0, outX1, outY1);
         }
 
         private static void AdornarCuarto(CellGrid grid)
@@ -3640,7 +3685,7 @@ namespace Alkahest.Sim
             }
         }
 
-        /// <summary>¿Pasa alguna huella de estación por la columna `x`? (Bucle plano sobre ~10 rects: se ejecuta 218 veces UNA vez, en la construcción del nivel.)</summary>
+        /// <summary>¿Pasa alguna huella de estación (o reserva del plano, ronda 69) por la columna `x`? (Bucle plano sobre ~10 rects: se ejecuta 218 veces UNA vez, en la construcción del nivel.)</summary>
         private static bool ColumnaOcupada(int x)
         {
             for (int i = 0; i < ObraDelTaller.Count; i++)
@@ -3648,15 +3693,25 @@ namespace Alkahest.Sim
                 var r = ObraDelTaller[i];
                 if (x >= r.X0 - 1 && x <= r.X1 + 1) return true;
             }
+            for (int i = 0; i < ReservasDelPlano.Count; i++)
+            {
+                var r = ReservasDelPlano[i];
+                if (x >= r.X0 - 1 && x <= r.X1 + 1) return true;
+            }
             return false;
         }
 
-        /// <summary>¿Solapa el rect dado con alguna obra ya registrada? Para las pilastras, que viven ARRIBA: la comprobación por columna sola las prohibiría en sitios donde a 14 celdas del techo no hay absolutamente nada.</summary>
+        /// <summary>¿Solapa el rect dado con alguna obra ya registrada (o reserva del plano, ronda 69)? Para las pilastras, que viven ARRIBA: la comprobación por columna sola las prohibiría en sitios donde a 14 celdas del techo no hay absolutamente nada.</summary>
         private static bool RectOcupado(int x0, int y0, int x1, int y1)
         {
             for (int i = 0; i < ObraDelTaller.Count; i++)
             {
                 var r = ObraDelTaller[i];
+                if (x1 >= r.X0 && x0 <= r.X1 && y1 >= r.Y0 && y0 <= r.Y1) return true;
+            }
+            for (int i = 0; i < ReservasDelPlano.Count; i++)
+            {
+                var r = ReservasDelPlano[i];
                 if (x1 >= r.X0 && x0 <= r.X1 && y1 >= r.Y0 && y0 <= r.Y1) return true;
             }
             return false;
@@ -3748,7 +3803,17 @@ namespace Alkahest.Sim
                 }
             }
 
-            RegistrarObra(x0, sueloY + 1, x1, sueloY + alto); // es obra del taller: el cincel no se la lleva por error (playtest 27).
+            // (ronda 69) YA NO SE REGISTRA como obra del taller (regla 15:
+            // documentar lo retirado). El registro del pt27 protegía de un
+            // borrado "por error" -- pero una terraza es un montículo de
+            // Stone de perfil irregular, indistinguible de roca madre en
+            // pantalla, y en modo caos Cesar topó con el aviso "es obra del
+            // taller" sobre lo que para él era una pared normal (pt68). La
+            // arquitectura DECORATIVA es tallable como cualquier roca: la
+            // protección se queda solo para la mampostería de las MÁQUINAS.
+            // Ningún pase posterior dependía de este rect: las pilastras
+            // (RectOcupado) viven en el techo, y las baldas se tallan en
+            // coordenadas fijas sin consultar el registro.
         }
 
         /// <summary>
@@ -3786,7 +3851,14 @@ namespace Alkahest.Sim
                 if (CellGrid.InBounds(px, yBot + 1)) grid.SetCell(px, yBot + 1, MaterialId.Stone);
             }
 
-            RegistrarObra(x0 - 1, yBot, x1 + 1, yTop);
+            // (ronda 69) YA NO SE REGISTRA como obra del taller -- mismo
+            // criterio y misma fecha que TallarTerraza (ver el comentario de
+            // cierre de ese método): la pilastra es piedra decorativa, se
+            // lee como "pared" y debe ceder al cincel. La comprobación
+            // RectOcupado que evita plantar una pilastra sobre una estación
+            // sigue funcionando igual (consulta obra + reservas, no
+            // necesitaba el rect de las pilastras ya talladas: cada columna
+            // de PilastraColumnas es distinta por construcción).
         }
 
         /// <summary>

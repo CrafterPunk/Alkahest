@@ -43,6 +43,16 @@ namespace Alkahest.Game
         // Nivel 2
         public const int AlmacenajeAtras = -16;
         // Nivel 3 (los valores históricos, nombrados)
+        /// <summary>
+        /// (RONDA 69, el sándwich MachineBack -> Sim -> MachineFront) El
+        /// FONDO INTERIOR de un recipiente: el panel que se ve POR DETRÁS de
+        /// la materia, a través de las celdas vacías de la cámara. Tiene que
+        /// vivir entre el backdrop (-10) y la simulación (-5): más atrás
+        /// taparía la pared del cuarto sin ganar nada, más adelante taparía
+        /// la propia carga. Es la mitad trasera del sándwich; la delantera
+        /// es <see cref="MaquinaFrente"/>.
+        /// </summary>
+        public const int MaquinaFondoInterior = -8;
         public const int Simulacion = -5;          // SimRenderer.BuildQuad.
         public const int FxOverlay = -4;           // ParticulasFx / capas de criatura.
         public const int MaquinaAtras = 14;        // detrás del cuerpo de máquina (18).

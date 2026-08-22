@@ -1616,6 +1616,90 @@ namespace Alkahest.Game
         /// enmarca la materia que hay dentro en vez de taparla). Proporción
         /// correcta por construcción: recibe span Y alto.
         /// </summary>
+        // =================================================================
+        // (RONDA 69) EL SÁNDWICH DEL RECIPIENTE: MachineBack -> Sim ->
+        // MachineFront (mandato 2.5D de la ronda 66, diferido hasta ahora).
+        // Dos piezas por recipiente:
+        //  · FondoInterior -- panel OPACO del interior, en
+        //    Capas.MaquinaFondoInterior (-8): se ve a través de las celdas
+        //    VACÍAS de la cámara (la sim pinta el vacío transparente), y
+        //    convierte "un agujero por el que se ve la pared del cuarto" en
+        //    "el interior del aparato". La materia de la sim (-5) lo tapa
+        //    donde hay carga: exactamente el orden correcto sin hacer nada.
+        //  · RebordeRecipiente -- la pared CERCANA del recipiente, en
+        //    Capas.MaquinaFrente (35): una banda baja que solapa las
+        //    primeras filas de la carga, como cuando miras una olla desde
+        //    un poco arriba y tu propio borde te come la base del contenido.
+        //    BAJA a propósito (2 filas de 9): las reacciones siguen siendo
+        //    protagonistas (mandato de la ronda 66) -- el reborde CONTIENE,
+        //    no tapa.
+        // =================================================================
+        /// <summary>Panel opaco del interior de un recipiente (va DETRÁS de la sim, orden <c>Capas.MaquinaFondoInterior</c>). Refractario oscuro con oclusión en bordes y suelo, luz tenue entrando por la boca, e hiladas horizontales apenas insinuadas.</summary>
+        public static Sprite FondoInterior(int spanCeldas, int altoCeldas)
+        {
+            string clave = "fondoint" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            // Más oscuro que HierroBajo: es una CAVIDAD, no una superficie.
+            var fondo = new Color32(0x17, 0x13, 0x11, 255);
+            var fondoLuz = new Color32(0x24, 0x1E, 0x19, 255);   // donde la luz de la boca alcanza.
+            var fondoOcl = new Color32(0x0D, 0x0B, 0x0A, 255);   // esquinas y suelo (oclusión).
+            int margen = Mathf.Max(Escala, Mathf.Min(w, h) / 8); // franja de oclusión perimetral.
+
+            for (int y = 0; y < h; y++)
+            {
+                float t = y / (float)Mathf.Max(1, h - 1); // 0 suelo, 1 boca.
+                for (int x = 0; x < w; x++)
+                {
+                    bool ocl = x < margen || x >= w - margen || y < margen;
+                    Color32 c = ocl ? fondoOcl : (t > 0.55f ? fondoLuz : fondo);
+                    // Hiladas del refractario: una línea tenue cada ~4 celdas,
+                    // solo en la zona no ocluida (que se INSINÚE, no que dibuje).
+                    if (!ocl && (y % S(8)) < Mathf.Max(1, Escala / 2)) c = fondoLuz;
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "ChaosAlchemyFondoInterior");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>La pared CERCANA de un recipiente (va DELANTE de la sim, orden <c>Capas.MaquinaFrente</c>): banda maciza de hierro con canto superior iluminado -- el borde sobre el que "miras dentro". Solapa las primeras filas de la carga.</summary>
+        public static Sprite RebordeRecipiente(int spanCeldas, int altoCeldas)
+        {
+            string clave = "reborde" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color32 c;
+                    if (y >= h - Escala) c = HierroAlto;          // el canto que recibe la luz: la línea que dice "borde".
+                    else if (y >= h - S(2)) c = Hierro;
+                    else c = HierroBajo;                           // la panza del borde, en sombra hacia abajo.
+                    px[y * w + x] = c;
+                }
+            }
+
+            // Remaches espaciados sobre el canto -- el mismo vocabulario de
+            // los zunchos de la panza, para que el reborde se lea como parte
+            // del MISMO aparato y no como una franja pegada.
+            for (int x = S(2); x < w - S(2); x += S(6))
+                MarcarRemache(px, w, h, x, h - S(1), HierroAlto);
+
+            s = Crear(px, w, h, "ChaosAlchemyRebordeRecipiente");
+            _cache[clave] = s;
+            return s;
+        }
+
         public static Sprite MarcoBandeja(int spanCeldas, int altoCeldas)
         {
             string clave = "bandeja" + spanCeldas + "x" + altoCeldas;
