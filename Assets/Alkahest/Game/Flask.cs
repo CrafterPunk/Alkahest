@@ -65,6 +65,29 @@ namespace Alkahest.Game
         /// <summary>Mismo canal de feedback, para que otros aparatos (la estantería de redomas) avisen junto al cursor y no en su propia esquina.</summary>
         public void Avisar(string msg) => SetFeedback(msg);
 
+        // -----------------------------------------------------------------
+        // (RONDA 69d, pedido directo de Cesar) LOS AVISOS DE VACÍO/LLENO SE
+        // CANSAN: "es cansadísimo que aparece cuando quieres tirar más
+        // material y ya está vacío". Cada aviso vive por EPISODIOS (mantener
+        // el botón refresca el mismo episodio ~2.5s, no gasta cupo) y tras
+        // AvisosMax episodios se CALLA para siempre en esta sesión -- el
+        // jugador nuevo lo ve un par de veces al inicio (a prueba de burros,
+        // como pidió en la fundación) y el veterano deja de sufrirlo. Si
+        // Cesar prefiere apagarlo del todo, AvisosMax=0 y listo.
+        // -----------------------------------------------------------------
+        private const int AvisosMax = 2;
+        private int _avisosVacio, _avisosLleno;
+        private float _avisoVacioEpisodioHasta, _avisoLlenoEpisodioHasta;
+
+        private void AvisarLimitado(ref int contador, ref float episodioHasta, string msg)
+        {
+            if (Time.time <= episodioHasta) { SetFeedback(msg); return; } // mismo episodio: refresca sin gastar cupo.
+            if (contador >= AvisosMax) return;
+            contador++;
+            episodioHasta = Time.time + 2.5f;
+            SetFeedback(msg);
+        }
+
         public const int Capacity = 900;
 
         private const float TickDt = 1f / 30f;
@@ -179,6 +202,7 @@ namespace Alkahest.Game
             BuildPourOrder();
             BuildCarryVisual();
             BuildBeamVisual();
+            BuildMotasVisual(); // (ronda 69c) el juice de aspirar/verter -- ver el bloque EL VIAJE DE LA MATERIA.
         }
 
         private void BuildPourOrder()
@@ -341,6 +365,24 @@ namespace Alkahest.Game
             EstaAspirando = wantSuck && _hasCursor;
             ModoIndiscriminado = indiscriminado;
 
+            // (ronda 69d) ANTICIPACIÓN -> ACCIÓN -> RESOLUCIÓN (flancos de
+            // los botones; ver el bloque de constantes AnticipacionSeg):
+            //  · arranque de succión: inhale (el frasco se encoge un instante)
+            //    y las motas esperan la ventana -- la celda YA se aspira.
+            //  · soltar succión: pop de cierre (traga y asienta).
+            //  · arranque de vertido: el tarro se ladea hacia el cursor (la
+            //    inclinación ES la anticipación) y las motas esperan.
+            //  · cortar el chorro: asentamiento suave.
+            bool aspirandoAhora = wantSuck && _hasCursor;
+            bool vertiendoAhora = !wantSuck && wantPour && _hasCursor && _total > 0;
+            if (aspirandoAhora && !_aspirabaPrev) { _motasDesde = Time.time + AnticipacionSeg; _pulsoVel += InhaleImpulso; _ticksSinMover = 0; }
+            if (!aspirandoAhora && _aspirabaPrev) _pulsoVel += SettleAspirar;
+            if (vertiendoAhora && !_vertiaPrev) { _motasDesde = Time.time + AnticipacionSeg; _ticksSinMover = 0; }
+            if (!vertiendoAhora && _vertiaPrev) _pulsoVel += SettleVerter;
+            _aspirabaPrev = aspirandoAhora;
+            _vertiaPrev = vertiendoAhora;
+            _vertiendoVisual = vertiendoAhora;
+
             if (wantDump && _hasCursor)
             {
                 DumpAll(_cursorCell);
@@ -352,8 +394,17 @@ namespace Alkahest.Game
             {
                 if (_hasCursor)
                 {
-                    if (wantSuck) TickSuck(_cursorCell, indiscriminado);
-                    else if (wantPour) TickPour(_cursorCell);
+                    if (wantSuck)
+                    {
+                        TickSuck(_cursorCell, indiscriminado);
+                        // (ronda 69e) contabilidad del flujo para la retracción del haz.
+                        if (_celdasJuiceTick > 0) _ticksSinMover = 0; else _ticksSinMover++;
+                    }
+                    else if (wantPour)
+                    {
+                        TickPour(_cursorCell);
+                        if (_celdasJuiceTick > 0) _ticksSinMover = 0; else _ticksSinMover++;
+                    }
                 }
                 _accumulator -= TickDt;
                 steps++;
@@ -362,6 +413,7 @@ namespace Alkahest.Game
 
             UpdateCarryVisual();
             UpdateWorldVisuals(wantSuck, wantPour);
+            ActualizarJuice(Time.deltaTime); // (ronda 69c) motas + muelle del pop. En los return tempranos lo llama OcultarVisualesDeMundo.
         }
 
         /// <summary>Raycast puro cámara-&gt;plano de mundo (z=0), sin comprobar límites de la grilla: lo usan tanto el aspirado/vertido (que sí necesita la celda) como el haz (que necesita el punto aunque caiga fuera de la grilla, p.ej. cursor en el borde de pantalla).</summary>
@@ -456,6 +508,7 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         private void TickSuck(Vector2Int cursor, bool indiscriminado)
         {
+            _celdasJuiceTick = 0; // (ronda 69e) AL PRINCIPIO, antes de toda guarda: el conteo de "este tick movió algo" alimenta la retracción del haz (ver Update).
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
 
@@ -469,7 +522,7 @@ namespace Alkahest.Game
             }
             if (_total >= Capacity)
             {
-                SetFeedback("frasco lleno — vierte (clic der.) o vacía (Q)");
+                AvisarLimitado(ref _avisosLleno, ref _avisoLlenoEpisodioHasta, "frasco lleno — vierte (clic der.) o vacía (Q)");
                 return;
             }
 
@@ -536,6 +589,11 @@ namespace Alkahest.Game
                         _total++;
                         budget--;
 
+                        // (ronda 69c) 1 mota por cada ~CeldasPorMota celdas comidas,
+                        // nacida en la PROPIA celda que acaba de desaparecer.
+                        _celdasJuiceTick++;
+                        if (_celdasJuiceTick % CeldasPorMota == 1) EmitirMota(x, y, matId, haciaFrasco: true);
+
                         if (_total >= Capacity) return;
                     }
                 }
@@ -547,7 +605,8 @@ namespace Alkahest.Game
         // ---------------------------------------------------------------------------------
         private void TickPour(Vector2Int cursor)
         {
-            if (_total <= 0) { SetFeedback("frasco vacío — ASPIRA algo primero (clic izq.)"); return; }
+            _celdasJuiceTick = 0; // (ronda 69e) al principio, antes de toda guarda -- ver TickSuck.
+            if (_total <= 0) { AvisarLimitado(ref _avisosVacio, ref _avisoVacioEpisodioHasta, "frasco vacío — ASPIRA algo primero (clic izq.)"); return; }
 
             Vector2Int apprenticeCell = _sim.WorldToCell(transform.position);
             float reachCellsSq = ReachCellsSq();
@@ -568,6 +627,11 @@ namespace Alkahest.Game
                 if (_counts[matId] <= 0) continue;
                 PourMaterial(matId, cursor, apprenticeCell, reachCellsSq, PourRadius, ref budget);
             }
+
+            // (ronda 69c) Si este tick soltó materia de verdad, el frasco se
+            // ENCOGE un pelín (impulso negativo del muelle): el gesto de
+            // apretar el bote. Una vez por tick, no por celda.
+            if (budget < PourRatePerTick) _pulsoVel += PulsoImpulsoVertido;
         }
 
         private void PourMaterial(byte matId, Vector2Int cursor, Vector2Int apprenticeCell, float reachCellsSq, int radius, ref int budget)
@@ -599,6 +663,11 @@ namespace Alkahest.Game
                         _counts[matId]--;
                         _total--;
                         budget--;
+
+                        // (ronda 69c) mota de vertido: sale del frasco hacia la
+                        // celda que acaba de nacer -- el chorro se VE viajar.
+                        _celdasJuiceTick++;
+                        if (_celdasJuiceTick % CeldasPorMota == 1) EmitirMota(x, y, matId, haciaFrasco: false);
                     }
                 }
             }
@@ -615,6 +684,12 @@ namespace Alkahest.Game
             float reachCellsSq = ReachCellsSq();
             int cdx0 = cursor.x - apprenticeCell.x, cdy0 = cursor.y - apprenticeCell.y;
             if (cdx0 * cdx0 + cdy0 * cdy0 > reachCellsSq) { SetFeedback("demasiado lejos — acércate"); return; }
+
+            // (ronda 69c) El vaciado de golpe es el gesto más brusco del
+            // frasco: ráfaga de motas (el pool de 24 la acota solo) y una
+            // encogida fuerte del muelle -- se ve y se siente "soltarlo todo".
+            _celdasJuiceTick = 0;
+            _pulsoVel += PulsoImpulsoVertido * 3f;
 
             for (int i = 0; i < _pourOrder.Length; i++)
             {
@@ -661,7 +736,9 @@ namespace Alkahest.Game
             _carryVisual.transform.position = new Vector3(anchor.x, anchor.y, anchor.z - 0.02f);
 
             float frac = Mathf.Clamp01((float)_total / Capacity);
-            _carryVisual.transform.localScale = Vector3.one * Mathf.Lerp(0.12f, 0.28f, frac);
+            // (ronda 69c) El swatch respira con el muelle del juice: pop al
+            // recibir una mota, encogida breve al verter. Ver ActualizarJuice.
+            _carryVisual.transform.localScale = Vector3.one * (Mathf.Lerp(0.12f, 0.28f, frac) * (1f + _pulso));
 
             float r = 0f, g = 0f, b = 0f;
             for (int i = 0; i < _pourOrder.Length; i++)
@@ -760,11 +837,243 @@ namespace Alkahest.Game
             return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n);
         }
 
-        /// <summary>Apaga el haz de golpe. Se llama en los primeros `return` de Update (título/paleta dev/escribiendo texto) para que ningún visual de mundo se quede "pegado" en pantalla mientras el frasco no actúa.</summary>
+        /// <summary>Apaga el haz de golpe. Se llama en los primeros `return` de Update (título/paleta dev/escribiendo texto) para que ningún visual de mundo se quede "pegado" en pantalla mientras el frasco no actúa. (ronda 69c) También avanza el juice: las motas en vuelo TERMINAN su viaje y se apagan aunque un modal congele el frasco -- si no, quedarían clavadas en el aire detrás del diario.</summary>
         private void OcultarVisualesDeMundo()
         {
             if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
             if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+            _vertiendoVisual = false; // (ronda 69d) modal en pantalla: el tarro vuelve a vertical.
+            ActualizarJuice(Time.deltaTime);
+        }
+
+        // ===================================================================
+        // (RONDA 69c) EL VIAJE DE LA MATERIA -- el juice de aspirar/verter.
+        // Pedido de Cesar en el pt69: "es la actividad más recurrente del
+        // juego y tiene que sentirse una delicia". Paquete elegido por él
+        // (opciones 1+2+3 de la propuesta): motas en tránsito + frasco que
+        // respira + sonido que cuenta el llenado (esto último vive en
+        // Audio/DirectorDeAudio.cs, que ya observaba Flask.Total).
+        //
+        // LA IDEA (referencias: el Poltergust de Luigi's Mansion, la pistola
+        // de terreno de Astroneer): hoy la materia se TELETRANSPORTA -- la
+        // celda desaparece de la grilla y un contador sube. Las motas hacen
+        // el viaje visible: al aspirar, cada puñado de celdas comidas suelta
+        // una mota del COLOR del material que vuela en curva hasta la boca
+        // del frasco, acelerando y encogiéndose (easeIn: la succión tira);
+        // al verter, salen del frasco hacia el punto de vertido frenando al
+        // llegar (easeOut: el chorro cae). Cuando una mota LLEGA al frasco,
+        // el swatch da un "pop" (muelle _pulso) -- el frasco RECIBE.
+        //
+        // DISCIPLINA: capa 100% cosmética. Pool FIJO de sprites (cero allocs
+        // por frame, regla de oro), la sim ni se entera (Paint/PaintCell
+        // siguen siendo la única mutación), y el RNG es System.Random local
+        // de presentación (mismo criterio documentado en
+        // DirectorDeAudio._rngVariacion: nunca UnityEngine.Random, pero
+        // tampoco necesita ser determinista entre sesiones -- no toca la
+        // grilla). Si el pool se llena, la emisión se salta en silencio.
+        // ===================================================================
+        private const int MotasMax = 32; // (ronda 69e, "+25% de notoriedad") 24->32: sostiene la cadencia subida sin perder emisiones.
+        private const int MotasOrdenDibujo = 42;      // sobre el haz (40/41), bajo las alas del imp (47+).
+        // (ronda 69d, idea de Cesar: "en los últimos píxeles pasan por
+        // delante del personaje/frente de la herramienta -- solo sorting,
+        // engañar elegantemente al cerebro") El último ~22% del viaje hacia
+        // el frasco (y el primero al salir) se dibuja DELANTE del cuerpo del
+        // imp (50) y del tarro en mano (52), debajo del swatch de contenido
+        // (60): la mota "cruza por delante" y desaparece EN la boca -- una
+        // pizca de profundidad sin física extra.
+        private const int MotasOrdenFrente = 53;
+        private const float MotaTramoFrente = 0.22f;  // fracción del viaje pegada al frasco que se dibuja delante.
+        // (ronda 69d, idea de Cesar: anticipación -> acción -> resolución)
+        // Al EMPEZAR a aspirar o verter, las motas esperan ~100 ms mientras
+        // el frasco hace su gesto de arranque (inhale / inclinación). SOLO
+        // visual: las celdas se aspiran/vierten desde el primer tick, el
+        // control no se retrasa ni un frame ("no metería delays reales que
+        // hagan torpe el control", textual).
+        private const float AnticipacionSeg = 0.10f;
+        private const float InhaleImpulso = -2.1f;    // (69e: -1.6->-2.1) el frasco se ENCOGE al arrancar la succión (toma aire)...
+        private const float SettleAspirar = 1.7f;     // (69e: 1.3->1.7) ...y al SOLTAR el botón, pop de cierre (traga y asienta).
+        private const float SettleVerter = 1.0f;      // (69e: 0.8->1.0) cierre suave al cortar el chorro.
+        private const float InclinacionMaxDeg = 14f;  // el tarro se LADEA hacia donde vierte (llega en ~65 ms: es la anticipación del chorro).
+        private const float InclinacionVelDegSeg = 220f;
+        // (ronda 69e, pedido de Cesar) EL HAZ RESPONDE AL FLUJO: "cuando
+        // termine de aspirar todo de un elemento, la línea guía se debe
+        // encoger hacia el frasco, para no seguir presionándole". Si el
+        // tick de aspirar/verter lleva ~0.1s sin mover NI UNA celda (el
+        // material bloqueado se agotó, el frasco está lleno/vacío, la zona
+        // de vertido no tiene hueco...), el haz se RETRAE hacia el frasco
+        // en ~0.25s -- la herramienta misma dice "ya está, suelta", sin
+        // cartelito. En cuanto vuelve a fluir (o al re-pulsar), crece de
+        // nuevo desde el frasco en ~80ms (lo que además le da al haz un
+        // gesto de despliegue en cada arranque).
+        private const float HazEncogerVelPorSeg = 4.5f;
+        private const float HazCrecerVelPorSeg = 12f;
+        private const int TicksSinMoverParaRetraer = 3; // ~0.1s de "no pasa nada" antes de encoger (evita parpadeo con flujos intermitentes).
+        // (ronda 69e, "+25% de notoriedad" pedido por Cesar tras sentirlo:
+        // "les falta un pelín más de notoriedad") motas más grandes, más
+        // frecuentes, con viaje algo más largo y comba más generosa.
+        private const float MotaDurMin = 0.20f;
+        private const float MotaDurMax = 0.32f;
+        private const float MotaTamano = 0.098f;      // ~1 celda de diámetro visual.
+        private const int CeldasPorMota = 8;          // 1 mota por cada ~8 celdas movidas (30/tick aspirando = ~4 motas/tick).
+        private const float PulsoResorte = 170f;      // muelle del "pop" del frasco.
+        private const float PulsoAmortiguacion = 11f;
+        private const float PulsoImpulsoLlegada = 2.8f;  // (69e: 2.2->2.8) pico ~ +21% de escala por mota recibida.
+        private const float PulsoImpulsoVertido = -1.4f; // (69e: -1.1->-1.4) el frasco se ENCOGE al soltar (una vez por tick con vertido real).
+
+        private SpriteRenderer[] _motaSr;
+        private Vector3[] _motaDesde;
+        private Vector3[] _motaHasta;
+        private Vector2[] _motaComba;   // desvío lateral del punto de control de la curva.
+        private float[] _motaT;
+        private float[] _motaDur;
+        private bool[] _motaViva;
+        private bool[] _motaHaciaFrasco;
+        private int _motaSiguiente;
+        private int _celdasJuiceTick;   // celdas movidas en el tick en curso (espacia la emisión).
+        private float _pulso, _pulsoVel;
+        private float _motasDesde;      // Time.time antes del cual EmitirMota calla (ventana de anticipación).
+        private bool _aspirabaPrev, _vertiaPrev; // flancos de los botones, para inhale/settle.
+        private float _hazExtension;    // 0..1: fracción del haz desplegada desde el frasco (ronda 69e).
+        private int _ticksSinMover;     // ticks consecutivos de aspirar/verter que no movieron ni una celda.
+        private bool _vertiendoVisual;  // ¿hay chorro AHORA? (alimenta la inclinación; false en guardas modales).
+        private float _inclinacion;     // grados actuales del tarro (suavizado hacia ±InclinacionMaxDeg).
+        private readonly System.Random _rngJuice = new System.Random(unchecked(System.Environment.TickCount * 17 + 3));
+
+        private void BuildMotasVisual()
+        {
+            var sprite = CrearSpritePulso(); // el mismo punto suave del haz: brillo difuso, no silueta.
+            var rootGo = new GameObject("FlaskMotas");
+            rootGo.transform.SetParent(transform, false);
+
+            _motaSr = new SpriteRenderer[MotasMax];
+            _motaDesde = new Vector3[MotasMax];
+            _motaHasta = new Vector3[MotasMax];
+            _motaComba = new Vector2[MotasMax];
+            _motaT = new float[MotasMax];
+            _motaDur = new float[MotasMax];
+            _motaViva = new bool[MotasMax];
+            _motaHaciaFrasco = new bool[MotasMax];
+
+            for (int i = 0; i < MotasMax; i++)
+            {
+                var go = new GameObject("Mota" + i);
+                go.transform.SetParent(rootGo.transform, false);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = sprite;
+                sr.sortingOrder = MotasOrdenDibujo;
+                sr.color = new Color(0f, 0f, 0f, 0f);
+                _motaSr[i] = sr;
+            }
+        }
+
+        /// <summary>Emite una mota desde/hacia la celda (cx,cy). El pool es round-robin SOLO sobre huecos libres: si las 24 están volando, esta emisión se pierde sin drama (es cosmética).</summary>
+        private void EmitirMota(int cx, int cy, byte matId, bool haciaFrasco)
+        {
+            if (_motaSr == null) return;
+            if (Time.time < _motasDesde) return; // (ronda 69d) ventana de anticipación: el gesto del frasco va primero, el flujo después.
+            int idx = -1;
+            for (int k = 0; k < MotasMax; k++)
+            {
+                int i = (_motaSiguiente + k) % MotasMax;
+                if (!_motaViva[i]) { idx = i; break; }
+            }
+            if (idx < 0) return;
+            _motaSiguiente = (idx + 1) % MotasMax;
+
+            float c = SimRenderer.CellWorldSize;
+            Vector3 celda = new Vector3((cx + 0.5f) * c, (cy + 0.5f) * c, -0.03f);
+            Vector3 boca = _apprentice != null ? _apprentice.CarryAnchor : transform.position;
+            boca.z = -0.03f;
+
+            _motaDesde[idx] = haciaFrasco ? celda : boca;
+            _motaHasta[idx] = haciaFrasco ? boca : celda;  // hacia el frasco el destino se re-lee VIVO cada frame (el imp se mueve); ver ActualizarJuice.
+            // Comba lateral: perpendicular al trayecto, magnitud y lado al azar
+            // -- es lo que convierte una línea en un "sorbo" con cuerpo.
+            Vector3 tramo = _motaHasta[idx] - _motaDesde[idx];
+            Vector2 perp = new Vector2(-tramo.y, tramo.x).normalized;
+            float lado = _rngJuice.Next(0, 2) == 0 ? -1f : 1f;
+            float comba = Mathf.Lerp(0.13f, 0.40f, (float)_rngJuice.NextDouble()); // (69e) arco más generoso.
+            _motaComba[idx] = perp * (lado * comba);
+            _motaT[idx] = 0f;
+            _motaDur[idx] = Mathf.Lerp(MotaDurMin, MotaDurMax, (float)_rngJuice.NextDouble());
+            _motaViva[idx] = true;
+            _motaHaciaFrasco[idx] = haciaFrasco;
+
+            Color32 col = _sim.Universe.Get(matId).baseColor;
+            _motaSr[idx].color = new Color(col.r / 255f, col.g / 255f, col.b / 255f, 0.95f);
+            _motaSr[idx].transform.position = _motaDesde[idx];
+            _motaSr[idx].transform.localScale = Vector3.one * MotaTamano;
+        }
+
+        /// <summary>El corazón del juice, una vez por frame: avanza las motas por su curva, integra el muelle del "pop" y le pasa el pulso al tarro en mano (ApprenticeController.PulsoDelFrasco).</summary>
+        private void ActualizarJuice(float dt)
+        {
+            // GUARDA DE ESTABILIDAD (cazada en la verificación de esta misma
+            // ronda, no teórica): el muelle se integra con Euler explícito, y
+            // con PulsoResorte=170 el método DIVERGE si dt >= ~0.15s
+            // (dt·sqrt(k) > 2). Un frame con hitch (carga, GC, alt-tab) tiene
+            // exactamente ese tamaño. Capar dt hace que en un hitch el juice
+            // avance un pelín más lento -- invisible -- en vez de que el
+            // frasco dé un latigazo entre los dos topes del clamp.
+            if (dt > 0.05f) dt = 0.05f;
+
+            // --- El muelle del pop (amortiguado, siempre vuelve a 0). ---
+            _pulsoVel += (-PulsoResorte * _pulso - PulsoAmortiguacion * _pulsoVel) * dt;
+            _pulso = Mathf.Clamp(_pulso + _pulsoVel * dt, -0.25f, 0.35f);
+            if (_apprentice != null) _apprentice.PulsoDelFrasco(_pulso);
+
+            // --- (ronda 69d) La inclinación del tarro al verter: se ladea
+            // hacia el lado del cursor (llega a tope en ~65 ms, antes de la
+            // primera mota) y vuelve sola a vertical al cortar el chorro. ---
+            float inclinacionObjetivo = 0f;
+            if (_vertiendoVisual && _hasCursorWorld && _apprentice != null)
+                inclinacionObjetivo = _cursorWorld.x >= _apprentice.CarryAnchor.x ? -InclinacionMaxDeg : InclinacionMaxDeg;
+            _inclinacion = Mathf.MoveTowards(_inclinacion, inclinacionObjetivo, InclinacionVelDegSeg * dt);
+            if (_apprentice != null) _apprentice.InclinacionDelFrasco(_inclinacion);
+
+            if (_motaSr == null) return;
+            Vector3 boca = _apprentice != null ? _apprentice.CarryAnchor : transform.position;
+            boca.z = -0.03f;
+
+            for (int i = 0; i < MotasMax; i++)
+            {
+                if (!_motaViva[i]) continue;
+                _motaT[i] += dt / _motaDur[i];
+                if (_motaT[i] >= 1f)
+                {
+                    _motaViva[i] = false;
+                    _motaSr[i].color = new Color(0f, 0f, 0f, 0f);
+                    if (_motaHaciaFrasco[i]) _pulsoVel += PulsoImpulsoLlegada; // el frasco RECIBE: pop.
+                    continue;
+                }
+
+                Vector3 a = _motaDesde[i];
+                Vector3 b = _motaHaciaFrasco[i] ? boca : _motaHasta[i]; // destino vivo al aspirar: el frasco viaja con el imp.
+                float t = _motaT[i];
+                float e = _motaHaciaFrasco[i] ? t * t : 1f - (1f - t) * (1f - t); // succión ACELERA al llegar; vertido FRENA al caer.
+                Vector3 m = (a + b) * 0.5f + (Vector3)_motaComba[i];
+                Vector3 pos = Vector3.Lerp(Vector3.Lerp(a, m, e), Vector3.Lerp(m, b, e), e);
+                _motaSr[i].transform.position = pos;
+
+                float escala = _motaHaciaFrasco[i]
+                    ? Mathf.Lerp(MotaTamano, MotaTamano * 0.45f, e)   // se encoge al entrar al frasco.
+                    : Mathf.Lerp(MotaTamano * 0.55f, MotaTamano, e);  // crece al salir: gota que cae.
+                _motaSr[i].transform.localScale = Vector3.one * escala;
+
+                // (ronda 69d) El tramo pegado al frasco se dibuja DELANTE del
+                // personaje y del tarro -- ver MotasOrdenFrente.
+                int orden = _motaHaciaFrasco[i]
+                    ? (t > 1f - MotaTramoFrente ? MotasOrdenFrente : MotasOrdenDibujo)
+                    : (t < MotaTramoFrente ? MotasOrdenFrente : MotasOrdenDibujo);
+                if (_motaSr[i].sortingOrder != orden) _motaSr[i].sortingOrder = orden;
+
+                if (t > 0.85f) // desvanecer solo el último tramo (que el viaje se VEA entero).
+                {
+                    var col = _motaSr[i].color;
+                    col.a = 0.95f * (1f - t) / 0.15f;
+                    _motaSr[i].color = col;
+                }
+            }
         }
 
         private void UpdateWorldVisuals(bool wantSuck, bool wantPour)
@@ -780,6 +1089,7 @@ namespace Alkahest.Game
             {
                 if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);
                 if (_beamPulseSr != null) _beamPulseSr.color = new Color(0f, 0f, 0f, 0f);
+                _hazExtension = 0f; // (ronda 69e) el próximo despliegue arranca DESDE el frasco.
                 return;
             }
 
@@ -798,6 +1108,16 @@ namespace Alkahest.Game
 
             Vector3 tramo = destino - origen; tramo.z = 0f;
             float largo = tramo.magnitude;
+
+            // (ronda 69e) LA RETRACCIÓN: si el flujo lleva ~0.1s seco (el
+            // material se agotó, frasco lleno/vacío, sin hueco donde verter),
+            // el haz se encoge hacia el frasco -- "ya está, suelta" dicho por
+            // la herramienta, no por un cartelito. Crece rápido al (re)fluir.
+            float extObjetivo = _ticksSinMover >= TicksSinMoverParaRetraer ? 0f : 1f;
+            float extVel = extObjetivo > _hazExtension ? HazCrecerVelPorSeg : HazEncogerVelPorSeg;
+            _hazExtension = Mathf.MoveTowards(_hazExtension, extObjetivo, extVel * Time.deltaTime);
+            largo *= _hazExtension;
+
             if (largo < 0.0005f)
             {
                 if (_beamLineSr != null) _beamLineSr.color = new Color(0f, 0f, 0f, 0f);

@@ -256,6 +256,23 @@ namespace Alkahest.Game
         /// <summary>Punto ~0.5 unidades por delante/abajo del aprendiz, donde el frasco muestra su contenido. SIN CAMBIOS: Flask.cs depende de este cálculo exacto para su indicador.</summary>
         public Vector3 CarryAnchor => transform.position + new Vector3(_facingRight ? 0.28f : -0.28f, -0.35f, 0f);
 
+        // (RONDA 69c, el juice del frasco) EL TARRO RESPIRA: Flask empuja
+        // aquí su muelle de "pop" (ver Flask.ActualizarJuice) y HandleVisual
+        // lo aplica a la escala del tarro en mano -- pop al recibir una mota,
+        // encogida breve al verter. Flask es quien INTEGRA el muelle (una
+        // sola fuente de verdad); este campo es solo el último valor recibido.
+        private float _pulsoFrasco;
+        /// <summary>Lo llama Flask cada frame con su muelle de pop (ya clampeado a [-0.25, 0.35]).</summary>
+        public void PulsoDelFrasco(float valor) => _pulsoFrasco = Mathf.Clamp(valor, -0.25f, 0.35f);
+
+        // (RONDA 69d) EL TARRO SE LADEA AL VERTER: Flask empuja aquí los
+        // grados (ya suavizados por su MoveTowards) y HandleVisual los aplica
+        // a la rotación del tarro en mano -- la inclinación llega ANTES que
+        // la primera mota del chorro: es la anticipación del vertido.
+        private float _inclinacionFrasco;
+        /// <summary>Lo llama Flask cada frame con la inclinación del vertido en grados (0 = vertical).</summary>
+        public void InclinacionDelFrasco(float grados) => _inclinacionFrasco = Mathf.Clamp(grados, -20f, 20f);
+
         private void Awake()
         {
             BuildVisual();
@@ -355,11 +372,23 @@ namespace Alkahest.Game
         // pero ahora sobre medidas leídas, no prosa (regla 39).
         // COSTE ASUMIDO (reportado a Cesar): un túnel HORIZONTAL de una sola
         // pasada del cincel (disco radio 2 = 5 celdas de luz) ya no da la
-        // talla en vertical (6.0): hay que ensancharlo con una segunda
-        // pasada. Los pozos VERTICALES de una pasada sí siguen dando (4.2 <
-        // 5). Cesar eligió explícitamente este lado del trato.
+        // talla en vertical: hay que ensancharlo con una segunda pasada.
+        // Los pozos VERTICALES de una pasada sí siguen dando (4.2 < 5).
+        // Cesar eligió explícitamente este lado del trato.
+        //
+        // (pt69, TERCERA pasada -- Cesar capturó los puntos MÁS NORTE Y MÁS
+        // SUR del bob del idle contra techo y suelo: "el borde inferior y el
+        // superior aún están jodidos"; los verticales ya le valen). Lo que
+        // faltaba era EL BOB: el visual sube y baja ±0.04u alrededor de
+        // transform.position (BobAmplitude) y la caja de 0.30 no lo cubría
+        // -- coronilla 0.364 + bob = 0.404 por arriba, barbilla 0.343 + bob
+        // = 0.383 por abajo. La caja pasa a ASIMÉTRICA y cubre AMBOS
+        // extremos del bob: solo las antenas (1 px, puntas blandas por
+        // doctrina) pueden asomar en el pico del bob. El trato del túnel no
+        // cambia: la pasada horizontal única ya estaba bloqueada desde 6.0.
         private const float MedioAnchoColision = 0.21f;  // 4.2 celdas de ancho total (cuerpo: 4.4).
-        private const float MedioAltoColision = 0.30f;   // 6.0 celdas de alto total (cuerpo: 7.7 con puntas; el macizo ~6).
+        private const float MedioAltoArriba = 0.40f;     // coronilla 0.364 + bob 0.04 = 0.404 (las antenas pueden rozar).
+        private const float MedioAltoAbajo = 0.38f;      // barbilla 0.343 + bob 0.04 = 0.383: queda "un milímetro por detrás".
         private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
 
         private AlkahestSim _simColision;
@@ -419,8 +448,8 @@ namespace Alkahest.Game
         {
             int x0 = Mathf.FloorToInt((cx - MedioAnchoColision) / SimRenderer.CellWorldSize);
             int x1 = Mathf.FloorToInt((cx + MedioAnchoColision) / SimRenderer.CellWorldSize);
-            int y0 = Mathf.FloorToInt((cy - MedioAltoColision) / SimRenderer.CellWorldSize);
-            int y1 = Mathf.FloorToInt((cy + MedioAltoColision) / SimRenderer.CellWorldSize);
+            int y0 = Mathf.FloorToInt((cy - MedioAltoAbajo) / SimRenderer.CellWorldSize);
+            int y1 = Mathf.FloorToInt((cy + MedioAltoArriba) / SimRenderer.CellWorldSize);
             for (int y = y0; y <= y1; y++)
             {
                 for (int x = x0; x <= x1; x++)
@@ -564,6 +593,8 @@ namespace Alkahest.Game
             // contenido, así el tarro y la mancha de color quedan alineados. ---
             Vector3 flaskTarget = new Vector3(dirSign * 0.28f, -0.35f, VisualZOffset - 0.01f);
             _carriedFlaskTr.localPosition = Vector3.SmoothDamp(_carriedFlaskTr.localPosition, flaskTarget, ref _carriedFlaskVel, CarriedFlaskLag);
+            _carriedFlaskTr.localScale = Vector3.one * (1f + _pulsoFrasco); // (ronda 69c) el tarro respira con el muelle del frasco.
+            _carriedFlaskTr.localRotation = Quaternion.Euler(0f, 0f, _inclinacionFrasco); // (ronda 69d) y se ladea al verter.
             _carriedFlaskSr.flipX = !_facingRight;
         }
 

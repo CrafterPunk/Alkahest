@@ -802,8 +802,17 @@ namespace Alkahest.Audio
             if (_flask == null) return;
             int total = _flask.Total;
             int delta = total - _totalFrascoAnterior;
-            if (delta > 0) DispararLimitado(ref _limAspirar, SintetizadorSfx.Aspirar, 4f, 0.18f);
-            else if (delta < 0) DispararLimitado(ref _limVerter, SintetizadorSfx.Verter, 4f, 0.18f);
+            // (RONDA 69c, el juice del frasco) EL SONIDO CUENTA EL LLENADO:
+            // el pitch sube con lo lleno del frasco -- la física de llenar
+            // una botella real (la columna de aire se acorta, el tono sube).
+            // Al verter usa la MISMA rampa: vaciar un frasco lleno arranca
+            // agudo y va cayendo a grave, espejo natural del llenado. La
+            // variación aleatoria de ±6% de ReproducirOneShot se MULTIPLICA
+            // encima, así que nada suena a metrónomo.
+            float frac = Mathf.Clamp01(total / (float)Flask.Capacity);
+            float pitchLlenado = 0.80f + 0.56f * frac; // (69e, "+25%") vacío 0.80 -> lleno 1.36: la rampa se OYE, no solo se intuye.
+            if (delta > 0) DispararLimitado(ref _limAspirar, SintetizadorSfx.Aspirar, 4f, 0.22f, pitchLlenado);
+            else if (delta < 0) DispararLimitado(ref _limVerter, SintetizadorSfx.Verter, 4f, 0.22f, pitchLlenado);
             _totalFrascoAnterior = total;
         }
 
@@ -1278,7 +1287,7 @@ namespace Alkahest.Audio
         /// cuando por fin se permite sonar de nuevo, el volumen sube un
         /// poco (nunca la cadencia) en proporción a cuántos se perdieron.
         /// </summary>
-        private void DispararLimitado(ref Limitador lim, AudioClip clip, float vecesPorSegundo, float volumenBase)
+        private void DispararLimitado(ref Limitador lim, AudioClip clip, float vecesPorSegundo, float volumenBase, float pitchBase = 1f)
         {
             float ahora = Time.time;
             if (ahora < lim.proximoPermitido)
@@ -1289,7 +1298,7 @@ namespace Alkahest.Audio
 
             float boost = Mathf.Clamp01(lim.suprimidos * 0.05f); // hasta +100% de volumen de diseño en avalanchas grandes, nunca más veces.
             float volumen = Mathf.Clamp01(volumenBase * (1f + boost));
-            ReproducirOneShot(clip, volumen);
+            ReproducirOneShot(clip, volumen, pitchBase);
 
             lim.proximoPermitido = ahora + 1f / Mathf.Max(0.1f, vecesPorSegundo);
             lim.suprimidos = 0;
@@ -1309,7 +1318,7 @@ namespace Alkahest.Audio
         /// one-shot sonando encima de ambiente+fuego+grifos) es exactamente
         /// cuando más falta hace bajar el resto un poco.
         /// </summary>
-        private void ReproducirOneShot(AudioClip clip, float volumenBase)
+        private void ReproducirOneShot(AudioClip clip, float volumenBase, float pitchBase = 1f)
         {
             if (clip == null || _vocesOneShot == null || _vocesOneShot.Length == 0) return;
             float factorMaestro = FactorMaestro;
@@ -1319,7 +1328,10 @@ namespace Alkahest.Audio
             var fuente = _vocesOneShot[_siguienteVoz];
             if (fuente == null) return;
 
-            float pitch = 1f + ((float)_rngVariacion.NextDouble() * 2f - 1f) * 0.06f;
+            // (ronda 69c) `pitchBase` deja que un llamador cuente ESTADO con
+            // el tono (el llenado del frasco, ver ActualizarPollerFrasco);
+            // la variación aleatoria de siempre se multiplica encima.
+            float pitch = pitchBase * (1f + ((float)_rngVariacion.NextDouble() * 2f - 1f) * 0.06f);
             float volVariacion = 1f + ((float)_rngVariacion.NextDouble() * 2f - 1f) * 0.10f;
 
             fuente.pitch = pitch;

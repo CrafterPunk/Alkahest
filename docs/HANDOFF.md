@@ -4103,3 +4103,162 @@ TRUCO OPERATIVO NUEVO: captura SIN permisos de escritorio — RunCommand
    no refresca y las capturas salen clavadas): comprobar isPaused y
    despausar antes de diagnosticar "no se pintó nada".
 ca_playtest69.cmd barre la ronda.
+
+### Ronda 69b — colider vertical cerrado (feedback pt69 con capturas del bob)
+
+Cesar capturó los puntos MÁS NORTE y MÁS SUR del idle: paredes verticales
+ya decentes ("un milímetro no fastidia"), suelo y techo "aún jodidos". La
+causa: el BOB visual (±0.04u alrededor de transform.position) no estaba en
+la caja. Caja ahora ASIMÉTRICA: MedioAltoArriba=0.40 (coronilla 0.364+bob),
+MedioAltoAbajo=0.38 (barbilla 0.343+bob); solo las antenas (1px, puntas
+blandas) pueden asomar en el pico del bob. Verificado en runtime: frontera
+exacta en 0.38 contra el suelo. El trato del túnel no cambia (la pasada
+horizontal única ya estaba bloqueada desde la caja 6.0).
+
+PENDIENTE DE DECISIÓN (pedido grande de Cesar en el pt69): darle una vuelta
+al game-feel de ASPIRAR/VERTER ("la actividad más recurrente, tiene que
+sentirse una delicia"). Propuesta con opciones enviada — motas en tránsito
+(Poltergust/Astroneer), frasco vivo (squash&stretch+pop), sonido que cuenta
+el llenado (pitch por fracción), mundo que responde (remolino/salpicadura),
+haz vivo. Esperando qué combinación elige antes de implementar.
+
+### Ronda 69c — EL VIAJE DE LA MATERIA (juice de aspirar/verter, paquete 1+2+3)
+
+Cesar en el pt69: "dale una vuelta a lo que ocurre en pantalla al absorber
+y devolver — es la actividad más recurrente y tiene que sentirse una
+delicia; busca referencias y propón". Propuesta de 4 opciones (motas en
+tránsito / frasco que respira / sonido que cuenta el llenado / mundo que
+responde); ELIGIÓ el paquete 1+2+3. Referencias: Poltergust de Luigi's
+Mansion, pistola de terreno de Astroneer, catecismo Vlambeer. Diagnóstico:
+la materia se TELETRANSPORTABA; la delicia está en hacerla VIAJAR.
+
+1. MOTAS EN TRÁNSITO (Flask.cs, bloque "EL VIAJE DE LA MATERIA"): pool
+   FIJO de 24 sprites (punto suave del haz reutilizado, orden 42 — sobre
+   el haz 40/41, bajo las alas 47+). 1 mota por cada ~10 celdas movidas
+   (CeldasPorMota), nacida EN la celda comida, color = baseColor del
+   material. Bezier con comba lateral aleatoria; easeIn hacia el frasco
+   (la succión tira, destino VIVO = CarryAnchor cada frame) y easeOut al
+   verter (el chorro cae, crece al salir). Q (vaciar) = ráfaga (el pool
+   la acota) + encogida x3. Capa 100% cosmética: Paint/PaintCell intactos,
+   System.Random local de presentación (criterio DirectorDeAudio), cero
+   allocs por frame. Si el pool está lleno, la emisión se pierde en
+   silencio. Con modales (diario/álbum) las motas TERMINAN su vuelo vía
+   ActualizarJuice en OcultarVisualesDeMundo (no quedan clavadas).
+2. EL FRASCO RESPIRA: muelle amortiguado _pulso (k=170, c=11) — cada mota
+   que LLEGA da +impulso (pop ~+17% de escala), cada tick de vertido da
+   -impulso (el bote se aprieta). Se aplica al swatch (UpdateCarryVisual)
+   y al TARRO en mano vía ApprenticeController.PulsoDelFrasco (campo
+   _pulsoFrasco aplicado a _carriedFlaskTr.localScale en HandleVisual).
+   GUARDA DE ESTABILIDAD (cazada EN la verificación, no teórica): Euler
+   explícito con k=170 DIVERGE si dt>=~0.15s (un frame con hitch) — dt
+   se capa a 0.05 en ActualizarJuice; mi prueba manual con dt=0.15 lo
+   demostró clavando el clamp en -0.25.
+3. EL SONIDO CUENTA EL LLENADO (DirectorDeAudio.cs): ReproducirOneShot y
+   DispararLimitado aceptan pitchBase (default 1f — ningún otro llamador
+   cambia); ActualizarPollerFrasco pasa 0.86+0.42·frac: aspirar sube de
+   tono al llenarse (física de botella real), verter arranca agudo con el
+   frasco lleno y cae — la variación aleatoria ±6% se multiplica encima.
+VERIFICADO en vivo (captura_r69c_motas.png): 5 motas en vuelo tras 42
+celdas aspiradas (la cuenta exacta: 3+2+0 por tick), reguero curvo color
+arena hacia el frasco. MotaTamano subido 0.062→0.078 tras verla a zoom.
+GESTOS PARA CESAR (regla 43): aspira un charco — reguero de motas curvas
+del color del material entrando al frasco y el tarro dando pops; vierte —
+gotas que salen frenando + el bote se encoge; el TONO del sorbo sube
+conforme llenas y baja conforme vacías; Q = ráfaga.
+PENDIENTE (opción 4, si tras probar quiere más): remolino en la boca de
+succión, salpicadura al impactar el vertido, haz ondulante.
+
+### Ronda 69d — ANTICIPACIÓN Y CIERRE (feedback de Cesar sobre el juice, "califica y aplica según tu criterio")
+
+Cesar probó el 69c: "me gustó pero aún no se siente lo suficientemente
+bueno". Tres ideas suyas, LAS TRES APLICADAS (calificación: las tres son de
+manual — anticipación->acción->resolución es el patrón clásico de
+animación, y el truco de sorting es profundidad gratis):
+
+1. EL CARTELITO SE CANSA: "frasco vacío — aspira algo" salía CADA VEZ al
+   verter en vacío ("es cansadísimo"). Ahora AvisarLimitado: cada aviso
+   (vacío Y lleno, patrón idéntico) vive por EPISODIOS de ~2.5s (mantener
+   el botón refresca sin gastar cupo) y tras 2 episodios se CALLA para
+   siempre en la sesión — el jugador nuevo lo ve un par de veces (a prueba
+   de burros), el veterano deja de sufrirlo. AvisosMax=0 lo apaga del todo
+   si Cesar lo pide.
+2. ANTICIPACIÓN -> ACCIÓN -> RESOLUCIÓN (flancos de botón en Update):
+   · empezar a aspirar: INHALE (impulso negativo del muelle: el frasco se
+     encoge un instante) y las motas esperan ~100ms (AnticipacionSeg) —
+     SOLO visual, la celda se aspira desde el primer tick ("no metería
+     delays reales que hagan torpe el control", textual).
+   · soltar: POP de cierre (traga y asienta, SettleAspirar).
+   · empezar a verter: el TARRO SE LADEA ±14° hacia el lado del cursor
+     (MoveTowards 220°/s: llega en ~65ms, ANTES de la primera mota — la
+     inclinación ES la anticipación del chorro) vía
+     ApprenticeController.InclinacionDelFrasco; motas esperan la ventana.
+   · cortar el chorro: asentamiento suave y el tarro vuelve a vertical
+     (también al abrir un modal: _vertiendoVisual=false en
+     OcultarVisualesDeMundo).
+3. PROFUNDIDAD POR SORTING (idea textual de Cesar: "en los últimos píxeles
+   pasan por delante del personaje... solo sorting, engañar elegantemente
+   al cerebro"): el último 22% del viaje hacia el frasco (y el primero al
+   salir) se dibuja en MotasOrdenFrente=53 — delante del cuerpo (50) y del
+   tarro (52), debajo del swatch (60): la mota cruza por delante y muere
+   EN la boca.
+VERIFICADO en runtime (sondas): inclinación -14.0 en 2 frames / 0.0 tras
+cortar; EmitirMota muda en ventana de anticipación, emite después; 0
+errores de consola. Los flancos usan el input real (no sondeable por MCP):
+la sensación final la valida Cesar jugando.
+GESTOS (regla 43): verter en vacío avisa 2 veces y luego calla; al pulsar
+aspirar el tarro se encoge un suspiro ANTES del reguero; al soltar, pop;
+al verter el tarro se ladea hacia el cursor antes de la primera gota; las
+motas cruzan POR DELANTE del imp justo antes de entrar al frasco.
+ca_playtest69.cmd (git add -A) barre también esta pasada.
+
+### Ronda 69e — EL HAZ QUE SE RETRAE + "+25% DE NOTORIEDAD"
+
+Dos pedidos de Cesar tras sentir el 69d:
+1. LA RETRACCIÓN DEL HAZ ("cuando termine de aspirar todo de un elemento
+   la línea guía se debe encoger hacia el frasco, para no seguir
+   presionándole"): _celdasJuiceTick se resetea AL PRINCIPIO de
+   TickSuck/TickPour (antes de toda guarda) y el Update contabiliza
+   _ticksSinMover tras cada tick; con >=3 ticks secos (~0.1s -- evita
+   parpadeo con flujos intermitentes) la extensión del haz (_hazExtension
+   0..1, multiplica `largo`) cae a 0 en ~220ms (HazEncogerVelPorSeg=4.5) y
+   al refluir o re-pulsar crece desde el frasco en ~80ms
+   (HazCrecerVelPorSeg=12 -- regalo colateral: cada arranque tiene gesto
+   de DESPLIEGUE). Cubre todos los "no fluye": material bloqueado agotado,
+   frasco lleno al aspirar, vacío al verter, sin hueco donde verter, fuera
+   de alcance. Es el aviso DIEGÉTICO que sustituye al cartelito limitado
+   de la 69d. En la rama !hazActivo la extensión se resetea a 0.
+2. "+25% DE NOTORIEDAD" en las partes 1-2-3: motas 0.078->0.098 (~1 celda),
+   CeldasPorMota 10->8 (~4/tick), pool 24->32, duración 0.16-0.26 ->
+   0.20-0.32, comba 0.10-0.32 -> 0.13-0.40; muelle: llegada 2.2->2.8,
+   inhale -1.6->-2.1, settle 1.3->1.7 / 0.8->1.0, vertido -1.1->-1.4;
+   audio: pitch 0.86..1.28 -> 0.80..1.36 y volumen 0.18->0.22.
+VERIFICADO en runtime (sondas): extensión crece con flujo vivo (0->0.06 en
+2 invocaciones intra-frame) y se retrae en seco (1->0.98 ídem; direcciones
+correctas, velocidades reales 80ms/220ms por frame de juego); 0 errores.
+GESTO (regla 43): mantén aspirar sobre un charquito hasta agotarlo -- al
+secarse, la línea guía se ENCOGE sola hacia el frasco (~0.2s): esa es la
+señal de soltar. Apunta a material de nuevo sin soltar: vuelve a
+desplegarse.
+ca_playtest69.cmd (git add -A) barre también esta pasada.
+
+### Ronda 69f — VERIFICACIÓN MULTI del juice (pregunta de Cesar)
+
+Cesar: "asegúrate de que se vea también en el multiplayer, esa parte no la
+contrasté antes". VERIFICADO POR LECTURA DE CÓDIGO (el camino completo):
+en la escena MULTI el avatar LOCAL se cablea en Net/AprendizNet.Cablear,
+que llama al MISMO Flask.Init(sim) de un jugador — y ahí dentro viven
+BuildCarryVisual/BuildBeamVisual/BuildMotasVisual, así que motas, muelle,
+inclinación, retracción del haz y avisos limitados funcionan para el
+jugador local en multi POR CONSTRUCCIÓN, anfitrión E invitado (el frasco
+del invitado predice contra el espejo y su Universe da los colores). El
+audio también: SpawnDirectorDeAudio corre en AMBAS ramas del bootstrap de
+red (la del invitado desde el playtest 43) con el flask local — la rampa
+de pitch viaja igual. Los avatares REMOTOS tienen su Flask DESACTIVADO
+(AprendizNet.OnNetworkSpawn) → no muestran su juice, exactamente igual
+que su haz, que tampoco se veía: no es regresión. BACKLOG: replicar el
+juice/haz de los otros jugadores (verse aspirar entre sí) es una feature
+de red nueva, anotada.
+LOS PLAYTESTS PENDIENTES: GitHub está en 7a49008 (rondas 66+68 completas,
+verificado contenido por contenido en su momento). TODO lo de la 69 (a-e)
+vive solo en el disco de Cesar. Como cada .cmd hace `git add -A`, correr
+SOLO ca_playtest69.cmd reúne todo en un commit — no hay orden que respetar.
