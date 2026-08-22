@@ -65,10 +65,11 @@ namespace Alkahest.Game
     /// podía editar roca desde la otra punta del cuarto. Por dirección de
     /// Cesar ("editar roca únicamente dentro de un rango razonablemente
     /// corto; no destruir ni construir A TRAVÉS de una pared") ahora tiene
-    /// alcance PROPIO (<see cref="ReachWorldCincel"/> = 22 celdas) y LÍNEA DE
-    /// VISIÓN celda a celda (PrimerSolidoEnRayo): solo se edita la cara que
-    /// ves. El aviso de "demasiado lejos" sigue saliendo por
-    /// <see cref="Flask.Avisar"/>, el canal compartido de siempre.
+    /// alcance PROPIO (<see cref="ReachWorldCincel"/> = 22 celdas) y, SOLO
+    /// PARA TALLAR, línea de visión por GROSOR (SolidosAntesDelDisco, ronda
+    /// 68): los salientes finos se pulen, las paredes de >=3 celdas bloquean.
+    /// CONSTRUIR no tiene línea de visión (ver RellenarTick). El aviso de
+    /// "demasiado lejos" sigue saliendo por <see cref="Flask.Avisar"/>.
     ///
     /// SOLO PIEDRA, Y NUNCA EL BORDE: TALLAR solo actúa si la celda bajo el
     /// disco es EXACTAMENTE MaterialId.Stone (nunca agua/aceite/cristal/
@@ -300,17 +301,26 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (RONDA 66) LÍNEA DE VISIÓN: camina el rayo aprendiz->cursor celda a
-        /// celda (Bresenham) y devuelve el PRIMER sólido estructural que toca
-        /// (roca madre o piso), sin contar la celda del propio aprendiz.
-        /// false = camino despejado. La regla del mandato: "no puedes destruir
-        /// o construir A TRAVÉS de una pared sólida -- primero abre camino":
-        /// editar la CARA que ves siempre vale (el bloqueo cae dentro del
-        /// disco del cursor); editar detrás de ella, no.
+        /// (RONDA 66; SUAVIZADA EN LA 68 por el playtest 67 de Cesar: "al
+        /// querer completar detalles me marca constantemente 'hay pared de
+        /// por medio' -- se siente tosco") LÍNEA DE VISIÓN v2: la v1
+        /// bloqueaba con el PRIMER sólido del rayo fuera del disco del
+        /// cursor, y eso convertía cada saliente fino, cada resto de una
+        /// pasada anterior y cada borde de la propia obra en un muro
+        /// imaginario -- imposible PULIR. La regla nueva mide GROSOR, no
+        /// presencia: camina el rayo aprendiz->cursor (Bresenham) contando
+        /// cuántas celdas sólidas cruza ANTES de entrar al disco del cursor.
+        /// Un saliente de 1-2 celdas se repasa sin drama (eso ES acabar un
+        /// detalle); una pared real (>=3 celdas de grosor en el rayo) sigue
+        /// bloqueando -- "primero abre camino" se conserva donde importa.
         /// </summary>
-        private bool PrimerSolidoEnRayo(Vector2Int desde, Vector2Int hasta, out Vector2Int solido)
+        private const int GrosorParedBloquea = 3;
+
+        private int SolidosAntesDelDisco(Vector2Int desde, Vector2Int hasta, int radioDisco)
         {
-            solido = default;
+            int n = 0;
+            int margen = radioDisco + 1;
+            int margen2 = margen * margen;
             int x = desde.x, y = desde.y;
             int dx = Mathf.Abs(hasta.x - x), dy = -Mathf.Abs(hasta.y - y);
             int sx = x < hasta.x ? 1 : -1, sy = y < hasta.y ? 1 : -1;
@@ -320,23 +330,13 @@ namespace Alkahest.Game
                 int e2 = 2 * err;
                 if (e2 >= dy) { err += dy; x += sx; }
                 if (e2 <= dx) { err += dx; y += sy; }
-                if (!CellGrid.InBounds(x, y)) return false;
+                if (!CellGrid.InBounds(x, y)) break;
+                int ddx = x - hasta.x, ddy = y - hasta.y;
+                if (ddx * ddx + ddy * ddy <= margen2) break; // ya es la cara del disco: lo que haya aquí es editable, no pared.
                 int m = _sim.SampleMaterial(x, y);
-                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural)
-                {
-                    solido = new Vector2Int(x, y);
-                    return true;
-                }
+                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) n++;
             }
-            return false;
-        }
-
-        /// <summary>true si el bloqueo de línea de visión está tan cerca del cursor que cuenta como "la cara que ves" (editable); false = hay pared de por medio.</summary>
-        private static bool BloqueoEsLaCara(Vector2Int bloqueo, Vector2Int cursor, int radioDisco)
-        {
-            int bdx = bloqueo.x - cursor.x, bdy = bloqueo.y - cursor.y;
-            int margen = radioDisco + 1;
-            return bdx * bdx + bdy * bdy <= margen * margen;
+            return n;
         }
 
         // ---------------------------------------------------------------------------------
@@ -354,12 +354,11 @@ namespace Alkahest.Game
                 return;
             }
 
-            // (ronda 66) Línea de visión: se talla la cara que VES, jamás la
-            // roca detrás de una pared -- abre camino primero.
-            if (PrimerSolidoEnRayo(apprenticeCell, cursor, out Vector2Int bloqueo)
-                && !BloqueoEsLaCara(bloqueo, cursor, CarveRadius))
+            // (ronda 68) Línea de visión por GROSOR: un saliente fino se
+            // repasa (pulir es legal); una pared real de >=3 celdas bloquea.
+            if (SolidosAntesDelDisco(apprenticeCell, cursor, CarveRadius) >= GrosorParedBloquea)
             {
-                if (_flask != null) _flask.Avisar("hay pared de por medio — abre camino primero");
+                if (_flask != null) _flask.Avisar("hay pared gruesa de por medio — abre camino primero");
                 return;
             }
 
@@ -446,14 +445,14 @@ namespace Alkahest.Game
                 return;
             }
 
-            // (ronda 66) Misma línea de visión que TallarTick: no se
-            // construye a través de una pared sólida.
-            if (PrimerSolidoEnRayo(apprenticeCell, cursor, out Vector2Int bloqueo)
-                && !BloqueoEsLaCara(bloqueo, cursor, FillRadius))
-            {
-                if (_flask != null) _flask.Avisar("hay pared de por medio — abre camino primero");
-                return;
-            }
+            // (ronda 68) CONSTRUIR NO TIENE LÍNEA DE VISIÓN. La v1 la aplicaba
+            // también aquí y era el peor de los roces del playtest 67: al
+            // extender una plataforma, las celdas RECIÉN COLOCADAS bloqueaban
+            // el rayo hacia la siguiente -- la propia obra te prohibía
+            // continuarla. Construir a distancia no roba nada a través de
+            // ninguna pared (solo AÑADE materia donde ya alcanzas), así que la
+            // única guarda honesta es el alcance. Regla 15: la LOS de
+            // construcción existió una ronda y se retiró por esto.
 
             int budget = FillRatePerTick;
 

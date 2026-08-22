@@ -3982,3 +3982,51 @@ RIESGO UX ABIERTO (reportar Cesar tras probar): sensación de la colisión
 OPERATIVA: verificado en vivo vía MCP con datos de grilla (mapas de celdas
    # / P / o) + capturas con amanecer forzado. Snapshot local 111e241.
    ca_playtest67.cmd barre la ronda.
+
+## Ronda 68 — EL PULIDO DEL 2.5D (feedback pt67 con captura) + TODO GLOBAL
+
+Cesar tras el pt67: construir se sentía TOSCO ("me marca constantemente
+'abre camino primero' al completar detalles"), el personaje SE HUNDÍA en
+roca/piso (captura), y "los bordes pintan tiles oscuros que entran en el
+personaje". Y el mandato extra de mitad de turno: hacer lo pendiente y que
+todo funcione en TODAS las versiones (caótico incluido).
+
+1. LÍNEA DE VISIÓN v2 (Cincel): la v1 bloqueaba con el PRIMER sólido del
+   rayo -- cada saliente fino y cada celda de la PROPIA OBRA recién
+   colocada era un muro imaginario (extender una plataforma se
+   auto-bloqueaba). Ahora: (a) CONSTRUIR NO TIENE LOS (añadir materia donde
+   alcanzas no roba nada; regla 15 documenta la LOS de construcción
+   retirada); (b) TALLAR mide GROSOR (SolidosAntesDelDisco): salientes de
+   1-2 celdas se pulen sin drama, paredes de >=3 celdas en el rayo siguen
+   bloqueando ("primero abre camino" vive donde importa). Aviso nuevo:
+   "hay pared GRUESA de por medio".
+2. CAJA DE COLISIÓN al tamaño visual: 2x3 -> 3x4 celdas (half 0.15/0.20) +
+   8 puntos de muestreo (esquinas + medios de los 4 lados; sin los medios
+   verticales un diente de 1 celda se colaba por el centro). Sigue cabiendo
+   por un túnel de disco del cincel.
+3. LABIO FRONTAL APAGADO (LabioFrontalActivo=false, static readonly
+   anti-CS0162; regla 15): los "tiles oscuros" de la captura. A 1
+   téxel/celda el anillo es blocky sin remedio; el volumen queda a cargo
+   del sombreado de masa (que sí gustó). Infra conservada tras bandera; NO
+   reactivar sin arte de borde real.
+4. ACABADO POR CONTEXTO del piso (idea "preseteado" de Cesar): cada cara
+   del piso se termina según lo que toca -- al AIRE canto neto de pieza
+   fabricada (arriba +30, abajo -26, lados -16), contra ROCA junta de
+   asiento (-8..-12: se lee encastrado). Los cantos/interior/esquinas/grano
+   genéricos quedaron SOLO para la roca (antes se aplicaban doble).
+5. APOYO ESTRUCTURAL AL SOLTAR (Mudanza, pendiente de la 66): las
+   ESTACIONES (IMovibleAnclaEsquina: ancla=esquina de huella, garantía
+   pt29) exigen >=70% de roca/piso/obra en la fila bajo su huella; aviso
+   "necesita apoyo firme — construye piso o roca debajo". Grifos (ancla=
+   boquilla, de pared) y seres quedan fuera a propósito.
+6. FONDO MÁS OSCURO (pendiente de la 66): WorkshopBackdrop x0.74 en los DOS
+   sitios de creación -- máquinas y latón saltan del muro.
+GLOBAL: colisión/cincel/piso/fondo son de TODOS los modos por construcción
+   (viven en ApprenticeController/Cincel/SimRenderer/WorkshopBackdrop, no
+   en la fundación). VERIFICADO en partida CAÓTICA real: colisión activa,
+   18 celdas de piso colocadas junto al taller clásico, fondo hundido con
+   las estaciones destacando (captura).
+SIGUE DIFERIDO (necesita pase propio con ojos de Opus, máquina por
+   máquina): vidrio frontal MachineBack->Sim->MachineFront (Capas.
+   MaquinaFrente=35 reservado); sprites decorativos de Niveles 0-2.
+Snapshot local 6ee1c39. ca_playtest68.cmd barre la ronda.

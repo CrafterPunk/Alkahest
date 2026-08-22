@@ -340,8 +340,13 @@ namespace Alkahest.Game
         // =================================================================
         public static bool ColisionConEstructura = true;
 
-        private const float MedioAnchoColision = 0.10f;  // 1 celda a cada lado del centro.
-        private const float MedioAltoColision = 0.14f;   // ~3 celdas de alto total.
+        // (afinado pt67, captura de Cesar: "el personaje entra mucho en la
+        // roca") La caja creció al tamaño VISUAL del imp: ~3 celdas de ancho
+        // por ~4 de alto (el sprite mide ~3.5x5 con alas y antenas; las
+        // puntas blandas pueden rozar, el cuerpo no). Sigue cabiendo por un
+        // túnel de disco del cincel (radio 2 = ~5 celdas de luz).
+        private const float MedioAnchoColision = 0.15f;  // 3 celdas de ancho total.
+        private const float MedioAltoColision = 0.20f;   // 4 celdas de alto total.
         private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
 
         private AlkahestSim _simColision;
@@ -387,7 +392,7 @@ namespace Alkahest.Game
             }
         }
 
-        /// <summary>true si la caja del imp centrada en (cx,cy) pisa algún sólido estructural. Muestrea las 4 esquinas + 2 puntos medios laterales (alto 3 celdas: el centro lateral evita colarse por un diente de 1 celda).</summary>
+        /// <summary>true si la caja del imp centrada en (cx,cy) pisa algún sólido estructural. Muestrea las 4 esquinas + los 4 puntos medios de cada lado (con la caja de 3x4 celdas, sin los medios de arriba/abajo un diente de 1 celda se colaría por el centro).</summary>
         private bool CajaChoca(float cx, float cy)
         {
             return PuntoChoca(cx - MedioAnchoColision, cy - MedioAltoColision)
@@ -395,7 +400,9 @@ namespace Alkahest.Game
                 || PuntoChoca(cx - MedioAnchoColision, cy + MedioAltoColision)
                 || PuntoChoca(cx + MedioAnchoColision, cy + MedioAltoColision)
                 || PuntoChoca(cx - MedioAnchoColision, cy)
-                || PuntoChoca(cx + MedioAnchoColision, cy);
+                || PuntoChoca(cx + MedioAnchoColision, cy)
+                || PuntoChoca(cx, cy + MedioAltoColision)
+                || PuntoChoca(cx, cy - MedioAltoColision);
         }
 
         private bool PuntoChoca(float wx, float wy)

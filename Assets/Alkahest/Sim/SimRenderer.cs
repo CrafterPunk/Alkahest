@@ -270,7 +270,21 @@ namespace Alkahest.Sim
         private uint[] _chunkLastRenderTick;
         private bool[] _chunkEverRendered;
         private Transform _quad;
-        // (ronda 66) El labio frontal de la roca -- ver Init y ComputeFrontRim.
+        // =============================================================
+        // (RONDA 66-68) EL LABIO FRONTAL: APAGADO (regla 15 de CLAUDE.md).
+        // Vivió UNA ronda: una segunda textura que oscurecía el anillo de
+        // aire pegado a la roca, dibujada por delante del aprendiz para
+        // vender profundidad. Cesar lo tumbó con captura en el playtest 67:
+        // "los bordes pintan tiles oscuros... entran mucho en el personaje y
+        // con cosas detrás se van a ver claramente" -- a 1 téxel/celda el
+        // anillo es inevitablemente BLOCKY y se lee como suciedad, no como
+        // profundidad. El volumen queda a cargo del sombreado de masa
+        // (interior/esquinas, que sí gustó) y de las capas de decoración
+        // futuras. La infraestructura se conserva tras esta bandera por si
+        // una versión suavizada (medio téxel, sprites de borde reales)
+        // vuelve a intentarse -- NO reactivar sin arte de borde de verdad.
+        // =============================================================
+        private static readonly bool LabioFrontalActivo = false; // static readonly (no const): evita el CS0162 de "código inalcanzable" en las ramas guardadas.
         private Texture2D _frontTexture;
         private Color32[] _frontScratch;
 
@@ -312,13 +326,16 @@ namespace Alkahest.Sim
             // sigue viniendo de la grilla, mandato de Cesar). Se rellena en el
             // MISMO barrido por chunks que la textura principal: mismo coste
             // de viewport, una subida extra por chunk sucio.
-            _frontTexture = new Texture2D(CellGrid.W, CellGrid.H, TextureFormat.RGBA32, false, false)
+            if (LabioFrontalActivo)
             {
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                name = "AlkahestRocaFrenteTexture",
-            };
-            _frontScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
+                _frontTexture = new Texture2D(CellGrid.W, CellGrid.H, TextureFormat.RGBA32, false, false)
+                {
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                    name = "AlkahestRocaFrenteTexture",
+                };
+                _frontScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
+            }
             _chunkContinuousAnim = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
             _chunkLastRenderTick = new uint[CellGrid.ChunksX * CellGrid.ChunksY];
             // (playtest 15) `_chunkEverRendered` arranca todo en false por
@@ -357,8 +374,11 @@ namespace Alkahest.Sim
             for (int i = 0; i < _pixels.Length; i++) _pixels[i] = default;
             _texture.SetPixels32(_pixels);
             _texture.Apply(false);
-            _frontTexture.SetPixels32(_pixels); // mismo buffer limpio: arranca transparente.
-            _frontTexture.Apply(false);
+            if (_frontTexture != null)
+            {
+                _frontTexture.SetPixels32(_pixels); // mismo buffer limpio: arranca transparente.
+                _frontTexture.Apply(false);
+            }
 
             BuildQuad();
 
@@ -589,17 +609,18 @@ namespace Alkahest.Sim
             _quad.SetParent(transform, false);
             _quad.position = Vector3.zero; // pivot en (0,0): el sprite cubre 25.6 x 14.4 exacto (256x144 celdas de 0.1).
 
-            // (RONDA 66) EL SPRITE DEL LABIO FRONTAL: misma geometría, orden 55
-            // (= Game/Capas.ArquitecturaFrente -- el literal se repite aquí a
-            // propósito: Sim/ no depende de Game/): por DELANTE del aprendiz
-            // (50) y de los halos (40), por DETRÁS del frasco en mano (60).
-            var goFrente = new GameObject("AlkahestRocaFrenteSprite");
-            var srFrente = goFrente.AddComponent<SpriteRenderer>();
-            srFrente.sprite = Sprite.Create(_frontTexture, new Rect(0, 0, CellGrid.W, CellGrid.H),
-                Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
-            srFrente.sortingOrder = 55;
-            goFrente.transform.SetParent(transform, false);
-            goFrente.transform.position = Vector3.zero;
+            // (RONDA 66-68) El sprite del labio frontal solo nace con la
+            // bandera encendida -- ver el docblock de LabioFrontalActivo.
+            if (LabioFrontalActivo)
+            {
+                var goFrente = new GameObject("AlkahestRocaFrenteSprite");
+                var srFrente = goFrente.AddComponent<SpriteRenderer>();
+                srFrente.sprite = Sprite.Create(_frontTexture, new Rect(0, 0, CellGrid.W, CellGrid.H),
+                    Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
+                srFrente.sortingOrder = 55; // = Game/Capas.ArquitecturaFrente (literal a propósito: Sim/ no depende de Game/).
+                goFrente.transform.SetParent(transform, false);
+                goFrente.transform.position = Vector3.zero;
+            }
         }
 
         /// <summary>
@@ -741,7 +762,7 @@ namespace Alkahest.Sim
             if (anyDrawn)
             {
                 _texture.Apply(false);
-                _frontTexture.Apply(false); // el labio va al mismo ritmo que la textura principal.
+                if (_frontTexture != null) _frontTexture.Apply(false); // el labio (si está activo) va al mismo ritmo.
             }
         }
 
@@ -903,7 +924,7 @@ namespace Alkahest.Sim
                     if (continuo) chunkAnimado = true;
                     _pixels[idx] = c;
                     scratch[scratchI] = c;
-                    _frontScratch[scratchI] = ComputeFrontRim(x, y, idx);
+                    if (_frontScratch != null) _frontScratch[scratchI] = ComputeFrontRim(x, y, idx);
                     scratchI++;
                 }
             }
@@ -917,7 +938,7 @@ namespace Alkahest.Sim
             _chunkEverRendered[chunkIndex] = true;
 
             _texture.SetPixels32(x0, y0, w, h, scratch);
-            _frontTexture.SetPixels32(x0, y0, w, h, _frontScratch);
+            if (_frontTexture != null) _frontTexture.SetPixels32(x0, y0, w, h, _frontScratch);
         }
 
         /// <summary>
@@ -1071,6 +1092,44 @@ namespace Alkahest.Sim
                     {
                         r = (byte)(r * 68 / 100); g = (byte)(g * 68 / 100); b = (byte)(b * 68 / 100); // remache.
                     }
+
+                    // (RONDA 68, idea de Cesar: "preseteado cómo se ve la
+                    // madera sobre piedra madre y cómo se ve al aire") ACABADO
+                    // POR CONTEXTO -- cada cara del piso se termina según lo
+                    // que toque:
+                    //  · cara al AIRE: canto NETO de pieza fabricada (arriba
+                    //    superficie clara +30%; abajo/lados silueta firme).
+                    //  · cara contra ROCA: junta de asiento (-10%): se lee
+                    //    encastrado en el muro, no flotando delante de él.
+                    byte mArr = y < CellGrid.H - 1 ? _grid.mat[idx + CellGrid.W] : MaterialId.Stone;
+                    byte mAbj = y > 0 ? _grid.mat[idx - CellGrid.W] : MaterialId.Stone;
+                    byte mIzq = x > 0 ? _grid.mat[idx - 1] : MaterialId.Stone;
+                    byte mDer = x < CellGrid.W - 1 ? _grid.mat[idx + 1] : MaterialId.Stone;
+
+                    if (mArr == MaterialId.Empty)
+                    {
+                        r = ClampByte(r + r * 30 / 100); g = ClampByte(g + g * 30 / 100); b = ClampByte(b + b * 30 / 100);
+                    }
+                    else if (mArr == MaterialId.Stone)
+                    {
+                        r = (byte)(r * 90 / 100); g = (byte)(g * 90 / 100); b = (byte)(b * 90 / 100);
+                    }
+                    if (mAbj == MaterialId.Empty)
+                    {
+                        r = (byte)(r * 74 / 100); g = (byte)(g * 74 / 100); b = (byte)(b * 74 / 100);
+                    }
+                    else if (mAbj == MaterialId.Stone)
+                    {
+                        r = (byte)(r * 88 / 100); g = (byte)(g * 88 / 100); b = (byte)(b * 88 / 100);
+                    }
+                    if (mIzq == MaterialId.Empty || mDer == MaterialId.Empty)
+                    {
+                        r = (byte)(r * 84 / 100); g = (byte)(g * 84 / 100); b = (byte)(b * 84 / 100);
+                    }
+                    else if (mIzq == MaterialId.Stone || mDer == MaterialId.Stone)
+                    {
+                        r = (byte)(r * 92 / 100); g = (byte)(g * 92 / 100); b = (byte)(b * 92 / 100);
+                    }
                 }
                 else
                 {
@@ -1093,60 +1152,64 @@ namespace Alkahest.Sim
                     }
                 }
 
-                // idx+W = celda de ARRIBA (y+1), idx-W = celda de ABAJO (y-1): ver
-                // SimStepper (belowIdx = idx - W, aboveIdx = idx + W) y el check de
-                // superficie de líquidos más abajo en este mismo archivo.
-                bool arribaVacia = y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty;
-                bool abajoVacia = y > 0 && _grid.mat[idx - CellGrid.W] == MaterialId.Empty;
-                bool izqVacia = x > 0 && _grid.mat[idx - 1] == MaterialId.Empty;
-                bool derVacia = x < CellGrid.W - 1 && _grid.mat[idx + 1] == MaterialId.Empty; // (ronda 66) el canto derecho existía sin sombra: masa asimétrica.
-                if (arribaVacia)
+                // (RONDA 68) Los cantos/interior/esquinas/grano genéricos son
+                // SOLO de la roca y demás sólidos orgánicos: el piso ya trae
+                // su propio acabado por contexto arriba (aplicar los dos lo
+                // ensuciaba el doble).
+                if (!esPiso)
                 {
-                    r = ClampByte(r + r * 28 / 100);
-                    g = ClampByte(g + g * 28 / 100);
-                    b = ClampByte(b + b * 28 / 100);
-                }
-                if (abajoVacia)
-                {
-                    r = (byte)(r * 80 / 100);
-                    g = (byte)(g * 80 / 100);
-                    b = (byte)(b * 80 / 100);
-                }
-                if (izqVacia)
-                {
-                    r = ClampByte(r + r * 10 / 100);
-                    g = ClampByte(g + g * 10 / 100);
-                    b = ClampByte(b + b * 10 / 100);
-                }
-                if (derVacia)
-                {
-                    r = (byte)(r * 88 / 100);
-                    g = (byte)(g * 88 / 100);
-                    b = (byte)(b * 88 / 100);
-                }
+                    // idx+W = celda de ARRIBA (y+1), idx-W = celda de ABAJO (y-1): ver
+                    // SimStepper (belowIdx = idx - W, aboveIdx = idx + W) y el check de
+                    // superficie de líquidos más abajo en este mismo archivo.
+                    bool arribaVacia = y < CellGrid.H - 1 && _grid.mat[idx + CellGrid.W] == MaterialId.Empty;
+                    bool abajoVacia = y > 0 && _grid.mat[idx - CellGrid.W] == MaterialId.Empty;
+                    bool izqVacia = x > 0 && _grid.mat[idx - 1] == MaterialId.Empty;
+                    bool derVacia = x < CellGrid.W - 1 && _grid.mat[idx + 1] == MaterialId.Empty; // (ronda 66) el canto derecho existía sin sombra: masa asimétrica.
+                    if (arribaVacia)
+                    {
+                        r = ClampByte(r + r * 28 / 100);
+                        g = ClampByte(g + g * 28 / 100);
+                        b = ClampByte(b + b * 28 / 100);
+                    }
+                    if (abajoVacia)
+                    {
+                        r = (byte)(r * 80 / 100);
+                        g = (byte)(g * 80 / 100);
+                        b = (byte)(b * 80 / 100);
+                    }
+                    if (izqVacia)
+                    {
+                        r = ClampByte(r + r * 10 / 100);
+                        g = ClampByte(g + g * 10 / 100);
+                        b = ClampByte(b + b * 10 / 100);
+                    }
+                    if (derVacia)
+                    {
+                        r = (byte)(r * 88 / 100);
+                        g = (byte)(g * 88 / 100);
+                        b = (byte)(b * 88 / 100);
+                    }
 
-                // (RONDA 66, la clave del "autotiling" percibido) VOLUMEN DE
-                // MASA: el interior sin caras al aire se hunde un 8% -- el
-                // borde queda como aro iluminado y varias celdas chicas se
-                // leen como UNA roca grande ("lógica pequeña, apariencia más
-                // grande"). Y una celda con 2+ caras expuestas (esquina) se
-                // apaga un 12%: el ojo la redondea, marching-squares gratis.
-                int carasAlAire = (arribaVacia ? 1 : 0) + (abajoVacia ? 1 : 0) + (izqVacia ? 1 : 0) + (derVacia ? 1 : 0);
-                if (carasAlAire == 0)
-                {
-                    r = (byte)(r * 92 / 100);
-                    g = (byte)(g * 92 / 100);
-                    b = (byte)(b * 92 / 100);
-                }
-                else if (carasAlAire >= 2)
-                {
-                    r = (byte)(r * 88 / 100);
-                    g = (byte)(g * 88 / 100);
-                    b = (byte)(b * 88 / 100);
-                }
+                    // (RONDA 66, la clave del "autotiling" percibido) VOLUMEN DE
+                    // MASA: el interior sin caras al aire se hunde un 8% -- el
+                    // borde queda como aro iluminado y varias celdas chicas se
+                    // leen como UNA roca grande ("lógica pequeña, apariencia más
+                    // grande"). Y una celda con 2+ caras expuestas (esquina) se
+                    // apaga un 12%: el ojo la redondea, marching-squares gratis.
+                    int carasAlAire = (arribaVacia ? 1 : 0) + (abajoVacia ? 1 : 0) + (izqVacia ? 1 : 0) + (derVacia ? 1 : 0);
+                    if (carasAlAire == 0)
+                    {
+                        r = (byte)(r * 92 / 100);
+                        g = (byte)(g * 92 / 100);
+                        b = (byte)(b * 92 / 100);
+                    }
+                    else if (carasAlAire >= 2)
+                    {
+                        r = (byte)(r * 88 / 100);
+                        g = (byte)(g * 88 / 100);
+                        b = (byte)(b * 88 / 100);
+                    }
 
-                if (!esPiso) // el piso fabril es liso: sin grano.
-                {
                     int grano = (int)(Hash3D(x, y, 97) % 9) - 4; // ±4, hash distinto al del bloque y sin componente de tiempo (la piedra no se anima)
                     r = ClampByte(r + grano);
                     g = ClampByte(g + grano);

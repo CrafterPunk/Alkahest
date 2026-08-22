@@ -674,6 +674,35 @@ namespace Alkahest.Game
                 return;
             }
 
+            // (RONDA 68, mandato 2.5D de Cesar: "una máquina solo puede
+            // colocarse cuando existe superficie estructural válida debajo...
+            // no quiero máquinas flotando sobre irregularidades absurdas")
+            // SOLO para las ESTACIONES (IMovibleAnclaEsquina: su ancla ES la
+            // esquina inferior-izquierda de su huella real, garantía del
+            // pt29): la fila bajo la huella debe ser >=70% roca madre / piso
+            // estructural / obra. Los aparatos de PARED (grifos: su ancla es
+            // la boquilla) y los seres (criatura/capullo: ancla de cuna)
+            // quedan fuera a propósito -- su ancla no describe una huella de
+            // suelo y exigirles piso rompería su colocación de siempre.
+            if (_llevando is IMovibleAnclaEsquina)
+            {
+                int anchoCeldas = Mathf.Max(1, Mathf.RoundToInt(_llevando.TamanoMundo.x / SimRenderer.CellWorldSize));
+                int apoyo = 0, evaluadas = 0;
+                for (int i = 0; i < anchoCeldas; i++)
+                {
+                    int xx = anclaCandidata.x + i, yy = anclaCandidata.y - 1;
+                    if (!CellGrid.InBounds(xx, yy)) continue;
+                    evaluadas++;
+                    int m = _sim.SampleMaterial(xx, yy);
+                    if (m == MaterialId.Stone || m == MaterialId.PisoEstructural || SimLevelBuilder.EsObraDelTaller(xx, yy)) apoyo++;
+                }
+                if (evaluadas > 0 && apoyo * 100 < evaluadas * 70)
+                {
+                    if (_flask != null) _flask.Avisar("necesita apoyo firme — construye piso o roca debajo (cincel: C, luego X)");
+                    return;
+                }
+            }
+
             _llevando.Reposicionar(anclaCandidata);
             MaquinaSync.PedirLiberar(_llevando); // (fix Cesar playtest 33, MULTI) el cerrojo se suelta AQUÍ, con el aparato ya en su sitio final -- no antes.
             if (_flask != null) _flask.Avisar("colocado");

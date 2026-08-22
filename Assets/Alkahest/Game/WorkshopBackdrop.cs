@@ -759,6 +759,11 @@ namespace Alkahest.Game
             float worldW = CellGrid.W * SimRenderer.CellWorldSize;
             sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
+            // (RONDA 68, dirección 2.5D: "fondo más oscuro, máquinas
+            // claramente separadas del muro") El muro de fondo se HUNDE un
+            // ~26% multiplicativo: todo lo que vive en el plano de juego
+            // (materia, máquinas, aprendiz) salta hacia adelante gratis.
+            sr.color = new Color(0.74f, 0.72f, 0.76f, 1f);
             go.transform.position = Vector3.zero;
         }
 
@@ -1330,6 +1335,11 @@ namespace Alkahest.Game
             // tras el playtest 15), solo cambia la densidad de téxeles por unidad.
             sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
+            // (RONDA 68, dirección 2.5D: "fondo más oscuro, máquinas
+            // claramente separadas del muro") El muro de fondo se HUNDE un
+            // ~26% multiplicativo: todo lo que vive en el plano de juego
+            // (materia, máquinas, aprendiz) salta hacia adelante gratis.
+            sr.color = new Color(0.74f, 0.72f, 0.76f, 1f);
             go.transform.position = Vector3.zero;
         }
 
