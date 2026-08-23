@@ -50,6 +50,20 @@ namespace Alkahest.EditorTools
                 return;
             }
 
+            // (RONDA 71b, pedido de Cesar: "que las builds se comporten como
+            // ventana, así puedo dividir la pantalla con Unity") MODO
+            // VENTANA para las builds de prueba: arranca en ventana 1600x900
+            // REDIMENSIONABLE en vez de pantalla completa, y Alt+Enter
+            // alterna a fullscreen cuando se quiera. Se fija AQUÍ, en el
+            // build script (versionado, determinista en cualquier máquina),
+            // no a mano en Project Settings. La build de RELEASE decidirá su
+            // propio modo cuando exista.
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultScreenWidth = 1600;
+            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.allowFullscreenSwitch = true;
+
             Directory.CreateDirectory(OutputDir);
             var options = new BuildPlayerOptions
             {

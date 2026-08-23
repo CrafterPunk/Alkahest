@@ -160,8 +160,20 @@ namespace Alkahest.Game
         // cuarto de segundo de rampa perceptible. Ahora 6.7/96 = 0.07s: el
         // arranque conserva un pelo de suavizado (cero rampa se siente
         // robótico) pero por debajo del umbral en que se LEE como acelerar.
-        [SerializeField] private float moveSpeed = 6.7f;
-        [SerializeField] private float acceleration = 96f; // unidades/s^2 -- rampa de ~0.07s, imperceptible (ver bloque de arriba).
+        // (RONDA 71b, "aún siento el mono muy rápido... ¿se aplicó en ambos
+        // lados?") LA TRAMPA DEL [SerializeField]: estos dos campos estaban
+        // serializados, y el prefab del avatar de red
+        // (Net/AlkahestAprendizRed.prefab) guardaba los valores VIEJOS
+        // (11.2/44) de cuando se creó -- un valor serializado en
+        // prefab/escena PISA el default del código, así que la escena MULTI
+        // (editor Y build) volaba a la velocidad antigua por mucho que el
+        // código dijera 6.7. Se retira la serialización: el CÓDIGO es la
+        // única fuente de verdad de estos dos números en todos los modos y
+        // en todas las builds. (El dato viejo del prefab queda huérfano e
+        // ignorado; se afina aquí, no en el inspector -- como todo en este
+        // proyecto.)
+        private float moveSpeed = 6.7f;
+        private float acceleration = 96f; // unidades/s^2 -- rampa de ~0.07s, imperceptible (ver bloque de arriba).
 
         [Header("Visual")]
         [SerializeField] private Sprite customSprite; // si se asigna, se usa en vez del rig generado (sin animación de capas: se respeta el sprite manual del inspector)

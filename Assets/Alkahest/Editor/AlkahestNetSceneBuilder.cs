@@ -94,6 +94,15 @@ namespace Alkahest.EditorTools
                 return;
             }
 
+            // (RONDA 71b) MODO VENTANA -- mismo criterio y mismos valores que
+            // la build de un jugador (ver AlkahestBuildTools.BuildDemoWindows):
+            // ventana 1600x900 redimensionable, Alt+Enter para fullscreen.
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultScreenWidth = 1600;
+            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.allowFullscreenSwitch = true;
+
             Directory.CreateDirectory(OutputDir);
             var options = new BuildPlayerOptions
             {

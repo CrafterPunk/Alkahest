@@ -160,8 +160,17 @@ namespace Alkahest.Game
         // geometría REAL de la grilla -- moverlos los desalinearía de sus
         // celdas y se leería como bug, no como profundidad.
         // =================================================================
-        private const float FactorParallax = 0.03f;
-        private const float MargenParallax = 1.03f;
+        // (RONDA 71b, Cesar: "no vi nada que se moviera atrás en ningún
+        // caso") SEGUNDA MIRADA, causa hallada: el 3% ERA IMPERCEPTIBLE.
+        // Tras cruzar UNA PANTALLA entera de vuelo, el muro solo diverge un
+        // 3% del ancho visible -- contra un patrón de ladrillo uniforme y
+        // repetitivo, el ojo no separa eso del movimiento propio. 8% sigue
+        // siendo "muy leve" (los fondos cercanos de los pixel-art clásicos
+        // van de 10-20%) pero cruza el umbral de percepción; su banda "2-5%"
+        // era estimación, la decisión analítica quedó en mí (textual). Si a
+        // Cesar le parece teatro de cartón, se baja aquí con un número.
+        private const float FactorParallax = 0.08f;
+        private const float MargenParallax = 1.06f; // margen de escala acorde: excursión máx ~2.1u contra ~2.3u de sobra por lado.
         private Transform _fondoTr;
         private Vector3 _fondoBase;
 

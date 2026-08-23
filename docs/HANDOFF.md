@@ -4413,3 +4413,32 @@ sondas: backdrop vivo en prólogo, moveSpeed=6.7, accel=96.
 CUARTO REINICIO DE SANDBOX documentado en la ronda 70; el rig renombra
 "SteamNetworkingSockets Transport...dll" -> SteamTransportNGO.dll (espacios
 rompen el script). ca_playtest71.cmd barre la ronda.
+
+### Ronda 71b — la velocidad que NO se aplicaba en multi, parallax perceptible, builds en ventana
+
+· VELOCIDAD, INTUICIÓN DE CESAR CONFIRMADA CON DATO: el prefab
+  Net/AlkahestAprendizRed.prefab serializaba moveSpeed: 11.2 /
+  acceleration: 44 -- un [SerializeField] guardado en prefab PISA el
+  default del código, así que la escena MULTI (editor Y build) volaba a la
+  velocidad vieja por mucho que el código dijera 6.7. FIX DE RAÍZ: se
+  retira [SerializeField] de ambos campos -- el dato huérfano del prefab
+  queda ignorado por la semántica de serialización y el CÓDIGO pasa a ser
+  la única fuente de verdad en todos los modos y builds. (Trampa nueva
+  para la lista: pariente de la regla 36 -- un valor afinado en código
+  puede estar siendo pisado por un prefab/escena serializado años atrás;
+  ante "cambié el número y no cambió nada", grep al .prefab/.unity.)
+· PARALLAX "no vi nada que se moviera atrás en ningún caso": causa hallada
+  en la segunda mirada -- el 3% es IMPERCEPTIBLE contra ladrillo uniforme
+  (tras cruzar una pantalla entera la divergencia acumulada es 3% del
+  ancho). FactorParallax 0.03 -> 0.08 (los fondos cercanos clásicos usan
+  10-20%; 8% sigue leve), MargenParallax 1.03 -> 1.06.
+· BUILDS EN VENTANA (pedido): los DOS build scripts fijan antes de
+  compilar PlayerSettings.fullScreenMode=Windowed, 1600x900,
+  resizableWindow=true, allowFullscreenSwitch=true -- las builds nuevas
+  arrancan en ventana redimensionable (para dividir pantalla con Unity) y
+  Alt+Enter alterna a pantalla completa. Versionado en el script, no a
+  mano en Project Settings.
+Recordatorio vigente: REBUILD tras bajar esto (Ctrl+R + "Ten Thousand
+Years/3" o "/4") -- las builds no se reconstruyen solas.
+ca_playtest71.cmd (git add -A) barre también esta pasada; si ya se corrió,
+usar ca_playtest71b.cmd.
