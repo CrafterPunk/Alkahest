@@ -270,7 +270,7 @@ namespace Alkahest.Game
         /// <summary>True mientras el panel de AJUSTES está sobre pantalla -- se abre desde el Título O desde la Pausa (mismo panel, ver <see cref="DrawAjustes"/>); al cerrarlo con "listo" (o Escape) se vuelve a lo que hubiera debajo (Título o Pausa) sin que este archivo tenga que recordar de dónde vino.</summary>
         private bool _ajustesAbiertos;
 
-        private const string PrefKeyVolGeneral = "ChaosAlchemy_VolGeneral";
+        private const string PrefKeyVolGeneral = "TenThousandYears_VolGeneral";
         /// <summary>
         /// Volumen general (AudioListener.volume), 0..1. CARGA PEREZOSA
         /// (hotfix pt47, visto EN VIVO): la versión anterior lo cargaba en el
@@ -970,7 +970,10 @@ namespace Alkahest.Game
             var filete = GUILayoutUtility.GetRect(10f, UiStyles.S(12f));
             if (Event.current.type == EventType.Repaint)
                 UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
-            GUILayout.Label("Diez mil años de servicio empiezan con un frasco prestado.", UiStyles.Subtitulo);
+            // (RONDA 71) EL ESLOGAN OFICIAL del GDD (ficha §1, versión en
+            // español) -- Cesar: "el slogan del título es otro y lo tienes en
+            // el GDD, colócalo en español".
+            GUILayout.Label("Reconstruye el conocimiento humano con barro, fuego y observación.", UiStyles.Subtitulo);
 
             // =================================================================
             // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3) DOS MODOS DE
@@ -986,12 +989,27 @@ namespace Alkahest.Game
             // del botón y el flag que deja apagado.
             // =================================================================
             GUILayout.Space(UiStyles.S(18f));
-            // (RONDA 60, GDD v0.3 §5/§14) EL INICIO OSCURO en greybox: la
-            // fundación de TEN THOUSAND YEARS, para probar con testers antes
-            // del arte. Misma seed de autor que Semilla Cero (los decretos
-            // aplican, ver AlkahestSim.CrearMundoInterno), plano y guion
-            // propios (SimLevelBuilder.BuildFundacion + FundacionDirector).
-            if (GUILayout.Button("EL INICIO — fundación (greybox)", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
+            // =============================================================
+            // (RONDA 71, mandato de Cesar: "ordenar solo la estructura
+            // visual del menú principal para testing... tres entradas
+            // claras") LAS TRES PUERTAS. SOLO cambian las ETIQUETAS y los
+            // comentarios: cada botón conserva EXACTAMENTE los flags, la
+            // seed y el punto de inicio que ya tenía -- "Normal y Caótico
+            // hoy tienen puntos de inicio y contenido ligeramente distintos:
+            // no los fusiones ni los normalices todavía" (textual). El punto
+            // de inicio definitivo post-prólogo se decidirá cuando el
+            // prólogo esté terminado y probado.
+            //  · PRÓLOGO   = la fundación greybox (ronda 60), repetible
+            //    siempre durante testing.
+            //  · MODO NORMAL — SEMILLA CERO = el juego principal (arco de
+            //    autor); conceptualmente empieza después del prólogo.
+            //  · MODO CAÓTICO = alternativo/procedural, semilla libre;
+            //    también asume que ya sabes jugar.
+            // ESC dentro de cualquiera de los tres abre PAUSA con "volver al
+            // título" (ManejarEscape + DrawPause, ya vigente en los tres
+            // modos: la fundación spawnea DayCycle desde el fix 62b).
+            // =============================================================
+            if (GUILayout.Button("PRÓLOGO — la fundación", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
             {
                 AlkahestGameBootstrap.ModoFundacion = true;
                 AlkahestGameBootstrap.ModoSemillaCero = false;
@@ -999,7 +1017,7 @@ namespace Alkahest.Game
             }
 
             GUILayout.Space(UiStyles.S(10f));
-            if (GUILayout.Button("SEMILLA CERO — tu primer taller", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
+            if (GUILayout.Button("MODO NORMAL — SEMILLA CERO", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
             {
                 AlkahestGameBootstrap.ModoSemillaCero = true;
                 AlkahestGameBootstrap.ModoFundacion = false;
@@ -1016,7 +1034,7 @@ namespace Alkahest.Game
 
             GUILayout.Space(UiStyles.S(10f));
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("MODO CAÓTICO — entrar con esta semilla", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
+            if (GUILayout.Button("MODO CAÓTICO — semilla libre", UiStyles.Boton, GUILayout.Height(UiStyles.S(34f))))
             {
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 AlkahestGameBootstrap.ModoFundacion = false;

@@ -598,7 +598,7 @@ namespace Alkahest.Game
             SimLevelBuilder.ActualizarObra(_handleObra, h.OutX0, h.OutY0, h.OutX1, h.OutY1);
 
             Rotular(null, UiStyles.Exito);
-            Debug.Log("[ChaosAlchemy] El alambique se ha construido: atrapa el vapor y destila.");
+            Debug.Log("[TenThousandYears] El alambique se ha construido: atrapa el vapor y destila.");
         }
 
         /// <summary>

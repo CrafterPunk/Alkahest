@@ -4357,3 +4357,59 @@ Los cuatro ajustes de Cesar:
    translúcido a propósito (ahí ver el taller es parte del gesto).
    VERIFICADO con captura de escritorio: título dorado + telón sin mundo.
 ca_playtest70.cmd barre la ronda (incluye el 69g rescatado).
+
+## Ronda 71 — TRES PUERTAS, ESLOGAN DEL GDD, UNIFICACIÓN DE NOMBRES, -40% DE VELOCIDAD
+
+Feedback de Cesar sobre la 70 + mandatos nuevos. Diagnósticos primero:
+· "NO VI EL PARALLAX": dos causas reales. (a) EL PRÓLOGO NO TENÍA FONDO --
+  SpawnFundacion retornaba antes de la línea que crea WorkshopBackdrop, así
+  que detrás de la piedra estaba el color plano de cámara y el parallax no
+  tenía nada que mover. FIX: la fundación ahora spawnea el backdrop (visual
+  puro; la viñeta del director lo oscurece donde toca). (b) LA BUILD ESTABA
+  VIEJA: ver abajo.
+· "LAS MEJORAS SOLO SE VEN EN UNITY, NO EN LA BUILD": la build que probó es
+  ANTERIOR a las rondas del juice -- el .exe no se reconstruye solo. Tras
+  bajar esta ronda: Ctrl+R y menú "Ten Thousand Years/3. Build demo
+  Windows" (o 4 para MULTI) -- la primera build nueva saldrá ya a
+  Builds/TenThousandYearsDemo|Multi con TODO lo acumulado.
+· "ME DA LA IMPRESIÓN QUE ACELERA": SUSTENTO CONFIRMADO -- MoveTowards con
+  acceleration=44 tardaba 0.25s en llegar a tope. moveSpeed 11.2 -> 6.7
+  (-40% pedido) y acceleration 44 -> 96 (rampa 0.07s: conserva un pelo de
+  suavizado anti-robótico pero ya no se LEE como acelerar).
+
+LAS TRES PUERTAS (DayCycle.DrawTitle -- SOLO etiquetas y orden visual, cada
+botón conserva flags/seed/punto de inicio EXACTOS, mandato textual de no
+fusionar Normal y Caótico todavía):
+  · "PRÓLOGO — la fundación"        (ex "EL INICIO — fundación (greybox)")
+  · "MODO NORMAL — SEMILLA CERO"    (ex "SEMILLA CERO — tu primer taller")
+  · "MODO CAÓTICO — semilla libre"  (ex "...entrar con esta semilla"), con
+    su campo de seed intacto.
+ESC->PAUSA->volver al título ya funcionaba en los tres modos (la fundación
+spawnea DayCycle desde el fix 62b); verificado InputLocked=False en prólogo.
+ESLOGAN OFICIAL bajo el título (GDD §1, versión española): "Reconstruye el
+conocimiento humano con barro, fuego y observación."
+
+UNIFICACIÓN DE NOMBRES (mandato: "no puede quedar vestigio que genere
+confusión a un dev futuro"):
+  · Barrido global "ChaosAlchemy" -> "TenThousandYears" en 34 .cs (tags de
+    log [TenThousandYears], nombres de clips/texturas, PrefKeys -- OJO: el
+    volumen guardado y la pref del DevPalette se resetean UNA vez).
+  · Menús de Unity: "Alkahest/1..5" -> "Ten Thousand Years/1..5".
+  · Builds: Builds/TenThousandYearsDemo/TenThousandYears.exe y
+    Builds/TenThousandYearsMulti/TenThousandYearsMulti.exe. (El rig
+    compile_fiel se re-stagea desde la carpeta NUEVA tras la primera build
+    multi; la vieja ChaosAlchemyMulti puede borrarse entonces.)
+  · PlayerSettings.productName = "TEN THOUSAND YEARS" (título de ventana).
+  · "SpaceWar" EN STEAM: NO es vestigio nuestro -- steam_appid.txt=480, el
+    app de PRUEBAS de Valve (Spacewar). Saldrá así hasta comprar el appid
+    propio en Steamworks ($100, fase de lanzamiento); no hay nada que
+    limpiar en el código.
+  · QUEDA COMO FASE DE LIMPIEZA (GDD §13, NO tocado hoy a propósito --
+    romper refs de escena/asmdef merece ronda propia): namespace Alkahest.*,
+    escena AlkahestLab, asmdef Alkahest.Runtime, repo GitHub `Alkahest`.
+VERIFICADO con captura: menú "Ten Thousand Years" en la barra de Unity,
+título con eslogan y tres puertas, telón opaco, log [TenThousandYears];
+sondas: backdrop vivo en prólogo, moveSpeed=6.7, accel=96.
+CUARTO REINICIO DE SANDBOX documentado en la ronda 70; el rig renombra
+"SteamNetworkingSockets Transport...dll" -> SteamTransportNGO.dll (espacios
+rompen el script). ca_playtest71.cmd barre la ronda.

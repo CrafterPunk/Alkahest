@@ -61,7 +61,7 @@ namespace Alkahest.Game
     ///    de cualquier temperatura de ignición sorteable).
     ///
     /// LIMITACIÓN: escribe _sim.Grid.temp[] directamente en vez de pasar por una
-    /// API dedicada del simulador. TODO(ChaosAlchemy): canalizar por
+    /// API dedicada del simulador. TODO(TenThousandYears): canalizar por
     /// AlkahestSim.InjectHeat de cara al netcode.
     ///
     /// ---------------------------------------------------------------------
@@ -661,7 +661,7 @@ namespace Alkahest.Game
             UpdateVisualTint();
             RebuildChapaEstado();
             MachineFocus.RegistrarUsoE(); // (restaurado playtest 7) el estado cambió de verdad: cuenta como un uso aprendido de E.
-            Debug.Log($"[ChaosAlchemy] Placa ígnea -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
+            Debug.Log($"[TenThousandYears] Placa ígnea -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
         }
 
         private byte TargetRaw() => _state == State.Ardiente ? ArdienteRaw : _templadaRaw;

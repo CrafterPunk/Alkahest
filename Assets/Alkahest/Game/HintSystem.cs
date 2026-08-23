@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy] Onboarding suave: pistas rotatorias arriba-centro, bajo el
+    /// [TenThousandYears] Onboarding suave: pistas rotatorias arriba-centro, bajo el
     /// reloj de la jornada. H las oculta/muestra (no "para siempre": es un
     /// interruptor, ver <see cref="_oculto"/>); N salta ya a la siguiente sin
     /// esperar el reloj (playtest 26, ver <see cref="_offsetManual"/>); y todo lo

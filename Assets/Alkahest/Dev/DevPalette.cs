@@ -38,7 +38,7 @@ namespace Alkahest.Dev
         private bool _visible;
         /// <summary>Abierta = el ratón pinta materiales; el Frasco debe ignorar sus clics.</summary>
         public static bool IsOpen { get; private set; }
-        private const string PrefKey = "ChaosAlchemy_DevPalette";
+        private const string PrefKey = "TenThousandYears_DevPalette";
 
         // Arranca por debajo del panel del frasco (arriba-izquierda) para no
         // taparlo al abrirse; sigue siendo arrastrable.
@@ -225,7 +225,7 @@ namespace Alkahest.Dev
         private void OnGUI()
         {
             if (!IsDevBuild() || !_visible || _sim == null || _sim.Universe == null) return;
-            _windowRect = GUILayout.Window(WindowId, _windowRect, DrawWindow, "ChaosAlchemy — Dev (F3)");
+            _windowRect = GUILayout.Window(WindowId, _windowRect, DrawWindow, "TenThousandYears — Dev (F3)");
         }
 
         private void DrawWindow(int id)

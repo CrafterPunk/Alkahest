@@ -1285,19 +1285,19 @@ namespace Alkahest.Sim
                 UnityEngine.Debug.Assert(
                     l.a == r.a && l.b == r.b && l.productoA == r.productA && l.productoB == r.productB
                     && l.chancePct == r.chancePct && l.minTempRaw == r.minTempRaw && l.maxTempRaw == r.maxTempRaw,
-                    $"[ChaosAlchemy] INVARIANTE ROTA: Leyes[{li}] no describe Reactions.At({li}) (ver CONTRATO_FASE3.md sección 3).");
+                    $"[TenThousandYears] INVARIANTE ROTA: Leyes[{li}] no describe Reactions.At({li}) (ver CONTRATO_FASE3.md sección 3).");
             }
             UnityEngine.Debug.Assert(leyCrecimientoIndice == reactionEngine.Count,
-                "[ChaosAlchemy] LeyCrecimientoIndice debe ser exactamente Reactions.Count.");
+                "[TenThousandYears] LeyCrecimientoIndice debe ser exactamente Reactions.Count.");
             UnityEngine.Debug.Assert(leyes.Length <= MaxLeyes,
-                $"[ChaosAlchemy] Leyes.Length={leyes.Length} supera MaxLeyes={MaxLeyes} (R9 del contrato).");
+                $"[TenThousandYears] Leyes.Length={leyes.Length} supera MaxLeyes={MaxLeyes} (R9 del contrato).");
 #endif
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             {
                 var sb = new System.Text.StringBuilder();
                 string afinidadNombres = string.Join(", ", Array.ConvertAll(afinidadDelUniverso, id => mats[id] != null ? mats[id].devName : id.ToString()));
-                sb.Append($"[ChaosAlchemy] Química de esta seed ({seed}): {leyesGeneradasDescriptores.Length} leyes sorteadas + 7 núcleo + 1 crecimiento = {leyes.Length} totales. Afinidad: {afinidadNombres}.\n");
+                sb.Append($"[TenThousandYears] Química de esta seed ({seed}): {leyesGeneradasDescriptores.Length} leyes sorteadas + 7 núcleo + 1 crecimiento = {leyes.Length} totales. Afinidad: {afinidadNombres}.\n");
                 for (int li = 0; li < leyesGeneradasDescriptores.Length; li++)
                 {
                     var l = leyesGeneradasDescriptores[li];
@@ -2126,8 +2126,8 @@ namespace Alkahest.Sim
                     // alguien amplía esos pools en el futuro sin leer este
                     // comentario.
 #if UNITY_EDITOR
-                    UnityEngine.Debug.Assert(a != MaterialId.Empty && a != MaterialId.Stone && a != MaterialId.Fire, "[ChaosAlchemy] R2 violada: reactivo prohibido en el pool de sorteo.");
-                    UnityEngine.Debug.Assert(b != MaterialId.Empty && b != MaterialId.Stone && b != MaterialId.Fire, "[ChaosAlchemy] R2 violada: reactivo prohibido en el pool de sorteo.");
+                    UnityEngine.Debug.Assert(a != MaterialId.Empty && a != MaterialId.Stone && a != MaterialId.Fire, "[TenThousandYears] R2 violada: reactivo prohibido en el pool de sorteo.");
+                    UnityEngine.Debug.Assert(b != MaterialId.Empty && b != MaterialId.Stone && b != MaterialId.Fire, "[TenThousandYears] R2 violada: reactivo prohibido en el pool de sorteo.");
 #endif
 
                     // R3: a != b.
@@ -2205,7 +2205,7 @@ namespace Alkahest.Sim
                     // pedidas para esta semilla, en vez de relajar R1-R8 para
                     // forzar un hueco imposible. Registrado para poder ver,
                     // semilla a semilla, si el tope de intentos se queda corto.
-                    UnityEngine.Debug.LogWarning($"[ChaosAlchemy] Sorteo de leyes: hueco {slot + 1}/{objetivo} agotó {MaxIntentosPorLey} intentos sin una combinación válida (R1-R8). Esta semilla tendrá {leyesList.Count} leyes sorteadas en vez de {objetivo}.");
+                    UnityEngine.Debug.LogWarning($"[TenThousandYears] Sorteo de leyes: hueco {slot + 1}/{objetivo} agotó {MaxIntentosPorLey} intentos sin una combinación válida (R1-R8). Esta semilla tendrá {leyesList.Count} leyes sorteadas en vez de {objetivo}.");
                 }
             }
 
@@ -2893,13 +2893,13 @@ namespace Alkahest.Sim
             if (!ok)
             {
                 ClampearGarantia(t, tempEnsayo, out ganador, out baseCombustible, out pasos);
-                UnityEngine.Debug.LogWarning($"[ChaosAlchemy] Persistencia: {MaxIntentosTabla} sorteos de tabla no cumplieron las 3 garantías por azar -- CLAMPEADA la última (ver ClampearGarantia).");
+                UnityEngine.Debug.LogWarning($"[TenThousandYears] Persistencia: {MaxIntentosTabla} sorteos de tabla no cumplieron las 3 garantías por azar -- CLAMPEADA la última (ver ClampearGarantia).");
             }
 
             UnityEngine.Debug.Assert(baseCombustible >= 0 && baseCombustible < MaterialId.BasesCount,
-                "[ChaosAlchemy] INVARIANTE ROTA: BaseCombustibleGarantizada fuera de rango tras el solver de persistencia (CONTRATO_PERSISTE.md sección 4.4).");
+                "[TenThousandYears] INVARIANTE ROTA: BaseCombustibleGarantizada fuera de rango tras el solver de persistencia (CONTRATO_PERSISTE.md sección 4.4).");
             UnityEngine.Debug.Assert(MaterialId.EsBaseEstado(ganador),
-                "[ChaosAlchemy] INVARIANTE ROTA: GanadorGarantizado no es una variante base×estado (CONTRATO_PERSISTE.md sección 4.4).");
+                "[TenThousandYears] INVARIANTE ROTA: GanadorGarantizado no es una variante base×estado (CONTRATO_PERSISTE.md sección 4.4).");
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             {
@@ -2910,7 +2910,7 @@ namespace Alkahest.Sim
                 // combustible garantizado salen las cinco") tiene que poder
                 // leerse en el PRIMER arranque, no deducirse jugando.
                 var sbEx = new System.Text.StringBuilder();
-                sbEx.Append($"[ChaosAlchemy] Persistencia: ganador={ganador} a {pasos} pasos, combustible=base {baseCombustible}, tier1={t.TempCombustibleRawBase[baseCombustible]} (verificado). Extracción del limo por banda:");
+                sbEx.Append($"[TenThousandYears] Persistencia: ganador={ganador} a {pasos} pasos, combustible=base {baseCombustible}, tier1={t.TempCombustibleRawBase[baseCombustible]} (verificado). Extracción del limo por banda:");
                 for (int b = 0; b < MaterialId.BasesCount; b++)
                     sbEx.Append($" base{b}={t.ExtraccionRaw[b]}{(t.ExtraccionRaw[b] <= CrisolTier0Raw ? "(fuego bajo)" : string.Empty)}");
                 UnityEngine.Debug.Log(sbEx.ToString());
@@ -3713,7 +3713,7 @@ namespace Alkahest.Sim
             int baseCombustibleGarantizada = u.BaseCombustibleGarantizada;
 #if UNITY_EDITOR
             UnityEngine.Debug.Assert(baseCombustibleGarantizada == bTurba,
-                $"[ChaosAlchemy][SemillaCero] BaseCombustibleGarantizada (base{baseCombustibleGarantizada}) ya no coincide con SemillaCeroBaseTurbaIdx ({bTurba}): la veta tallada en SimLevelBuilder dejaría de ser el combustible garantizado -- actualizar la constante junto con SemillaCero si se recongela.");
+                $"[TenThousandYears][SemillaCero] BaseCombustibleGarantizada (base{baseCombustibleGarantizada}) ya no coincide con SemillaCeroBaseTurbaIdx ({bTurba}): la veta tallada en SimLevelBuilder dejaría de ser el combustible garantizado -- actualizar la constante junto con SemillaCero si se recongela.");
 #endif
 
             // ---- Override 1: extracción a fuego propio, banda generosa (REESCRITO, D1) ----
@@ -3872,7 +3872,7 @@ namespace Alkahest.Sim
                 byte arcillaCalcinado = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Calcinado));
                 byte arcillaCompacto = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Compacto));
                 byte arcillaCeramico = u.UmbralPersistenciaRaw(MaterialId.MatDe(1, EstadoMateria.Ceramico));
-                UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] LA CERÁMICA ES EL TECHO -- umbrales finales de arcilla (base1): calcinado/ladrillo molido={arcillaCalcinado}, compacto/adobe={arcillaCompacto}, ceramico/cerámica={arcillaCeramico} (ceramico y compacto deben quedar >= calcinado tras el override, o no había inversión que corregir).");
+                UnityEngine.Debug.Log($"[TenThousandYears][SemillaCero] LA CERÁMICA ES EL TECHO -- umbrales finales de arcilla (base1): calcinado/ladrillo molido={arcillaCalcinado}, compacto/adobe={arcillaCompacto}, ceramico/cerámica={arcillaCeramico} (ceramico y compacto deben quedar >= calcinado tras el override, o no había inversión que corregir).");
             }
 #endif
 
@@ -3885,9 +3885,9 @@ namespace Alkahest.Sim
             byte tierUnoDeB1 = u.TempCombustibleRaw(MaterialId.MatDe(baseCombustibleGarantizada, EstadoMateria.Calcinado));
 #if UNITY_EDITOR
             UnityEngine.Debug.Assert(baseCombustibleGarantizada != b0,
-                "[ChaosAlchemy][SemillaCero] BaseCombustibleGarantizada coincide con SemillaCeroBaseIdx: la trampa del beat 4 (\"alimenta el brasero\") no tiene con qué dispararse -- recongelar SemillaCero con otra seed vecina.");
+                "[TenThousandYears][SemillaCero] BaseCombustibleGarantizada coincide con SemillaCeroBaseIdx: la trampa del beat 4 (\"alimenta el brasero\") no tiene con qué dispararse -- recongelar SemillaCero con otra seed vecina.");
             UnityEngine.Debug.Assert(tierUnoDeB1 >= techoCalcinadoB0,
-                "[ChaosAlchemy][SemillaCero] El combustible garantizado de esta seed no supera el techo de calcinación de la base 0: la trampa del beat 4 no se dispara -- recalibrar techoCalcinadoB0 o recongelar la seed.");
+                "[TenThousandYears][SemillaCero] El combustible garantizado de esta seed no supera el techo de calcinación de la base 0: la trampa del beat 4 no se dispara -- recalibrar techoCalcinadoB0 o recongelar la seed.");
 #endif
 
             // ---- Override 4: colores reales de la tabla (las CINCO bases) ----
@@ -3984,7 +3984,7 @@ namespace Alkahest.Sim
                     if (soluble) haySoluble = true; else hayInsoluble = true;
                 }
                 UnityEngine.Debug.Assert(haySoluble && hayInsoluble,
-                    "[ChaosAlchemy][SemillaCero] G3 rota tras apagar SolubleBase[base0] (D2): ya no hay soluble+insoluble alcanzables a la vez -- ajustar SOLO otra base soluble (nunca reencender la arena), CONTRATO_RONDA48.md §1b.");
+                    "[TenThousandYears][SemillaCero] G3 rota tras apagar SolubleBase[base0] (D2): ya no hay soluble+insoluble alcanzables a la vez -- ajustar SOLO otra base soluble (nunca reencender la arena), CONTRATO_RONDA48.md §1b.");
             }
 #endif
 
@@ -4001,7 +4001,7 @@ namespace Alkahest.Sim
                 string[] etiquetaCima = { "rescoldo (sin combustible)", "turba cruda (veta, tallada)", "ceniza (residuo del beat 4, tier 0.5)", "carbón vegetal (combustible garantizado, tallado y calcinado)" };
 
                 var sbEsc = new System.Text.StringBuilder();
-                sbEsc.Append($"[ChaosAlchemy][SemillaCero] ESCALERA fuel->base (seed {SemillaCero}), bandas REALES de esta instancia:");
+                sbEsc.Append($"[TenThousandYears][SemillaCero] ESCALERA fuel->base (seed {SemillaCero}), bandas REALES de esta instancia:");
                 bool huboEclipse = false;
                 for (int b = 0; b < MaterialId.BasesCount; b++)
                 {
@@ -4041,13 +4041,13 @@ namespace Alkahest.Sim
                 UnityEngine.Debug.Log(sbEsc.ToString());
 #if UNITY_EDITOR
                 UnityEngine.Debug.Assert(!huboEclipse,
-                    "[ChaosAlchemy][SemillaCero] ECLIPSE en la escalera fuel->base: alguna de las 4 bases que salen del limo no tiene cima que la alcance (D1, CONTRATO_RONDA48.md §1b) -- ver el log de arriba para cuál.");
+                    "[TenThousandYears][SemillaCero] ECLIPSE en la escalera fuel->base: alguna de las 4 bases que salen del limo no tiene cima que la alcance (D1, CONTRATO_RONDA48.md §1b) -- ver el log de arriba para cuál.");
                 UnityEngine.Debug.Assert(u.ExtraccionRaw(1) <= turbaCombustibleRaw,
-                    $"[ChaosAlchemy][SemillaCero] La banda de arcilla (base1={u.ExtraccionRaw(1)}) no cabe bajo la cima de la turba ({turbaCombustibleRaw}) -- contrato §1b: subir el tier de la turba justo por encima, NUNCA bajar la banda de arcilla.");
+                    $"[TenThousandYears][SemillaCero] La banda de arcilla (base1={u.ExtraccionRaw(1)}) no cabe bajo la cima de la turba ({turbaCombustibleRaw}) -- contrato §1b: subir el tier de la turba justo por encima, NUNCA bajar la banda de arcilla.");
 #endif
             }
 
-            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Overrides aplicados: base0={b0} (extraccion={u.ExtraccionRaw(b0)}, calcinacion={u.CalcinacionRaw(b0)}, techoCalcinado={u.UmbralPersistenciaRaw(calcinadoB0)}, fusion={u.FusionRaw(b0)}), turba=base{bTurba} (combustibleCrudo={u.TempCombustibleRaw(polvoTurba)}, tier1Calcinado={tierUnoDeB1}, densidad={turbaDef.density} vs agua={u.Materials[MaterialId.Water].density}, soluble={u.SolubleEnAgua(polvoTurba)}), cenizaTier0_5={u.TempCombustibleRaw(MaterialId.Ash)}, ganadorGarantizado(sin tocar)={u.GanadorGarantizado}.");
+            UnityEngine.Debug.Log($"[TenThousandYears][SemillaCero] Overrides aplicados: base0={b0} (extraccion={u.ExtraccionRaw(b0)}, calcinacion={u.CalcinacionRaw(b0)}, techoCalcinado={u.UmbralPersistenciaRaw(calcinadoB0)}, fusion={u.FusionRaw(b0)}), turba=base{bTurba} (combustibleCrudo={u.TempCombustibleRaw(polvoTurba)}, tier1Calcinado={tierUnoDeB1}, densidad={turbaDef.density} vs agua={u.Materials[MaterialId.Water].density}, soluble={u.SolubleEnAgua(polvoTurba)}), cenizaTier0_5={u.TempCombustibleRaw(MaterialId.Ash)}, ganadorGarantizado(sin tocar)={u.GanadorGarantizado}.");
 #endif
         }
 

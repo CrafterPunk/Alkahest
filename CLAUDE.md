@@ -1,4 +1,6 @@
-# ChaosAlchemy — contexto para agentes (LÉEME PRIMERO)
+# TEN THOUSAND YEARS — contexto para agentes (LÉEME PRIMERO)
+
+(Ex-ChaosAlchemy; el repo sigue llamándose `Alkahest` y el namespace del código `Alkahest.*` — su renombre es la fase de Limpieza del GDD §13. Los menús de Unity son "Ten Thousand Years/1..5", las builds salen a `Builds/TenThousandYearsDemo|Multi` y el productName es "TEN THOUSAND YEARS" desde la ronda 71.)
 
 Juego Unity de alquimia emergente: simulación celular estilo Noita + descubrir/nombrar/domesticar
 las leyes de un universo distinto por seed. Derivado del template `FriendsLoop-Unity-Steam-Template`

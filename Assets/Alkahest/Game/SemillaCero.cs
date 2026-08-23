@@ -389,7 +389,7 @@ namespace Alkahest.Game
             string nombre = _knowledge.NombreDe(_sustanciaPrincipal);
             string texto = "Tráeme " + Beat2Cantidad + " de ese... \"" + nombre + "\" tuyo.";
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat2Cantidad, Beat2Recompensa, texto, targetMat: _sustanciaPrincipal);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 1→2: primera hornada lista (\"" + nombre + "\"). Petición a regañadientes: " + texto);
+            Debug.Log("[TenThousandYears][SemillaCero] beat 1→2: primera hornada lista (\"" + nombre + "\"). Petición a regañadientes: " + texto);
         }
 
         /// <summary>
@@ -448,7 +448,7 @@ namespace Alkahest.Game
 
             string texto = "Ahora que sabes cómo se llama: tráeme " + Beat3Cantidad + " de tu \"" + nombre + "\".";
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat3Cantidad, Beat3Recompensa, texto, targetMat: _sustanciaPrincipal);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 2→3: el Maestro enseña el nombre real (\"" + nombre + "\") -- el pedido continúa: " + texto);
+            Debug.Log("[TenThousandYears][SemillaCero] beat 2→3: el Maestro enseña el nombre real (\"" + nombre + "\") -- el pedido continúa: " + texto);
         }
 
         private void SondeoNombreSeGana()
@@ -488,7 +488,7 @@ namespace Alkahest.Game
             // frase no cambia.
             string texto = "Más de eso, pero TOSTADO -- tráeme " + Beat4Cantidad + " de tu \"" + nombre + "\", bien calcinada. El brasero come lo que talles del muro.";
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat4Cantidad, Beat4Recompensa, texto, targetMat: _calcinadoPrincipal);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 3→4: pide lo tostado -- la banda de calcinación es estrecha, el brasero recién alimentado se pasará de largo.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 3→4: pide lo tostado -- la banda de calcinación es estrecha, el brasero recién alimentado se pasará de largo.");
 
             // (contrato §1d) El consejo de la veta, texto EXACTO, disparado
             // UNA vez al entrar en este beat -- ver el docblock del método.
@@ -510,7 +510,7 @@ namespace Alkahest.Game
             {
                 _cenizaComentada = true;
                 MaestroDice("Eso es ceniza. Interesante... apunta a qué temperatura muere. Y guárdala: la ceniza también arde, mal, pero arde.", 8f);
-                Debug.Log("[ChaosAlchemy][SemillaCero] beat 4: presenció la ceniza -- nota forense ya en el diario, el Maestro comenta.");
+                Debug.Log("[TenThousandYears][SemillaCero] beat 4: presenció la ceniza -- nota forense ya en el diario, el Maestro comenta.");
             }
 
             if (!PedidoActivoCompletado()) return;
@@ -529,7 +529,7 @@ namespace Alkahest.Game
             SimLevelBuilder.DestaparSala(_sim, SalaPrensa); // la sala se destapa AL ACEPTARSE la pregunta (contrato §1 beat 5), no al completarla.
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat5CantidadPrensa, Beat5Recompensa,
                 "¿Puedes hacerlo MÁS DURO?", targetMat: _compactoPrincipal);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 4→5.1: se destapa la prensa -- idea ESTADO/proceso.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 4→5.1: se destapa la prensa -- idea ESTADO/proceso.");
         }
 
         private void SondeoPreguntaPrensa()
@@ -563,7 +563,7 @@ namespace Alkahest.Game
                 Beat5CantidadColumna + " celdas de algo así a la Tolva -- la turba de la veta, por ejemplo, " +
                 "o cualquier otra cosa que flote entera.");
             MaestroDice("La columna es para MIRAR, no para entregar: vierte agua, suelta un polvo encima y observa quién flota sin disolverse. La respuesta me la dejas en la Tolva.", 9f);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.1→5.2: se destapa la columna -- idea DENSIDAD.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 5.1→5.2: se destapa la columna -- idea DENSIDAD.");
         }
 
         private void SondeoPreguntaColumna()
@@ -580,7 +580,7 @@ namespace Alkahest.Game
             // OrderSystem.CompletarEnsayo(OrderType.Conduce, ...) -- nunca en la Tolva
             // (MatchesOrder devuelve false a propósito para este tipo).
             _orders.EncolarPedidoGuiado(OrderType.Conduce, 1, Beat5RecompensaEnsayo, "¿Esto CONDUCE?");
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.2→5.3: se destapa el banco de chispa -- idea CONDUCTIVIDAD.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 5.2→5.3: se destapa el banco de chispa -- idea CONDUCTIVIDAD.");
         }
 
         private void SondeoPreguntaChispa()
@@ -627,7 +627,7 @@ namespace Alkahest.Game
             MaestroDice("Todo lo tuestas. ¿Y si lo ENFRÍAS?", 6f);
             _orders.EncolarPedidoGuiado(OrderType.Guiado, Beat5CantidadFrio, Beat5RecompensaFrio,
                 "Tráeme HIELO — y apúrate, que el frío no espera a nadie.", targetMat: MaterialId.Ice);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.3→5.3½: se destapa la alcoba fría -- idea TEMPERATURA-FRÍA (completa la mitad caliente del beat 4).");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 5.3→5.3½: se destapa la alcoba fría -- idea TEMPERATURA-FRÍA (completa la mitad caliente del beat 4).");
         }
 
         private void SondeoPreguntaFrio()
@@ -675,7 +675,7 @@ namespace Alkahest.Game
                 _derretidoComentado = true;
                 // (contrato §3c, textual) "el Maestro NO se burla dos veces igual: una línea... edge-trigger como la ceniza del beat 4".
                 MaestroDice("...se te derritió. El frío es paciencia Y PRISA.", 7f);
-                Debug.Log("[ChaosAlchemy][SemillaCero] beat frío: el hielo se derritió antes de llegar a la Tolva -- el Maestro comenta, una sola vez.");
+                Debug.Log("[TenThousandYears][SemillaCero] beat frío: el hielo se derritió antes de llegar a la Tolva -- el Maestro comenta, una sola vez.");
             }
 
             _hieloEnZonaFriaAntes = hieloAhora;
@@ -730,7 +730,7 @@ namespace Alkahest.Game
             // coherente con el pedido rehecho.
             _orders.EncolarPedidoGuiado(OrderType.AguantaCalor, 1, Beat5RecompensaEnsayo,
                 "¿DE VERDAD aguanta? Trae al ENSAYO (la sala recién abierta) algo que sobreviva al rojo sin arder ni fundirse -- lo bien cocido aguanta.");
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.3→5.4: se destapa el Ensayo -- idea TEMPERATURA, cierra el fracaso del beat 4.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 5.3→5.4: se destapa el Ensayo -- idea TEMPERATURA, cierra el fracaso del beat 4.");
         }
 
         /// <summary>
@@ -778,7 +778,7 @@ namespace Alkahest.Game
             _beat = Beat.FinalAbierto;
             _orders.ActiveOrders.Clear(); // contrato: "sin encargo nuevo, panel de encargos vacío".
             MaestroDice("No necesito nada más por hoy. ...Pero queda limo.", 9f);
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 5.4→6: FINAL ABIERTO. El alambique sigue goteando; nadie lo pidió. Arranca el contador de autonomía.");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 5.4→6: FINAL ABIERTO. El alambique sigue goteando; nadie lo pidió. Arranca el contador de autonomía.");
 
             _ultimaManipTotal = SumaManipulaciones();
             _ultimoNamingVersion = _knowledge.NamingVersion;
@@ -813,7 +813,7 @@ namespace Alkahest.Game
             FaseVidaUtil = true;
             MaestroDice("Y te subí la alacena del sótano: lo que produzcas, guárdalo — el mundo no avisa antes de pedir.", 9f);
             _orders.EncolarCompuestoVitrales();
-            Debug.Log("[ChaosAlchemy][SemillaCero] beat 6: EL MUNDO EMPIEZA A PEDIR -- compuesto \"vitrales_capilla\" encolado, Alacena revelada (FaseVidaUtil=true).");
+            Debug.Log("[TenThousandYears][SemillaCero] beat 6: EL MUNDO EMPIEZA A PEDIR -- compuesto \"vitrales_capilla\" encolado, Alacena revelada (FaseVidaUtil=true).");
         }
 
         private int SumaManipulaciones()
@@ -841,7 +841,7 @@ namespace Alkahest.Game
                 _ultimaManipTotal = manipActual;
                 _autonomiaAcciones += deltaManip;
                 _autonomiaAccionesEsteMinuto += deltaManip;
-                Debug.Log("[ChaosAlchemy][SemillaCero] autonomía: +" + deltaManip + " manipulación(es) tras el final abierto (total " + _autonomiaAcciones + ").");
+                Debug.Log("[TenThousandYears][SemillaCero] autonomía: +" + deltaManip + " manipulación(es) tras el final abierto (total " + _autonomiaAcciones + ").");
             }
 
             int naming = _knowledge.NamingVersion;
@@ -851,14 +851,14 @@ namespace Alkahest.Game
                 _ultimoNamingVersion = naming;
                 _autonomiaAcciones += deltaNaming;
                 _autonomiaAccionesEsteMinuto += deltaNaming;
-                Debug.Log("[ChaosAlchemy][SemillaCero] autonomía: bautizaste/renombraste algo tras el final abierto (total " + _autonomiaAcciones + ").");
+                Debug.Log("[TenThousandYears][SemillaCero] autonomía: bautizaste/renombraste algo tras el final abierto (total " + _autonomiaAcciones + ").");
             }
 
             _autonomiaMinutoAcc += SondeoSeg;
             if (_autonomiaMinutoAcc >= 60f)
             {
                 _autonomiaMinutoAcc -= 60f;
-                Debug.Log("[ChaosAlchemy][SemillaCero] autonomía: resumen del minuto -- " + _autonomiaAccionesEsteMinuto + " acción(es) (total " + _autonomiaAcciones + ").");
+                Debug.Log("[TenThousandYears][SemillaCero] autonomía: resumen del minuto -- " + _autonomiaAccionesEsteMinuto + " acción(es) (total " + _autonomiaAcciones + ").");
                 _autonomiaAccionesEsteMinuto = 0;
             }
         }

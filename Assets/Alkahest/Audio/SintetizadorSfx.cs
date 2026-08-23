@@ -543,7 +543,7 @@ namespace Alkahest.Audio
 
             Normalizar(buf, 0.28f); // ver comentario de clase: presupuesto de mezcla, "casi subliminal".
             SuavizarBucle(buf, Mathf.RoundToInt(0.22f * SR_LOOP)); // ventana algo más larga que antes (180ms->220ms): margen extra para el ruido muy filtrado (autocorrelación larga tras dos pasadas de paso-bajo a 130Hz).
-            return CrearClip("ChaosAlchemy_LechoAmbiental", buf, SR_LOOP);
+            return CrearClip("TenThousandYears_LechoAmbiental", buf, SR_LOOP);
         }
 
         /// <summary>
@@ -580,7 +580,7 @@ namespace Alkahest.Audio
             Normalizar(buf, 0.50f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
             Clamp(buf);
             SuavizarBucle(buf, Mathf.RoundToInt(0.15f * SR_LOOP));
-            return CrearClip("ChaosAlchemy_FuegoBucle", buf, SR_LOOP);
+            return CrearClip("TenThousandYears_FuegoBucle", buf, SR_LOOP);
         }
 
         /// <summary>
@@ -611,7 +611,7 @@ namespace Alkahest.Audio
             PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
             Normalizar(buf, 0.42f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
             SuavizarBucle(buf, Mathf.RoundToInt(0.14f * SR_LOOP));
-            return CrearClip("ChaosAlchemy_GrifoLiquido", buf, SR_LOOP);
+            return CrearClip("TenThousandYears_GrifoLiquido", buf, SR_LOOP);
         }
 
         /// <summary>
@@ -630,7 +630,7 @@ namespace Alkahest.Audio
             PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
             Normalizar(buf, 0.45f);
             SuavizarBucle(buf, Mathf.RoundToInt(0.13f * SR_LOOP));
-            return CrearClip("ChaosAlchemy_GrifoPolvo", buf, SR_LOOP);
+            return CrearClip("TenThousandYears_GrifoPolvo", buf, SR_LOOP);
         }
 
         /// <summary>
@@ -648,7 +648,7 @@ namespace Alkahest.Audio
             PasoAltoDC(buf, SR_LOOP, 20f); // (fix playtest 9, causa 1b)
             Normalizar(buf, 0.26f); // presupuesto de mezcla: ver DirectorDeAudio.cs.
             SuavizarBucle(buf, Mathf.RoundToInt(0.13f * SR_LOOP));
-            return CrearClip("ChaosAlchemy_GrifoGas", buf, SR_LOOP);
+            return CrearClip("TenThousandYears_GrifoGas", buf, SR_LOOP);
         }
 
         /// <summary>4a) Aspirar: barrido ASCENDENTE (paso-bajo abriéndose de grave a agudo) sobre ruido -- sensación de "entra al frasco".</summary>
@@ -659,7 +659,7 @@ namespace Alkahest.Audio
             PasoBajoBarrido(buf, SR_ONESHOT, 250f, 3200f);
             AplicarEnvolvente(buf, SR_ONESHOT, 0.008f, 0.15f);
             Normalizar(buf, 0.5f);
-            return CrearClip("ChaosAlchemy_Aspirar", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_Aspirar", buf, SR_ONESHOT);
         }
 
         /// <summary>4b) Verter: barrido DESCENDENTE -- espejo exacto de Aspirar, sensación de "sale del frasco".</summary>
@@ -670,7 +670,7 @@ namespace Alkahest.Audio
             PasoBajoBarrido(buf, SR_ONESHOT, 3200f, 250f);
             AplicarEnvolvente(buf, SR_ONESHOT, 0.010f, 0.15f);
             Normalizar(buf, 0.5f);
-            return CrearClip("ChaosAlchemy_Verter", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_Verter", buf, SR_ONESHOT);
         }
 
         /// <summary>5) Ignición: un "fum" grave y corto -- chirrido seno grave que cae de tono + un breve soplo de ruido filtrado descendente por encima, mezclados y normalizados juntos.</summary>
@@ -691,7 +691,7 @@ namespace Alkahest.Audio
             Sumar(buf, soplo, 0.35f);
             Normalizar(buf, 0.62f); // bajado de 0.7 (playtest 9, presupuesto de mezcla en DirectorDeAudio.cs).
             Clamp(buf);
-            return CrearClip("ChaosAlchemy_Ignicion", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_Ignicion", buf, SR_ONESHOT);
         }
 
         /// <summary>
@@ -724,7 +724,7 @@ namespace Alkahest.Audio
             PasoBajo(buf, SR_ONESHOT, 6500f);
             Normalizar(buf, 0.42f); // bajado de 0.55 (playtest 9): es el sonido con más riesgo de solapar VARIAS instancias a la vez (avalancha de cristalización, hasta 6/s con cola de ~0.5s cada una), así que su pico individual pesa varias veces en el presupuesto de mezcla -- ver DirectorDeAudio.cs.
             Clamp(buf);
-            return CrearClip("ChaosAlchemy_CristalizarCongelar", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_CristalizarCongelar", buf, SR_ONESHOT);
         }
 
         /// <summary>7) La tolva traga: retumbo grave (chirrido seno descendente) + un puñado de granos de ruido muy filtrados encima, para la textura "granular" pedida.</summary>
@@ -745,7 +745,7 @@ namespace Alkahest.Audio
 
             Normalizar(buf, 0.55f); // bajado de 0.6 (playtest 9, presupuesto de mezcla en DirectorDeAudio.cs).
             Clamp(buf);
-            return CrearClip("ChaosAlchemy_TolvaTraga", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_TolvaTraga", buf, SR_ONESHOT);
         }
 
         /// <summary>8) Bautizar: dos notas cálidas ascendentes (triángulo filtrado), separadas por un hueco silencioso corto -- es el momento de descubrimiento del juego, tiene que sentirse bien.</summary>
@@ -768,7 +768,7 @@ namespace Alkahest.Audio
             SumarConDesfase(buf, nota2, 0.9f, Mathf.RoundToInt((dur1 + hueco) * SR_ONESHOT));
 
             Normalizar(buf, 0.55f);
-            return CrearClip("ChaosAlchemy_Bautizar", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_Bautizar", buf, SR_ONESHOT);
         }
 
         /// <summary>9) Encargo completado: acorde breve de tres notas (do-mi-sol) en triángulo filtrado (paso-bajo -&gt; timbre de latón), con un "roll" mínimo entre notas para que no suene a acorde de órgano.</summary>
@@ -790,7 +790,7 @@ namespace Alkahest.Audio
 
             Normalizar(buf, 0.55f);
             Clamp(buf);
-            return CrearClip("ChaosAlchemy_EncargoCompletado", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_EncargoCompletado", buf, SR_ONESHOT);
         }
 
         /// <summary>10) Fin de jornada: una campana CON CUERPO -- misma técnica de parciales que CristalizarCongelar pero fundamental más grave, más parciales y caídas más largas, más un "cuerpo" de gong (seno grave sostenido) por debajo.</summary>
@@ -820,7 +820,7 @@ namespace Alkahest.Audio
             PasoBajo(buf, SR_ONESHOT, 5200f);
             Normalizar(buf, 0.65f);
             Clamp(buf);
-            return CrearClip("ChaosAlchemy_FinDeJornada", buf, SR_ONESHOT);
+            return CrearClip("TenThousandYears_FinDeJornada", buf, SR_ONESHOT);
         }
     }
 }

@@ -177,7 +177,7 @@ namespace Alkahest.Game
             _sim = FindAnyObjectByType<AlkahestSim>();
             if (_sim == null)
             {
-                Debug.LogError("[ChaosAlchemy] AlkahestGameBootstrap no encontró un AlkahestSim en la escena.");
+                Debug.LogError("[TenThousandYears] AlkahestGameBootstrap no encontró un AlkahestSim en la escena.");
                 enabled = false;
                 return;
             }
@@ -657,7 +657,7 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] Capa de interacción inicializada (cuarto íntimo, playtest 25 -- LO QUE PERSISTE: crisol/prensa/banco de chispa, criatura aparcada).");
+            Debug.Log("[TenThousandYears] Capa de interacción inicializada (cuarto íntimo, playtest 25 -- LO QUE PERSISTE: crisol/prensa/banco de chispa, criatura aparcada).");
         }
 
         /// <summary>
@@ -790,7 +790,7 @@ namespace Alkahest.Game
                 SpawnDirectorDeAudio(null, knowledge, flask, apprentice.transform);
 
                 _spawned = true;
-                Debug.Log("[ChaosAlchemy][Red] Invitado listo: espejo + avatar + menús (diario/bautizo/pistas/encargos replicados) + audio (modo espejo). Las máquinas y la sim las lleva el anfitrión.");
+                Debug.Log("[TenThousandYears][Red] Invitado listo: espejo + avatar + menús (diario/bautizo/pistas/encargos replicados) + audio (modo espejo). Las máquinas y la sim las lleva el anfitrión.");
                 return;
             }
 
@@ -949,7 +949,7 @@ namespace Alkahest.Game
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio" +
+            Debug.Log("[TenThousandYears][Red] Anfitrión listo: sim, máquinas, encargos y avatar propio" +
                       (ModoSemillaCero ? " (SEMILLA CERO compartida: arco guiado por Game/SemillaCero.cs)." : "."));
         }
 
@@ -964,6 +964,16 @@ namespace Alkahest.Game
         /// </summary>
         private void SpawnFundacion()
         {
+            // (RONDA 71, cazado por el reporte de Cesar "no vi nada de
+            // movimiento al fondo") EL PRÓLOGO NO TENÍA FONDO: esta rama
+            // retorna antes de la línea que crea el WorkshopBackdrop en el
+            // camino clásico, así que detrás de la piedra se veía el color
+            // plano de cámara -- y el parallax de la ronda 70 no tenía nada
+            // que mover. El muro entra también aquí (es puramente visual; la
+            // viñeta de oscuridad del FundacionDirector lo tapa donde debe
+            // taparlo, y le da textura y profundidad al greybox).
+            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+
             var apprentice = SpawnApprentice();
             // Reposicionar al rincón de la fundación (SpawnApprentice nace en
             // AprendizX/Y del cuarto íntimo clásico, que en este plano es
@@ -1002,7 +1012,7 @@ namespace Alkahest.Game
             trueque.Init(_sim, flask, apprentice.transform);
 
             _spawned = true;
-            Debug.Log("[ChaosAlchemy] FUNDACIÓN (greybox ronda 60): mundo vacío, rincón del Maestro, director de beats.");
+            Debug.Log("[TenThousandYears] FUNDACIÓN (greybox ronda 60): mundo vacío, rincón del Maestro, director de beats.");
         }
 
         private ApprenticeController SpawnApprentice()
@@ -1308,7 +1318,7 @@ namespace Alkahest.Game
 
             if (SimSync.EnEscena)
             {
-                Debug.Log("[ChaosAlchemy][Red] La mufla se talló en el host -- el invitado la VE (chunks replicados) pero no puede USARLA todavía (deuda pt56, ver el docblock de ConstruirMufla).");
+                Debug.Log("[TenThousandYears][Red] La mufla se talló en el host -- el invitado la VE (chunks replicados) pero no puede USARLA todavía (deuda pt56, ver el docblock de ConstruirMufla).");
             }
 
             // (contrato §2b) El anuncio del nacimiento de la mufla, vía el
@@ -1317,7 +1327,7 @@ namespace Alkahest.Game
             // Semilla Cero ya terminó), ver el docblock de MaestroAnuncia.
             SemillaCero.MaestroAnuncia("La mufla está en pie. Dos fuegos, aprendiz — ahora produce como taller de verdad.", 8f);
 
-            Debug.Log("[ChaosAlchemy] La mufla se construyó en " + SimLevelBuilder.MuflaX + "," + SimLevelBuilder.MuflaBaseY + " (obra_mufla completada).");
+            Debug.Log("[TenThousandYears] La mufla se construyó en " + SimLevelBuilder.MuflaX + "," + SimLevelBuilder.MuflaBaseY + " (obra_mufla completada).");
         }
 
         /// <summary>LO QUE PERSISTE (contrato §5.4): la Prensa, en <see cref="SimLevelBuilder.PrensaX"/>.</summary>

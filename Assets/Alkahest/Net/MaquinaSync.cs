@@ -362,7 +362,7 @@ namespace Alkahest.Net
         {
             if (Instancia != null && Instancia != this)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] Ya existe un MaquinaSync en la escena; se destruye el duplicado.");
+                Debug.LogWarning("[TenThousandYears][Red] Ya existe un MaquinaSync en la escena; se destruye el duplicado.");
                 Destroy(this);
                 return;
             }
@@ -411,7 +411,7 @@ namespace Alkahest.Net
             }
             catch (System.Exception ex)
             {
-                Debug.LogError("[ChaosAlchemy][Red] MaquinaSync.OnNetworkSpawn: excepción inesperada, NO debe tumbar la sesión: " + ex);
+                Debug.LogError("[TenThousandYears][Red] MaquinaSync.OnNetworkSpawn: excepción inesperada, NO debe tumbar la sesión: " + ex);
             }
         }
 
@@ -447,7 +447,7 @@ namespace Alkahest.Net
                 }
                 catch (System.Exception ex)
                 {
-                    Debug.LogError("[ChaosAlchemy][Red] MaquinaSync: excepción durante el escaneo de máquinas (se reintentará el próximo Update): " + ex);
+                    Debug.LogError("[TenThousandYears][Red] MaquinaSync: excepción durante el escaneo de máquinas (se reintentará el próximo Update): " + ex);
                 }
                 return; // hasta que el escaneo tenga éxito no hay nada que sondear.
             }
@@ -478,7 +478,7 @@ namespace Alkahest.Net
                     }
                     catch (System.Exception ex)
                     {
-                        Debug.LogError("[ChaosAlchemy][Red] MaquinaSync: excepción durante el sondeo de altas tardías (se reintentará el próximo sondeo): " + ex);
+                        Debug.LogError("[TenThousandYears][Red] MaquinaSync: excepción durante el sondeo de altas tardías (se reintentará el próximo sondeo): " + ex);
                     }
                 }
             }
@@ -589,7 +589,7 @@ namespace Alkahest.Net
             _altasTardiasCompletas = _prensaVista && _chispaVista && _columnaVista &&
                                       _ensayoVista && _placaCalorVista && _placaFriaVista;
 
-            Debug.Log("[ChaosAlchemy][Red] MaquinaSync: registro publicado (" + _fuentes.Count + " máquinas" +
+            Debug.Log("[TenThousandYears][Red] MaquinaSync: registro publicado (" + _fuentes.Count + " máquinas" +
                 (_altasTardiasCompletas ? "" : ", con estaciones tapiables pendientes de alta tardía") + ").");
         }
 
@@ -662,7 +662,7 @@ namespace Alkahest.Net
             if (_prensaVista && _chispaVista && _columnaVista && _ensayoVista && _placaCalorVista && _placaFriaVista)
             {
                 _altasTardiasCompletas = true;
-                Debug.Log("[ChaosAlchemy][Red] MaquinaSync: última alta tardía recibida -- registro completo (" + _fuentes.Count + " máquinas), sondeo de altas detenido.");
+                Debug.Log("[TenThousandYears][Red] MaquinaSync: última alta tardía recibida -- registro completo (" + _fuentes.Count + " máquinas), sondeo de altas detenido.");
             }
         }
 
@@ -694,7 +694,7 @@ namespace Alkahest.Net
             _registro.Add(ConstruirEntrada(f, 0)); // estadoVivo=0: SondearEstadoVivo lo pone al día en ≤0.25s, igual que una entrada del primer publicado.
             _bloqueos.Add(SinBloqueo); // nace libre, mismo criterio que PublicarRegistroInicial.
 
-            Debug.Log("[ChaosAlchemy][Red] MaquinaSync: alta tardía -- " + tipo + " recién destapada, añadida al registro (índice " +
+            Debug.Log("[TenThousandYears][Red] MaquinaSync: alta tardía -- " + tipo + " recién destapada, añadida al registro (índice " +
                 (_fuentes.Count - 1) + ").");
             return true;
         }
@@ -1167,7 +1167,7 @@ namespace Alkahest.Net
 
             if (index != _replicas.Count)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] MaquinaSync: hueco inesperado en el registro de máquinas (index " + index + ", esperaba " + _replicas.Count + "); se ignora la entrada.");
+                Debug.LogWarning("[TenThousandYears][Red] MaquinaSync: hueco inesperado en el registro de máquinas (index " + index + ", esperaba " + _replicas.Count + "); se ignora la entrada.");
                 return;
             }
 

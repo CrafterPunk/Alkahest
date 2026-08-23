@@ -152,8 +152,16 @@ namespace Alkahest.Game
         // teletransporte entre zonas ya visitadas -- deliberadamente NO
         // implementado aquí por quedar fuera de lo que este encargo pidió.
         [Header("Movimiento")]
-        [SerializeField] private float moveSpeed = 11.2f;
-        [SerializeField] private float acceleration = 44f; // unidades/s^2 de suavizado hacia la velocidad objetivo (escalado con la velocidad nueva para que el arranque siga siendo igual de nítido)
+        // (RONDA 71, pedido de Cesar) VELOCIDAD -40%: 11.2 -> 6.7. Con las
+        // esquinas suaves de la ronda 70 el imp ya no se atora, y a 11.2 se
+        // sentía disparado. Cruzar una pantalla pasa de ~2.3s a ~3.8s.
+        // Y SU INTUICIÓN DE "ACELERA" TENÍA SUSTENTO: MoveTowards con
+        // acceleration=44 tardaba 11.2/44 = 0.25s en llegar a tope -- un
+        // cuarto de segundo de rampa perceptible. Ahora 6.7/96 = 0.07s: el
+        // arranque conserva un pelo de suavizado (cero rampa se siente
+        // robótico) pero por debajo del umbral en que se LEE como acelerar.
+        [SerializeField] private float moveSpeed = 6.7f;
+        [SerializeField] private float acceleration = 96f; // unidades/s^2 -- rampa de ~0.07s, imperceptible (ver bloque de arriba).
 
         [Header("Visual")]
         [SerializeField] private Sprite customSprite; // si se asigna, se usa en vez del rig generado (sin animación de capas: se respeta el sprite manual del inspector)

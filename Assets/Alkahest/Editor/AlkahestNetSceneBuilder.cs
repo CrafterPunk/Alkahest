@@ -49,10 +49,10 @@ namespace Alkahest.EditorTools
         private const string MultiScenePath = ScenesFolder + "/AlkahestLabMulti.unity";
         private const string AvatarPrefabPath = NetFolder + "/AlkahestAprendizRed.prefab";
 
-        private const string OutputDir = "Builds/ChaosAlchemyMulti";
-        private const string OutputExe = OutputDir + "/ChaosAlchemyMulti.exe";
+        private const string OutputDir = "Builds/TenThousandYearsMulti";
+        private const string OutputExe = OutputDir + "/TenThousandYearsMulti.exe";
 
-        [MenuItem("Alkahest/2. Generar escena Lab MULTI (taller compartido)", priority = 2)]
+        [MenuItem("Ten Thousand Years/2. Generar escena Lab MULTI (taller compartido)", priority = 2)]
         public static void GenerateLabMultiScene()
         {
             EnsureFolders();
@@ -61,7 +61,7 @@ namespace Alkahest.EditorTools
             BuildMultiScene(avatarPrefab);
 
             AssetDatabase.Refresh();
-            Debug.Log("[ChaosAlchemy] Escena MULTI generada/actualizada en " + MultiScenePath);
+            Debug.Log("[TenThousandYears] Escena MULTI generada/actualizada en " + MultiScenePath);
         }
 
         /// <summary>
@@ -69,12 +69,12 @@ namespace Alkahest.EditorTools
         /// REGLA 14 de CLAUDE.md: regenera la escena antes de compilar — nunca
         /// confiar en el .unity guardado en el repo.
         /// </summary>
-        [MenuItem("Alkahest/4. Build MULTI Windows (taller compartido)", priority = 4)]
+        [MenuItem("Ten Thousand Years/4. Build MULTI Windows (taller compartido)", priority = 4)]
         public static void BuildMultiWindows()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
             {
-                Debug.LogWarning("[ChaosAlchemy] Build MULTI cancelada: hay cambios sin guardar en la escena abierta.");
+                Debug.LogWarning("[TenThousandYears] Build MULTI cancelada: hay cambios sin guardar en la escena abierta.");
                 return;
             }
 
@@ -84,13 +84,13 @@ namespace Alkahest.EditorTools
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[ChaosAlchemy] Build MULTI ABORTADA: no se pudo (re)generar la escena. " + e);
+                Debug.LogError("[TenThousandYears] Build MULTI ABORTADA: no se pudo (re)generar la escena. " + e);
                 return;
             }
 
             if (!File.Exists(MultiScenePath))
             {
-                Debug.LogError("[ChaosAlchemy] Build MULTI ABORTADA: sigue sin existir " + MultiScenePath + ".");
+                Debug.LogError("[TenThousandYears] Build MULTI ABORTADA: sigue sin existir " + MultiScenePath + ".");
                 return;
             }
 
@@ -115,7 +115,7 @@ namespace Alkahest.EditorTools
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[ChaosAlchemy] ✘ BUILD MULTI FALLIDA — excepción: " + e);
+                Debug.LogError("[TenThousandYears] ✘ BUILD MULTI FALLIDA — excepción: " + e);
                 return;
             }
 
@@ -136,16 +136,16 @@ namespace Alkahest.EditorTools
                     string appIdPath = System.IO.Path.Combine(
                         System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(OutputExe)), "steam_appid.txt");
                     System.IO.File.WriteAllText(appIdPath, "480");
-                    Debug.Log("[ChaosAlchemy] steam_appid.txt (480, desarrollo) escrito junto al ejecutable.");
+                    Debug.Log("[TenThousandYears] steam_appid.txt (480, desarrollo) escrito junto al ejecutable.");
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogWarning("[ChaosAlchemy] No se pudo escribir steam_appid.txt junto al exe: " + e.Message);
+                    Debug.LogWarning("[TenThousandYears] No se pudo escribir steam_appid.txt junto al exe: " + e.Message);
                 }
             }
 
-            if (ok) Debug.Log("[ChaosAlchemy] ✔ BUILD MULTI OK — " + resumen);
-            else Debug.LogError("[ChaosAlchemy] ✘ BUILD MULTI FALLIDA — " + resumen);
+            if (ok) Debug.Log("[TenThousandYears] ✔ BUILD MULTI OK — " + resumen);
+            else Debug.LogError("[TenThousandYears] ✘ BUILD MULTI FALLIDA — " + resumen);
 
             EditorUtility.DisplayDialog(ok ? "Build MULTI completada" : "Build MULTI FALLIDA",
                 (ok ? "Build OK.\n\nPara probar en este PC: abre DOS veces el .exe.\n" +
@@ -230,12 +230,12 @@ namespace Alkahest.EditorTools
 
             if (!saveSuccess)
             {
-                Debug.LogError("[ChaosAlchemy] No se pudo guardar el prefab del avatar en " + AvatarPrefabPath);
+                Debug.LogError("[TenThousandYears] No se pudo guardar el prefab del avatar en " + AvatarPrefabPath);
                 return null;
             }
 
             GameObject saved = AssetDatabase.LoadAssetAtPath<GameObject>(AvatarPrefabPath);
-            Debug.Log("[ChaosAlchemy] Prefab de avatar de red creado/actualizado: " + AvatarPrefabPath);
+            Debug.Log("[TenThousandYears] Prefab de avatar de red creado/actualizado: " + AvatarPrefabPath);
             return saved;
         }
 
@@ -254,7 +254,7 @@ namespace Alkahest.EditorTools
         {
             var netObjs = Object.FindObjectsByType<Unity.Netcode.NetworkObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             var vistos = new System.Collections.Generic.HashSet<uint>();
-            var tabla = new System.Text.StringBuilder("[ChaosAlchemy] GlobalObjectIdHash sellados:");
+            var tabla = new System.Text.StringBuilder("[TenThousandYears] GlobalObjectIdHash sellados:");
             var gen = typeof(Unity.Netcode.NetworkObject).GetMethod("GenerateGlobalObjectIdHash",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
             bool cambio = false;
@@ -268,7 +268,7 @@ namespace Alkahest.EditorTools
                 var prop = so.FindProperty("GlobalObjectIdHash");
                 if (prop == null)
                 {
-                    Debug.LogError("[ChaosAlchemy] NetworkObject sin propiedad serializada GlobalObjectIdHash (¿cambió NGO?): " + no.name);
+                    Debug.LogError("[TenThousandYears] NetworkObject sin propiedad serializada GlobalObjectIdHash (¿cambió NGO?): " + no.name);
                     return;
                 }
                 uint hash = (uint)prop.longValue;
@@ -297,7 +297,7 @@ namespace Alkahest.EditorTools
             {
                 EditorSceneManager.MarkSceneDirty(scene);
                 if (!EditorSceneManager.SaveScene(scene, MultiScenePath))
-                    Debug.LogError("[ChaosAlchemy] No se pudo re-guardar la escena MULTI con los hashes sellados.");
+                    Debug.LogError("[TenThousandYears] No se pudo re-guardar la escena MULTI con los hashes sellados.");
             }
         }
 
@@ -318,7 +318,7 @@ namespace Alkahest.EditorTools
             bool saved = EditorSceneManager.SaveScene(scene, MultiScenePath);
             if (!saved)
             {
-                Debug.LogError("[ChaosAlchemy] No se pudo guardar la escena MULTI en " + MultiScenePath);
+                Debug.LogError("[TenThousandYears] No se pudo guardar la escena MULTI en " + MultiScenePath);
                 return;
             }
 
@@ -446,7 +446,7 @@ namespace Alkahest.EditorTools
 #if !DISABLESTEAMWORKS && STEAMWORKSNET && NETCODEGAMEOBJECTS
             SteamNetworkingSocketsTransport steamTransport = networkGo.AddComponent<SteamNetworkingSocketsTransport>();
 #else
-            Debug.LogWarning("[ChaosAlchemy] STEAMWORKSNET/NETCODEGAMEOBJECTS no están activos: la escena MULTI se genera SIN el transporte de Steam (solo loopback local).");
+            Debug.LogWarning("[TenThousandYears] STEAMWORKSNET/NETCODEGAMEOBJECTS no están activos: la escena MULTI se genera SIN el transporte de Steam (solo loopback local).");
 #endif
 
             networkGo.AddComponent<SteamBootstrap>();
@@ -489,7 +489,7 @@ namespace Alkahest.EditorTools
             }
             else
             {
-                Debug.LogWarning("[ChaosAlchemy] No se asignó el prefab de avatar al NetworkConfig porque no se pudo generar.");
+                Debug.LogWarning("[TenThousandYears] No se asignó el prefab de avatar al NetworkConfig porque no se pudo generar.");
             }
 
             var serializedCoordinator = new SerializedObject(sessionCoordinator);
@@ -535,7 +535,7 @@ namespace Alkahest.EditorTools
             };
 
             EditorBuildSettings.scenes = lista.ToArray();
-            Debug.Log("[ChaosAlchemy] AlkahestLabMulti añadida a Build Settings.");
+            Debug.Log("[TenThousandYears] AlkahestLabMulti añadida a Build Settings.");
         }
     }
 }

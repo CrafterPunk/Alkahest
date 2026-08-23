@@ -5,7 +5,7 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · pivot playtest 21] EL RESCOLDO — la criatura del
+    /// [TenThousandYears · pivot playtest 21] EL RESCOLDO — la criatura del
     /// laboratorio íntimo. Ficción (decidida por Cesar): estaba ahí, dormida
     /// en la roca; nadie te la dio. El juego empieza con ella desmayada de
     /// hambre.
@@ -644,11 +644,11 @@ namespace Alkahest.Game
                 SerSprites.AplicarBrasa(px, w, h, mask, seedSilueta, _temperamento);
                 SerSprites.AplicarVolumen(px, w, h, mask);
                 _framesVivo[f] = SerSprites.CrearSprite(px, w, h, new Vector2(0.5f, 0.5f),
-                    "ChaosAlchemyCorazonVivo_" + f, out _texVivo[f]);
+                    "TenThousandYearsCorazonVivo_" + f, out _texVivo[f]);
 
                 var pxDormido = SerSprites.Desaturar(px, 0.55f);
                 _framesDormido[f] = SerSprites.CrearSprite(pxDormido, w, h, new Vector2(0.5f, 0.5f),
-                    "ChaosAlchemyCorazonDormido_" + f, out _texDormido[f]);
+                    "TenThousandYearsCorazonDormido_" + f, out _texDormido[f]);
             }
 
             _corazonVivoSr = MaquinariaSprites.CrearCapa(_pivoteLatido, "CorazonVivo", _framesVivo[0], 45, AnchoMundoCorazon, AltoMundoCorazon);
@@ -660,7 +660,7 @@ namespace Alkahest.Game
         {
             int w = SerSprites.ZarcilloW, h = SerSprites.ZarcilloH;
             byte[] mask = SerSprites.MascaraZarcillo(w, h);
-            Sprite sprZarcillo = SerSprites.SpriteDeMascara(mask, w, h, new Vector2(0.5f, 0f), "ChaosAlchemyZarcillo", out _texZarcillo);
+            Sprite sprZarcillo = SerSprites.SpriteDeMascara(mask, w, h, new Vector2(0.5f, 0f), "TenThousandYearsZarcillo", out _texZarcillo);
 
             for (int i = 0; i < NumZarcillos; i++)
             {

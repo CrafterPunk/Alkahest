@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · pivot playtest 21, ENCARGO B "LOS SERES"] Fábrica de
+    /// [TenThousandYears · pivot playtest 21, ENCARGO B "LOS SERES"] Fábrica de
     /// SILUETAS y texturas generadas por código para el Rescoldo (Criatura)
     /// y su Capullo: el cuerpo (un bulbo/tubérculo ASIMÉTRICO con cuello,
     /// NO un corazón -- ver el docblock de <see cref="MascaraCorazon"/> para
@@ -623,7 +623,7 @@ namespace Alkahest.Game
                     px[y * size + x] = new Color32(gris.r, gris.g, gris.b, (byte)Mathf.RoundToInt(a * 255f));
                 }
             }
-            return CrearSprite(px, size, size, new Vector2(0.5f, 0.5f), "ChaosAlchemyHaloLuz", out textura);
+            return CrearSprite(px, size, size, new Vector2(0.5f, 0.5f), "TenThousandYearsHaloLuz", out textura);
         }
 
         // ===================================================================

@@ -13,7 +13,7 @@ namespace Alkahest.Game
     /// cincel o algo así que permita editar el bedrock, quedará feo y sin
     /// recortar pero luego le daremos forma"*.
     ///
-    /// POR QUÉ IMPORTA: ChaosAlchemy va de DOMESTICAR LEYES -- un juego con esa
+    /// POR QUÉ IMPORTA: TenThousandYears va de DOMESTICAR LEYES -- un juego con esa
     /// premisa tiene que dejarte construir tu propio aparato, no solo operar
     /// el que puso el diseñador. Hoy el taller es un escenario clavado
     /// (SimLevelBuilder es "EL PLANO", de solo lectura para el jugador); el

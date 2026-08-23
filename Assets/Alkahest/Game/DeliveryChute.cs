@@ -148,7 +148,7 @@ namespace Alkahest.Game
     ///
     /// LIMITACIÓN: lee _sim.Grid.temp[] directamente para evaluar los encargos
     /// Hot/Cold (mismo patrón que HeatPlate/ChillStone).
-    /// TODO(ChaosAlchemy): canalizar por una API de lectura del sim.
+    /// TODO(TenThousandYears): canalizar por una API de lectura del sim.
     ///
     /// =====================================================================
     /// VERIFICADO (playtest 21, EL PIVOT): "LA RECOMPENSA DE CAVAR" NO SE CALLA
@@ -585,7 +585,7 @@ namespace Alkahest.Game
 
         private static Sprite SpriteSolido()
         {
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "ChaosAlchemyChuteTex" };
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "TenThousandYearsChuteTex" };
             tex.SetPixel(0, 0, Color.white);
             tex.Apply(false, false);
             return Sprite.Create(tex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
@@ -597,7 +597,7 @@ namespace Alkahest.Game
             const int w = 24, h = 18;
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
             {
-                name = "ChaosAlchemyChuteArrowTex",
+                name = "TenThousandYearsChuteArrowTex",
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,
             };

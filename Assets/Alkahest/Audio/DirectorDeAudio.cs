@@ -155,8 +155,8 @@ namespace Alkahest.Audio
         // -----------------------------------------------------------------
         private const int VocesOneShot = 8;
         private const float VolumenMaestroPorDefecto = 0.5f; // (encargo) "Volumen maestro por defecto 0.5".
-        private const string PrefKeySilenciado = "ChaosAlchemy_AudioSilenciado";
-        private const string PrefKeyVolEfectos = "ChaosAlchemy_VolEfectos";
+        private const string PrefKeySilenciado = "TenThousandYears_AudioSilenciado";
+        private const string PrefKeyVolEfectos = "TenThousandYears_VolEfectos";
 
         // ===================================================================
         // ENCARGO M (CONTRATO_FASE_A.md, "AJUSTES"): "Efectos del taller" --

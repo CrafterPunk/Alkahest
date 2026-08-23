@@ -119,7 +119,7 @@ namespace Alkahest
             // enseñaría un mundo de otro universo). Ver Net/SimSync.cs.
             if (SimSync.EnEscena)
             {
-                Debug.Log("[ChaosAlchemy] Escena MULTI: la creación del mundo espera a la sesión (ver Net/SimSync.cs).");
+                Debug.Log("[TenThousandYears] Escena MULTI: la creación del mundo espera a la sesión (ver Net/SimSync.cs).");
                 return;
             }
 
@@ -158,7 +158,7 @@ namespace Alkahest
         {
             if (_grid != null)
             {
-                Debug.LogWarning("[ChaosAlchemy] CrearMundo llamado dos veces: se ignora la segunda (SimRenderer.Init NO es idempotente, regla 36).");
+                Debug.LogWarning("[TenThousandYears] CrearMundo llamado dos veces: se ignora la segunda (SimRenderer.Init NO es idempotente, regla 36).");
                 return;
             }
 
@@ -181,14 +181,14 @@ namespace Alkahest
                 // pintado con la paleta equivocada, sin ningún error visible.
                 if (seed == 0)
                 {
-                    Debug.LogError("[ChaosAlchemy] Espejo sin seed del anfitrión: el universo no puede coincidir. Reconéctate.");
+                    Debug.LogError("[TenThousandYears] Espejo sin seed del anfitrión: el universo no puede coincidir. Reconéctate.");
                 }
             }
             else if (NextRunSeed.HasValue)
             {
                 seed = NextRunSeed.Value;
                 NextRunSeed = null;
-                Debug.Log($"[ChaosAlchemy] Seed fijada por DayCycle para esta run: {seed}");
+                Debug.Log($"[TenThousandYears] Seed fijada por DayCycle para esta run: {seed}");
             }
             else if (seed == 0)
             {
@@ -250,7 +250,7 @@ namespace Alkahest
             // si los dos lados construyeron el mismo universo -- la fuga de
             // ModoFundacion (ver Net/SimSync.cs, ronda 69g) se habría cazado
             // al primer vistazo con esto en pantalla.
-            Debug.Log("[ChaosAlchemy] Mundo construido: plano=" +
+            Debug.Log("[TenThousandYears] Mundo construido: plano=" +
                 (AlkahestGameBootstrap.ModoFundacion ? "FUNDACION" : "CUARTO") +
                 " seed=" + seed +
                 " espejo=" + espejo +

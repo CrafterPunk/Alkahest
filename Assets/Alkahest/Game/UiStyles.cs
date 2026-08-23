@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · pase visual M5] Mini-sistema de estilo para TODA la UI
+    /// [TenThousandYears · pase visual M5] Mini-sistema de estilo para TODA la UI
     /// IMGUI del juego: una única paleta, una tipografía que escala con la
     /// resolución, y primitivas de dibujo (panel, barra, chip, etiqueta anclada
     /// al mundo) que comparten todos los HUD.

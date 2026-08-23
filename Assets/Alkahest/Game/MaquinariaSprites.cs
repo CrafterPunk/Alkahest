@@ -4,7 +4,7 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · reingeniería del espacio] Fábrica de sprites generados
+    /// [TenThousandYears · reingeniería del espacio] Fábrica de sprites generados
     /// por código para los APARATOS del taller (placa ígnea, piedra gélida,
     /// grifos, redomas de la estantería).
     ///
@@ -403,7 +403,7 @@ namespace Alkahest.Game
                 for (int x = 0; x < w; x++)
                     px[y * w + x] = sombra;
 
-            s = Crear(px, w, h, "ChaosAlchemyLosaPlaca");
+            s = Crear(px, w, h, "TenThousandYearsLosaPlaca");
             _cache[clave] = s;
             return s;
         }
@@ -495,7 +495,7 @@ namespace Alkahest.Game
             // --- Pasada 2: BLOOM ancho, SOLO donde no hay tubo ---
             RecorrerSerpentin(px, inten, w, h, xIni, xFin, nichoX0, nichoX1, centroY, amp, periodo, rx * 3.2f, ry * 2.4f, true);
 
-            s = Crear(px, w, h, "ChaosAlchemySerpentinPlaca");
+            s = Crear(px, w, h, "TenThousandYearsSerpentinPlaca");
             _cache[clave] = s;
             return s;
         }
@@ -672,7 +672,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyBloqueGelido");
+            s = Crear(px, w, h, "TenThousandYearsBloqueGelido");
             _cache[clave] = s;
             return s;
         }
@@ -779,7 +779,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyCristalesGelidos");
+            s = Crear(px, w, h, "TenThousandYearsCristalesGelidos");
             _cache[clave] = s;
             return s;
         }
@@ -847,7 +847,7 @@ namespace Alkahest.Game
                     px[y * w + x] = borde ? latonAlto : latonBajo;
                 }
 
-            s = Crear(px, w, h, "ChaosAlchemyCanoGrifo");
+            s = Crear(px, w, h, "TenThousandYearsCanoGrifo");
             _cache[clave] = s;
             return s;
         }
@@ -900,7 +900,7 @@ namespace Alkahest.Game
                 if (oldY % 7 != 0 && x + Escala < w) px[y * w + x + Escala] = new Color32(255, 255, 255, 60);
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyVidrioRedoma");
+            s = Crear(px, w, h, "TenThousandYearsVidrioRedoma");
             _cache[clave] = s;
             return s;
         }
@@ -934,7 +934,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyContenidoRedoma");
+            s = Crear(px, w, h, "TenThousandYearsContenidoRedoma");
             _cache[clave] = s;
             return s;
         }
@@ -966,7 +966,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyTaponRedoma");
+            s = Crear(px, w, h, "TenThousandYearsTaponRedoma");
             _cache[clave] = s;
             return s;
         }
@@ -1001,7 +1001,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyListonEstante");
+            s = Crear(px, w, h, "TenThousandYearsListonEstante");
             _cache[clave] = s;
             return s;
         }
@@ -1054,7 +1054,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyEmbudo");
+            s = Crear(px, w, h, "TenThousandYearsEmbudo");
             _cache[clave] = s;
             return s;
         }
@@ -1122,7 +1122,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyBrasero");
+            s = Crear(px, w, h, "TenThousandYearsBrasero");
             _cache[clave] = s;
             return s;
         }
@@ -1164,7 +1164,7 @@ namespace Alkahest.Game
             MarcarRemateCuadrado(px, w, h, 0, h - remate, remate, latonBrillo);
             MarcarRemateCuadrado(px, w, h, w - remate, h - remate, remate, latonBrillo);
 
-            s = Crear(px, w, h, "ChaosAlchemyMarcoContenedor");
+            s = Crear(px, w, h, "TenThousandYearsMarcoContenedor");
             _cache[clave] = s;
             return s;
         }
@@ -1202,7 +1202,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyChimenea");
+            s = Crear(px, w, h, "TenThousandYearsChimenea");
             _cache[clave] = s;
             return s;
         }
@@ -1235,7 +1235,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyHumo");
+            s = Crear(px, w, h, "TenThousandYearsHumo");
             _cache[clave] = s;
             return s;
         }
@@ -1274,7 +1274,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyHusillo");
+            s = Crear(px, w, h, "TenThousandYearsHusillo");
             _cache[clave] = s;
             return s;
         }
@@ -1315,7 +1315,7 @@ namespace Alkahest.Game
                 prevY = y;
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyArco");
+            s = Crear(px, w, h, "TenThousandYearsArco");
             _cache[clave] = s;
             return s;
         }
@@ -1455,7 +1455,7 @@ namespace Alkahest.Game
 
             RecortarCamara(px, w, h, spanCeldas, altoCeldas, muroCeldas, sueloCeldas, LatonAlto);
 
-            s = Crear(px, w, h, "ChaosAlchemyPanzaCrisol");
+            s = Crear(px, w, h, "TenThousandYearsPanzaCrisol");
             _cache[clave] = s;
             return s;
         }
@@ -1523,7 +1523,7 @@ namespace Alkahest.Game
 
             RecortarCamara(px, w, h, spanCeldas, altoCeldas, muroCeldas, sueloCeldas, HierroAlto);
 
-            s = Crear(px, w, h, "ChaosAlchemyCestoBrasero");
+            s = Crear(px, w, h, "TenThousandYearsCestoBrasero");
             _cache[clave] = s;
             return s;
         }
@@ -1602,7 +1602,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyLechoBrasas");
+            s = Crear(px, w, h, "TenThousandYearsLechoBrasas");
             _cache[clave] = s;
             return s;
         }
@@ -1663,7 +1663,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyFondoInterior");
+            s = Crear(px, w, h, "TenThousandYearsFondoInterior");
             _cache[clave] = s;
             return s;
         }
@@ -1695,7 +1695,7 @@ namespace Alkahest.Game
             for (int x = S(2); x < w - S(2); x += S(6))
                 MarcarRemache(px, w, h, x, h - S(1), HierroAlto);
 
-            s = Crear(px, w, h, "ChaosAlchemyRebordeRecipiente");
+            s = Crear(px, w, h, "TenThousandYearsRebordeRecipiente");
             _cache[clave] = s;
             return s;
         }
@@ -1744,7 +1744,7 @@ namespace Alkahest.Game
                 Pintar(px, w, h, w - 1 - cart - d, h - cart + inv - Escala, LatonBajo);
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyMarcoBandeja");
+            s = Crear(px, w, h, "TenThousandYearsMarcoBandeja");
             _cache[clave] = s;
             return s;
         }
@@ -1792,7 +1792,7 @@ namespace Alkahest.Game
             for (int x = cuerno + S(2); x < w - cuerno - S(2); x += S(8))
                 MarcarRemache(px, w, h, x, h - rollo + Escala, LatonAlto);
 
-            s = Crear(px, w, h, "ChaosAlchemyLabioBoca");
+            s = Crear(px, w, h, "TenThousandYearsLabioBoca");
             _cache[clave] = s;
             return s;
         }
@@ -1839,7 +1839,7 @@ namespace Alkahest.Game
             MarcarRemateCuadrado(px, w, h, w / 4, pernoY, Mathf.Max(Escala, h / 6), Laton);
             MarcarRemateCuadrado(px, w, h, 3 * w / 4, pernoY, Mathf.Max(Escala, h / 6), Laton);
 
-            s = Crear(px, w, h, "ChaosAlchemyMandibulaPrensa");
+            s = Crear(px, w, h, "TenThousandYearsMandibulaPrensa");
             _cache[clave] = s;
             return s;
         }
@@ -1885,7 +1885,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyVolante");
+            s = Crear(px, w, h, "TenThousandYearsVolante");
             _cache[clave] = s;
             return s;
         }
@@ -1929,7 +1929,7 @@ namespace Alkahest.Game
                 for (int k = 0; k < Mathf.Max(1, anchoBanda / 2); k++) Pintar(px, w, h, x1 + k, y, new Color32(255, 255, 255, 52));
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyVidrioPanel");
+            s = Crear(px, w, h, "TenThousandYearsVidrioPanel");
             _cache[clave] = s;
             return s;
         }
@@ -1986,7 +1986,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyElectrodo");
+            s = Crear(px, w, h, "TenThousandYearsElectrodo");
             _cache[clave] = s;
             return s;
         }
@@ -2036,7 +2036,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyAmpollaLampara");
+            s = Crear(px, w, h, "TenThousandYearsAmpollaLampara");
             _cache[clave] = s;
             return s;
         }
@@ -2071,7 +2071,7 @@ namespace Alkahest.Game
                 Pintar(px, w, h, w / 2 + semi, y, new Color32(255, 255, 255, 190));
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyFilamentoLampara");
+            s = Crear(px, w, h, "TenThousandYearsFilamentoLampara");
             _cache[clave] = s;
             return s;
         }
@@ -2125,7 +2125,7 @@ namespace Alkahest.Game
                     for (int k = 0; k < Escala; k++) Pintar(px, w, h, x + k, y, (y < colgante - largo + Escala) ? LatonAlto : LatonBajo);
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyDosel");
+            s = Crear(px, w, h, "TenThousandYearsDosel");
             _cache[clave] = s;
             return s;
         }
@@ -2164,7 +2164,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemySillar");
+            s = Crear(px, w, h, "TenThousandYearsSillar");
             _cache[clave] = s;
             return s;
         }
@@ -2227,7 +2227,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyMensula");
+            s = Crear(px, w, h, "TenThousandYearsMensula");
             _cache[clave] = s;
             return s;
         }
@@ -2258,7 +2258,7 @@ namespace Alkahest.Game
                 for (int k = 0; k < Mathf.Max(1, Escala / 2); k++)
                     Pintar(px, w, h, x + k, h / 2, LatonAlto);
 
-            s = Crear(px, w, h, "ChaosAlchemyFiloBalda");
+            s = Crear(px, w, h, "TenThousandYearsFiloBalda");
             _cache[clave] = s;
             return s;
         }
@@ -2304,7 +2304,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyBaldaPiedra");
+            s = Crear(px, w, h, "TenThousandYearsBaldaPiedra");
             _cache[clave] = s;
             return s;
         }
@@ -2355,7 +2355,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyCuadradoAnclaje");
+            s = Crear(px, w, h, "TenThousandYearsCuadradoAnclaje");
             _cache[clave] = s;
             return s;
         }
@@ -2406,7 +2406,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyHazClaraboya");
+            s = Crear(px, w, h, "TenThousandYearsHazClaraboya");
             _cache[clave] = s;
             return s;
         }
@@ -2452,7 +2452,7 @@ namespace Alkahest.Game
                 if (y == 0) for (int d = -r; d <= r; d++) Pintar(px, w, h, cx + d, y, Hierro);
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyCadena");
+            s = Crear(px, w, h, "TenThousandYearsCadena");
             _cache[clave] = s;
             return s;
         }
@@ -2479,7 +2479,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyBurbuja");
+            s = Crear(px, w, h, "TenThousandYearsBurbuja");
             _cache[clave] = s;
             return s;
         }
@@ -2577,7 +2577,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, lado, lado, "ChaosAlchemyHalo");
+            s = Crear(px, lado, lado, "TenThousandYearsHalo");
             _cache[clave] = s;
             return s;
         }
@@ -2633,7 +2633,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemyLuzDeMuro");
+            s = Crear(px, w, h, "TenThousandYearsLuzDeMuro");
             _cache[clave] = s;
             return s;
         }
@@ -2666,7 +2666,7 @@ namespace Alkahest.Game
                 }
             }
 
-            s = Crear(px, w, h, "ChaosAlchemySombraSuave");
+            s = Crear(px, w, h, "TenThousandYearsSombraSuave");
             _cache[clave] = s;
             return s;
         }
@@ -2782,7 +2782,7 @@ namespace Alkahest.Game
         {
             const string clave = "solido";
             if (_cache.TryGetValue(clave, out var s)) return s;
-            s = Crear(new[] { new Color32(255, 255, 255, 255) }, 1, 1, "ChaosAlchemySolido");
+            s = Crear(new[] { new Color32(255, 255, 255, 255) }, 1, 1, "TenThousandYearsSolido");
             _cache[clave] = s;
             return s;
         }

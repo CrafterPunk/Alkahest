@@ -5,7 +5,7 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy] Pared de fondo del taller: un sprite opaco DETRÁS del
+    /// [TenThousandYears] Pared de fondo del taller: un sprite opaco DETRÁS del
     /// sprite de la simulación, con la textura generada por código (cero
     /// assets, cero Shader.Find — ver la regla del playtest 2).
     ///
@@ -466,7 +466,7 @@ namespace Alkahest.Game
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
             {
-                name = "ChaosAlchemyWorkshopBackdrop",
+                name = "TenThousandYearsWorkshopBackdrop",
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,
             };
@@ -1171,7 +1171,7 @@ namespace Alkahest.Game
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
             {
-                name = "ChaosAlchemyWorkshopBackdrop",
+                name = "TenThousandYearsWorkshopBackdrop",
                 // (fix playtest 7) Bilinear sobre un fondo pixel-art contra un sim y
                 // una maquinaria en Point: el fondo se veía borroso y el conjunto
                 // "descuadrado". Point casa los tres planos del cuadro.

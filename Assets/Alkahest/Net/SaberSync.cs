@@ -221,7 +221,7 @@ namespace Alkahest.Net
         {
             if (Instancia != null && Instancia != this)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] Ya existe un SaberSync en la escena; se destruye el duplicado.");
+                Debug.LogWarning("[TenThousandYears][Red] Ya existe un SaberSync en la escena; se destruye el duplicado.");
                 Destroy(this);
                 return;
             }

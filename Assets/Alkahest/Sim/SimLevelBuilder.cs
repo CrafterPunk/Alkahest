@@ -2865,10 +2865,10 @@ namespace Alkahest.Sim
 
 #if UNITY_EDITOR
             UnityEngine.Debug.Assert(celdas >= 250 && celdas <= 500,
-                $"[ChaosAlchemy][SemillaCero] La veta de turba talló {celdas} celdas (banda esperada 250-500, contrato §1a) -- si el número real se sale de la banda, ajustar VetaTurbaAncho/Y0/Y1 o los porcentajes de VetaTurbaCuelloPct/VetaTurbaBordeSaltoPct.");
+                $"[TenThousandYears][SemillaCero] La veta de turba talló {celdas} celdas (banda esperada 250-500, contrato §1a) -- si el número real se sale de la banda, ajustar VetaTurbaAncho/Y0/Y1 o los porcentajes de VetaTurbaCuelloPct/VetaTurbaBordeSaltoPct.");
 #endif
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            UnityEngine.Debug.Log($"[ChaosAlchemy][SemillaCero] Veta de turba tallada: {celdas} celdas en x[{VetaTurbaX0}..{VetaTurbaX1}] y[{VetaTurbaY0}..{VetaTurbaY1}], muro izquierdo del cuarto (junto a CrisolX={CrisolX}).");
+            UnityEngine.Debug.Log($"[TenThousandYears][SemillaCero] Veta de turba tallada: {celdas} celdas en x[{VetaTurbaX0}..{VetaTurbaX1}] y[{VetaTurbaY0}..{VetaTurbaY1}], muro izquierdo del cuarto (junto a CrisolX={CrisolX}).");
 #endif
         }
 

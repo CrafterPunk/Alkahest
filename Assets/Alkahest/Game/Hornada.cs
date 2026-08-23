@@ -4,7 +4,7 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · playtest 25, CONTRATO_PERSISTE.md §6.3] Registro
+    /// [TenThousandYears · playtest 25, CONTRATO_PERSISTE.md §6.3] Registro
     /// GLOBAL de las operaciones de máquina que transforman materia
     /// (Crisol/Prensa/BancoChispa, encargo B) -- la unidad trazable de una
     /// patente. API CONGELADA que llama B:

@@ -19,7 +19,7 @@ namespace Alkahest.EditorTools
         private const string ScenesFolder = "Assets/Alkahest/Scenes";
         private const string LabScenePath = ScenesFolder + "/AlkahestLab.unity";
 
-        [MenuItem("Alkahest/1. Generar escena Lab (un jugador)", priority = 1)]
+        [MenuItem("Ten Thousand Years/1. Generar escena Lab (un jugador)", priority = 1)]
         public static void GenerateLabScene()
         {
             EnsureScenesFolder();

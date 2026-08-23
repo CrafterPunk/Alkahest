@@ -382,7 +382,7 @@ namespace Alkahest.Game
             if (!Bloqueado) return;
             Bloqueado = false;
             UpdateVisual();
-            Debug.Log($"[ChaosAlchemy] El Maestro abre el grifo de {ResolverNombre()}.");
+            Debug.Log($"[TenThousandYears] El Maestro abre el grifo de {ResolverNombre()}.");
         }
 
         /// <summary>
@@ -644,7 +644,7 @@ namespace Alkahest.Game
             {
                 _on = false;
                 _rebosando = false;
-                Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> OFF");
+                Debug.Log($"[TenThousandYears] Grifo de {_sim.Universe.Get(_matId).devName} -> OFF");
                 return true;
             }
 
@@ -652,14 +652,14 @@ namespace Alkahest.Game
             {
                 _on = true;
                 _emitidasEstaApertura = 0; // (playtest 26, LA RACIÓN) ración nueva por apertura -- ver el docblock de _racionCeldas.
-                Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName} -> ON (coste {favorCostPerActivation} Favor).");
+                Debug.Log($"[TenThousandYears] Grifo de {_sim.Universe.Get(_matId).devName} -> ON (coste {favorCostPerActivation} Favor).");
                 return true;
             }
 
             // (restaurado playtest 7) NO se registra uso: un intento
             // fallido por falta de Favor no enseña nada sobre cómo usar la E.
             _insufficientFavorTimer = InsufficientFavorFlashSeconds;
-            Debug.Log($"[ChaosAlchemy] Grifo de {_sim.Universe.Get(_matId).devName}: sin Favor suficiente ({favorCostPerActivation} requerido).");
+            Debug.Log($"[TenThousandYears] Grifo de {_sim.Universe.Get(_matId).devName}: sin Favor suficiente ({favorCostPerActivation} requerido).");
             return false;
         }
 

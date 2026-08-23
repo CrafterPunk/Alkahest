@@ -724,7 +724,7 @@ namespace Alkahest.Game
             UpdateVisualTint();
             RebuildChapaEstado();
             MachineFocus.RegistrarUsoE(); // el estado cambió de verdad: cuenta como un uso aprendido de E.
-            Debug.Log($"[ChaosAlchemy] Piedra gélida -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
+            Debug.Log($"[TenThousandYears] Piedra gélida -> {StateLabel()} ({CellGrid.RawToC(TargetRaw())} °C)");
         }
 
         private byte TargetRaw() => _state == State.Helando ? HelandoRaw : _frescaRaw;

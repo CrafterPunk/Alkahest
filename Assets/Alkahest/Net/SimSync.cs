@@ -231,7 +231,7 @@ namespace Alkahest.Net
                         .GetField("unityTransport", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                     if (campoTransporte != null && campoTransporte.GetValue(coordinador) == null)
                         campoTransporte.SetValue(coordinador, nmParaCoordinador.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>());
-                    UnityEngine.Debug.LogWarning("[ChaosAlchemy] SessionCoordinator venía sin cablear (escena generada a medias): recableado en runtime. Regenera la escena MULTI (menú Alkahest) cuando puedas.");
+                    UnityEngine.Debug.LogWarning("[TenThousandYears] SessionCoordinator venía sin cablear (escena generada a medias): recableado en runtime. Regenera la escena MULTI (menú Alkahest) cuando puedas.");
                 }
             }
 
@@ -262,7 +262,7 @@ namespace Alkahest.Net
 
             if (Instancia != null && Instancia != this)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] Ya existe un SimSync en la escena; se destruye el duplicado.");
+                Debug.LogWarning("[TenThousandYears][Red] Ya existe un SimSync en la escena; se destruye el duplicado.");
                 Destroy(this);
                 return;
             }
@@ -309,7 +309,7 @@ namespace Alkahest.Net
             _sim = FindAnyObjectByType<AlkahestSim>();
             if (_sim == null)
             {
-                Debug.LogError("[ChaosAlchemy][Red] SimSync no encontró un AlkahestSim en la escena: la sesión no puede sincronizar nada.");
+                Debug.LogError("[TenThousandYears][Red] SimSync no encontró un AlkahestSim en la escena: la sesión no puede sincronizar nada.");
                 return;
             }
 
@@ -325,7 +325,7 @@ namespace Alkahest.Net
             }
             else
             {
-                Debug.LogError("[ChaosAlchemy][Red] No hay CustomMessagingManager: no se podrán recibir chunks.");
+                Debug.LogError("[TenThousandYears][Red] No hay CustomMessagingManager: no se podrán recibir chunks.");
             }
 
             if (IsServer)
@@ -373,13 +373,13 @@ namespace Alkahest.Net
                 try
                 {
                     _sim.CrearMundoAnfitrion(seedDeLaSesion);
-                    Debug.Log("[ChaosAlchemy][Red] Anfitrión: mundo creado, seed " +
+                    Debug.Log("[TenThousandYears][Red] Anfitrión: mundo creado, seed " +
                               (_sim.Universe != null ? _sim.Universe.Seed.ToString() : "?") +
                               (AlkahestGameBootstrap.ModoSemillaCero ? " (SEMILLA CERO compartida)." : "."));
                 }
                 catch (System.Exception ex)
                 {
-                    Debug.LogError("[ChaosAlchemy][Red] CrearMundoAnfitrion reventó construyendo el mundo (seed pedida " +
+                    Debug.LogError("[TenThousandYears][Red] CrearMundoAnfitrion reventó construyendo el mundo (seed pedida " +
                                     seedDeLaSesion + "): " + ex + " — el anfitrión se queda SIN mundo (_sim.Grid/_sim.Universe " +
                                     "en null), la sesión no puede continuar. Esta es la costura que el playtest 48 dejó anotada " +
                                     "como candidato #1 del multi roto: ahora la excepción real queda en la consola en vez de " +
@@ -396,7 +396,7 @@ namespace Alkahest.Net
                 // snapshot: la seed viaja en su cabecera.
                 _sim.PrepararEspejo();
                 SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
-                Debug.Log("[ChaosAlchemy][Red] Invitado: espejo preparado, snapshot solicitado al anfitrión.");
+                Debug.Log("[TenThousandYears][Red] Invitado: espejo preparado, snapshot solicitado al anfitrión.");
             }
         }
 
@@ -700,7 +700,7 @@ namespace Alkahest.Net
             var grid = _sim.Grid;
             if (grid == null)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] Se pidió un snapshot antes de que el mundo existiera; se ignora.");
+                Debug.LogWarning("[TenThousandYears][Red] Se pidió un snapshot antes de que el mundo existiera; se ignora.");
                 return;
             }
 
@@ -732,7 +732,7 @@ namespace Alkahest.Net
                 mensajes++;
             }
 
-            Debug.Log("[ChaosAlchemy][Red] Snapshot completo enviado al cliente " + clientId +
+            Debug.Log("[TenThousandYears][Red] Snapshot completo enviado al cliente " + clientId +
                       " (" + mensajes + " mensaje(s), seed " + _sim.Universe.Seed + ").");
         }
 
@@ -963,7 +963,7 @@ namespace Alkahest.Net
             }
             else if (_sim.Universe != null && _sim.Universe.Seed != seed)
             {
-                Debug.LogError("[ChaosAlchemy][Red] La seed del anfitrión (" + seed + ") no coincide con la del espejo (" +
+                Debug.LogError("[TenThousandYears][Red] La seed del anfitrión (" + seed + ") no coincide con la del espejo (" +
                                _sim.Universe.Seed + "): los materiales generados por semilla no son los mismos. " +
                                "Se ignora el mensaje — reconéctate.");
                 return;

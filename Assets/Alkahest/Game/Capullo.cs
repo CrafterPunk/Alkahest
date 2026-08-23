@@ -4,7 +4,7 @@ using Alkahest.Sim;
 namespace Alkahest.Game
 {
     /// <summary>
-    /// [ChaosAlchemy · pivot playtest 21] EL CAPULLO — sellado, al lado del
+    /// [TenThousandYears · pivot playtest 21] EL CAPULLO — sellado, al lado del
     /// Rescoldo. Mismo generador de silueta que <see cref="Criatura"/> (bulbo
     /// por semiancho-de-fila, ver <see cref="SerSprites.MascaraCapullo"/>)
     /// pero cerrado y ovoide (sin cuello), y la MISMA firma visual de la
@@ -179,7 +179,7 @@ namespace Alkahest.Game
                 var px = (Color32[])pxBase.Clone();
                 SerSprites.AplicarGrietas(px, mask, w, h, fase, seed + 4242);
                 _spritesPorFase[fase] = SerSprites.CrearSprite(px, w, h, new Vector2(0.5f, 0.5f),
-                    "ChaosAlchemyCapulloFase_" + fase, out _texturasPorFase[fase]);
+                    "TenThousandYearsCapulloFase_" + fase, out _texturasPorFase[fase]);
             }
 
             _sr = MaquinariaSprites.CrearCapa(_pivote, "Cascara", _spritesPorFase[0], 43, AnchoMundoCapullo, AltoMundoCapullo);

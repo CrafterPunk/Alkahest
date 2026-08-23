@@ -6,16 +6,16 @@ using UnityEngine;
 namespace Alkahest.EditorTools
 {
     /// <summary>
-    /// [ChaosAlchemy] Build de la demo (análogo a FriendsLoopBuildTools).
+    /// [TenThousandYears] Build de la demo (análogo a FriendsLoopBuildTools).
     /// La escena AlkahestLab debe existir (menú "Alkahest/1. Generar escena Lab").
     /// </summary>
     public static class AlkahestBuildTools
     {
         private const string ScenePath = "Assets/Alkahest/Scenes/AlkahestLab.unity";
-        private const string OutputDir = "Builds/ChaosAlchemyDemo";
-        private const string OutputExe = OutputDir + "/ChaosAlchemy.exe";
+        private const string OutputDir = "Builds/TenThousandYearsDemo";
+        private const string OutputExe = OutputDir + "/TenThousandYears.exe";
 
-        [MenuItem("Alkahest/3. Build demo Windows (un jugador)", priority = 3)]
+        [MenuItem("Ten Thousand Years/3. Build demo Windows (un jugador)", priority = 3)]
         public static void BuildDemoWindows()
         {
             // (pre-vuelo build) Antes esto solo comprobaba que el .unity EXISTIERA en
@@ -30,7 +30,7 @@ namespace Alkahest.EditorTools
             // cualquier edición sin guardar que hubiera abierta en ese momento.
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
             {
-                Debug.LogWarning("[ChaosAlchemy] Build cancelada: hay cambios sin guardar en la escena abierta.");
+                Debug.LogWarning("[TenThousandYears] Build cancelada: hay cambios sin guardar en la escena abierta.");
                 return;
             }
 
@@ -40,13 +40,13 @@ namespace Alkahest.EditorTools
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[ChaosAlchemy] Build ABORTADA: no se pudo (re)generar la escena Lab antes de compilar: " + e);
+                Debug.LogError("[TenThousandYears] Build ABORTADA: no se pudo (re)generar la escena Lab antes de compilar: " + e);
                 return;
             }
 
             if (!File.Exists(ScenePath))
             {
-                Debug.LogError("[ChaosAlchemy] Build ABORTADA: sigue sin existir " + ScenePath + " tras intentar generarla.");
+                Debug.LogError("[TenThousandYears] Build ABORTADA: sigue sin existir " + ScenePath + " tras intentar generarla.");
                 return;
             }
 
@@ -82,7 +82,7 @@ namespace Alkahest.EditorTools
             }
             catch (System.Exception e)
             {
-                Debug.LogError("[ChaosAlchemy] ✘ BUILD FALLIDA — excepción durante BuildPipeline.BuildPlayer: " + e);
+                Debug.LogError("[TenThousandYears] ✘ BUILD FALLIDA — excepción durante BuildPipeline.BuildPlayer: " + e);
                 EditorUtility.DisplayDialog("Build FALLIDA", "Excepción durante la build:\n\n" + e.Message, "OK");
                 return;
             }
@@ -100,11 +100,11 @@ namespace Alkahest.EditorTools
 
             if (ok)
             {
-                Debug.Log("[ChaosAlchemy] ✔ BUILD OK — " + resumen);
+                Debug.Log("[TenThousandYears] ✔ BUILD OK — " + resumen);
             }
             else
             {
-                Debug.LogError("[ChaosAlchemy] ✘ BUILD FALLIDA — " + resumen);
+                Debug.LogError("[TenThousandYears] ✘ BUILD FALLIDA — " + resumen);
             }
 
             EditorUtility.DisplayDialog(
@@ -113,7 +113,7 @@ namespace Alkahest.EditorTools
                 "OK");
         }
 
-        [MenuItem("Alkahest/5. Abrir carpeta de builds", priority = 5)]
+        [MenuItem("Ten Thousand Years/5. Abrir carpeta de builds", priority = 5)]
         public static void RevealBuilds()
         {
             Directory.CreateDirectory(OutputDir);

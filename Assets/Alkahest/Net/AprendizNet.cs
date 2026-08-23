@@ -235,7 +235,7 @@ namespace Alkahest.Net
             }
 
             _cableado = true;
-            Debug.Log("[ChaosAlchemy][Red] Avatar local cableado (color " + DescribirColor() + ").");
+            Debug.Log("[TenThousandYears][Red] Avatar local cableado (color " + DescribirColor() + ").");
         }
 
         /// <summary>

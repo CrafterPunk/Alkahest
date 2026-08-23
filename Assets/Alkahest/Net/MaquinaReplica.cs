@@ -254,7 +254,7 @@ namespace Alkahest.Net
         {
             if (e.tipo != _tipo || e.indice != _indice)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] MaquinaReplica: la entrada del registro cambió de identidad -- no debería pasar (el registro solo crece), se ignora.");
+                Debug.LogWarning("[TenThousandYears][Red] MaquinaReplica: la entrada del registro cambió de identidad -- no debería pasar (el registro solo crece), se ignora.");
                 return;
             }
 

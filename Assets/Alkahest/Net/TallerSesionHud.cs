@@ -249,7 +249,7 @@ namespace Alkahest.Net
             var dayCycle = FindAnyObjectByType<DayCycle>();
             if (dayCycle == null)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] AJUSTES: no se encontró ningún DayCycle en la escena tras ForzarDesbloqueoSesion.");
+                Debug.LogWarning("[TenThousandYears][Red] AJUSTES: no se encontró ningún DayCycle en la escena tras ForzarDesbloqueoSesion.");
                 return;
             }
 
@@ -257,7 +257,7 @@ namespace Alkahest.Net
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (campo == null)
             {
-                Debug.LogWarning("[ChaosAlchemy][Red] AJUSTES: DayCycle._ajustesAbiertos no existe (¿renombrado?) -- botón sin efecto.");
+                Debug.LogWarning("[TenThousandYears][Red] AJUSTES: DayCycle._ajustesAbiertos no existe (¿renombrado?) -- botón sin efecto.");
                 return;
             }
 
@@ -339,7 +339,7 @@ namespace Alkahest.Net
                     // Sin id escrito no hay nada que hacer aquí: en Steam la
                     // vía normal es la invitación del overlay, que entra sola
                     // por SteamLobbyService (GameLobbyJoinRequested).
-                    Debug.LogWarning("[ChaosAlchemy][Red] Pega primero el id del lobby de tu amigo, o acepta su invitación desde Steam.");
+                    Debug.LogWarning("[TenThousandYears][Red] Pega primero el id del lobby de tu amigo, o acepta su invitación desde Steam.");
                 }
             }
 

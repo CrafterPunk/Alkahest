@@ -351,7 +351,7 @@ namespace Alkahest.Sim
 #pragma warning disable 0162 // guard intencional sobre constantes (CS0162 si W/H son múltiplos exactos)
             if ((CellGrid.W % CellGrid.CHUNK) != 0 || (CellGrid.H % CellGrid.CHUNK) != 0)
             {
-                Debug.LogError($"[ChaosAlchemy] CellGrid {CellGrid.W}x{CellGrid.H} no es múltiplo de CHUNK={CellGrid.CHUNK}: " +
+                Debug.LogError($"[TenThousandYears] CellGrid {CellGrid.W}x{CellGrid.H} no es múltiplo de CHUNK={CellGrid.CHUNK}: " +
                                "SimRenderer necesita chunks completos (ver el buffer scratch único).");
             }
 #pragma warning restore 0162
@@ -366,7 +366,7 @@ namespace Alkahest.Sim
             int peorPeriodo = PatronPeriodoCeldas(8); // patronEscala tope, ver Universe.Create.
             if (RecipienteMasEstrechoAncho / peorPeriodo < 3)
             {
-                Debug.LogError($"[ChaosAlchemy] El recipiente más estrecho ({RecipienteMasEstrechoAncho} celdas) ya no cabe " +
+                Debug.LogError($"[TenThousandYears] El recipiente más estrecho ({RecipienteMasEstrechoAncho} celdas) ya no cabe " +
                                 $"3 repeticiones del periodo máximo de Vetas/Celdas ({peorPeriodo}): revisar PatronPeriodoCeldas " +
                                 "o la medida real de SimLevelBuilder (regla 24 de CLAUDE.md).");
             }

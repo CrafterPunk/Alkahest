@@ -715,7 +715,7 @@ namespace Alkahest.Game
                 order.Completado = true;
                 int favor = Mathf.RoundToInt(order.Recompensa * factorFavor);
                 AddFavor(favor);
-                Debug.Log($"[ChaosAlchemy] Ensayo superado: {order.Descripcion} (+{favor} Favor, x{factorFavor:0.0}).");
+                Debug.Log($"[TenThousandYears] Ensayo superado: {order.Descripcion} (+{favor} Favor, x{factorFavor:0.0}).");
                 AvanzarArcoPersisteSiToca();
                 return true;
             }
@@ -1095,7 +1095,7 @@ namespace Alkahest.Game
                 if (ActiveOrders[i].GrupoId == _grupoCompuestoActivo && !ActiveOrders[i].Completado) return; // aún falta una línea.
 
             AddFavor(_recompensaGrupoActivo);
-            Debug.Log($"[ChaosAlchemy] Encargo compuesto completado: {_grupoCompuestoActivo} (+{_recompensaGrupoActivo} Favor).");
+            Debug.Log($"[TenThousandYears] Encargo compuesto completado: {_grupoCompuestoActivo} (+{_recompensaGrupoActivo} Favor).");
             if (_textoCierreGrupoActivo != null) SemillaCero.MaestroAnuncia(_textoCierreGrupoActivo, 9f);
 
             string grupoQueTermino = _grupoCompuestoActivo;
@@ -1209,7 +1209,7 @@ namespace Alkahest.Game
                 {
                     order.Completado = true;
                     AddFavor(order.Recompensa);
-                    Debug.Log($"[ChaosAlchemy] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
+                    Debug.Log($"[TenThousandYears] Encargo completado: {order.Descripcion} (+{order.Recompensa} Favor).");
                     AvanzarArcoPersisteSiToca(); // no-op si el arco de LO QUE PERSISTE no está activo (_arcoPersisteIndex==-1).
                     AvanzarArcoRecetarioSiToca(); // no-op si el recetario de la Semilla Cero compartida no está activo (_arcoRecetarioIndex==-1).
                     AvanzarGrupoCompuestoSiToca(order); // no-op si `order` no pertenece a un grupo (ronda 56, GrupoId==null en TODO Order clásico).

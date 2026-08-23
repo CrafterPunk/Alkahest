@@ -156,7 +156,7 @@ namespace Alkahest.Game
             _sim.PaintRect(centroBandeja - AnchoSaquito / 2, SimLevelBuilder.ChillTrayInteriorY0,
                 AnchoSaquito, AltoSaquito, MaterialId.CrystalSeed);
 
-            Debug.Log("[ChaosAlchemy] Muestras del Maestro entregadas (jornada 2): azoth, vivium y semilla de cristal.");
+            Debug.Log("[TenThousandYears] Muestras del Maestro entregadas (jornada 2): azoth, vivium y semilla de cristal.");
         }
     }
 }
