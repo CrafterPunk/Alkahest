@@ -344,6 +344,16 @@ namespace Alkahest.Net
                 // MISMO flag estático, ver sus comentarios.
                 int seedDeLaSesion = AlkahestGameBootstrap.ModoSemillaCero ? (int)Universe.SemillaCero : 0;
 
+                // (RONDA 69g) LA FUGA GEMELA, LADO DEL ANFITRIÓN: un host que
+                // venía de jugar "EL INICIO — fundación" (título, un jugador)
+                // conservaba `ModoFundacion=true` y CrearMundoInterno le
+                // habría construido EL PLANO DE LA FUNDACIÓN (mundo casi
+                // vacío) como mundo de la sesión compartida, con overrides de
+                // autor sobre una seed aleatoria. El lobby multi no ofrece la
+                // fundación: SIEMPRE false aquí. Ver el bloque espejo en
+                // AlRecibirChunks para el resto de la historia.
+                AlkahestGameBootstrap.ModoFundacion = false;
+
                 // (HANDOFF.md, Playtest 48, deuda "SimSync:330 CrearMundoAnfitrion
                 // sin try/catch, candidato #1 del fallo original") CERRADA
                 // esta ronda: antes, cualquier excepción real dentro de
@@ -423,6 +433,7 @@ namespace Alkahest.Net
             // red de seguridad para el jugador que NUNCA vuelve a pulsar
             // ningún botón de host/join y solo cierra la sesión.
             AlkahestGameBootstrap.ModoSemillaCero = false;
+            AlkahestGameBootstrap.ModoFundacion = false; // (ronda 69g) la fuga gemela -- ver el bloque junto a CrearMundoEspejo.
 
             base.OnNetworkDespawn();
         }
@@ -927,6 +938,25 @@ namespace Alkahest.Net
                 // misma comprobación barata que hace este método para la
                 // seed en la rama de abajo, cero costo real).
                 AlkahestGameBootstrap.ModoSemillaCero = seed == (int)Universe.SemillaCero;
+                // (RONDA 69g, "el multi se rompió" -- captura del invitado de
+                // Cesar) LA FUGA GEMELA que el bloque de arriba no cubría:
+                // `ModoFundacion` es TAN estático como ModoSemillaCero, lo
+                // enciende el botón "EL INICIO — fundación" del título (el
+                // PRIMER botón que pulsa un jugador nuevo, ronda 60) y NADIE
+                // lo apagaba en el camino multi -- ni el lobby, ni este
+                // snapshot, ni el despawn. Un invitado que pasó por la
+                // fundación y luego se une: CrearMundoInterno le construía
+                // BuildFundacion como BASE del espejo y -- mucho peor --
+                // aplicaba Universe.AplicarOverridesSemillaCero SOBRE la seed
+                // del anfitrión: paleta, identidades y umbrales de OTRO
+                // universo. El snapshot corregía la geometría (mat[] entero,
+                // fiable) pero los colores/identidades quedaban rotos para
+                // toda la sesión: "todo desincronizado y rotísimo" (textual).
+                // La fundación es una experiencia DE UN JUGADOR: el lobby
+                // multi no la ofrece, así que aquí SIEMPRE false. Si algún
+                // día existe fundación co-op, su botón de lobby pondrá el
+                // flag igual que hoy lo hacen los de Semilla Cero.
+                AlkahestGameBootstrap.ModoFundacion = false;
 
                 _sim.CrearMundoEspejo(seed);
                 if (_sim.Grid == null) return;

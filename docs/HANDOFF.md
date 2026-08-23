@@ -4262,3 +4262,98 @@ LOS PLAYTESTS PENDIENTES: GitHub está en 7a49008 (rondas 66+68 completas,
 verificado contenido por contenido en su momento). TODO lo de la 69 (a-e)
 vive solo en el disco de Cesar. Como cada .cmd hace `git add -A`, correr
 SOLO ca_playtest69.cmd reúne todo en un commit — no hay orden que respetar.
+
+### Ronda 69g — EL MULTI ROTO DEL INVITADO: la fuga gemela de ModoFundacion
+
+Cesar, con captura del lado del INVITADO: "se rompió el multi... está todo
+desincronizado y rotísimo, revisa profundamente". Investigación por lectura
+completa del camino de red (SimSync/AprendizNet/MaquinaReplica/AlkahestSim):
+
+LO QUE NO ERA: el protocolo RLE está sano (encoder/decoder simétricos,
+cap 255 con split correcto), el snapshot manda el grid ENTERO (864 chunks)
+con NetworkDelivery.ReliableFragmentedSequenced (sin drops posibles), el
+Start del sim espera a la sesión (SimSync.EnEscena), y las réplicas de
+máquinas NO tallan ni borran piedra (MaquinaReplica.Reposicionar solo
+pide). Parte del look "pobre" del invitado es DISEÑO del POC pt30: las
+máquinas remotas son SILUETAS simplificadas (un sprite escalado), no el
+cuerpo completo con mampostería -- deuda conocida, anotada abajo.
+
+LA FUGA CONFIRMADA: `AlkahestGameBootstrap.ModoFundacion` es un estático
+que enciende el botón "EL INICIO — fundación" del título (EL PRIMER botón
+que pulsa cualquier jugador nuevo, ronda 60) y que NADIE apagaba en el
+camino multi -- mientras que ModoSemillaCero tiene TRES resets (lobby,
+snapshot del invitado, OnNetworkDespawn). Un invitado que pasó por la
+fundación y luego se une a una sesión:
+  · CrearMundoInterno le aplicaba Universe.AplicarOverridesSemillaCero
+    SOBRE la seed del anfitrión -> paleta, identidades del retículo y
+    umbrales de OTRO universo: el espejo pinta el mundo del anfitrión con
+    los colores/materiales equivocados EN TODA LA SESIÓN.
+  · Y construía BuildFundacion (mundo casi vacío) como base del espejo --
+    el snapshot corrige mat[] entero, pero el Universe ya quedó torcido.
+Un ANFITRIÓN con el flag pegado era aún peor: hosteaba el plano de la
+fundación como mundo compartido.
+FIX (simétrico al de ModoSemillaCero del pt50): ModoFundacion=false en los
+TRES sitios -- rama anfitrión de OnNetworkSpawn (antes de
+CrearMundoAnfitrion), rama invitado de AlRecibirChunks (antes de
+CrearMundoEspejo) y OnNetworkDespawn. La fundación es de UN jugador; si
+algún día hay fundación co-op, su botón de lobby pondrá el flag.
+
++ LA LÍNEA DE LA VERDAD (AlkahestSim.CrearMundoInterno): un Debug.Log al
+construir cualquier mundo con plano/seed/espejo/flags/overrides -- comparar
+esa línea entre las dos consolas responde en segundos si ambos lados
+construyeron el mismo universo. Para el próximo reporte de desync: pedir
+captura de consola (o Player.log) de AMBOS lados.
+
+SIN VERIFICAR EN VIVO (requiere dos instancias + Steam): compilado limpio
+(fiel + editor); la verificación real es el próximo test de Cesar con su
+amigo -- AMBOS con el build nuevo (los dos lados deben compartir formato).
+BACKLOG SUBRAYADO POR ESTA RONDA: réplicas de máquina del invitado con el
+visual completo (hoy siluetas del POC pt30) -- es probablemente la mitad
+del "se ve rotísimo" que quedará tras el fix.
+
+## Ronda 70 — DOMINGO DE AJUSTES: máquinas atravesables, esquinas suaves, parallax, título
+
+ANTES DE EMPEZAR, CUARTO REINICIO DEL SANDBOX: el repo local revirtió a la
+63b y el rig perdió las DLLs. Recuperación: git reset a origin (Cesar SÍ
+corrió ca_playtest69.cmd: GitHub tiene la 69a-e completa en 6770d86), PERO
+el fix 69g del multi NO alcanzó ese push -- recuperado del disco de Cesar
+vía device_stage_files (verificado por contenido) y va en el commit de esta
+ronda. Rig reconstruido (155 DLLs); OJO: la DLL "SteamNetworkingSockets
+Transport for Netcode for GameObjects.dll" lleva ESPACIOS y rompe el
+compile_fiel.sh (REFS sin comillas) -- en /home/claude/unityrefs se renombra
+a SteamTransportNGO.dll (la identidad del ensamblado vive en el metadato,
+no en el nombre del archivo).
+
+Los cuatro ajustes de Cesar:
+1. EL PERSONAJE NO COLISIONA CON LAS MÁQUINAS ("que la gestión del
+   laboratorio no se convierta en una trampa"). Decisión: nuestra colisión
+   es la GRILLA leída directo (cero colliders de Unity, nada de capas) --
+   la mampostería de máquina es Stone pero está registrada en
+   ObraDelTaller, así que CajaChoca la EXCLUYE: solo bloquean roca madre y
+   piso estructural. Sonda en runtime: caja centrada sobre el muro de una
+   estación = False; sobre roca madre = True.
+2. ESQUINAS SUAVES ("muy pixel perfect: si toca un poquito ya no pasa el
+   mono"). Su idea de Composite/Tilemap Collider no aplica (no hay
+   colliders que fusionar); la tosquedad eran las ESQUINAS AFILADAS de la
+   AABB. Dos suavizados en ApprenticeController:
+   · CHAFLÁN (ChaflanCeldas=2): la caja pasa a OCTÁGONO -- las celdas del
+     rincón no cuentan, rozar un diente de 1-2 celdas ya no frena.
+   · DESLIZAMIENTO ASISTIDO (IntentarAsistencia, sondas 0.5/1.0/1.5
+     celdas): si un paso choca pero desplazándose en el eje perpendicular
+     hay hueco, el imp RESBALA alrededor del borde sin perder velocidad --
+     la corner correction clásica. El avance bloqueado de verdad sigue
+     frenando el eje como siempre.
+3. PARALLAX LEVE (WorkshopBackdrop): el muro de fondo (-10) se desplaza un
+   3% del recorrido de la cámara (su rango 2-5%), escalado 1.03 y
+   recentrado para no descubrir bordes en los extremos del mundo. SOLO el
+   muro: los herrajes están anclados a geometría real de la grilla.
+   Sonda en runtime: posición real == esperada al 3%, escala 1.03.
+4. TÍTULO: "LIMO PRIMORDIAL" -> "TEN THOUSAND YEARS" (el nombre vigente
+   del proyecto, GDD ronda 60) + descripción nueva "Diez mil años de
+   servicio empiezan con un frasco prestado." (liga con el beat 1 sin
+   inventar lore, regla del pt65) + EL TELÓN: DrawTitle ya no usa el velo
+   0.72 (que dejaba ver el mapa "feo" detrás) sino un fondo OPACO de tinta
+   parda (0.085/0.072/0.062); los overlays de jornada conservan su velo
+   translúcido a propósito (ahí ver el taller es parte del gesto).
+   VERIFICADO con captura de escritorio: título dorado + telón sin mundo.
+ca_playtest70.cmd barre la ronda (incluye el 69g rescatado).

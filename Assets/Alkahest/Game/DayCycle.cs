@@ -927,7 +927,19 @@ namespace Alkahest.Game
 
         private void DrawTitle()
         {
-            DrawFullscreenDim();
+            // (RONDA 70, pedido de Cesar: "coloca algo oscuro para que al
+            // iniciar el juego el menú no deje ver uno de los mapas de fondo,
+            // que se ve feo") EL TELÓN: el título ya no usa el velo
+            // semitransparente de los overlays de jornada (DrawFullscreenDim,
+            // alfa 0.72 -- correcto para la intro de día, donde VER el taller
+            // detrás es parte del gesto) sino un telón OPACO de tinta parda
+            // casi negra, de la misma familia que los paneles de UiStyles: al
+            // arrancar el juego se ve el menú sobre tela, no sobre un mundo a
+            // medio generar.
+            var prevColorTelon = GUI.color;
+            GUI.color = new Color(0.085f, 0.072f, 0.062f, 1f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = prevColorTelon;
             UiStyles.Preparar();
             // (playtest 40, SEMILLA CERO) 320 -> 380: el panel gana el botón
             // principal nuevo + su filete separador -- ver el bloque de abajo.
@@ -943,20 +955,22 @@ namespace Alkahest.Game
             // filete con rombo debajo, como la portada de un tratado.
             //
             // (fix Cesar playtest 33, tarea 1, "TÍTULO") "CHAOS ALCHEMY" ->
-            // "LIMO PRIMORDIAL": el nombre en inglés no encajaba con el resto
-            // del juego (texto en español latino, regla 53 de CLAUDE.md) ni
-            // con la propia ficción -- el limo primordial ES la sustancia de
-            // la que se separan las cinco bases del retículo (Sim/Universe.cs,
-            // "LO QUE PERSISTE"), el hilo que atraviesa toda la partida desde
-            // el primer caño. Mini-descripción nueva, sobria, sin explicar de
-            // más: la fuente/espaciado (Cinzel + UiStyles.Espaciar) y el
+            // "LIMO PRIMORDIAL" en su día; (RONDA 70, pedido de Cesar:
+            // "revisa el título del juego en la pantalla inicial y
+            // actualízalo al nombre actual") -> "TEN THOUSAND YEARS", el
+            // nombre vigente del proyecto desde el GDD de la ronda 60 (la
+            // fundación entera se dirige hacia él: el aprendiz de una raza
+            // pequeña y longeva al servicio del Maestro). La descripción
+            // acompaña: liga con la primera escena real del juego (el frasco
+            // PRESTADO del beat 1) sin contar lore que no existe (regla del
+            // pt65). La fuente/espaciado (Cinzel + UiStyles.Espaciar) y el
             // filete con rombo se conservan EXACTOS, solo cambia el texto.
             GUILayout.Space(UiStyles.S(6f));
-            GUILayout.Label(UiStyles.Espaciar("LIMO PRIMORDIAL"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(46f)));
+            GUILayout.Label(UiStyles.Espaciar("TEN THOUSAND YEARS"), UiStyles.TituloGrande, GUILayout.Height(UiStyles.S(46f)));
             var filete = GUILayoutUtility.GetRect(10f, UiStyles.S(12f));
             if (Event.current.type == EventType.Repaint)
                 UiStyles.FileteRombo(interior.width * 0.5f, filete.y + filete.height * 0.5f, interior.width * 0.55f, UiStyles.LatonOscuro);
-            GUILayout.Label("Todo lo que existe desciende del limo.", UiStyles.Subtitulo);
+            GUILayout.Label("Diez mil años de servicio empiezan con un frasco prestado.", UiStyles.Subtitulo);
 
             // =================================================================
             // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3) DOS MODOS DE

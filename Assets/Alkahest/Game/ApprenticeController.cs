@@ -390,6 +390,22 @@ namespace Alkahest.Game
         private const float MedioAltoArriba = 0.40f;     // coronilla 0.364 + bob 0.04 = 0.404 (las antenas pueden rozar).
         private const float MedioAltoAbajo = 0.38f;      // barbilla 0.343 + bob 0.04 = 0.383: queda "un milímetro por detrás".
         private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
+        // (RONDA 70, domingo de ajustes de Cesar) DOS SUAVIZADOS DE LA CAJA:
+        //  · CHAFLÁN (ChaflanCeldas): las 4 esquinas de la AABB se recortan
+        //    en diagonal (la caja pasa a OCTÁGONO). Cesar: "en las esquinas
+        //    es muy pixel perfect -- si toca un poquito ya no pasa el mono".
+        //    Rozar un diente de 1-2 celdas con la esquina ya no bloquea.
+        //    NOTA: aquí no hay colliders de Unity que fusionar (la colisión
+        //    es la GRILLA leída directo, cero colliders) -- el Composite
+        //    Collider que sugería no aplica: el problema eran las esquinas
+        //    afiladas, y se resuelve en la forma de la caja.
+        //  · ASISTENCIA DE ESQUINA (AsistenciaEsquina, ver MoverConColision):
+        //    si un paso se bloquea pero a <=1.5 celdas de deslizamiento
+        //    lateral hay hueco, el imp RESBALA alrededor del borde en vez de
+        //    frenar en seco -- la "corner correction" clásica de los
+        //    plataformeros, aplicada a un volador.
+        private const int ChaflanCeldas = 2;
+        private static readonly float[] AsistenciaEsquina = { 0.05f, 0.10f, 0.15f };
 
         private AlkahestSim _simColision;
 
@@ -421,17 +437,52 @@ namespace Alkahest.Game
                 if (pasoX != 0f)
                 {
                     float px = pos.x + pasoX;
-                    if (CajaChoca(px, pos.y)) { pasoX = 0f; _velocity.x = 0f; }
-                    else pos.x = px;
+                    if (!CajaChoca(px, pos.y)) pos.x = px;
+                    else if (!IntentarAsistencia(ref pos, px, pos.y, vertical: true))
+                    {
+                        pasoX = 0f; _velocity.x = 0f;
+                    }
                 }
                 if (pasoY != 0f)
                 {
                     float py = pos.y + pasoY;
-                    if (CajaChoca(pos.x, py)) { pasoY = 0f; _velocity.y = 0f; }
-                    else pos.y = py;
+                    if (!CajaChoca(pos.x, py)) pos.y = py;
+                    else if (!IntentarAsistencia(ref pos, pos.x, py, vertical: false))
+                    {
+                        pasoY = 0f; _velocity.y = 0f;
+                    }
                 }
                 if (pasoX == 0f && pasoY == 0f) break;
             }
+        }
+
+        /// <summary>
+        /// (ronda 70) DESLIZAMIENTO ASISTIDO: el paso hacia (px,py) chocó,
+        /// pero si desplazándose hasta ±1.5 celdas en el eje PERPENDICULAR
+        /// hay hueco, el imp resbala alrededor del borde y el avance NO se
+        /// pierde -- es lo que convierte "rocé la esquina del túnel y me
+        /// clavé" en "entré resbalando". Prueba primero los desplazamientos
+        /// chicos (0.5/1.0/1.5 celdas) y los dos lados; devuelve false si
+        /// ninguno libra, y entonces el llamador frena el eje como siempre.
+        /// La velocidad NO se toca en un paso asistido: el gesto sigue vivo.
+        /// </summary>
+        private bool IntentarAsistencia(ref Vector3 pos, float px, float py, bool vertical)
+        {
+            for (int a = 0; a < AsistenciaEsquina.Length; a++)
+            {
+                float d = AsistenciaEsquina[a];
+                if (vertical)
+                {
+                    if (!CajaChoca(px, py + d)) { pos.x = px; pos.y = py + d; return true; }
+                    if (!CajaChoca(px, py - d)) { pos.x = px; pos.y = py - d; return true; }
+                }
+                else
+                {
+                    if (!CajaChoca(px + d, py)) { pos.x = px + d; pos.y = py; return true; }
+                    if (!CajaChoca(px - d, py)) { pos.x = px - d; pos.y = py; return true; }
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -452,11 +503,30 @@ namespace Alkahest.Game
             int y1 = Mathf.FloorToInt((cy + MedioAltoArriba) / SimRenderer.CellWorldSize);
             for (int y = y0; y <= y1; y++)
             {
+                int dyBorde = Mathf.Min(y - y0, y1 - y);
                 for (int x = x0; x <= x1; x++)
                 {
+                    // (ronda 70) CHAFLÁN: las celdas del rincón de la caja no
+                    // cuentan (octágono, no rectángulo) -- rozar una esquina
+                    // contra un saliente de 1-2 celdas ya no frena al imp.
+                    int dxBorde = Mathf.Min(x - x0, x1 - x);
+                    if (dxBorde + dyBorde < ChaflanCeldas) continue;
+
                     if (!CellGrid.InBounds(x, y)) continue;
                     int m = _simColision.SampleMaterial(x, y);
-                    if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) return true;
+                    if (m != MaterialId.Stone && m != MaterialId.PisoEstructural) continue;
+
+                    // (ronda 70, mandato de Cesar: "el personaje NO puede
+                    // colisionar con las máquinas -- que la gestión del
+                    // laboratorio no se convierta en una trampa") La
+                    // mampostería de las máquinas es Stone en la grilla, pero
+                    // está registrada en ObraDelTaller: se atraviesa. Solo
+                    // bloquean la ROCA MADRE y el PISO ESTRUCTURAL de verdad.
+                    // No hizo falta tocar capas ni sorting: la colisión es la
+                    // grilla, así que la excepción vive aquí, en la lectura.
+                    if (SimLevelBuilder.EsObraDelTaller(x, y)) continue;
+
+                    return true;
                 }
             }
             return false;

@@ -243,6 +243,20 @@ namespace Alkahest
             // donde se decide qué plano construir.
             if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
             else SimLevelBuilder.BuildCuartoIntimo(_grid);
+            // (RONDA 69g, diagnóstico del "multi roto") LA LÍNEA DE LA VERDAD:
+            // una sola línea que dice exactamente QUÉ mundo construyó este
+            // proceso y con qué flags. Cuando un invitado vea el mundo "raro",
+            // comparar esta línea entre las dos consolas responde en segundos
+            // si los dos lados construyeron el mismo universo -- la fuga de
+            // ModoFundacion (ver Net/SimSync.cs, ronda 69g) se habría cazado
+            // al primer vistazo con esto en pantalla.
+            Debug.Log("[ChaosAlchemy] Mundo construido: plano=" +
+                (AlkahestGameBootstrap.ModoFundacion ? "FUNDACION" : "CUARTO") +
+                " seed=" + seed +
+                " espejo=" + espejo +
+                " semillaCero=" + AlkahestGameBootstrap.ModoSemillaCero +
+                " fundacion=" + AlkahestGameBootstrap.ModoFundacion +
+                " overrides=" + (AlkahestGameBootstrap.ModoSemillaCero || AlkahestGameBootstrap.ModoFundacion));
             // (playtest 40, SEMILLA CERO) Tapiado de las cuatro salas por
             // pregunta -- API CONGELADA (SimLevelBuilder.TapiarSalasSemillaCero,
             // ver su docblock). Después de BuildCuartoIntimo (necesita que las

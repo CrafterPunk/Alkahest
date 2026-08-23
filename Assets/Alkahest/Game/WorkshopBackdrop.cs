@@ -145,6 +145,52 @@ namespace Alkahest.Game
         private const int TexW = CellGrid.W * Escala;  // 2304
         private const int TexH = CellGrid.H * Escala;  // 864
 
+        // =================================================================
+        // (RONDA 70, domingo de ajustes de Cesar) PARALLAX LEVE DEL FONDO:
+        // "Fondo 0 puede moverse una cantidad minúscula respecto al plano
+        // jugable. Incluso 2-5% puede vender profundidad. No exageres o
+        // parecerá teatro de cartón." Elegido 3%: el muro se desplaza un 3%
+        // del recorrido de la cámara EN LA MISMA dirección -- en pantalla se
+        // mueve más lento que el mundo y se lee más LEJOS. Para que el
+        // desplazamiento no descubra los bordes del sprite en los extremos
+        // del mundo, el fondo se ESCALA un 3% extra y se recentra (el margen
+        // sobrante absorbe el vaivén: excursión máx de cámara ~26u x 3% =
+        // ~0.8u, contra ~1.1u de margen por lado). SOLO el muro (-10): los
+        // herrajes (baldas de piedra, pilastras, cadenas) están anclados a
+        // geometría REAL de la grilla -- moverlos los desalinearía de sus
+        // celdas y se leería como bug, no como profundidad.
+        // =================================================================
+        private const float FactorParallax = 0.03f;
+        private const float MargenParallax = 1.03f;
+        private Transform _fondoTr;
+        private Vector3 _fondoBase;
+
+        private void LateUpdate()
+        {
+            if (_fondoTr == null) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            float worldW = CellGrid.W * SimRenderer.CellWorldSize;
+            float worldH = CellGrid.H * SimRenderer.CellWorldSize;
+            Vector3 centro = new Vector3(worldW * 0.5f, worldH * 0.5f, 0f);
+            Vector3 off = (cam.transform.position - centro) * FactorParallax;
+            off.z = 0f;
+            _fondoTr.position = _fondoBase + off;
+        }
+
+        /// <summary>Registra el sprite del muro para el parallax: lo escala con margen, lo recentra y guarda su base. Lo llaman los DOS pintores de fondo (cuarto íntimo y taller clásico) en su único punto de creación.</summary>
+        private void RegistrarFondoParallax(GameObject go)
+        {
+            float worldW = CellGrid.W * SimRenderer.CellWorldSize;
+            float worldH = CellGrid.H * SimRenderer.CellWorldSize;
+            go.transform.localScale = Vector3.one * MargenParallax;
+            go.transform.position = new Vector3(
+                -worldW * (MargenParallax - 1f) * 0.5f,
+                -worldH * (MargenParallax - 1f) * 0.5f, 0f);
+            _fondoTr = go.transform;
+            _fondoBase = go.transform.position;
+        }
+
         // Mampostería: pieza de 10x5 CELDAS (antes 16x7 celdas a 1 téxel/celda,
         // es decir, ladrillos casi del doble de grandes y sin margen para
         // detalle interior). En téxeles: 30x15.
@@ -764,7 +810,7 @@ namespace Alkahest.Game
             // ~26% multiplicativo: todo lo que vive en el plano de juego
             // (materia, máquinas, aprendiz) salta hacia adelante gratis.
             sr.color = new Color(0.74f, 0.72f, 0.76f, 1f);
-            go.transform.position = Vector3.zero;
+            RegistrarFondoParallax(go); // (ronda 70) escala con margen + base del parallax; sustituye al position=zero de antes.
         }
 
         // =================================================================
@@ -1340,7 +1386,7 @@ namespace Alkahest.Game
             // ~26% multiplicativo: todo lo que vive en el plano de juego
             // (materia, máquinas, aprendiz) salta hacia adelante gratis.
             sr.color = new Color(0.74f, 0.72f, 0.76f, 1f);
-            go.transform.position = Vector3.zero;
+            RegistrarFondoParallax(go); // (ronda 70) escala con margen + base del parallax; sustituye al position=zero de antes.
         }
 
         private static uint Hash(int a, int b)
