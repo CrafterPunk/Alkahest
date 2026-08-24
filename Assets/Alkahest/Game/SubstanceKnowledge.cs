@@ -1671,6 +1671,22 @@ namespace Alkahest.Game
 
         private void OnGUI()
         {
+            // (R79, mandato de Cesar: "no se debería activar el bautizo, al
+            // menos hasta esta parte del prólogo... no nos va a quedar otra
+            // opción que hardcodear algunas cosas para que simplemente no
+            // puedan ocurrir") EN EL PRÓLOGO NO SE DESCUBRE NI SE BAUTIZA:
+            // ni el banner "ALGO NUEVO"/"LEY DESCUBIERTA" ni la invitación
+            // "T para bautizarlo" se dibujan en ModoFundacion. El detonante
+            // real era la BARBOTINA (lodo+agua): nace sola al jugar, el
+            // cuenco YA la acepta como lodo (eso se queda — que mojar el
+            // lodo no castigue), pero anunciar "descubrimiento" + invitar a
+            // una tecla que en el prólogo no tiene UI (NamingUi no se
+            // spawnea aquí) era pura confusión. El SABER sí se registra en
+            // silencio: si el jugador llega al taller completo con la
+            // barbotina ya vista, el banner no re-aparece (ya estaba
+            // descubierta) y el catálogo la lista — nada se pierde, solo se
+            // CALLA durante el prólogo.
+            if (AlkahestGameBootstrap.ModoFundacion) return;
             if (DayCycle.InputLocked || DayCycle.HudSilenciado) return; // (playtest 21) HudSilenciado, hermano de InputLocked.
             // (integración pt46) Con la FICHA-VITRINA del álbum abierta, este
             // banner "ALGO NUEVO" no compite (en caótico ambos podían convivir

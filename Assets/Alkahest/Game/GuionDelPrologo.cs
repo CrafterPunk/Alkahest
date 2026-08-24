@@ -85,6 +85,17 @@ namespace Alkahest.Game
         public float radioAgua = 440f;
         public float radioTaller = 540f;
         public float radioAmanecer = 2400f;
+        // (R79, feedback de Cesar: "la luz pierde muy rápido el track del
+        // personaje") El VEN. ya no estira la luz hacia el fuego (el bias
+        // 0.62 de la R73 dejaba al jugador en el borde de su propio óvalo en
+        // cuanto se movía): ahora la luz es casi toda del jugador y el rumbo
+        // lo señala la LUCECITA del Maestro (campos de abajo).
+        [Tooltip("(R79) Cuánto de la luz es del JUGADOR durante el VEN. (1 = pegada a él; hacia 0 = estirada al fuego). Antes 0.62 y perdía al jugador.")]
+        public float luzBiasVen = 0.92f;
+        [Tooltip("(R79) Radio en px escalados de la lucecita del área del Maestro durante el VEN. (el indicador de 'algo ocurre allá').")]
+        public float lucecitaRadioPx = 52f;
+        [Tooltip("(R79) Alfa máxima de la lucecita (parpadea con el fuego).")]
+        public float lucecitaAlfa = 0.6f;
 
         [Header("La cascada")]
         public float manantialSeg = 0.14f;

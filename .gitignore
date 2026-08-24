@@ -116,3 +116,9 @@ InitTestScene*.unity*
 /ca_commit.cmd
 /alk_commit.cmd
 /ca_commit*.cmd
+
+# (R79, decisión de Cesar) Hojas de trabajo vivas con Claude: se iteran en
+# conversación, no se versionan. Y la papelera del puente (device_bash no
+# puede borrar: mueve aquí).
+/_notas/
+/_to_delete/

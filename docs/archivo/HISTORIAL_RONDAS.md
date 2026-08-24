@@ -4765,3 +4765,72 @@ ca_playtest76.cmd barre la ronda.
   device_bash + Refresh.
 · compile_fiel EXIT=0; editor de Cesar 0 errores. ca_playtest77.cmd barre TODO lo pendiente
   (cmds 73-76 sin correr: el más nuevo manda).
+
+## Ronda 78 — CONSULTA DE DISEÑO: sólidos, inventario, viscosidad y la línea jugable
+
+· Cesar pidió consejo extendido en documento: cómo guardar SÓLIDOS (el barro en el depósito
+  "no completó la misión"), qué papel tienen matraces/tubos si el personaje es enano, el
+  inventario en pantalla ("líquidos check y el resto?"), mejorar el game feel de líquidos y
+  polvos, y cómo debe evolucionar la línea jugable tras el prólogo.
+· Entregado como HOJA VIVA en `_notas/DISENO_R78_SOLIDOS_INVENTARIO_Y_LINEA.md` (fuera del repo por decisión de Cesar: se itera con Claude, no se versiona). Hallazgos clave verificados en
+  código antes de opinar:
+  1. (BUG DE DISEÑO CONFIRMADO) El lodo en el depósito es un SOFTLOCK SILENCIOSO: AguaDentro()
+     SÍ verifica agua, pero el lodo roba volumen del vidrio (interior 78, meta 48: con >30 de
+     lodo la meta es imposible) y la placa no lo dice — viola las reglas 38/43. Fix propuesto:
+     contador honesto + llave de purga (pendiente de aprobación, tabla §8 fila 1).
+  2. El estante de redomas (StorageRack: 5×300, CUALQUIER material incl. polvos, etiquetas +
+     firmas) existe y el prólogo NO lo spawnea; el plano ya reserva su sitio ("lo levanta el
+     Maestro en el beat 6"). La jerarquía de volúmenes está invertida: frasco 900 > redoma
+     300 > depósito 78.
+  3. Recetario propuesto: SILO para granel de polvos (gemelo del depósito, compuerta+canaleta),
+     redomas para lo curado, LINGOTES por Prensa (caeSolido/cohesión, regla 7) como capítulo
+     de progresión (lodo→ladrillo→REPARAR LA RUINA que el fondo ya narra), saco/item-ización
+     descartada con razones. Game feel: brillo de superficie líquida, vertido en grumos,
+     nubecita de impacto, GrifoPolvo al verter polvo, viscosidad por fluidity. Línea jugable:
+     escalera descubrir→nombrar→producir→almacenar→automatizar (refill como rito de
+     canonización)→construir; fases F1-F3.
+· Ronda de solo-documento: sin código tocado. SÉPTIMO... no: SEXTO reinicio del sandbox a
+  mitad de ronda — árbol recuperado del disco de Cesar con tar (la receta de CLAUDE.md).
+ca_playtest78.cmd barre esta ronda y TODO lo pendiente (73-77 sin correr).
+
+## Ronda 79 — EL PULIDO DEL PRÓLOGO (primer feedback de juego real de Cesar) + LA HOJA VIVA
+
+· Cesar jugó el prólogo ("está hermoso") y trajo detalles. Los CLAROS se aplicaron; los dos
+  de tutorial quedaron como PROPUESTAS a discutir (ver abajo). Además: la consulta R78 salió
+  del repo — es una HOJA VIVA para iterar con Claude, no un documento versionado. Vive en
+  `_notas/` (gitignoreada junto con `_to_delete/`).
+· APLICADO Y VERIFICADO EN VIVO:
+  1. LA TURBA "INCRUSTADA EN LA PARED": era el bolsón sellado de la R61-64. El sellado del
+     pt48 evitaba el DERRAME, pero en 2D la roca no TAPA: el parche se veía dentro del muro
+     como residuo. RETIRADO ENTERO del plano (regla 15; las constantes FundacionVeta* se
+     conservan para el beat del fogón futuro). Sonda: zona x333-339/y152-160 = 100% piedra;
+     captura del ala izquierda limpia. Con esto se cierra el ÚLTIMO vector de descubrimiento
+     accidental del greybox.
+  2. "LA LUZ PIERDE MUY RÁPIDO EL TRACK DEL PERSONAJE": el culpable era el bias 0.62 del
+     VEN. (la luz prestaba 38% de su centro al fuego del Maestro: al moverse con el WASD
+     recién aprendido, el jugador quedaba al borde de su propio óvalo). Ahora
+     `luzBiasVen=0.92` (guion) — la luz es del jugador — y el RUMBO lo señala lo nuevo:
+  3. LA LUCECITA DEL MAESTRO (pedido literal: "una luz diminuta desde esa área, como que
+     algo está ocurriendo ahí"): resplandor ámbar diminuto sobre el hogar de brasas, SOLO
+     durante el VEN., que nace en fade con la palabra y parpadea con la llama real
+     (_luzFuego). Compuesto ENCIMA de la capa oscura de la viñeta (un segundo agujero no se
+     puede recortar por alfa; un glow cálido encima lee igual: ascua lejana en la penumbra).
+     Radio y alfa en el guion (lucecitaRadioPx/lucecitaAlfa).
+  4. LA CHAPA "EL MAESTRO" YA NO SE ADELANTA: se dibujaba desde el primer frame; ahora se
+     oculta durante todo el Despertar — el nombre se lee por primera vez cuando su voz ya
+     sonó (entra junto con la lucecita, en el VEN.).
+  5. EN EL PRÓLOGO NO SE DESCUBRE NI SE BAUTIZA (hardcode pedido: "que simplemente no
+     puedan ocurrir"): SubstanceKnowledge.OnGUI retorna en ModoFundacion — ni banner "ALGO
+     NUEVO"/"LEY DESCUBIERTA" ni "T para bautizarlo" (que además invitaba a una tecla sin
+     UI: NamingUi no se spawnea en el prólogo). El detonante real era la BARBOTINA
+     (lodo+agua): SIGUE naciendo y el cuenco SIGUE aceptándola como lodo (mojar el lodo no
+     castiga), pero en silencio; el saber se registra igual y el catálogo la mostrará
+     cuando el juego completo despierte. DECISIÓN (pregunta de Cesar "¿debe aparecer como
+     material descubierto?"): NO durante el prólogo — es más información de la que el arco
+     quiere cargar; nada se pierde, solo se calla.
+· PENDIENTE DE DECISIÓN (ideas entregadas en chat, no aplicadas — pedido expreso):
+  a) el conteo del VERTER que "obliga a vaciar todo" (re-aspirar tras el corte sube la
+     base fantasma); b) el jugador que aspira rápido y luego no sabe repetir el gesto.
+· SÉPTIMO reinicio del sandbox al abrir la ronda — recuperado del disco con tar, receta de
+  siempre. compile_fiel EXIT=0; editor 0 errores.
+ca_playtest79.cmd barre esta ronda y todo lo pendiente.

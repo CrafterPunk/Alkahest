@@ -229,6 +229,7 @@ namespace Alkahest.Game
             SimRenderer.FocoCinematico = null;
             if (_instancia == this) _instancia = null;
             if (_vineta != null) Destroy(_vineta);
+            if (_lucecitaTex != null) Destroy(_lucecitaTex); // (R79) la lucecita muere con el director.
             if (_maestroVisualPropio && _maestroGo != null) Destroy(_maestroGo); // el visual que creó el director; un marcador de ESCENA jamás se destruye.
             if (_maestroTex != null) Destroy(_maestroTex);
             if (_frascoVuelo != null) Destroy(_frascoVuelo.gameObject);
@@ -399,7 +400,15 @@ namespace Alkahest.Game
                 CambiarBeat(Beat.Ven);
                 Decir(_g.vozVen);
                 _radioObjetivo = UiStyles.S(_g.radioVen);
-                _focoBias = 0.62f; // la luz se estira hacia el fuego: la única señal de hacia dónde.
+                // (R79, feedback de Cesar) Antes: _focoBias = 0.62 ("la luz se
+                // estira hacia el fuego"). En juego real ese 38% prestado al
+                // fuego dejaba al jugador en el borde de su propio óvalo en
+                // cuanto usaba el WASD recién aprendido — "la luz pierde muy
+                // rápido el track del personaje". Ahora la luz es casi toda
+                // suya (luzBiasVen≈0.92) y el RUMBO lo señala la LUCECITA del
+                // área del Maestro (DibujarLucecitaMaestro), que es además el
+                // indicador que Cesar pidió: "algo está ocurriendo ahí".
+                _focoBias = Mathf.Clamp01(_g.luzBiasVen);
             }
         }
         private bool _tutorialCerrado;
@@ -1079,9 +1088,20 @@ namespace Alkahest.Game
 
             float celda = SimRenderer.CellWorldSize;
 
+            // (R79) La lucecita del área del Maestro durante el VEN.: el
+            // indicador pedido por Cesar ("una luz diminuta desde esa área,
+            // como que algo está ocurriendo ahí") — sustituye al bias de la
+            // viñeta como señal de rumbo. Sobre la capa oscura, así se ve
+            // aunque el jugador esté lejos.
+            if (_beat == Beat.Ven && !DayCycle.InputLocked) DibujarLucecitaMaestro();
+
             // La chapa "EL MAESTRO" sobre la mesa (se oculta de cerca: de ahí
             // en adelante hablan la silueta y la voz).
-            if (_beat != Beat.Fin && DistAlMaestro() >= 14f && !DayCycle.InputLocked)
+            // (R79, feedback de Cesar: "no se debería leer 'el Maestro' como
+            // texto hasta después que hable") También se oculta durante el
+            // DESPERTAR entero: la primera vez que lees su nombre es cuando
+            // su voz ya sonó (el VEN. entra junto con la lucecita de arriba).
+            if (_beat != Beat.Despertar && _beat != Beat.Fin && DistAlMaestro() >= 14f && !DayCycle.InputLocked)
             {
                 var ancla = PosMaestro() + new Vector3(0f, 7f * celda, 0f); // sobre la capucha, siga donde siga el marcador.
                 float alfa = LuzEn(ancla) * 0.85f;
@@ -1195,6 +1215,63 @@ namespace Alkahest.Game
             if (agujero.xMin > -ov) GUI.DrawTexture(new Rect(0, agujero.yMin, agujero.xMin + ov, agujero.height), blanco);
             if (agujero.xMax < Screen.width + ov) GUI.DrawTexture(new Rect(agujero.xMax - ov, agujero.yMin, Screen.width - agujero.xMax + ov, agujero.height), blanco);
             GUI.color = prev;
+        }
+
+        // =================================================================
+        // (R79) LA LUCECITA DEL MAESTRO: un resplandor diminuto y cálido
+        // sobre el hogar de brasas, visible DURANTE el VEN. La viñeta pinta
+        // oscuridad encima del mundo, así que un "segundo agujero" real no
+        // se puede recortar por alfa — pero componer un glow cálido ENCIMA
+        // de la capa oscura lee igual: un ascua lejana en la penumbra.
+        // Parpadea con _luzFuego (la misma llama que ya calcula el fuego) y
+        // entra en fade con la palabra. Radio y alfa viven en el guion.
+        // =================================================================
+        private Texture2D _lucecitaTex;
+
+        private void DibujarLucecitaMaestro()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            if (_lucecitaTex == null) ConstruirLucecita();
+
+            float celda = SimRenderer.CellWorldSize;
+            var brasas = new Vector3((SimLevelBuilder.FundacionBrasasX0 + 2.5f) * celda,
+                (SimLevelBuilder.FundacionBrasasY + 2) * celda, 0f);
+            Vector3 p = cam.WorldToScreenPoint(brasas);
+            if (p.z < 0f) return;
+            float cx = p.x, cy = Screen.height - p.y;
+
+            float entrada = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_tBeat / 1.2f)); // nace con la palabra, no de golpe.
+            float alfa = _g.lucecitaAlfa * entrada * Mathf.Lerp(0.75f, 1f, _luzFuego);
+            float r = UiStyles.S(_g.lucecitaRadioPx) * Mathf.Lerp(0.92f, 1f, _luzFuego);
+
+            var prev = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, alfa);
+            GUI.DrawTexture(new Rect(cx - r, cy - r * 0.8f, r * 2f, r * 1.6f), _lucecitaTex);
+            GUI.color = prev;
+        }
+
+        private void ConstruirLucecita()
+        {
+            const int N = 96;
+            _lucecitaTex = new Texture2D(N, N, TextureFormat.RGBA32, false);
+            _lucecitaTex.wrapMode = TextureWrapMode.Clamp;
+            var px = new Color32[N * N];
+            float half = N * 0.5f;
+            // Ámbar de brasa: núcleo casi blanco, halo naranja que muere en 0.
+            for (int y = 0; y < N; y++)
+            {
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+                    float a = 1f - Mathf.SmoothStep(0f, 1f, d);        // cae suave hacia el borde.
+                    a *= a;                                             // núcleo concentrado, halo tenue.
+                    Color c = Color.Lerp(new Color(1f, 0.93f, 0.72f), new Color(1f, 0.55f, 0.2f), Mathf.Clamp01(d * 1.4f));
+                    px[y * N + x] = new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(a * 255f));
+                }
+            }
+            _lucecitaTex.SetPixels32(px);
+            _lucecitaTex.Apply(false, true);
         }
 
         private void ConstruirVineta()

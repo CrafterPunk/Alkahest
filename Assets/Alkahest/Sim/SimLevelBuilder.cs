@@ -3067,10 +3067,22 @@ namespace Alkahest.Sim
             // el descubrimiento pasa a ser un CARTEL de mundo ("VETA -- talla
             // con C") que el director enciende en el beat del fogón, más la
             // línea del Maestro. A prueba de burros > sutileza, mandato pt64.
-            byte turbaFundacion = MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx, EstadoMateria.Polvo);
-            for (int x = FundacionVetaX - 6; x <= FundacionVetaX - 2; x++)
-                for (int y = FundacionVetaY0; y <= FundacionVetaY1; y++)
-                    grid.SetCell(x, y, turbaFundacion);
+            // (R79, feedback de Cesar sobre el prólogo rehecho) EL BOLSÓN SE
+            // RETIRA ENTERO del plano de la fundación (regla 15). El sellado
+            // del pt48 evitaba el DERRAME, pero en una vista 2D la roca no
+            // TAPA nada: el parche de turba se veía dentro del muro como
+            // "residuo de algún intento anterior, incrustado en la pared —
+            // eso no podría estar" (Cesar, literal). Además el arco actual
+            // (R73: solo el VERBO) ya no tiene beat de fogón que lo use, y
+            // retirarlo cierra el ÚLTIMO vector de descubrimiento accidental
+            // del greybox (la política R79: en el prólogo no se descubre ni
+            // se bautiza nada — ver SubstanceKnowledge.OnGUI). Las constantes
+            // FundacionVeta* se conservan: el bolsón volverá con el beat del
+            // fogón, en la capa del prólogo que lo enseñe de verdad.
+            //   byte turbaFundacion = MaterialId.MatDe(Universe.SemillaCeroBaseTurbaIdx, EstadoMateria.Polvo);
+            //   for (int x = FundacionVetaX - 6; x <= FundacionVetaX - 2; x++)
+            //       for (int y = FundacionVetaY0; y <= FundacionVetaY1; y++)
+            //           grid.SetCell(x, y, turbaFundacion);
 
             // =============================================================
             // (RONDA 74, pedido de Cesar) LA DESTRUCCIÓN MORDIÓ LOS BORDES:
