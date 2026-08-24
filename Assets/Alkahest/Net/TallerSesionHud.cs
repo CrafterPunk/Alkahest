@@ -138,6 +138,12 @@ namespace Alkahest.Net
         {
             if (_recargaPendiente)
             {
+                // La recarga ESPERA a que el NetworkManager termine su
+                // apagado asíncrono (visto en vivo en la verificación R76:
+                // recargar con un shutdown de NGO aún pendiente hacía que ese
+                // shutdown rezagado matara al PRÓXIMO host del mismo proceso).
+                var nm = Unity.Netcode.NetworkManager.Singleton;
+                if (nm != null && (nm.IsListening || nm.ShutdownInProgress)) return; // el próximo frame vuelve a mirar.
                 _recargaPendiente = false;
                 Debug.LogWarning("[TenThousandYears] Fin de sesión involuntario: recargando la escena para dejar el taller limpio (revisión Opus 76 #1).");
                 UnityEngine.SceneManagement.SceneManager.LoadScene(

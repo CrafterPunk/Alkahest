@@ -19,6 +19,8 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
 2. Editar EN EL SANDBOX → `SendUserFile` → `device_commit_files` a
    `C:\JuegosUnity\UnityAI_Test\Alkahest\...` (uuids COPIADOS del resultado, jamás tecleados).
 3. `device_bash` NO puede borrar (unlink bloqueado): para "borrar", `mv` a `_to_delete/`.
+   `AssetDatabase.DeleteAsset` también está VETADO vía MCP RunCommand ("user interactions
+   are not supported", R77): retirar assets = mv a `_to_delete/` + `AssetDatabase.Refresh()`.
    Git en el PC: scripts `.cmd` de un solo uso que corre Cesar (Win+R o doble clic).
    TODO git de lectura vía device_bash lleva `--no-optional-locks` (un `git status` normal
    deja un index.lock que el puente no puede borrar y el push de Cesar revienta — pasó en

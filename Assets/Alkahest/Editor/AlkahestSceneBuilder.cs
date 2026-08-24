@@ -177,6 +177,17 @@ namespace Alkahest.EditorTools
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Alkahest/Arte/Prologo/DepositoVisual.prefab");
                 if (prefab != null) { esc.depositoVisualPrefab = prefab; n++; }
             }
+            if (esc.planoOverlay == null)
+            {
+                // (R77) El overlay del cincel: si Cesar guardó una forma con
+                // el botón de la paleta dev, este cableo es lo que la lleva a
+                // las BUILDS (en runtime-editor hay un fallback por ruta, pero
+                // el player solo ve lo que la escena referencia). Borrar el
+                // asset deja el campo como referencia muerta → el fallback de
+                // GuionEfectivo/BuscarAsset lo trata como null: plano virgen.
+                var overlay = AssetDatabase.LoadAssetAtPath<PlanoOverlay>(PlanoOverlay.RutaAsset);
+                if (overlay != null) { esc.planoOverlay = overlay; n++; }
+            }
             if (n > 0) EditorUtility.SetDirty(esc);
             return n;
         }

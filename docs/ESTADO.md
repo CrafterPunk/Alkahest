@@ -1,7 +1,7 @@
 # ESTADO DEL PROYECTO — documento vivo
 
 *(Se actualiza cada ronda. Historia completa: `archivo/HISTORIAL_RONDAS.md`. Visión: el GDD.)*
-*Última actualización: ronda 75 — LA ESCENIFICACIÓN del prólogo (arquitectura híbrida Scene/Prefab + código).*
+*Última actualización: ronda 77 — LAS HERRAMIENTAS DE CESAR (overlay del cincel, mapa de zonas, cascada sonora, juego libre por conducta). Antes: R76 blindó el ciclo de sesión multi (12 fixes + verificación en vivo del ciclo host→caída→recarga→re-host) y R75 la escenificación.*
 
 ## Dónde estamos
 
@@ -34,7 +34,8 @@
 ## Backlog priorizado
 
 1. **Afinar el prólogo rehecho con el playtest de Cesar** (números del guion, sensación de
-   las fichas y la voz, tubería v2 del depósito, omitir-intro).
+   las fichas y la voz, tubería v2 del depósito, omitir-intro). Desde la R77 Cesar puede
+   PERFILAR LA ROCA él mismo: tallar/pintar en Play y F3 → "GUARDAR FORMA COMO PLANO".
 2. **RONDA ESTRUCTURAL** (ver plan abajo): renombre de namespace/escena/asmdef/repo + poda de
    código aparcado. Prerequisito de la escenificación.
 3. **ESCENIFICACIÓN, siguientes familias**: máquinas del taller a prefabs, decoración,
@@ -96,6 +97,7 @@ prefab del depósito y el guion.
 | Dónde emerge el depósito | ESCENA | marcador `Prologo_Escenografia/Deposito` (base-centro, se ajusta a celdas) |
 | Piel del depósito (capas, offsets, sprites) | PREFAB | `Arte/Prologo/DepositoVisual.prefab` (hijos `Fondo`/`Marco`) |
 | Telón de la ruina (sprite, posición, tinte) | ESCENA | `WorkshopBackdrop` + su hijo `Fondo_Horneado` (sprite: `RuinaFondo.png`) |
+| Retoques de ROCA del prólogo (R77: la forma que Cesar guarda desde el juego) | ASSET | jugar → tallar/pintar Stone → F3 "GUARDAR FORMA COMO PLANO" → `Arte/Prologo/PlanoOverlay.asset` (borrar el asset = plano virgen; respeta obra y zona del derrumbe con acuse) |
 | Beats y su orden, sim, plano tallado (cascada/poza/cráter/cuenco), química, net | CÓDIGO | como siempre |
 
 **Fallbacks (reversibilidad)**: si falta el asset/marcador/prefab, el código reconstruye el

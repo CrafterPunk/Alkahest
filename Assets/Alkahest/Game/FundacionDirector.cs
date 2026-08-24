@@ -126,6 +126,13 @@ namespace Alkahest.Game
         // El manantial / la poza:
         private float _manantialTimer;
 
+        // (R77) El rumor de la cascada: bucle GrifoLiquido anclado al
+        // manantial, con caída cuadrática por distancia (el mismo perfil que
+        // las voces de grifo de DirectorDeAudio) × VolumenEfectos. Vive aquí
+        // y no en DirectorDeAudio porque es materia del prólogo: nace y muere
+        // con el director.
+        private AudioSource _cascadaFuente;
+
         // El derrumbe / el lodo:
         private bool _lodoActivo;
         private float _lodoTimer;
@@ -196,6 +203,19 @@ namespace Alkahest.Game
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
 
+            // (R77) El rumor de la cascada arranca con el mundo — el agua
+            // corre desde el minuto cero (TickAgua: "la cascada ya corría"),
+            // así que su sonido también: es la pista sonora que INVITA a
+            // acercarse antes de que la voz la nombre. Volumen 0 de inicio;
+            // TickCascadaAudio lo lleva por distancia.
+            _cascadaFuente = gameObject.AddComponent<AudioSource>();
+            _cascadaFuente.playOnAwake = false;
+            _cascadaFuente.spatialBlend = 0f;
+            _cascadaFuente.loop = true;
+            _cascadaFuente.clip = Audio.SintetizadorSfx.GrifoLiquido;
+            _cascadaFuente.volume = 0f;
+            _cascadaFuente.Play();
+
             _radioObjetivo = UiStyles.S(_g.radioDespertar);
             _radio = _radioObjetivo;
         }
@@ -225,7 +245,12 @@ namespace Alkahest.Game
             // reventón del derrumbe repintaba 3 celdas en vez de verter 26, y
             // el beat avanzaba con la cinemática sin público. Un ESC en mal
             // momento se comía el derrumbe completo.
-            if (DayCycle.InputLocked) { _posAnterior = _aprendiz.position; return; }
+            if (DayCycle.InputLocked)
+            {
+                _posAnterior = _aprendiz.position;
+                if (_cascadaFuente != null) _cascadaFuente.volume = 0f; // (R77) el menú de pausa congela el mundo; su rumor también.
+                return;
+            }
 
             // La física de fondo corre SIEMPRE: el fuego arde, el manantial
             // brota, la poza rezuma, el lodo gotea. El mundo no se congela
@@ -237,6 +262,7 @@ namespace Alkahest.Game
             TickDrenarCuenco();
             TickVoz();
             TickVueloDelFrasco();
+            TickCascadaAudio();
 
             _tBeat += Time.deltaTime;
             switch (_beat)
@@ -468,7 +494,14 @@ namespace Alkahest.Game
                     break;
 
                 case AguaSub.Libre:
-                    if (_tBeat > _g.juegoLibreSeg)
+                    // (R77) EL JUEGO LIBRE CIERRA POR CONDUCTA, no por reloj:
+                    // tras un mínimo de juego (juegoLibreMinSeg), ALEJARSE de
+                    // la poza es la frase "terminé de jugar" — y ahí el
+                    // Maestro pide. El reloj (juegoLibreTopeSeg) queda como tope
+                    // de seguridad: si el jugador ni juega ni se va, el arco
+                    // no se cuelga esperándolo para siempre.
+                    if ((_tBeat > _g.juegoLibreMinSeg && DistAPoza() > _g.juegoLibreAlejarseCeldas)
+                        || _tBeat > _g.juegoLibreTopeSeg)
                     {
                         CambiarBeat(Beat.EntregaAgua);
                         Decir(_g.vozTraela);
@@ -654,6 +687,23 @@ namespace Alkahest.Game
             for (int i = 0; i < _g.manantialCeldas; i++)
                 _sim.PaintStable(SimLevelBuilder.FundacionManantialX,
                     SimLevelBuilder.FundacionManantialY + i, 0, MaterialId.Water);
+        }
+
+        /// <summary>
+        /// (R77) El rumor de la cascada: volumen por distancia al manantial
+        /// (caída cuadrática, el perfil de los grifos de DirectorDeAudio) ×
+        /// volumen base del guion × VolumenEfectos del jugador. Cada frame —
+        /// es una multiplicación, no una búsqueda.
+        /// </summary>
+        private void TickCascadaAudio()
+        {
+            if (_cascadaFuente == null || _aprendiz == null) return;
+            float celda = SimRenderer.CellWorldSize;
+            var punto = new Vector2(SimLevelBuilder.FundacionManantialX * celda,
+                (SimLevelBuilder.FundacionManantialY + 1) * celda);
+            float dCeldas = Vector2.Distance((Vector2)_aprendiz.position, punto) / celda;
+            float t = Mathf.Clamp01(1f - dCeldas / Mathf.Max(1f, _g.cascadaRadioAudibleCeldas));
+            _cascadaFuente.volume = t * t * _g.cascadaVolumen * Audio.DirectorDeAudio.VolumenEfectos;
         }
 
         /// <summary>Cuenta celdas de `mat` en la poza (cuenco + 2 filas sobre el borde).</summary>

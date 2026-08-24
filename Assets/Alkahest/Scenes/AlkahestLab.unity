@@ -215,6 +215,8 @@ MonoBehaviour:
   maestro: {fileID: 537250030}
   deposito: {fileID: 65343462}
   depositoVisualPrefab: {fileID: 2530118568032828713, guid: 22310212d81261f4684209aed095d2ce, type: 3}
+  planoOverlay: {fileID: 0}
+  mostrarZonasDelPlano: 1
 --- !u!4 &894369479
 Transform:
   m_ObjectHideFlags: 0

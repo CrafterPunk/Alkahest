@@ -50,6 +50,15 @@ namespace Alkahest.Dev
 
         private Vector2Int _hoverCell;
         private bool _hoverValid;
+        // (R77, herramientas para Cesar) true desde el primer hover válido:
+        // _hoverCell pasa a ser "la última celda vista", usable por los
+        // botones de copiar/capturar (al pulsarlos el ratón está sobre la
+        // ventana y _hoverValid es false por diseño).
+        private bool _hoverAlgunaVez;
+#if UNITY_EDITOR
+        /// <summary>Resumen de la última captura de overlay (R77), mostrado bajo el botón. Editor-only como el botón que lo llena (en el player el campo no existiría: CS0169).</summary>
+        private string _resumenOverlay;
+#endif
 
         // =====================================================================
         // (fix playtest 13) "El tirar humo es como si fuera un borrador."
@@ -196,6 +205,7 @@ namespace Alkahest.Dev
 
             _hoverCell = cell;
             _hoverValid = true;
+            _hoverAlgunaVez = true; // (R77) _hoverCell queda como "la última celda vista" para copiar/capturar aunque el ratón esté ahora sobre la ventana.
 
             int radius = Mathf.Clamp(Mathf.RoundToInt(_brushRadius), 1, 10);
             if (mouse.leftButton.isPressed)
@@ -317,6 +327,56 @@ namespace Alkahest.Dev
             {
                 GUILayout.Label("Celda: -");
             }
+
+            // =============================================================
+            // (RONDA 77, pedido de Cesar: "algo para que yo pueda perfilar
+            // el mundo con roca madre y te digo: mira, así es como lo
+            // quiero") HERRAMIENTAS DE COORDENADAS + EL OVERLAY DEL CINCEL.
+            // Los botones usan LA ÚLTIMA celda vista (_hoverCell): al pulsar
+            // un botón el ratón está sobre la ventana y el hover del mundo
+            // es inválido por diseño (ver UpdateHoverAndPaint).
+            // =============================================================
+            if (_hoverAlgunaVez)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button($"Copiar ({_hoverCell.x},{_hoverCell.y})"))
+                {
+                    GUIUtility.systemCopyBuffer = $"({_hoverCell.x},{_hoverCell.y})";
+                }
+                if (GUILayout.Button("Captura PNG"))
+                {
+                    // Con la celda en el NOMBRE: "mira esta captura, la celda
+                    // del nombre es donde lo quiero" es una frase completa.
+                    // Se guarda en la raíz del proyecto (editor) / junto al
+                    // .exe (build). La hora evita pisar capturas de la misma
+                    // celda.
+                    string nombre = $"captura_celda_{_hoverCell.x}_{_hoverCell.y}_{System.DateTime.Now:HHmmss}.png";
+                    ScreenCapture.CaptureScreenshot(nombre);
+                    Debug.Log("[TenThousandYears] Captura guardada: " + nombre);
+                }
+                GUILayout.EndHorizontal();
+            }
+
+#if UNITY_EDITOR
+            // EL BOTÓN DEL OVERLAY (solo prólogo, solo editor): talla con el
+            // cincel / pinta Stone con esta paleta, y guarda la DIFERENCIA
+            // como asset que el plano reaplica en cada arranque. Todo el
+            // mecanismo (qué captura, qué respeta, cómo se revierte) vive en
+            // Game/PlanoOverlay.cs.
+            if (AlkahestGameBootstrap.ModoFundacion)
+            {
+                GUILayout.Space(6);
+                if (GUILayout.Button("GUARDAR FORMA COMO PLANO (overlay)", GUILayout.Height(28)))
+                {
+                    _resumenOverlay = PlanoOverlay.Capturar(_sim);
+                }
+                if (!string.IsNullOrEmpty(_resumenOverlay))
+                {
+                    _explicacionStyle ??= new GUIStyle(GUI.skin.label) { wordWrap = true };
+                    GUILayout.Label(_resumenOverlay, _explicacionStyle);
+                }
+            }
+#endif
 
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }

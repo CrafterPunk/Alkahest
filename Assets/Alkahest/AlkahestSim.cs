@@ -243,6 +243,16 @@ namespace Alkahest
             // donde se decide qué plano construir.
             if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
             else SimLevelBuilder.BuildCuartoIntimo(_grid);
+            // (RONDA 77, EL OVERLAY DEL CINCEL) Los retoques de roca que
+            // Cesar guardó desde la paleta dev (F3 → "GUARDAR FORMA COMO
+            // PLANO") se reaplican sobre el plano recién construido. AQUÍ y
+            // no en el bootstrap: el mundo se reconstruye (RestartRun) y el
+            // overlay pertenece a CADA construcción del plano FUNDACION.
+            // PaintStable es seguro antes de crear el stepper (TickActual
+            // cae a TickEspejo con stepper null — mismo tramo en el que ya
+            // pinta TapiarSalasSemillaCero). El espejo jamás pasa por aquí
+            // (no construye plano).
+            if (AlkahestGameBootstrap.ModoFundacion) Game.PlanoOverlay.AplicarSiExiste(this);
             // (RONDA 69g, diagnóstico del "multi roto") LA LÍNEA DE LA VERDAD:
             // una sola línea que dice exactamente QUÉ mundo construyó este
             // proceso y con qué flags. Cuando un invitado vea el mundo "raro",

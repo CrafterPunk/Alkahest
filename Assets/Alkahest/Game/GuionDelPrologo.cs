@@ -58,7 +58,16 @@ namespace Alkahest.Game
         public float trasTutorialSeg = 0.8f;
         public float entregaFrascoSeg = 0.95f;
         public float trasTomaSeg = 1.3f;
-        public float juegoLibreSeg = 14f;
+        // (R77) `juegoLibreSeg` (14 s a reloj) se RENOMBRA a
+        // `juegoLibreTopeSeg` a propósito: el asset ya guardado en el
+        // proyecto serializa el nombre viejo con 14, y un campo serializado
+        // PISA el default de código (regla 58) — con el nombre nuevo el
+        // asset viejo simplemente lo ignora y el tope arranca en su valor
+        // pensado para el cierre por conducta.
+        [Tooltip("(R77) Tope de seguridad del juego libre con agua: si el jugador ni juega ni se va, TRÁELA. llega igual a estos segundos. El cierre NORMAL es por conducta (ver juegoLibreMinSeg / juegoLibreAlejarseCeldas).")]
+        public float juegoLibreTopeSeg = 45f;
+        [Tooltip("(R77) Mínimo de juego libre antes de que alejarse cuente como 'terminé de jugar'.")]
+        public float juegoLibreMinSeg = 5f;
         public float lodoLibreSeg = 22f;
         public float vozHoldSeg = 2.1f;
         public float derrumbePausaSeg = 2.2f;
@@ -66,6 +75,8 @@ namespace Alkahest.Game
         [Header("Triggers de distancia (celdas)")]
         public float distCharla = 16f;
         public float distZonaAgua = 26f;
+        [Tooltip("(R77) A esta distancia de la poza, alejarse cierra el juego libre por CONDUCTA (el jugador dejó el agua y siguió su camino).")]
+        public float juegoLibreAlejarseCeldas = 34f;
 
         [Header("La luz (radios de viñeta por tramo, px escalados)")]
         public float radioDespertar = 180f;
@@ -79,6 +90,10 @@ namespace Alkahest.Game
         public float manantialSeg = 0.14f;
         public int manantialCeldas = 2;
         public int pozaLlenaCeldas = 48;
+        [Tooltip("(R77) Volumen base del rumor de la cascada (bucle GrifoLiquido), antes de distancia y del volumen de efectos.")]
+        public float cascadaVolumen = 0.4f;
+        [Tooltip("(R77) Radio audible del rumor, en celdas desde el manantial (caída cuadrática, como los grifos).")]
+        public float cascadaRadioAudibleCeldas = 55f;
 
         [Header("El derrumbe y la gotera de lodo")]
         public int lodoBurstCeldas = 26;

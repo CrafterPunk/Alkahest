@@ -4688,3 +4688,80 @@ cmds 73-75 aún no corren. Lección nueva en CLAUDE.md: git de lectura por el pu
   descargándose la versión para el hermano): el flujo host-cierra→invitado-recarga y el
   cerrojo liberado. Compila fiel EXIT=0 y el editor de Cesar compila con 0 errores/avisos.
 ca_playtest76.cmd barre la ronda.
+
+## Ronda 76b — LA VERIFICACIÓN EN VIVO DEL CICLO DE SESIÓN (Unity libre, mandato de Cesar)
+
+· Cesar liberó el editor ("unity libre para que termines pruebas") y se corrió EN VIVO el
+  ciclo completo que la R76 dejó pendiente, en AlkahestLabMulti por sondas MCP:
+  1. Host local (loopback) → Hosting, mundo construido, avatar vivo. De paso se verificó la
+     guarda nueva: ModoFundacion encendido a propósito antes de hostear → el bootstrap lo
+     apagó con acuse en consola (el prólogo NO puede colarse en multi).
+  2. Disconnect() directo (fin INVOLUNTARIO, sin botón SALIR) → el aviso estático se pobló
+     y la escena se recargó sola: Offline, espejo desarmado, avatar viejo muerto, aviso en
+     pantalla. El hallazgo nº1 de la R76, confirmado jugando.
+  3. RE-HOST tras la recarga → primera pasada FALLÓ: IsListening=False, el host nuevo moría
+     solo. Censo: "AlkahestRed" (NetworkManager+SessionCoordinator) es DontDestroyOnLoad y
+     único (singleton-guard OK); la causa era otra — el shutdown de NGO es ASÍNCRONO
+     (ShutdownInProgress) y si la recarga corre antes de que termine, ProcessServerShutdown
+     remata al host RECIÉN nacido. Fix: la recarga pendiente de TallerSesionHud espera
+     `!nm.IsListening && !nm.ShutdownInProgress` antes del LoadScene (un frame más tarde no
+     duele; un host asesinado sí).
+  4. Con el fix desplegado, ciclo completo limpio: host → caída → recarga (esperando el
+     cierre real) → re-host → mundo NUEVO vivo (grid OK, TickActual 1077→1438 avanzando),
+     aviso limpio.
+· DOS TRAMPAS DE VERIFICACIÓN reconfirmadas para el futuro: (a) los errores "[FriendsLoop]
+  El cliente de Steam no está en ejecución" son RUIDO ESPERADO en loopback local, pero cada
+  tanda dispara el Error Pause del editor y congela TODO — ante "no pasa nada" en pruebas
+  multi, mirar EditorApplication.isPaused ANTES de diagnosticar (pasó TRES veces en esta
+  sola verificación); (b) SimSync.Grid es el ESPEJO del invitado — en el host siempre es
+  null y el mundo real se sonda por AlkahestSim.Grid/TickActual.
+· El editor quedó en la escena clásica AlkahestLab, fuera de Play. El fix viaja en el cmd
+  de la R77 (git add -A barre todo lo pendiente: cmds 73-76 sin correr aún).
+
+## Ronda 77 — LAS HERRAMIENTAS DE CESAR: el overlay del cincel, el mapa de zonas, la cascada sonora
+
+· Mandato: "tomo todas tus recomendaciones" (las herramientas de editor propuestas en la R76
+  para que Cesar, sin ser dev, perfile el mundo y se haga entender). Cuatro entregas:
+· EL OVERLAY DEL CINCEL (Game/PlanoOverlay.cs, la recomendada): en Play, Cesar talla con el
+  cincel y pinta Stone con la paleta dev; el botón "GUARDAR FORMA COMO PLANO" (F3, solo
+  prólogo, solo editor) regenera el plano virgen en una grilla de borrador (con SNAPSHOT/
+  RESTORE del registro de obra: el registro vivo tiene más que el plano — el depósito
+  registra su rect en runtime), toma la DIFERENCIA solo en pares Stone↔Empty (la silueta de
+  la roca; líquidos y polvos son la sim viviendo, no el escenario) y la guarda como asset.
+  AlkahestSim la reaplica justo tras BuildFundacion — ahí y no en el bootstrap porque el
+  mundo se RECONSTRUYE (RestartRun) y el overlay pertenece a cada construcción. Respeta con
+  ACUSE: la obra del taller (regla 38) y la ZONA DEL DERRUMBE (grieta+cráter: esa roca la
+  talla el director cada partida; capturarla congelaría la cinemática como agujero de
+  fábrica). Reversible borrando el asset. El menú 1 lo cablea a la escena (así llega a las
+  builds); en editor hay fallback por ruta para el ciclo tallar→guardar→reiniciar sin tocar
+  la escena. VERIFICADO EN VIVO, ciclo reina completo: esculpido por sonda (8 talladas + 6
+  añadidas + 1 dentro del cráter) → captura ("8 talladas + 6 añadidas... omitidas 1 de la
+  zona del derrumbe") → RestartRun → muescas y bultos REAPLICADOS, celda del cráter VIRGEN
+  → menú 1 cableó la referencia. El asset de prueba (garabato de sonda) se retiró después:
+  el primer overlay de verdad lo guardará Cesar.
+· EL MAPA DE ZONAS (PrologoEscenografia.OnDrawGizmos): TODOS los rectángulos funcionales
+  del plano del prólogo dibujados en la vista de escena con etiqueta — caverna, manantial,
+  repisas (obra), poza, grieta y cráter (marcados "runtime": ahí NO capturar), cuenco, mesa,
+  brasas, depósito, fogón del jugador, veta, estante, nicho de salida, spawn. Leídos de las
+  MISMAS constantes que consume SimLevelBuilder (regla 24). Toggle `mostrarZonasDelPlano`.
+· COORDENADAS A MANO (DevPalette): botón "Copiar (x,y)" (GUIUtility.systemCopyBuffer) y
+  botón "Captura PNG" con LA CELDA EN EL NOMBRE del archivo — "mira esta captura, la celda
+  del nombre es donde lo quiero" pasa a ser una frase completa. Usan la última celda vista
+  (al pulsar, el ratón está sobre la ventana y el hover del mundo es inválido por diseño).
+· LA CASCADA SUENA (FundacionDirector): bucle GrifoLiquido anclado al manantial, caída
+  cuadrática por distancia (el perfil de los grifos) × cascadaVolumen del guion ×
+  VolumenEfectos; se calla con el menú de pausa. Verificado en vivo: 0.0000 en el spawn →
+  0.3306 al pie del manantial. Es la pista sonora que INVITA a acercarse antes de que la
+  voz nombre el agua.
+· EL JUEGO LIBRE CIERRA POR CONDUCTA (no por reloj): tras juegoLibreMinSeg (5 s), ALEJARSE
+  de la poza (juegoLibreAlejarseCeldas=34) es la frase "terminé de jugar" — ahí llega
+  TRÁELA. El reloj queda como tope de seguridad (juegoLibreTopeSeg=45): RENOMBRADO de
+  juegoLibreSeg a propósito, porque el asset ya guardado serializa el nombre viejo con 14 y
+  un campo serializado PISA el default de código (regla 58) — con el nombre nuevo el asset
+  viejo lo ignora. Verificado en vivo forzando el estado: Agua/Libre + 6 s + jugador lejos
+  → beat=EntregaAgua al tick siguiente.
+· Nota de sonda nueva: AssetDatabase.DeleteAsset está VETADO vía MCP ("user interactions
+  are not supported") — para retirar un asset desde el puente: mv a _to_delete/ con
+  device_bash + Refresh.
+· compile_fiel EXIT=0; editor de Cesar 0 errores. ca_playtest77.cmd barre TODO lo pendiente
+  (cmds 73-76 sin correr: el más nuevo manda).
