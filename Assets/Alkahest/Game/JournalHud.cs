@@ -447,6 +447,14 @@ namespace Alkahest.Game
         /// </summary>
         private void OnDestroy()
         {
+            // (RONDA 76, revisión Opus #3/#4) LAS ESTÁTICAS NO SOBREVIVEN A LA
+            // INSTANCIA: `Abierto` clavado en true tras una recarga de escena
+            // con el diario abierto mataba el haz del frasco, el cincel y la
+            // mudanza en TODAS las sesiones siguientes (el gemelo exacto del
+            // fix pt55 de AlbumReal, que tapó una de las dos puertas). Ídem
+            // EscribiendoTexto si el foco moría en un campo del diario.
+            Abierto = false;
+            UiStyles.EscribiendoTexto = false;
             for (int i = 0; i < _miniaturas.Length; i++)
             {
                 if (_miniaturas[i] != null) Destroy(_miniaturas[i]);

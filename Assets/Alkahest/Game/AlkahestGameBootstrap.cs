@@ -367,6 +367,24 @@ namespace Alkahest.Game
             // NI UNA LÍNEA.
             if (SimSync.EnEscena)
             {
+                // (RONDA 76, invariante explícita) EL PRÓLOGO ES SOLO-SINGLE:
+                // jamás cruza a una sesión de red. La arquitectura ya lo
+                // impide (esta rama nunca llama a SpawnFundacion, y la R59
+                // resetea los flags en host/invitado/despawn), pero un flag
+                // estático encendido que llegara hasta aquí (editor: jugar el
+                // prólogo y abrir la escena multi en el mismo proceso) se
+                // apaga con acuse en el log — cinturón y tirantes.
+                if (ModoFundacion)
+                {
+                    ModoFundacion = false;
+                    Debug.LogWarning("[TenThousandYears] ModoFundacion venía ENCENDIDO al entrar a la escena MULTI: apagado. El prólogo es un modo de un solo jugador.");
+                }
+                // (R76, nota FRÁGIL de la revisión) Las dos estáticas del
+                // prólogo dependen del OnDestroy del director; apagarlas aquí
+                // también es gratis y hace la invariante autosuficiente.
+                FundacionDirector.HudPermitido = false;
+                FundacionDirector.FrascoBloqueado = false;
+
                 // (playtest 48, D4/§2e) EL LOBBY DEBE PODER PAUSARSE DESDE EL
                 // PRIMER FRAME: antes, `DayCycle.ForzarDesbloqueoSesion()`
                 // vivía dentro de `TrySpawnRed`, DESPUÉS de esperar a

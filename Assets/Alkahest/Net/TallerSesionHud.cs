@@ -93,10 +93,58 @@ namespace Alkahest.Net
         private void Awake()
         {
             if (sessionCoordinator == null) sessionCoordinator = FindAnyObjectByType<SessionCoordinator>();
+            if (sessionCoordinator != null) sessionCoordinator.OnStateChanged += AlCambiarEstadoSesion;
+        }
+
+        private void OnDestroy()
+        {
+            if (sessionCoordinator != null) sessionCoordinator.OnStateChanged -= AlCambiarEstadoSesion;
+        }
+
+        // ------------------------------------------------------------------
+        // (RONDA 76, revisión Opus #1 — LA DEUDA pt53/pt55 COMPLETA) EL FIN
+        // DE SESIÓN INVOLUNTARIO: el botón SALIR ya recargaba la escena (el
+        // único reset barato y completo del estado por-escena), pero cuando
+        // la sesión moría SIN botón — el anfitrión cierra el .exe, cae el
+        // transporte — el invitado quedaba en la MISMA escena sucia:
+        // _spawned=true, el espejo con la seed vieja rechazando chunks en
+        // bucle, réplicas huérfanas, catch-up del saber ya "hecho". Ahora
+        // CUALQUIER caída a Offline desde una sesión viva dispara la misma
+        // recarga, con un aviso que sobrevive a la recarga (estática).
+        // ------------------------------------------------------------------
+        private bool _lobbyIdConFoco;
+        private bool _estuvoEnSesion;
+        private bool _salidaVoluntaria;
+        private bool _recargaPendiente;
+        /// <summary>Aviso mostrado en el lobby tras una recarga por fin de sesión (estática: sobrevive a la recarga; se limpia al hostear/unirse).</summary>
+        public static string AvisoPostRecarga;
+
+        private void AlCambiarEstadoSesion(SessionCoordinator.ConnectionState estado)
+        {
+            if (estado == SessionCoordinator.ConnectionState.Hosting || estado == SessionCoordinator.ConnectionState.Client)
+            {
+                _estuvoEnSesion = true;
+                AvisoPostRecarga = null;
+                return;
+            }
+            if (estado == SessionCoordinator.ConnectionState.Offline && _estuvoEnSesion && !_salidaVoluntaria)
+            {
+                AvisoPostRecarga = "La sesión terminó (el anfitrión cerró el taller o se perdió la conexión).";
+                _recargaPendiente = true; // se recarga desde Update, no desde dentro del callback de red.
+            }
         }
 
         private void Update()
         {
+            if (_recargaPendiente)
+            {
+                _recargaPendiente = false;
+                Debug.LogWarning("[TenThousandYears] Fin de sesión involuntario: recargando la escena para dejar el taller limpio (revisión Opus 76 #1).");
+                UnityEngine.SceneManagement.SceneManager.LoadScene(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+                return;
+            }
+
             // F9 alterna el panel. Es un atajo de META (como M de silenciar,
             // regla 12 de CLAUDE.md), no una acción de juego: solo respeta
             // "estoy escribiendo un nombre", nada más.
@@ -166,6 +214,16 @@ namespace Alkahest.Net
             // en Hosting/Client" del contrato: sin esto, un jugador que
             // reintenta y esta vez SÍ conecta seguiría viendo el error
             // viejo debajo del panel de "conectado".
+            // (R76 #1) El porqué de la última recarga, sobreviviente estático:
+            if (!string.IsNullOrEmpty(AvisoPostRecarga))
+            {
+                var cPrev = GUI.color;
+                GUI.color = UiStyles.Aviso;
+                GUILayout.Label(AvisoPostRecarga, UiStyles.Cuerpo);
+                GUI.color = cPrev;
+                GUILayout.Space(4f);
+            }
+
             string errorActual = sessionCoordinator.LastError;
             if (!string.IsNullOrEmpty(errorActual) && !ReferenceEquals(errorActual, _errorMostrado))
             {
@@ -344,7 +402,18 @@ namespace Alkahest.Net
             }
 
             GUILayout.Label("Id de lobby del anfitrión:", UiStyles.CuerpoTenue);
+            GUI.SetNextControlName("CampoLobbyId");
             _lobbyIdEscrito = GUILayout.TextField(_lobbyIdEscrito, UiStyles.Campo);
+            // (RONDA 76, revisión Opus #11) Regla 12 también aquí: era el
+            // ÚNICO TextField del proyecto que no levantaba EscribiendoTexto —
+            // pegar el id con Ctrl+V togleaba la mudanza y una C suelta
+            // activaba el cincel, con el avatar ya vivo detrás del panel.
+            bool escribiendoLobby = GUI.GetNameOfFocusedControl() == "CampoLobbyId";
+            if (escribiendoLobby != _lobbyIdConFoco)
+            {
+                _lobbyIdConFoco = escribiendoLobby;
+                UiStyles.EscribiendoTexto = escribiendoLobby;
+            }
 
             GUILayout.Space(4f);
             GUILayout.Label("Prueba local (dos ventanas en este PC):", UiStyles.CuerpoTenue);
@@ -480,6 +549,7 @@ namespace Alkahest.Net
             GUILayout.Space(6f);
             if (GUILayout.Button("SALIR de la sesión", UiStyles.Boton))
             {
+                _salidaVoluntaria = true; // (R76) esta recarga es del botón: el manejador de Offline no debe recargar otra vez.
                 sessionCoordinator.Disconnect();
                 // (integración pt55, LA FUGA DE RE-HOST del pt53) Salir de la
                 // sesión RECARGA la escena activa: es la única forma barata y

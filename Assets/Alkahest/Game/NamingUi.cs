@@ -146,6 +146,12 @@ namespace Alkahest.Game
         /// <summary>Misma disciplina que FlaskHud/JournalHud: las Texture2D creadas por código no se liberan solas al recargar la escena (DayCycle.RestartRun recrea este componente).</summary>
         private void OnDestroy()
         {
+            // (RONDA 76, revisión Opus #4) Si el rito muere ABIERTO (recarga
+            // de escena al salir de una sesión multi con el bautizo en
+            // pantalla), EscribiendoTexto quedaba clavado en true: TODAS las
+            // teclas de una tecla muertas hasta reiniciar el .exe. La guarda
+            // universal de la regla 12 se libera con su dueño.
+            UiStyles.EscribiendoTexto = false;
             for (int m = 0; m < _muestraTexturas.Length; m++)
             {
                 var t = _muestraTexturas[m];

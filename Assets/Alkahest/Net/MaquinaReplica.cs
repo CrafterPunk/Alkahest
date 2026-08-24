@@ -173,8 +173,13 @@ namespace Alkahest.Net
                 ArbitrarSiHaceFalta();
                 _esGanadoraEsteFrame = ReferenceEquals(_ganadoraEsteFrame, this);
 
+                // (RONDA 76, revisión Opus #7) R12 COMPLETA: faltaban
+                // AlbumReal (la ficha-vitrina se abre SOLA al descubrir — la E
+                // de cerrarla abría el grifo a ciegas detrás del velo) y la
+                // paleta dev.
                 if (_esGanadoraEsteFrame && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame
-                    && !DayCycle.InputLocked && !UiStyles.EscribiendoTexto && !JournalHud.Abierto)
+                    && !DayCycle.InputLocked && !UiStyles.EscribiendoTexto && !JournalHud.Abierto
+                    && !AlbumReal.Abierto && !Alkahest.Dev.DevPalette.IsOpen)
                 {
                     MaquinaSync.PedirUso(_tipo, _indice); // el servidor ejecuta IMaquinaUsableRemota.UsarPorRed() de verdad -- ver Net/MaquinaSync.cs.
                 }
@@ -454,6 +459,7 @@ namespace Alkahest.Net
             if (Alkahest.Dev.DevPalette.IsOpen) return;
             if (UiStyles.EscribiendoTexto) return;
             if (JournalHud.Abierto) return;
+            if (AlbumReal.Abierto) return; // (R76 #7) la vitrina modal también tapa las chapas.
             if (_tipo == MaquinariaSprites.TipoBalda || _tipo == MaquinariaSprites.TipoAnclaje) return; // mobiliario: sin chapa, ver doc de arriba.
 
             var jugador = ApprenticeController.AprendizLocal;

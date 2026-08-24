@@ -4632,3 +4632,59 @@ de autoridad por elemento, sin big-bang, por familias validadas, y reversible.
 · La matriz de autoridad completa y las familias PENDIENTES (máquinas del taller a prefabs,
   decoración, escena multi) quedaron en ESTADO.md como receta para repetir el criterio.
 ca_playtest75.cmd barre la ronda (incluye la escena guardada, los PNG, el prefab y el guion).
+
+### Ronda 76 — estabilidad del multiplayer (los ojos de Opus sobre Net/) + el prólogo es solo-single
+
+(QUINTO REINICIO DEL SANDBOX al arrancar la ronda: el repo local revirtió a la 63b. Recuperado
+COMPLETO desde el disco de Cesar con un tar vía device_bash — GitHub estaba atrás porque los
+cmds 73-75 aún no corren. Lección nueva en CLAUDE.md: git de lectura por el puente SIEMPRE con
+--no-optional-locks.)
+
+· EL PRÓLOGO ES SOLO-SINGLE (pedido de Cesar): invariante explícita con dos guardas — el
+  bootstrap apaga ModoFundacion (y HudPermitido/FrascoBloqueado) con acuse al entrar a la
+  escena MULTI, y FundacionDirector se autodestruye con error si algún día naciera en una
+  escena de red. La arquitectura ya lo impedía (bifurcación SimSync.EnEscena + R59); ahora
+  además se DICE.
+· REVIEW DE ESTABILIDAD MULTI (agente Opus, Net/ entero + costuras): veredicto — el
+  protocolo (RLE, permisos RPC, cerrojos, altas tardías) está sano; lo que rompía el multi
+  era EL CICLO DE VIDA: el juego no sabía terminar una sesión que él no decidió terminar, y
+  una decena de estáticas de proceso sobrevivían al fin de partida. 12 hallazgos aplicados:
+  1. (CRÍTICO) Fin de sesión INVOLUNTARIO (host cierra / cae transporte): el invitado quedaba
+     en la escena sucia — _spawned=true, espejo con seed vieja rechazando chunks EN BUCLE,
+     réplicas huérfanas, catch-up del saber "ya hecho". Fix: TallerSesionHud escucha
+     OnStateChanged y cualquier caída a Offline desde sesión viva dispara LA MISMA recarga
+     de escena del botón SALIR (con aviso estático que sobrevive a la recarga). La deuda
+     pt53/pt55 completa, cerrada.
+  2. (BUG) El invitado FABRICABA temperatura: su espejo no replica temp[], así que vertía a
+     20°C y PISABA la temperatura real del mundo del host (lavandería térmica). Fix: lo que
+     un cliente vierte nace a temperatura estable (R22) hasta que temp[] viaje en el RLE.
+  3-5. (CRÍTICOS) Estáticas clavadas que mataban sesiones futuras: JournalHud.Abierto (el
+     gemelo exacto del fix pt55 de AlbumReal — mataba haz/cincel/mudanza para siempre),
+     UiStyles.EscribiendoTexto (rito de bautizo muerto abierto = TODAS las teclas muertas),
+     y Cincel/Mudanza/Termometro.ModoActivo (cincel pegado = frasco del invitado
+     IRRECUPERABLE). Fix: OnDestroy baja cada una — con guarda `enabled` para que el Destroy
+     del avatar de un amigo que se va no te apague TU modo.
+  6. (BUG) Cerrojo de mudanza eterno: invitado agarra máquina con V y se desconecta → nadie
+     podía moverla el resto de la partida. Fix: el server libera los cerrojos del cliente
+     caído (OnClientDisconnectCallback).
+  7. (BUG) R12 incompleta en la E remota del invitado: con la ficha-vitrina del
+     descubrimiento en pantalla (se abre sola), la E abría grifos a ciegas. Fix: guardas
+     AlbumReal + DevPalette en MaquinaReplica.
+  8. (FRÁGIL) El snapshot se pedía UNA vez: si el host aún no tenía mundo, el invitado
+     quedaba gris para siempre. Fix: reintento cada 2 s con acuse mientras el espejo no
+     tenga grilla.
+  9-10. (FRÁGILES) Hornada nunca se limpiaba en multi (ids de la seed anterior); la
+     contabilidad de difusión de SimSync sobrevivía a la sesión. Fix: Hornada.Limpiar() en
+     el arranque multi; reset de _ultimoTickEnviado y compañía en OnNetworkDespawn.
+  11. (BUG menor) El campo del id de lobby era el ÚNICO TextField sin EscribiendoTexto:
+     pegar el id con Ctrl+V togleaba la mudanza. Fix: foco = flag.
+  12. Limpieza del prefab de red: las claves muertas moveSpeed/acceleration (la trampa R58
+     durmiente) fuera del YAML.
+  DESCARTADOS con evidencia (verificados, no re-investigar): R58 en prefabs, doble
+  suscripción de callbacks, permisos RPC/NetworkVariable, RLE/reordenación de snapshot,
+  determinismo (UnityEngine.Random solo en partículas client-local), FrascoBloqueado en
+  multi, el find-or-create del backdrop R75, doble DayCycle, pausa del invitado.
+· Pendiente de VERIFICACIÓN EN VIVO con dos ventanas (no se pudo esta ronda: Unity ocupado
+  descargándose la versión para el hermano): el flujo host-cierra→invitado-recarga y el
+  cerrojo liberado. Compila fiel EXIT=0 y el editor de Cesar compila con 0 errores/avisos.
+ca_playtest76.cmd barre la ronda.

@@ -155,6 +155,18 @@ namespace Alkahest.Game
 
         public void Init(AlkahestSim sim, OrderSystem orders, Flask flask, SubstanceKnowledge saber, Transform aprendiz)
         {
+            // (RONDA 76) EL PRÓLOGO ES SOLO-SINGLE: si alguien llegara a
+            // instanciar este director en la escena de red (hoy es imposible
+            // por la bifurcación del bootstrap; esta guarda protege el
+            // mañana), se autodestruye con acuse en vez de dirigir un
+            // tutorial sobre una sim espejada que no le pertenece.
+            if (Alkahest.Net.SimSync.EnEscena)
+            {
+                Debug.LogError("[TenThousandYears] FundacionDirector en escena MULTI: el prólogo es solo-single. Director abortado.");
+                Destroy(gameObject);
+                return;
+            }
+
             // (orders/saber se aceptan por compatibilidad de firma con el
             // bootstrap; el prólogo rehecho no encola pedidos — el receptor
             // es físico — ni bautiza nada todavía.)

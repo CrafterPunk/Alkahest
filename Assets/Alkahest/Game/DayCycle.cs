@@ -207,6 +207,11 @@ namespace Alkahest.Game
         public void ArrancarSoloParaPausaMulti()
         {
             _modoMulti = true;
+            // (RONDA 76, revisión Opus #9) En MULTI nadie pasaba por Init()
+            // y `Hornada` (estática de proceso) arrastraba ids de material
+            // del universo de la sesión ANTERIOR — hoy inerte (patentes
+            // apagadas), mañana un diario con procedimientos de otra seed.
+            Hornada.Limpiar();
             EnterPlaying();
         }
 

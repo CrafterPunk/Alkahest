@@ -140,8 +140,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e4def4e4de346994daa78eb30ee1f001, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Game.ApprenticeController
-  moveSpeed: 11.2
-  acceleration: 44
   customSprite: {fileID: 0}
   sortingOrder: 50
 --- !u!114 &7991888974081322168

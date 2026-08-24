@@ -182,6 +182,18 @@ namespace Alkahest.Game
             BuildVisuals();
         }
 
+        // (RONDA 76, revisión Opus #5) EL MODO ES DE LA SESIÓN, NO DEL
+        // PROCESO: la estática quedaba encendida tras la recarga de escena
+        // del fin de sesión multi — el frasco de la sesión siguiente nacía muerto; como invitado (AprendizNet apaga este componente) era IRRECUPERABLE sin reiniciar el .exe.
+        private void OnDestroy()
+        {
+            // Solo el componente ACTIVO (el del jugador local) es dueño del
+            // modo: los avatares remotos llevan este componente apagado
+            // (AprendizNet.Cablear) y su Destroy al desconectarse un amigo no
+            // debe apagar el TUYO a mitad de sesión.
+            if (enabled) ModoActivo = false;
+        }
+
         private void Update()
         {
             if (_sim == null || _sim.Grid == null) return;

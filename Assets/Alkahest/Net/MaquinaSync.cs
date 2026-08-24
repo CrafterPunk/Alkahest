@@ -374,6 +374,9 @@ namespace Alkahest.Net
         {
             base.OnNetworkSpawn();
 
+            if (IsServer && NetworkManager != null)
+                NetworkManager.OnClientDisconnectCallback += AlDesconectarCliente; // (R76 #6) liberar cerrojos de mudanza de clientes caídos.
+
             // (playtest 48, CONTRATO_RONDA48.md D3/§2d: "MaquinaSync a
             // prueba de orden de spawn") AUDITADO: este método NUNCA lee
             // `_sim.Universe`/`_sim.Grid` -- solo guarda la referencia a
@@ -418,7 +421,25 @@ namespace Alkahest.Net
         public override void OnNetworkDespawn()
         {
             _registro.OnListChanged -= AlCambiarRegistro;
+            if (IsServer && NetworkManager != null)
+                NetworkManager.OnClientDisconnectCallback -= AlDesconectarCliente; // (R76 #6) simétrico con la suscripción del spawn.
             base.OnNetworkDespawn();
+        }
+
+        /// <summary>
+        /// (RONDA 76, revisión Opus #6) EL CERROJO NO SOBREVIVE A SU DUEÑO:
+        /// un invitado que agarra una máquina con V y se desconecta (Alt-F4,
+        /// caída de red) dejaba `_bloqueos[i] = suClientId` para siempre —
+        /// ni el anfitrión podía soltarla ("lo está moviendo otro
+        /// alquimista", el resto de la partida). Al caer un cliente, el
+        /// servidor libera todo cerrojo suyo.
+        /// </summary>
+        private void AlDesconectarCliente(ulong clientId)
+        {
+            if (!IsServer) return;
+            for (int i = 0; i < _bloqueos.Count; i++)
+                if (_bloqueos[i] == clientId)
+                    _bloqueos[i] = SinBloqueo;
         }
 
         public override void OnDestroy()

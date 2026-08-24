@@ -395,7 +395,8 @@ namespace Alkahest.Net
                 // colores equivocados. Se marca el modo espejo y se pide el
                 // snapshot: la seed viaja en su cabecera.
                 _sim.PrepararEspejo();
-                SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
+SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
+                _reintentoSnapshotEn = Time.time + 3f; // (R76 #8) el reintento de Update espera un respiro: esta petición del spawn suele bastar.
                 Debug.Log("[TenThousandYears][Red] Invitado: espejo preparado, snapshot solicitado al anfitrión.");
             }
         }
@@ -409,6 +410,17 @@ namespace Alkahest.Net
             }
 
             _pinturasPendientes = 0;
+
+            // (RONDA 76, revisión Opus #10) La contabilidad de difusión
+            // también es de LA SESIÓN: en un re-arranque dentro del mismo
+            // proceso, un chunk cuyo tick nuevo coincida con el "ya enviado"
+            // de la sesión anterior no se difundiría hasta volver a cambiar.
+            if (_ultimoTickEnviado != null)
+                for (int i = 0; i < _ultimoTickEnviado.Length; i++) _ultimoTickEnviado[i] = uint.MaxValue;
+            _cursorBarrido = 0;
+            _difundidoAlgunaVez = false;
+            _tickUltimaDifusionPrioridad = 0u;
+            _tickUltimaDifusionResto = 0u;
 
             // (CONTRATO_RONDA50.md §4b, ENCARGO M) LA FUGA DE ESTADO CLÁSICA:
             // `ModoSemillaCero` es un flag ESTÁTICO (sobrevive a este objeto y
@@ -448,10 +460,31 @@ namespace Alkahest.Net
         /// que decide QUÉ pasadas ejecutar esta llamada -- si ninguna de las
         /// dos toca, se sale sin ni siquiera mirar la sim.
         /// </summary>
+        private float _reintentoSnapshotEn;
+        private int _reintentosSnapshot;
+
         private void Update()
         {
             if (!IsSpawned || _sim == null) return;
-            if (!IsServer) return;
+
+            // (RONDA 76, revisión Opus #8) EL SNAPSHOT SE REPITE HASTA QUE
+            // LLEGA: la petición única del spawn podía caer en el hueco "el
+            // host aún no tiene mundo" (EnviarSnapshot la descartaba con un
+            // warning y nadie reintentaba) — el invitado quedaba en gris para
+            // siempre, sin un solo error de su lado. Mientras el espejo siga
+            // sin grilla, se insiste cada 2 s con acuse en el log.
+            if (!IsServer)
+            {
+                if (_sim.Grid == null && Time.time >= _reintentoSnapshotEn)
+                {
+                    _reintentoSnapshotEn = Time.time + 2f;
+                    if (_reintentosSnapshot > 0)
+                        Debug.LogWarning("[TenThousandYears] Snapshot aún sin llegar; reintento " + _reintentosSnapshot + " (¿el anfitrión tiene mundo?).");
+                    _reintentosSnapshot++;
+                    SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
+                }
+                return;
+            }
 
             var stepper = _sim.Stepper;
             if (stepper == null) return;
@@ -1075,11 +1108,22 @@ namespace Alkahest.Net
                 byte modo = lote[p + 6];
                 byte tempRaw = lote[p + 7];
 
+                // (RONDA 76, revisión Opus #2) EL INVITADO NO FABRICA
+                // TEMPERATURA: su espejo no replica temp[] (viaja solo mat, el
+                // docblock de esta clase lo documenta), así que el tempRaw que
+                // manda es el AMBIENTE congelado de su espejo, no la
+                // temperatura real de lo que aspiró — verterlo con PaintCell
+                // pisaba la temperatura del mundo del anfitrión (agua
+                // hirviendo que llega a 20°C: una lavandería térmica). Hasta
+                // que temp[] viaje en el RLE (segundo bloque, anotado en el
+                // docblock), lo que un cliente vierte NACE A TEMPERATURA
+                // ESTABLE (R22): honesto con la información que el cliente
+                // de verdad tiene.
                 switch (modo)
                 {
                     case ModoPaintStable: _sim.PaintStable(x, y, radio, material); break;
-                    case ModoPaintCell: _sim.PaintCell(x, y, material, tempRaw); break;
-                    case ModoPaintRect: _sim.PaintRect(x, y, radio, tempRaw, material); break;
+                    case ModoPaintCell: _sim.PaintStable(x, y, 0, material); break;
+                    case ModoPaintRect: _sim.PaintRect(x, y, radio, CellGrid.AmbientRaw, material); break;
                     default: _sim.Paint(x, y, radio, material); break;
                 }
             }

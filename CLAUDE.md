@@ -20,6 +20,9 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
    `C:\JuegosUnity\UnityAI_Test\Alkahest\...` (uuids COPIADOS del resultado, jamás tecleados).
 3. `device_bash` NO puede borrar (unlink bloqueado): para "borrar", `mv` a `_to_delete/`.
    Git en el PC: scripts `.cmd` de un solo uso que corre Cesar (Win+R o doble clic).
+   TODO git de lectura vía device_bash lleva `--no-optional-locks` (un `git status` normal
+   deja un index.lock que el puente no puede borrar y el push de Cesar revienta — pasó en
+   la R74; el lock huérfano se quita con `mv` a _to_delete/).
 4. Permisos de computer-use caducan solos: re-pedir con `computer_resolve_access` +
    `computer_request_access` (entradas verbatim). Cesar los concede al vuelo.
 5. Probar EN VIVO vía Unity MCP: Refresh → esperar → 0 errores → Play → sondas por RunCommand
@@ -33,7 +36,7 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
    escritorio con permiso). Toda ronda visual se verifica JUGANDO con capturas (regla 52).
 6. Commits frecuentes, mensajes en español. **6b: EL AGENTE NUNCA HACE PUSH** — Cesar corre
    `ca_playtestNN.cmd` (git add -A + commit + push). GitHub es LA VERDAD; el sandbox es
-   VOLÁTIL (4+ reinicios ya): ante duda, `git fetch` y comparar; el fix 69g casi se pierde por
+   VOLÁTIL (5+ reinicios ya; recuperar del disco de Cesar con tar vía device_bash si GitHub está atrás): ante duda, `git fetch` y comparar; el fix 69g casi se pierde por
    no llegar a un push. Documentar cada ronda en `docs/archivo/HISTORIAL_RONDAS.md` + generar
    el cmd nuevo SIEMPRE, sin excepción.
 7. Compilador fiel del sandbox (`/home/claude/compile_fiel.sh` + 155 DLLs en
