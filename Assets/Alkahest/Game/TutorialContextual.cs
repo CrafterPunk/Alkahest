@@ -114,6 +114,21 @@ namespace Alkahest.Game
             _completado = false;
         }
 
+        /// <summary>
+        /// (R79b) Retirada SUAVE sin celebración: entra al fade-out normal
+        /// pero SIN blip ni destello — para fichas-recuerdo que caducan solas
+        /// ("reaparece una vez, discreta, y se va sola", Cesar). Ocultar()
+        /// corta en seco; esto respira. Nota: deja Terminado en true, igual
+        /// que un grupo completado — quien lo use como señal de avance debe
+        /// consumirla antes (hoy solo el Despertar la lee, mucho antes).
+        /// </summary>
+        public void Desvanecer()
+        {
+            if (_pasos == null) return;
+            _completado = true;
+            _holdRestante = 0f; // directo al fade-out, sin el hold de la celebración.
+        }
+
         private void Blip(float pitch)
         {
             if (_voz == null) return;

@@ -160,6 +160,14 @@ namespace Alkahest.Game
             if (_usosAyuda >= UsosParaAprender || _flask == null) return;
             if (DayCycle.InputLocked || UiStyles.EscribiendoTexto || JournalHud.Abierto) return;
             if (Alkahest.Dev.DevPalette.IsOpen) return; // con la paleta dev abierta el frasco no actúa (ver Flask.Update): tampoco cuenta como "uso".
+            // (R81, revisión Opus #4 — Q A OSCURAS QUEMABA LA AYUDA) Las
+            // guardas de arriba copiaban las de Flask.Update MENOS estas:
+            // sin frasco (prólogo pre-TOMA.), tres Q probando teclas en la
+            // intro dejaban _usosAyuda=3 y la ÚNICA línea que nombra los
+            // tres verbos no aparecía JAMÁS. Simetría completa (regla 37):
+            // si el frasco no actúa, el gesto no cuenta como uso.
+            if (FundacionDirector.FrascoBloqueado) return;
+            if (AlbumReal.Abierto || Cincel.ModoActivo || Mudanza.ModoActivo) return;
 
             bool aspirando = _flask.EstaAspirando;
             bool aspirarUsado = aspirando && !_aspirandoPrevio; // flanco de subida: una vez por pulsación, no por frame mantenido.
@@ -276,6 +284,12 @@ namespace Alkahest.Game
             if (_sim == null || _flask == null || _sim.Universe == null) return;
             if (DayCycle.InputLocked) return; // bajo los overlays de jornada el HUD estorba.
             if (DayCycle.HudSilenciado) return; // (playtest 21, EL PIVOT) hermano de InputLocked, ver DayCycle.HudSilenciado.
+            // (R81, cazado por Cesar en el playtest: "la mira no debería
+            // aparecer hasta que recibo el frasco") SIN FRASCO NO HAY MIRA:
+            // la retícula es la boca de la herramienta — mostrarla antes del
+            // TOMA. promete un verbo que aún no tienes (y Flask.cs ya se
+            // guarda igual con esta misma bandera para el haz y los clics).
+            if (FundacionDirector.FrascoBloqueado) return;
 
             UiStyles.Preparar();
             ComputeTopContents();

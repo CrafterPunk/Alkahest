@@ -4834,3 +4834,72 @@ ca_playtest78.cmd barre esta ronda y TODO lo pendiente (73-77 sin correr).
 · SÉPTIMO reinicio del sandbox al abrir la ronda — recuperado del disco con tar, receta de
   siempre. compile_fiel EXIT=0; editor 0 errores.
 ca_playtest79.cmd barre esta ronda y todo lo pendiente.
+
+## Ronda 80 — EL MANTÉN REAL Y LA FICHA-RECUERDO (las dos ideas aprobadas del aspirar)
+
+· Cesar subió el playtest 79 y aprobó las dos ideas del tutorial de aspirar; aplicadas:
+  1. EL MANTÉN REAL (FundacionDirector, caso Aspirar): la ficha ya no confirma con la meta
+     de celdas a secas — exige además una racha de succión CONTINUA (botón sostenido Y agua
+     entrando, con 0.3 s de gracia entre celdas porque el frasco no traga cada frame) de al
+     menos `aspirarHoldSeg` (0.6, guion). La racha se LATCHEA: lograda una vez, vale aunque
+     el resto se tapone a clics. El gesto que la ficha celebra es el gesto que hay que
+     aprender.
+  2. LA FICHA-RECUERDO (caso Libre): si tras `recordatorioAspirarSeg` (8) sin que entre agua
+     al frasco el jugador sigue en la zona del agua, la ficha "CLIC IZQ — mantén" reaparece
+     UNA sola vez. Si aspira, confirma con su blip; si no, se DESVANECE sola a los
+     `recordatorioDuraSeg` (6) — método nuevo `TutorialContextual.Desvanecer()`: fade-out
+     sin blip ni destello (Ocultar corta en seco; esto respira). Al cerrarse el juego libre
+     por conducta, la ficha activa se desvanece también (nada queda huérfano).
+· VERIFICADO EN VIVO por sondas: (1) 15 aguas inyectadas al frasco SIN gesto → la ficha NO
+  confirma (sub=Aspirar, mantén=false); (2) mantén latcheado → confirma al tick (sub=Verter);
+  (3) en Libre con el ocio vencido, el recuerdo apareció y CADUCÓ solo por el camino del
+  Desvanecer (timer a -0.003, sin excepciones, ficha fuera).
+· compile_fiel EXIT=0; editor 0 errores. Pendiente de decisión aparte: cómo enseñar "la
+  acción vive en el CURSOR" (opciones entregadas en chat) y el conteo del verter.
+ca_playtest80.cmd barre la ronda.
+
+## Ronda 81 — ENSEÑAR EL CURSOR (opciones 2+3 aprobadas) + LA MIRA GATEADA, con revisión Opus
+
+· Mandato de Cesar: opción 2 (haz de presentación) + opción 3 (aro de la boca) + "la mira no
+  debería aparecer hasta que recibo el frasco" + "revisa la ejecución visual con Opus para
+  garantizar el objetivo no solo de ejecución sino de ORIENTACIÓN del player".
+· LO CONSTRUIDO:
+  1. LA MIRA GATEADA: FlaskHud.OnGUI retorna con FrascoBloqueado — sin frasco no hay
+     retícula ni panel (la mira es la boca de la herramienta; antes del TOMA. promete un
+     verbo que no tienes).
+  2. EL HAZ DE PRESENTACIÓN: al aterrizar el frasco (+0.35 s de respiro), su haz se estira
+     UNA vez desde la MANO real (CarryAnchor) hasta el cursor vivo, recortado a ReachWorld,
+     sostiene y se recoge (hazPresentacionSeg=2.0). La línea que los testers vetaron como
+     permanente, como gesto de nacimiento.
+  3. EL ARO DE LA BOCA: anillo tenue en el cursor durante el paso de ASPIRAR, radio =
+     anillo de succión REAL (Flask.SuckRadiusWorld, ahora público) medido con la cámara.
+· LA REVISIÓN OPUS (ojos frescos, con números a 1080p) tumbó la primera ejecución — 17
+  hallazgos, 3 BLOQUEA-OBJETIVO, TODOS aplicados:
+  #1 el haz como sprites de mundo nacía ENTERRADO en la viñeta (negro opaco desde ~3.07u,
+     el haz mide 6u): REHECHO EN IMGUI, dibujado tras DibujarVineta — sobre la oscuridad.
+  #2 el aro MENTÍA en el verter (dibujaba succión=4 cuando el vertido usa PourRadius=2):
+     aro SOLO en aspirar; al verter, el tarro ladeándose ya señala el cursor.
+  #3 el tramo TOMA.→AGUA. quedaba sin guía y la cascada estaba a VOLUMEN 0 hasta con los
+     pies en la poza (medido: ancla en el manantial + radio 55 = 0.0016): ancla a la MITAD
+     de la caída + radio 95 (spawn≈0.12 ✓ verificado en vivo) + LUCECITA DE LA POZA durante
+     Agua/Ir (el indicador R79, aplicado al destino siguiente).
+  #4 Q a oscuras quemaba el contador de la línea de ayuda del frasco (guardas asimétricas
+     en ActualizarUsosAyuda): simetría completa con Flask.Update.
+  #5-#7 el aro calla ante cincel/mudanza/álbum/paleta/bautizo; se enfría en fuera-de-alcance
+     (a juego con la retícula roja); radio corregido al anillo euclídeo real (+0.5 celdas,
+     banda de la textura compensada).
+  #8 el haz duraba 1.15s compitiendo con el HUD naciendo: 2.0s + retraso 0.35 + renombre
+     R58-seguro trasTomaSeg→trasTomaRespiroSeg (2.6) para que el beat no corte el gesto.
+  #13 el latido del aro ahora DECAE (4s) — un anillo pulsando minutos era la línea
+     permanente vetada, por la puerta de atrás.
+  #14 la ficha-recuerdo revive el aro (volvía media lección sin el anillo).
+  #15 hot-reload reseteaba FrascoBloqueado (estática) y la mira aparecía sola: verdad de
+     instancia _frascoEntregado + re-afirmación por frame.
+  Nota final de la revisión: renombre radioAgua→radioAguaLuz (615) — con 440 el último
+  tercio del alcance (y el corte rojo del haz real) se jugaba a oscuras.
+· Verificado en vivo: volumen de cascada en spawn 0.122 (antes 0.000), FrascoBloqueado=True
+  en el Despertar, guion nuevo cargado (2.6/615/95/2.0 — los renombres esquivaron los
+  valores viejos serializados del asset), ciclo completo del haz corrido y recogido sin
+  errores. La constatación VISUAL final es el playtest de Cesar (el haz/aro son IMGUI: no
+  salen en capturas de RenderTexture).
+· compile_fiel EXIT=0; editor 0 errores. ca_playtest81.cmd barre la ronda.

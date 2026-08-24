@@ -53,11 +53,31 @@ namespace Alkahest.Game
         [Tooltip("Desplazamiento real (unidades de mundo) por dirección para confirmar cada tecla del WASD.")]
         public float moverMetaMundo = 0.5f;
 
+        [Header("Enseñar el cursor (R81: el haz de presentación y el aro de la boca)")]
+        [Tooltip("Duración total del haz de presentación al recibir el frasco (se estira hasta el cursor, sostiene y se recoge — una sola vez). Arranca 0.35 s después del aterrizaje para no competir con el HUD naciendo (revisión Opus #8).")]
+        public float hazPresentacionSeg = 2.0f;
+        [Tooltip("Alfa máxima del aro de la boca del frasco (el anillo tenue en el cursor durante los pasos de aspirar/verter).")]
+        public float aroAlfa = 0.4f;
+
+        [Header("El mantén y el recuerdo del aspirar (R79b, aprobados por Cesar)")]
+        [Tooltip("Succión CONTINUA mínima para que la ficha de aspirar confirme: el gesto aprendido es el mantén real, no un clic afortunado.")]
+        public float aspirarHoldSeg = 0.6f;
+        [Tooltip("Segundos sin aspirar nada durante el juego libre (y aún en la zona del agua) antes de que la ficha-recuerdo 'CLIC IZQ — mantén' reaparezca UNA vez.")]
+        public float recordatorioAspirarSeg = 8f;
+        [Tooltip("Cuánto vive la ficha-recuerdo si el jugador no aspira: se desvanece sola, sin celebración.")]
+        public float recordatorioDuraSeg = 6f;
+
         [Header("Tiempos (segundos)")]
         public float despertarPausaSeg = 1.4f;
         public float trasTutorialSeg = 0.8f;
         public float entregaFrascoSeg = 0.95f;
-        public float trasTomaSeg = 1.3f;
+        // (R81, revisión Opus #8) `trasTomaSeg` (1.3) se RENOMBRA a
+        // `trasTomaRespiroSeg` (2.6) a propósito — regla 58: el asset ya
+        // serializa el nombre viejo con 1.3 y PISARÍA el default; con el
+        // nombre nuevo el asset viejo lo ignora. El respiro creció porque
+        // ahora contiene el HAZ DE PRESENTACIÓN entero (retraso 0.35 +
+        // hazPresentacionSeg): el beat no debe cortar el gesto a la mitad.
+        public float trasTomaRespiroSeg = 2.6f;
         // (R77) `juegoLibreSeg` (14 s a reloj) se RENOMBRA a
         // `juegoLibreTopeSeg` a propósito: el asset ya guardado en el
         // proyecto serializa el nombre viejo con 14, y un campo serializado
@@ -82,7 +102,13 @@ namespace Alkahest.Game
         public float radioDespertar = 180f;
         public float radioVen = 260f;
         public float radioToma = 330f;
-        public float radioAgua = 440f;
+        // (R81, revisión Opus, nota final) `radioAgua` (440) se RENOMBRA a
+        // `radioAguaLuz` (615) — regla 58, mismo motivo que arriba. Con 440
+        // el negro total empezaba a 4.29 u y el alcance del frasco mide 6 u:
+        // el último tercio del haz real (incluido su corte rojo de "fuera de
+        // alcance") se jugaba A OSCURAS. 615 hace que las 6 u quepan justas
+        // en el óvalo horizontal.
+        public float radioAguaLuz = 615f;
         public float radioTaller = 540f;
         public float radioAmanecer = 2400f;
         // (R79, feedback de Cesar: "la luz pierde muy rápido el track del
@@ -103,8 +129,8 @@ namespace Alkahest.Game
         public int pozaLlenaCeldas = 48;
         [Tooltip("(R77) Volumen base del rumor de la cascada (bucle GrifoLiquido), antes de distancia y del volumen de efectos.")]
         public float cascadaVolumen = 0.4f;
-        [Tooltip("(R77) Radio audible del rumor, en celdas desde el manantial (caída cuadrática, como los grifos).")]
-        public float cascadaRadioAudibleCeldas = 55f;
+        [Tooltip("(R77; recalibrado R81) Radio audible del rumor, en celdas desde la MITAD de la caída (caída cuadrática, como los grifos). Con 55 desde el manantial el volumen era 0 hasta CON LOS PIES EN LA POZA (revisión Opus #3, medido).")]
+        public float cascadaRadioAudibleCeldas = 95f;
 
         [Header("El derrumbe y la gotera de lodo")]
         public int lodoBurstCeldas = 26;

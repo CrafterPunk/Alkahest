@@ -97,9 +97,18 @@ namespace Alkahest.Game
         private AlkahestSim _sim;
         private Flask _flask;
         private Transform _aprendiz;
+        private ApprenticeController _aprendizCtrl; // (R81) para CarryAnchor (la mano real).
         private TutorialContextual _tutorial;
         private DepositoDeAgua _deposito;
         private AudioSource _audio;
+
+        // (R81, revisión Opus #15) LA VERDAD DE INSTANCIA del frasco: un
+        // hot-reload de scripts en Play (domain reload) resetea las
+        // ESTÁTICAS a su default — FrascoBloqueado caía a false y la mira
+        // aparecía sola a mitad de la intro. Los campos de instancia de un
+        // MonoBehaviour sí sobreviven al reload: este bool es la verdad y
+        // Update re-afirma la estática desde él cada frame.
+        private bool _frascoEntregado;
 
         private Beat _beat = Beat.Despertar;
         private AguaSub _aguaSub = AguaSub.Ir;
@@ -180,6 +189,7 @@ namespace Alkahest.Game
             _sim = sim;
             _flask = flask;
             _aprendiz = aprendiz;
+            _aprendizCtrl = aprendiz.GetComponent<ApprenticeController>(); // (R81) el haz de presentación sale de la MANO real (CarryAnchor).
             _posAnterior = aprendiz.position;
 
             // (RONDA 75) LA ESCENOGRAFÍA Y EL GUION, ANTES QUE NADA: todo lo
@@ -229,7 +239,8 @@ namespace Alkahest.Game
             SimRenderer.FocoCinematico = null;
             if (_instancia == this) _instancia = null;
             if (_vineta != null) Destroy(_vineta);
-            if (_lucecitaTex != null) Destroy(_lucecitaTex); // (R79) la lucecita muere con el director.
+            if (_lucecitaTex != null) Destroy(_lucecitaTex); // (R79) la lucecita muere con el director (el haz de presentación comparte esta textura: nada más que liberar — revisión Opus R81 #11 resuelto por diseño).
+            if (_aroTex != null) Destroy(_aroTex);           // (R81) y el aro de la boca.
             if (_maestroVisualPropio && _maestroGo != null) Destroy(_maestroGo); // el visual que creó el director; un marcador de ESCENA jamás se destruye.
             if (_maestroTex != null) Destroy(_maestroTex);
             if (_frascoVuelo != null) Destroy(_frascoVuelo.gameObject);
@@ -238,6 +249,11 @@ namespace Alkahest.Game
         private void Update()
         {
             if (_sim == null || _sim.Grid == null) return;
+
+            // (R81, revisión Opus #15) Re-afirmar la estática desde la verdad
+            // de instancia — ANTES de la guarda de pausa, para que el estado
+            // sea correcto también con el menú delante tras un hot-reload.
+            FrascoBloqueado = !_frascoEntregado;
 
             // (revisión Opus 73 #1) CON EL MENÚ DE PAUSA DELANTE, EL DIRECTOR
             // ESPERA ENTERO: la sim está congelada (DayCycle.ApplyPause) pero
@@ -264,6 +280,8 @@ namespace Alkahest.Game
             TickVoz();
             TickVueloDelFrasco();
             TickCascadaAudio();
+            TickHazPresentacion(); // (R81) el gesto de nacimiento del frasco, si está en curso.
+            if (_aroActivo) _aroVida += Time.deltaTime; // (R81) el latido del aro se calma con la edad (revisión Opus #13).
 
             _tBeat += Time.deltaTime;
             switch (_beat)
@@ -434,11 +452,11 @@ namespace Alkahest.Game
         private void TickToma()
         {
             if (_frascoVuelo != null) return; // el vuelo sigue en el aire (TickVueloDelFrasco).
-            if (!FrascoBloqueado && _tBeat > _g.trasTomaSeg)
+            if (!FrascoBloqueado && _tBeat > _g.trasTomaRespiroSeg)
             {
                 CambiarBeat(Beat.Agua);
                 _aguaSub = AguaSub.Ir;
-                _radioObjetivo = UiStyles.S(_g.radioAgua);
+                _radioObjetivo = UiStyles.S(_g.radioAguaLuz);
                 _focoBias = 1f;
             }
         }
@@ -468,20 +486,44 @@ namespace Alkahest.Game
                         Decir(_g.vozAgua);
                         _aguaSub = AguaSub.Aspirar;
                         _aguaBase = _flask.GetCount(MaterialId.Water);
+                        // (R79b) Arranque limpio del detector de mantén:
+                        _aguaPrevAspirar = _aguaBase;
+                        _sinSuccionSeg = 1f; _rachaManten = 0f; _mantenLogrado = false;
+                        _aroActivo = true; _aroVida = 0f; // (R81, revisión Opus #2) el aro acompaña SOLO el aspirar: su radio es el de succión, y en el verter mentiría (PourRadius=2). Al verter, el tarro ya se ladea hacia el cursor — señal de sobra.
                         _tutorial.Mostrar(_g.leyendaAspirar,
                             new TutorialContextual.Paso { Etiqueta = "CLIC IZQ", Presionada = () => Mouse.current != null && Mouse.current.leftButton.isPressed });
                     }
                     break;
 
                 case AguaSub.Aspirar:
-                    if (_flask.GetCount(MaterialId.Water) >= _aguaBase + _g.aspirarMeta)
+                {
+                    // (R79b, aprobado por Cesar: "que la ficha no confirme con
+                    // un toque suelto sino con un MANTÉN real") El detector:
+                    // una racha de succión CONTINUA — botón sostenido Y agua
+                    // entrando de verdad (con 0.3 s de gracia entre celdas,
+                    // porque el frasco no traga en cada frame) — de al menos
+                    // aspirarHoldSeg. Se LATCHEA: lograste el mantén una vez,
+                    // vale aunque el resto lo taponees a clics. La ficha solo
+                    // confirma con meta CUMPLIDA + mantén LOGRADO: el gesto
+                    // que celebra es el gesto que hay que aprender.
+                    int cuentaA = _flask.GetCount(MaterialId.Water);
+                    if (cuentaA > _aguaPrevAspirar) _sinSuccionSeg = 0f;
+                    else _sinSuccionSeg += Time.deltaTime;
+                    _aguaPrevAspirar = cuentaA;
+                    bool succionando = Mouse.current != null && Mouse.current.leftButton.isPressed && _sinSuccionSeg < 0.3f;
+                    _rachaManten = succionando ? _rachaManten + Time.deltaTime : 0f;
+                    if (_rachaManten >= _g.aspirarHoldSeg) _mantenLogrado = true;
+
+                    if (_mantenLogrado && cuentaA >= _aguaBase + _g.aspirarMeta)
                     {
                         _tutorial.Confirmar(0);
+                        _aroActivo = false; // (R81, revisión Opus #2) la lección del radio de succión quedó dada; en el verter el aro mentiría.
                         _aguaSub = AguaSub.Verter;
                         _aguaBase = _flask.GetCount(MaterialId.Water);
                         _tBeat = 0f;
                     }
                     break;
+                }
 
                 case AguaSub.Verter:
                     if (!_vertidoEnsenado)
@@ -499,10 +541,56 @@ namespace Alkahest.Game
                         _tutorial.Confirmar(0);
                         _aguaSub = AguaSub.Libre;
                         _tBeat = 0f;
+                        // (R79b) Arranque limpio del reloj de la ficha-recuerdo.
+                        _aguaUltimaCuenta = _flask.GetCount(MaterialId.Water);
+                        _sinAspirarSeg = 0f;
                     }
                     break;
 
                 case AguaSub.Libre:
+                {
+                    // (R79b, aprobado por Cesar) LA FICHA-RECUERDO, una sola
+                    // vez: quien aspiró a clics rápidos y luego se quedó sin
+                    // saber repetir el gesto ("no sabía cómo volver a
+                    // absorber") recibe, tras recordatorioAspirarSeg sin que
+                    // entre agua al frasco Y todavía en la zona del agua, la
+                    // ficha "CLIC IZQ — mantén" de nuevo. Si aspira, confirma
+                    // con su blip; si no, se DESVANECE sola (sin celebración)
+                    // a los recordatorioDuraSeg. Nunca reaparece.
+                    int cuentaL = _flask.GetCount(MaterialId.Water);
+                    bool aspiro = cuentaL > _aguaUltimaCuenta;
+                    if (aspiro) _sinAspirarSeg = 0f; else _sinAspirarSeg += Time.deltaTime;
+                    _aguaUltimaCuenta = cuentaL;
+
+                    if (_recordatorioActivo)
+                    {
+                        if (aspiro)
+                        {
+                            _tutorial.Confirmar(0); // "sí. eso era." — y la ficha se va por su camino feliz.
+                            _recordatorioActivo = false;
+                            _aroActivo = false; // (R81, revisión Opus #14) el aro del recuerdo se va con su ficha.
+                        }
+                        else
+                        {
+                            _recordatorioTimer -= Time.deltaTime;
+                            if (_recordatorioTimer <= 0f) { _tutorial.Desvanecer(); _recordatorioActivo = false; _aroActivo = false; }
+                        }
+                    }
+                    else if (!_recordatorioMostrado && !_tutorial.Visible
+                        && _sinAspirarSeg > _g.recordatorioAspirarSeg
+                        && DistAPoza() < _g.distZonaAgua)
+                    {
+                        _recordatorioMostrado = true;
+                        _recordatorioActivo = true;
+                        _recordatorioTimer = _g.recordatorioDuraSeg;
+                        // (R81, revisión Opus #14) El aro VUELVE con la ficha-recuerdo:
+                        // esta ficha existe justo para quien NO interiorizó el gesto —
+                        // sin el anillo que dice dónde vive la boca, volvía media lección.
+                        _aroActivo = true; _aroVida = 0f;
+                        _tutorial.Mostrar(_g.leyendaAspirar,
+                            new TutorialContextual.Paso { Etiqueta = "CLIC IZQ", Presionada = () => Mouse.current != null && Mouse.current.leftButton.isPressed });
+                    }
+
                     // (R77) EL JUEGO LIBRE CIERRA POR CONDUCTA, no por reloj:
                     // tras un mínimo de juego (juegoLibreMinSeg), ALEJARSE de
                     // la poza es la frase "terminé de jugar" — y ahí el
@@ -512,14 +600,27 @@ namespace Alkahest.Game
                     if ((_tBeat > _g.juegoLibreMinSeg && DistAPoza() > _g.juegoLibreAlejarseCeldas)
                         || _tBeat > _g.juegoLibreTopeSeg)
                     {
+                        if (_recordatorioActivo) { _tutorial.Desvanecer(); _recordatorioActivo = false; _aroActivo = false; } // el arco sigue; ni ficha ni aro se quedan huérfanos.
                         CambiarBeat(Beat.EntregaAgua);
                         Decir(_g.vozTraela);
                         _radioObjetivo = UiStyles.S(_g.radioTaller);
                     }
                     break;
+                }
             }
         }
         private bool _vertidoEnsenado;
+
+        // (R79b) El mantén real del aspirar + la ficha-recuerdo del juego libre:
+        private int _aguaPrevAspirar;
+        private float _sinSuccionSeg;
+        private float _rachaManten;
+        private bool _mantenLogrado;
+        private int _aguaUltimaCuenta;
+        private float _sinAspirarSeg;
+        private bool _recordatorioMostrado;
+        private bool _recordatorioActivo;
+        private float _recordatorioTimer;
 
         /// <summary>
         /// 4b/5b) LA ENTREGA: viertes lo pedido en el cuenco junto a la mesa
@@ -708,8 +809,16 @@ namespace Alkahest.Game
         {
             if (_cascadaFuente == null || _aprendiz == null) return;
             float celda = SimRenderer.CellWorldSize;
-            var punto = new Vector2(SimLevelBuilder.FundacionManantialX * celda,
-                (SimLevelBuilder.FundacionManantialY + 1) * celda);
+            // (R81, revisión Opus #3, MEDIDO) El ancla estaba en el MANANTIAL
+            // (340,176) con radio 55: el volumen era 0 en el spawn, 0 junto
+            // al Maestro y 0.0016 CON LOS PIES EN LA POZA — el "rumor que
+            // invita" de la R77 no sonó jamás. El ancla pasa a la MITAD DE LA
+            // CAÍDA (entre el manantial y el centro de la poza, ~x359 y la
+            // repisa baja) y el radio del guion sube a 95: audible desde el
+            // spawn (~0.13), pleno en la poza (~0.38), direccional siempre.
+            var punto = new Vector2(
+                (SimLevelBuilder.FundacionManantialX + (SimLevelBuilder.FundacionCharcoX0 + SimLevelBuilder.FundacionCharcoX1 + 1) * 0.5f) * 0.5f * celda,
+                SimLevelBuilder.FundacionRepisaBY * celda);
             float dCeldas = Vector2.Distance((Vector2)_aprendiz.position, punto) / celda;
             float t = Mathf.Clamp01(1f - dCeldas / Mathf.Max(1f, _g.cascadaRadioAudibleCeldas));
             _cascadaFuente.volume = t * t * _g.cascadaVolumen * Audio.DirectorDeAudio.VolumenEfectos;
@@ -871,11 +980,107 @@ namespace Alkahest.Game
             {
                 Destroy(_frascoVuelo.gameObject);
                 _frascoVuelo = null;
+                _frascoEntregado = true;      // (R81, revisión Opus #15) la VERDAD de instancia: sobrevive al hot-reload; la estática es su espejo (ver Update).
                 FrascoBloqueado = false;      // el tarro del aprendiz aparece: AHORA llevas frasco.
                 HudPermitido = true;
                 DayCycle.DespertarHudFundacion();
-                _tBeat = 0f; // (revisión Opus 73 #9) _g.trasTomaSeg cuenta desde AQUÍ: es el respiro con el frasco ya en la mano, no menos el vuelo.
+                _tBeat = 0f; // (revisión Opus 73 #9) _g.trasTomaRespiroSeg cuenta desde AQUÍ: es el respiro con el frasco ya en la mano, no menos el vuelo.
+                _hazPresRetraso = 0.35f; // (R81) la herramienta se presenta — tras un respiro, para no competir con el HUD naciendo (revisión Opus #8).
             }
+        }
+
+        // =================================================================
+        // (R81, opción 2 aprobada por Cesar; REHECHO tras la revisión Opus
+        // R81 #1) EL HAZ DE PRESENTACIÓN: al aterrizar el frasco en tu mano
+        // (con 0.35 s de respiro para no competir con el HUD naciendo —
+        // hallazgo #8), su haz se estira UNA única vez desde la mano hasta
+        // donde esté el cursor vivo, sostiene y se recoge (~2 s,
+        // hazPresentacionSeg). Es "la línea jugador→cursor" que los testers
+        // vetaron como permanente, convertida en gesto de nacimiento: la
+        // herramienta enseña sola dónde actúa (el cursor) y hasta dónde
+        // llega (se detiene en Flask.ReachWorld).
+        //
+        // POR QUÉ IMGUI Y NO SPRITES DE MUNDO (hallazgo #1, BLOQUEA-OBJETIVO,
+        // medido): la VIÑETA de oscuridad es IMGUI y tapa por completo los
+        // sprites de mundo — con radioToma≈330 el negro opaco empezaba a
+        // ~3.07 u del jugador y el haz mide hasta 6 u: su punta (la parte
+        // que ENSEÑA) nacía sepultada en lo negro la mayor parte de las
+        // veces. Dibujado aquí, DESPUÉS de DibujarVineta en el mismo OnGUI,
+        // el haz queda SOBRE la oscuridad: la lección se ve siempre. La
+        // paleta sigue siendo el latón del haz real (Flask.BrassBase) y la
+        // punta reutiliza la textura radial de la lucecita (misma familia
+        // de resplandores del prólogo).
+        // =================================================================
+        private float _hazPresT = -1f;     // <0 = inactivo; [0..1] = curso.
+        private float _hazPresRetraso;     // respiro entre el aterrizaje y el gesto.
+        private static readonly Color HazPresColor = new Color(168f / 255f, 126f / 255f, 58f / 255f); // Flask.BrassBase.
+
+        /// <summary>Avanza SOLO los relojes (Update; congelado por la guarda de InputLocked de arriba — en pausa el gesto espera, no se pierde).</summary>
+        private void TickHazPresentacion()
+        {
+            if (_hazPresRetraso > 0f)
+            {
+                _hazPresRetraso -= Time.deltaTime;
+                if (_hazPresRetraso <= 0f) _hazPresT = 0f;
+                return;
+            }
+            if (_hazPresT < 0f) return;
+            _hazPresT += Time.deltaTime / Mathf.Max(0.2f, _g.hazPresentacionSeg);
+            if (_hazPresT >= 1f) _hazPresT = -1f; // se recogió: nunca vuelve.
+        }
+
+        /// <summary>El dibujo (OnGUI, tras la viñeta). Curso: 0→0.35 se ESTIRA · 0.35→0.72 SOSTIENE (~0.74 s con el default) · 0.72→1 se RECOGE.</summary>
+        private void DibujarHazPresentacion()
+        {
+            var cam = Camera.main;
+            var mouse = Mouse.current;
+            if (cam == null || mouse == null) return;
+            if (_lucecitaTex == null) ConstruirLucecita(); // la punta comparte el resplandor de la casa.
+
+            float ext;
+            if (_hazPresT < 0.35f) ext = Mathf.SmoothStep(0f, 1f, _hazPresT / 0.35f);
+            else if (_hazPresT < 0.72f) ext = 1f;
+            else ext = Mathf.SmoothStep(1f, 0f, (_hazPresT - 0.72f) / 0.28f);
+
+            // Origen: la MANO real (CarryAnchor — hallazgo #12: el haz real
+            // sale de ahí; que la presentación salga del mismo sitio).
+            Vector3 origen = _aprendizCtrl != null ? _aprendizCtrl.CarryAnchor : _aprendiz.position + new Vector3(0f, -0.35f, 0f);
+
+            // Destino: el cursor VIVO, recortado al alcance real del frasco.
+            Vector2 mp = mouse.position.ReadValue();
+            Vector3 destino = origen + Vector3.right;
+            var ray = cam.ScreenPointToRay(new Vector3(mp.x, mp.y, 0f));
+            var plano = new Plane(Vector3.forward, Vector3.zero);
+            if (plano.Raycast(ray, out float enter)) destino = ray.GetPoint(enter);
+            Vector3 delta = destino - origen;
+            float largoMax = Mathf.Clamp(delta.magnitude, 0.15f, Flask.ReachWorld);
+            Vector3 dir = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector3.right;
+            Vector3 puntaMundo = origen + dir * (largoMax * ext);
+
+            // A pantalla (IMGUI: Y invertida).
+            Vector3 o = cam.WorldToScreenPoint(origen);
+            Vector3 p = cam.WorldToScreenPoint(puntaMundo);
+            var oGui = new Vector2(o.x, Screen.height - o.y);
+            var pGui = new Vector2(p.x, Screen.height - p.y);
+            float largoPx = Vector2.Distance(oGui, pGui);
+            if (largoPx < 1f) return;
+            float grosorPx = Mathf.Max(2f, UiStyles.S(4f));
+            float alfa = 0.85f * Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, _hazPresT / 0.1f));
+
+            float angGui = Mathf.Atan2(pGui.y - oGui.y, pGui.x - oGui.x) * Mathf.Rad2Deg;
+            var prevM = GUI.matrix;
+            var prevC = GUI.color;
+            GUIUtility.RotateAroundPivot(angGui, oGui);
+            GUI.color = new Color(HazPresColor.r, HazPresColor.g, HazPresColor.b, alfa * 0.8f);
+            GUI.DrawTexture(new Rect(oGui.x, oGui.y - grosorPx * 0.5f, largoPx, grosorPx), Texture2D.whiteTexture);
+            GUI.matrix = prevM;
+
+            // La punta: el resplandor radial (no un cuadrado — hallazgo #10),
+            // latiendo despacio (4.5 rad/s: respira, no tiembla).
+            float lado = UiStyles.S(16f) * (1f + 0.18f * Mathf.Sin(Time.time * 4.5f));
+            GUI.color = new Color(1f, 1f, 1f, alfa);
+            GUI.DrawTexture(new Rect(pGui.x - lado, pGui.y - lado, lado * 2f, lado * 2f), _lucecitaTex);
+            GUI.color = prevC;
         }
 
         // ------------------------------------------------------------------
@@ -1088,12 +1293,30 @@ namespace Alkahest.Game
 
             float celda = SimRenderer.CellWorldSize;
 
+            // (R81) El haz de presentación — SOBRE la oscuridad de la viñeta
+            // (revisión Opus #1: como sprites de mundo nacía enterrado en lo
+            // negro). En pausa no se dibuja y su reloj tampoco corre: el
+            // gesto espera entero al otro lado del menú (revisión Opus #9).
+            if (_hazPresT >= 0f && !DayCycle.InputLocked) DibujarHazPresentacion();
+
+            // (R81) El aro de la boca del frasco: acompaña el paso de aspirar
+            // (y la ficha-recuerdo). Calla ante TODO modo que apague el
+            // frasco (revisión Opus #5: cincel, mudanza, álbum, paleta dev,
+            // bautizo — si el frasco no actúa, el aro mentiría).
+            if (_aroActivo && !FrascoBloqueado && !DayCycle.InputLocked
+                && !Alkahest.Dev.DevPalette.IsOpen && !UiStyles.EscribiendoTexto
+                && !JournalHud.Abierto && !AlbumReal.Abierto
+                && !Cincel.ModoActivo && !Mudanza.ModoActivo)
+                DibujarAroDeLaBoca();
+
             // (R79) La lucecita del área del Maestro durante el VEN.: el
             // indicador pedido por Cesar ("una luz diminuta desde esa área,
             // como que algo está ocurriendo ahí") — sustituye al bias de la
             // viñeta como señal de rumbo. Sobre la capa oscura, así se ve
             // aunque el jugador esté lejos.
             if (_beat == Beat.Ven && !DayCycle.InputLocked) DibujarLucecitaMaestro();
+            // (R81, revisión Opus #3) ...y camino de la poza, la poza brilla igual.
+            if (_beat == Beat.Agua && _aguaSub == AguaSub.Ir && !DayCycle.InputLocked) DibujarLucecitaPoza();
 
             // La chapa "EL MAESTRO" sobre la mesa (se oculta de cerca: de ahí
             // en adelante hablan la silueta y la voz).
@@ -1218,6 +1441,92 @@ namespace Alkahest.Game
         }
 
         // =================================================================
+        // (R81, opción 3 aprobada por Cesar; acotado por la revisión Opus
+        // #2) EL ARO DE LA BOCA: un anillo tenue en el cursor, SOLO durante
+        // el paso de ASPIRAR (y su ficha-recuerdo, #14) — en el verter
+        // mentiría: el radio real del vertido es otro (PourRadius=2) y el
+        // tarro ladeándose hacia el cursor ya es señal de sobra. Marca el
+        // anillo de succión REAL (Flask.SuckRadiusWorld, leído — no
+        // duplicado) convertido a pantalla: el aro dice la verdad, no
+        // decora. Late los primeros segundos y se aquieta; desaparece al
+        // confirmarse el aspirar (la lección quedó dada: enseñar y callar).
+        // La retícula del FlaskHud (depth 0, encima) queda anillada por él:
+        // mira + aro = "la acción es AQUÍ y abarca ESTO".
+        // =================================================================
+        private bool _aroActivo;
+        private float _aroVida; // segundos desde la activación: el latido se calma con ella (revisión Opus #13).
+        private Texture2D _aroTex;
+
+        private void DibujarAroDeLaBoca()
+        {
+            var cam = Camera.main;
+            var mouse = Mouse.current;
+            if (cam == null || mouse == null) return;
+            if (_aroTex == null) ConstruirAro();
+
+            Vector2 mp = mouse.position.ReadValue();
+            var gui = new Vector2(mp.x, Screen.height - mp.y);
+
+            // Radio en pantalla = el anillo COMPLETO de succión real
+            // (Flask.SuckRadiusWorld: radio+0.5 celdas — el disco euclídeo
+            // aspira hasta d≈4.49) medido con la cámara de hoy, corregido
+            // para que la BANDA visible de la textura (centro en d≈0.92 del
+            // rect) caiga exactamente sobre ese anillo (revisión Opus #7).
+            Vector3 a = cam.WorldToScreenPoint(Vector3.zero);
+            Vector3 b = cam.WorldToScreenPoint(new Vector3(Flask.SuckRadiusWorld / 0.92f, 0f, 0f));
+            float r = Mathf.Abs(b.x - a.x);
+            if (r < 8f) r = 8f;
+
+            // ¿La boca está donde el frasco DE VERDAD llega? Fuera de alcance
+            // el aro se enfría y apaga a juego con la retícula roja del
+            // FlaskHud (revisión Opus #6: dos señales, un solo mensaje).
+            bool enAlcance = true;
+            var ray = cam.ScreenPointToRay(new Vector3(mp.x, mp.y, 0f));
+            var plano = new Plane(Vector3.forward, Vector3.zero);
+            if (plano.Raycast(ray, out float enter))
+            {
+                Vector3 mundo = ray.GetPoint(enter);
+                enAlcance = (mundo - _aprendiz.position).sqrMagnitude <= Flask.ReachWorld * Flask.ReachWorld;
+            }
+
+            // El latido llama la atención los primeros segundos y luego se
+            // AQUIETA (amplitud con decaimiento): un anillo pulsando minutos
+            // sería la línea permanente que los testers vetaron, por la
+            // puerta de atrás (revisión Opus #13; mandato pt44).
+            float amp = 0.15f * Mathf.Exp(-_aroVida / 4f);
+            float lat = (1f - amp) + amp * Mathf.Sin(Time.time * 3.2f);
+
+            var prev = GUI.color;
+            GUI.color = enAlcance
+                ? new Color(1f, 1f, 1f, _g.aroAlfa * lat)
+                : new Color(1f, 0.55f, 0.5f, _g.aroAlfa * lat * 0.45f);
+            GUI.DrawTexture(new Rect(gui.x - r, gui.y - r, r * 2f, r * 2f), _aroTex);
+            GUI.color = prev;
+        }
+
+        private void ConstruirAro()
+        {
+            const int N = 128;
+            _aroTex = new Texture2D(N, N, TextureFormat.RGBA32, false);
+            _aroTex.wrapMode = TextureWrapMode.Clamp;
+            var px = new Color32[N * N];
+            float half = N * 0.5f;
+            // Anillo cálido de bordes suaves: banda en d∈[0.86, 0.98] del radio.
+            for (int y = 0; y < N; y++)
+            {
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+                    float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.84f, 0.90f, d))
+                            * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.94f, 1f, d)));
+                    px[y * N + x] = new Color32(255, 235, 190, (byte)(a * 255f)); // el mismo ámbar de la casa.
+                }
+            }
+            _aroTex.SetPixels32(px);
+            _aroTex.Apply(false, true);
+        }
+
+        // =================================================================
         // (R79) LA LUCECITA DEL MAESTRO: un resplandor diminuto y cálido
         // sobre el hogar de brasas, visible DURANTE el VEN. La viñeta pinta
         // oscuridad encima del mundo, así que un "segundo agujero" real no
@@ -1230,18 +1539,39 @@ namespace Alkahest.Game
 
         private void DibujarLucecitaMaestro()
         {
+            float celda = SimRenderer.CellWorldSize;
+            var brasas = new Vector3((SimLevelBuilder.FundacionBrasasX0 + 2.5f) * celda,
+                (SimLevelBuilder.FundacionBrasasY + 2) * celda, 0f);
+            DibujarLucecitaEn(brasas, Mathf.Clamp01(_tBeat / 1.2f)); // nace con la palabra, no de golpe.
+        }
+
+        /// <summary>
+        /// (R81, revisión Opus #3) LA LUCECITA DE LA POZA: el mismo indicador
+        /// aprobado en R79 ("una luz diminuta desde esa área"), aplicado al
+        /// destino SIGUIENTE. Tras el TOMA., el jugador quedaba con la
+        /// herramienta nueva y CERO señal de a dónde ir (la poza está más
+        /// allá del óvalo de luz y el rumor de la cascada era inaudible —
+        /// medido). Durante Agua/Ir, la poza brilla como brilló el Maestro.
+        /// </summary>
+        private void DibujarLucecitaPoza()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            var poza = new Vector3((SimLevelBuilder.FundacionCharcoX0 + SimLevelBuilder.FundacionCharcoX1 + 1) * 0.5f * celda,
+                (SimLevelBuilder.FundacionY0 + 2) * celda, 0f);
+            DibujarLucecitaEn(poza, Mathf.Clamp01(_tBeat / 1.2f));
+        }
+
+        private void DibujarLucecitaEn(Vector3 mundo, float entrada01)
+        {
             var cam = Camera.main;
             if (cam == null) return;
             if (_lucecitaTex == null) ConstruirLucecita();
 
-            float celda = SimRenderer.CellWorldSize;
-            var brasas = new Vector3((SimLevelBuilder.FundacionBrasasX0 + 2.5f) * celda,
-                (SimLevelBuilder.FundacionBrasasY + 2) * celda, 0f);
-            Vector3 p = cam.WorldToScreenPoint(brasas);
+            Vector3 p = cam.WorldToScreenPoint(mundo);
             if (p.z < 0f) return;
             float cx = p.x, cy = Screen.height - p.y;
 
-            float entrada = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_tBeat / 1.2f)); // nace con la palabra, no de golpe.
+            float entrada = Mathf.SmoothStep(0f, 1f, entrada01);
             float alfa = _g.lucecitaAlfa * entrada * Mathf.Lerp(0.75f, 1f, _luzFuego);
             float r = UiStyles.S(_g.lucecitaRadioPx) * Mathf.Lerp(0.92f, 1f, _luzFuego);
 

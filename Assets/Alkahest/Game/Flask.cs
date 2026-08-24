@@ -93,7 +93,12 @@ namespace Alkahest.Game
         private const float TickDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
 
-        private const int SuckRadius = 4;
+        // (R81, revisión Opus #7) PÚBLICOS: el aro de la boca del prólogo
+        // (FundacionDirector.DibujarAroDeLaBoca) dibuja el radio REAL leído
+        // de aquí — nunca un número duplicado a mano (reglas 47/50).
+        public const int SuckRadius = 4;
+        /// <summary>El anillo COMPLETO de succión en unidades de mundo: la celda más lejana que el disco euclídeo alcanza (radio+0.5 celdas). Consumidor: el aro del prólogo.</summary>
+        public const float SuckRadiusWorld = (SuckRadius + 0.5f) * SimRenderer.CellWorldSize;
         private const int SuckRatePerTick = 30;
         private const int PourRadius = 2;
         private const int PourRatePerTick = 20;
