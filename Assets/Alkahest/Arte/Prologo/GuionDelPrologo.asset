@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44d859ac0e68f914ab294a7b4536e21d, type: 3}
+  m_Name: GuionDelPrologo
+  m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.Game.GuionDelPrologo
+  vozVen: VEN.
+  vozToma: TOMA.
+  vozAgua: AGUA.
+  vozTraela: "TR\xC1ELA."
+  vozBien: BIEN.
+  vozLodo: LODO.
+  vozTraelo: "TR\xC1ELO."
+  vozObserva: OBSERVA.
+  vozLlenalo: "LL\xC9NALO."
+  leyendaMover: "mu\xE9vete"
+  leyendaAspirar: "mant\xE9n \u2014 aspira el agua"
+  leyendaVerter: "mant\xE9n \u2014 vi\xE9rtela donde quieras"
+  aspirarMeta: 10
+  verterMeta: 6
+  entregaAguaMeta: 20
+  lodoProbarMeta: 8
+  entregaLodoMeta: 16
+  llenarDepositoMeta: 48
+  moverMetaMundo: 0.5
+  despertarPausaSeg: 1.4
+  trasTutorialSeg: 0.8
+  entregaFrascoSeg: 0.95
+  trasTomaSeg: 1.3
+  juegoLibreSeg: 14
+  lodoLibreSeg: 22
+  vozHoldSeg: 2.1
+  derrumbePausaSeg: 2.2
+  distCharla: 16
+  distZonaAgua: 26
+  radioDespertar: 180
+  radioVen: 260
+  radioToma: 330
+  radioAgua: 440
+  radioTaller: 540
+  radioAmanecer: 2400
+  manantialSeg: 0.14
+  manantialCeldas: 2
+  pozaLlenaCeldas: 48
+  lodoBurstCeldas: 26
+  lodoSeepSeg: 0.4
+  lodoMonticuloTope: 70
+  lodoMonticuloResume: 50
+  depositoEmergerSeg: 2.4
+  depositoCargaInicial: 14
+  vozAlturaFrac: 0.24
+  vozTamFrac: 0.056
+  fichasOffsetPx: 64

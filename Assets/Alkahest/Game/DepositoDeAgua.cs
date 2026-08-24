@@ -31,11 +31,13 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class DepositoDeAgua : MonoBehaviour
     {
-        // ---- Los números del esqueleto (afinables) ----
-        private const float EmergerSeg = 2.4f;        // duración de la salida de la tierra.
+        // ---- Los números del esqueleto ----
+        // (R75) Duración de la emergencia y carga inicial viven en el GUION
+        // (GuionDelPrologo.asset, editable en Inspector); aquí solo cadencias
+        // internas menores.
         private const float PolvoCadaSeg = 0.22f;     // ritmo del polvo que suelta al emerger.
-        private const int CargaInicialCeldas = 14;    // el culo de agua con el que emerge (~2 filas): suficiente para entender QUÉ es, insuficiente para no llenarlo.
-        private const float CargaInicialSeg = 0.09f;  // cadencia de esa carga (cae dentro del vidrio, se ve acomodarse).
+        private const float CargaInicialSeg = 0.09f;  // cadencia de la carga (cae dentro del vidrio, se ve acomodarse).
+        private GuionDelPrologo _g;
 
         private AlkahestSim _sim;
         private int _x0, _x1, _y0, _y1;               // muros en x0/x1; interior x0+1..x1-1, y0..y1.
@@ -76,10 +78,29 @@ namespace Alkahest.Game
         public void Init(AlkahestSim sim)
         {
             _sim = sim;
-            _x0 = SimLevelBuilder.FundacionDepositoX0;
-            _x1 = SimLevelBuilder.FundacionDepositoX1;
-            _y0 = SimLevelBuilder.FundacionDepositoY0;
-            _y1 = SimLevelBuilder.FundacionDepositoY1;
+
+            // (RONDA 75) AUTORIDAD DE POSICIÓN: el marcador "Deposito" de la
+            // escenografía, ajustado a la grilla de celdas (el marcador es la
+            // BASE-CENTRO del tanque). Sin marcador: el sitio histórico del
+            // plano. La huella (8x13, interior 6 de ancho) es fija: la piel
+            // puede moverse, el vidrio no cambia de capacidad desde la escena.
+            var escena = PrologoEscenografia.Buscar();
+            _g = PrologoEscenografia.GuionEfectivo(escena);
+            if (escena != null && escena.deposito != null)
+            {
+                float celdaM = SimRenderer.CellWorldSize;
+                int cx0 = Mathf.RoundToInt(escena.deposito.position.x / celdaM);
+                int cy0 = Mathf.RoundToInt(escena.deposito.position.y / celdaM);
+                _x0 = cx0 - 4; _x1 = cx0 + 3;
+                _y0 = cy0; _y1 = cy0 + (SimLevelBuilder.FundacionDepositoY1 - SimLevelBuilder.FundacionDepositoY0);
+            }
+            else
+            {
+                _x0 = SimLevelBuilder.FundacionDepositoX0;
+                _x1 = SimLevelBuilder.FundacionDepositoX1;
+                _y0 = SimLevelBuilder.FundacionDepositoY0;
+                _y1 = SimLevelBuilder.FundacionDepositoY1;
+            }
 
             float c = SimRenderer.CellWorldSize;
             int spanVisual = (_x1 - _x0 + 1) + 2;      // 1 celda de vuelo a cada lado.
@@ -89,10 +110,31 @@ namespace Alkahest.Game
             _cuerpo = new GameObject("DepositoCuerpo").transform;
             _cuerpo.SetParent(transform, false);
             float cx = (_x0 + _x1 + 1) * 0.5f * c;
+            float baseY = _y0 * c; // borde inferior del tanque en el mundo.
 
             // (R74) EL TUBO TRASERO SE RETIRÓ de esta versión: insinuaba un
             // rellenado que ya no existe. Vuelve como tubería lateral
             // completa junto con el autofill (ver docblock de clase).
+
+            // (RONDA 75) LA PIEL: si la escenografía trae el prefab visual
+            // (horneado por el menú 6, editable en el editor), ÉL viste al
+            // tanque — convención de hijos: "Fondo" (detrás de la sim) y
+            // "Marco" (el armazón con vidrio; el director le baja el orden
+            // mientras emerge y se lo sube al asentarse). Sin prefab, las
+            // capas procedurales de siempre (fallback reversible).
+            if (escena != null && escena.depositoVisualPrefab != null)
+            {
+                var piel = Instantiate(escena.depositoVisualPrefab, _cuerpo);
+                piel.name = "PielPrefab";
+                piel.transform.localPosition = Vector3.zero;
+                var marcoPrefab = piel.transform.Find("Marco");
+                _marcoSr = marcoPrefab != null ? marcoPrefab.GetComponent<SpriteRenderer>() : null;
+                if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFondoInterior + 2; // emerge OCULTO tras la roca (revisión Opus 73 #15).
+                transform.position = new Vector3(cx, baseY, 0f);
+                _cuerpo.localPosition = new Vector3(0f, -_alturaMundo, 0f);
+                _cuerpo.gameObject.SetActive(false);
+                return; // la piel procedural de abajo no se construye.
+            }
 
             // La cavidad (detrás de la sim).
             var fondoGo = new GameObject("Fondo");
@@ -113,7 +155,6 @@ namespace Alkahest.Game
                 Capas.MaquinaFondoInterior + 2, spanVisual * c, altoVisual * c);
 
             // Posiciones locales definitivas (relativas al centro del cuerpo):
-            float baseY = _y0 * c; // borde inferior del tanque en el mundo.
             marcoGo.transform.localPosition = new Vector3(0f, altoVisual * 0.5f * c, 0f);
             fondoGo.transform.localPosition = new Vector3(0f, (_y1 - _y0 + 1) * 0.5f * c, 0f);
 
@@ -159,7 +200,7 @@ namespace Alkahest.Game
         /// </summary>
         private void TickEmerger(float dt)
         {
-            float t = Mathf.Clamp01(_tFase / EmergerSeg);
+            float t = Mathf.Clamp01(_tFase / _g.depositoEmergerSeg);
             float ease = 1f - (1f - t) * (1f - t) * (1f - t); // cúbico: frena al asentarse.
             _cuerpo.localPosition = new Vector3(0f, -_alturaMundo * (1f - ease), 0f);
 
@@ -220,7 +261,7 @@ namespace Alkahest.Game
             if (_rellenoTimer > 0f) return;
             _rellenoTimer = CargaInicialSeg;
 
-            if (AguaDentro() >= CargaInicialCeldas)
+            if (AguaDentro() >= _g.depositoCargaInicial)
             {
                 _fase = Fase.Listo;
                 return;

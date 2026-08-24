@@ -4588,3 +4588,47 @@ teclas físicas las prueba él). ca_playtest73.cmd barre la ronda.
   errores/warnings), fuga sellada (0 celdas fuera del camino, poza 48/48), fondo de ruina
   montado y el del taller ausente, plano nuevo sondado celda a celda, capturas.
 ca_playtest74.cmd barre las rondas 73 y 74 juntas.
+
+### Ronda 75 — LA ESCENIFICACIÓN del prólogo (arquitectura híbrida Scene/Prefab + código)
+
+Mandato de Cesar: migración QUIRÚRGICA para poder retocar el juego desde Unity sin pedir
+código por cada ajuste — empezando por el prólogo para trabajar con su hermano — con criterio
+de autoridad por elemento, sin big-bang, por familias validadas, y reversible.
+
+· FAMILIA 1 — EL GUION COMO ASSET: Game/GuionDelPrologo.cs (ScriptableObject) con TODOS los
+  textos/cantidades/tiempos/triggers/radios/caudales/layout de UI del prólogo. El director y
+  el depósito leen `_g` (solo lectura); los defaults viven en los inicializadores del SO y
+  entran solos si el asset falta. VERIFICADO: vozVen editada en el asset → el director la dice.
+· FAMILIA 2 — LA ESCENOGRAFÍA EN ESCENA: Game/PrologoEscenografia.cs, raíz
+  "Prologo_Escenografia" con marcadores movibles (gizmos etiquetados): MAESTRO (posición y
+  escala de la silueta Y de los triggers de proximidad — mover el marcador mueve al Maestro
+  entero) y DEPÓSITO (base-centro, ajustado a celdas). El director monta y dispara SOBRE los
+  marcadores; jamás escribe en ellos. VERIFICADO JUGANDO: marcador movido 1u + escala 1.3 →
+  silueta y trigger AHÍ (VEN→TOMA→Agua completados en la posición nueva); depósito x0=418
+  siguiendo su marcador.
+· FAMILIA 3 — ARTE HORNEADO + PREFABS: Editor/PrologoBakeTools.cs (menú "6. Hornear arte del
+  prólogo"): baja a PNG los sprites procedurales (Maestro, TanqueMarco/Fondo, y el telón de
+  la ruina 2304x864 — con el pintor por filas EXTRAÍDO a estático compartido: horneado y
+  procedural son la misma verdad de píxeles), crea DepositoVisual.prefab (hijos Fondo/Marco;
+  solo si falta: sus ediciones son sagradas) y GuionDelPrologo.asset (ídem), y ata todo a los
+  campos VACÍOS de la escena. El Maestro queda VISIBLE en el editor (hijo Silueta del
+  marcador). El runtime prefiere prefab/asset y cae al procedural si faltan.
+· LOS GENERADORES YA NO ARRASAN: menú 1 → "Validar-completar" (abre la escena real, añade
+  solo lo que falte, JAMÁS pisa lo existente); el pre-vuelo de builds pasa por ahí (la regla
+  14 evoluciona: la build valida, no destruye). El botón rojo quedó aparte: "1b. REGENERAR
+  DESDE CERO" con diálogo de confirmación (recuperación R20). Bootstrap: find-or-create del
+  WorkshopBackdrop (la escena puede traer el suyo con el sprite horneado; la escena manda
+  sobre su transform — el parallax usa la variante "tal cual", sin reescalar).
+· VERIFICACIÓN QUIRÚRGICA EN VIVO: retoque manual simulado (marcadores movidos/escalados +
+  palabra del guion) → guardado → MENÚ 1 → TODO SOBREVIVIÓ → Play → el código lo respetó
+  (sondas + captura del Maestro al 130% fuera de su mesa). Regresión del MODO CLÁSICO:
+  Semilla Cero arranca con 1 solo backdrop (el de escena), fondo del taller correcto, sim y
+  Crisol vivos, 0 errores. MULTI: sin código de red tocado; su escena no trae backdrop → el
+  find-or-create crea el histórico (comportamiento idéntico); prefab de red intacto. Los
+  retoques de prueba se RESTAURARON: la escena queda en el estado histórico limpio.
+· LO QUE SE QUEDÓ EN CÓDIGO A PROPÓSITO (explicado en ESTADO.md): la UI IMGUI (migrar a
+  uGUI = reescribir toda la capa de UI; el guion ya da los números), la geometría tallada de
+  cascada/poza/cuenco/cráter (la sim es la verdad), y el fuego del Maestro (Brasa real).
+· La matriz de autoridad completa y las familias PENDIENTES (máquinas del taller a prefabs,
+  decoración, escena multi) quedaron en ESTADO.md como receta para repetir el criterio.
+ca_playtest75.cmd barre la ronda (incluye la escena guardada, los PNG, el prefab y el guion).

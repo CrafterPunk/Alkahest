@@ -61,65 +61,18 @@ namespace Alkahest.Game
         private enum AguaSub { Ir, Aspirar, Verter, Libre }
 
         // ==================================================================
-        // EL GUION — todo lo que Cesar querrá tocar, junto y a la vista.
+        // EL GUION vive ahora en un ASSET (ronda 75, la escenificación):
+        // GuionDelPrologo.asset — textos, cantidades, tiempos, triggers,
+        // radios de luz, caudales y layout de la UI se editan desde el
+        // INSPECTOR, sin pedir código. Los DEFAULTS (y la documentación de
+        // cada número) viven en Game/GuionDelPrologo.cs; si el asset falta,
+        // GuionEfectivo entrega esos mismos defaults en memoria y el prólogo
+        // corre igual (fallback invisible, escenificación reversible).
+        // `_g` es de SOLO LECTURA para el director: el código jamás escribe
+        // en el guion.
         // ==================================================================
-        // -- Las palabras del Maestro (una por golpe de voz):
-        private const string VozVen = "VEN.";
-        private const string VozToma = "TOMA.";
-        private const string VozAgua = "AGUA.";
-        private const string VozTraela = "TRÁELA.";
-        private const string VozBien = "BIEN.";
-        private const string VozLodo = "LODO.";
-        private const string VozTraelo = "TRÁELO.";
-        private const string VozObserva = "OBSERVA.";
-        private const string VozLlenalo = "LLÉNALO."; // (R74) la tarea final: el depósito llega con un culo de agua y llenarlo es tuyo.
-
-        // -- Las leyendas del tutorial contextual (fichas blancas):
-        private const string LeyendaMover = "muévete"; // (revisión Opus 73 #21) minúscula como sus hermanas: las leyendas son susurros funcionales, no títulos.
-        private const string LeyendaAspirar = "mantén — aspira el agua";
-        private const string LeyendaVerter = "mantén — viértela donde quieras";
-
-        // -- Cantidades (celdas de materia REAL):
-        private const int AspirarMeta = 10;      // agua que debe ENTRAR al frasco para confirmar el gesto.
-        private const int VerterMeta = 6;        // agua que debe SALIR para confirmar verter.
-        private const int EntregaAguaMeta = 20;  // agua en el cuenco para completar la entrega.
-        private const int LodoProbarMeta = 8;    // lodo aspirado que dispara el TRÁELO.
-        private const int EntregaLodoMeta = 16;  // lodo en el cuenco.
-        private const int LlenarDepositoMeta = 48; // (R74) agua dentro del tanque para cerrar el prólogo (llega con ~14; interior 6 de ancho: ~8 filas al completar).
-        private const float MoverMetaMundo = 0.5f; // desplazamiento real (unidades de mundo) por dirección para confirmar cada tecla.
-
-        // -- Tiempos:
-        private const float DespertarPausaSeg = 1.4f;  // oscuridad a solas antes de las fichas WASD.
-        private const float TrasTutorialSeg = 0.8f;    // respiro entre el tutorial completado y la voz VEN.
-        private const float EntregaFrascoSeg = 0.95f;  // vuelo del frasco de la mesa a tu mano.
-        private const float TrasTomaSeg = 1.3f;        // respiro tras recibir el frasco.
-        private const float JuegoLibreSeg = 14f;       // rato de jugar con el agua antes del TRÁELA.
-        private const float LodoLibreSeg = 22f;        // tope de experimentación con el lodo antes del TRÁELO.
-        private const float VozHoldSeg = 2.1f;         // cuánto sostiene cada palabra en pantalla.
-        private const float DerrumbePausaSeg = 2.2f;   // respiro entre la entrega del agua y el techo abriéndose.
-
-        // -- Triggers de distancia (en celdas):
-        private const float DistCharla = 16f;    // "estar con el Maestro".
-        private const float DistZonaAgua = 26f;  // radio alrededor de la poza que dispara AGUA.
-
-        // -- La luz (radios de viñeta por tramo, en px escalados):
-        private const float RadioDespertar = 180f;
-        private const float RadioVen = 260f;
-        private const float RadioToma = 330f;
-        private const float RadioAgua = 440f;
-        private const float RadioTaller = 540f;
-        private const float RadioAmanecer = 2400f;
-
-        // -- La cascada (el caudal lo mantiene el director; el camino lo talla SimLevelBuilder):
-        private const float ManantialSeg = 0.14f;   // cadencia del brote (0.24 daba un hilo demasiado ralo — visto en captura R73).
-        private const int ManantialCeldas = 2;      // hilo de 2 celdas por pulso: caudal visible, no diluvio.
-        private const int PozaLlenaCeldas = 48;     // nivel de equilibrio del rezumado (R74: la poza es más honda — capacidad física ~70; el nivel llena unas 3.5 filas).
-
-        // -- El derrumbe y la gotera de lodo:
-        private const int LodoBurstCeldas = 26;     // el reventón inicial que cae con el derrumbe.
-        private const float LodoSeepSeg = 0.4f;     // cadencia del goteo permanente posterior.
-        private const int LodoMonticuloTope = 70;   // el goteo se pausa si el montículo crece hasta aquí...
-        private const int LodoMonticuloResume = 50; // ...y vuelve cuando el jugador se lo lleva (histéresis).
+        private GuionDelPrologo _g;
+        private PrologoEscenografia _escena;
 
         // -- El cuenco (drenado = "el Maestro lo toma"):
         private const float DrenarCadaSeg = 0.05f;
@@ -210,12 +163,19 @@ namespace Alkahest.Game
             _aprendiz = aprendiz;
             _posAnterior = aprendiz.position;
 
-            SpawnMaestroSilueta();
+            // (RONDA 75) LA ESCENOGRAFÍA Y EL GUION, ANTES QUE NADA: todo lo
+            // de abajo lee de `_g`, y los marcadores de escena deciden dónde
+            // vive el Maestro. Sin escenografía en la escena (sandbox,
+            // escena vieja) los fallbacks reconstruyen el prólogo histórico.
+            _escena = PrologoEscenografia.Buscar();
+            _g = PrologoEscenografia.GuionEfectivo(_escena);
+
+            SpawnMaestro();
             HudPermitido = false;
             FrascoBloqueado = true;
 
             _tutorial = new GameObject("TutorialContextual").AddComponent<TutorialContextual>();
-            _tutorial.Init(aprendiz);
+            _tutorial.Init(aprendiz, _g.fichasOffsetPx);
 
             _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
             _deposito.Init(sim);
@@ -224,7 +184,7 @@ namespace Alkahest.Game
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
 
-            _radioObjetivo = UiStyles.S(RadioDespertar);
+            _radioObjetivo = UiStyles.S(_g.radioDespertar);
             _radio = _radioObjetivo;
         }
 
@@ -237,7 +197,7 @@ namespace Alkahest.Game
             SimRenderer.FocoCinematico = null;
             if (_instancia == this) _instancia = null;
             if (_vineta != null) Destroy(_vineta);
-            if (_maestroGo != null) Destroy(_maestroGo);
+            if (_maestroVisualPropio && _maestroGo != null) Destroy(_maestroGo); // el visual que creó el director; un marcador de ESCENA jamás se destruye.
             if (_maestroTex != null) Destroy(_maestroTex);
             if (_frascoVuelo != null) Destroy(_frascoVuelo.gameObject);
         }
@@ -273,10 +233,10 @@ namespace Alkahest.Game
                 case Beat.Ven: TickVen(); break;
                 case Beat.Toma: TickToma(); break;
                 case Beat.Agua: TickAgua(); break;
-                case Beat.EntregaAgua: TickEntrega(MaterialId.Water, EntregaAguaMeta, Beat.Derrumbe); break;
+                case Beat.EntregaAgua: TickEntrega(MaterialId.Water, _g.entregaAguaMeta, Beat.Derrumbe); break;
                 case Beat.Derrumbe: TickDerrumbe(); break;
                 case Beat.Lodo: TickLodoBeat(); break;
-                case Beat.EntregaLodo: TickEntrega(Lodo, EntregaLodoMeta, Beat.Recompensa); break;
+                case Beat.EntregaLodo: TickEntrega(Lodo, _g.entregaLodoMeta, Beat.Recompensa); break;
                 case Beat.Recompensa: TickRecompensa(); break;
                 case Beat.LlenarDeposito: TickLlenarDeposito(); break;
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
@@ -320,7 +280,7 @@ namespace Alkahest.Game
         {
             _vozTexto = palabra;
             _vozT = 0f;
-            _vozDur = 0.45f + VozHoldSeg + VozFadeOutSeg; // fade in + hold + fade out.
+            _vozDur = 0.45f + _g.vozHoldSeg + VozFadeOutSeg; // fade in + hold + fade out.
             if (_audio != null)
             {
                 // El pitch varía un pelo por palabra (determinista): la voz
@@ -357,9 +317,9 @@ namespace Alkahest.Game
         /// </summary>
         private void TickDespertar()
         {
-            if (_tBeat > DespertarPausaSeg && !_tutorial.Visible && !_tutorial.Terminado)
+            if (_tBeat > _g.despertarPausaSeg && !_tutorial.Visible && !_tutorial.Terminado)
             {
-                _tutorial.Mostrar(LeyendaMover,
+                _tutorial.Mostrar(_g.leyendaMover,
                     new TutorialContextual.Paso { Etiqueta = "W", Presionada = () => Keyboard.current != null && (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) },
                     new TutorialContextual.Paso { Etiqueta = "A", Presionada = () => Keyboard.current != null && (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) },
                     new TutorialContextual.Paso { Etiqueta = "S", Presionada = () => Keyboard.current != null && (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) },
@@ -384,7 +344,7 @@ namespace Alkahest.Game
                 }
                 for (int i = 0; i < 4; i++)
                 {
-                    if (!_moverOk[i] && _progMover[i] >= MoverMetaMundo)
+                    if (!_moverOk[i] && _progMover[i] >= _g.moverMetaMundo)
                     {
                         _moverOk[i] = true;
                         _tutorial.Confirmar(i);
@@ -396,11 +356,11 @@ namespace Alkahest.Game
             // tutorial, no desde el inicio del beat: _tBeat se re-arma en el
             // instante del evento para que la constante signifique lo que dice.
             if (_tutorial.Terminado && !_tutorialCerrado) { _tutorialCerrado = true; _tBeat = 0f; }
-            if (_tutorialCerrado && _tBeat > TrasTutorialSeg)
+            if (_tutorialCerrado && _tBeat > _g.trasTutorialSeg)
             {
                 CambiarBeat(Beat.Ven);
-                Decir(VozVen);
-                _radioObjetivo = UiStyles.S(RadioVen);
+                Decir(_g.vozVen);
+                _radioObjetivo = UiStyles.S(_g.radioVen);
                 _focoBias = 0.62f; // la luz se estira hacia el fuego: la única señal de hacia dónde.
             }
         }
@@ -412,12 +372,12 @@ namespace Alkahest.Game
             // (revisión Opus 73 #6) La palabra VEN. se dice entera aunque el
             // jugador ya esté pegado al Maestro (terminó el tutorial a sus
             // pies): el encuentro espera a que la voz suelte la palabra.
-            if (_tBeat < VozHoldSeg) return;
-            if (DistAlMaestro() < DistCharla)
+            if (_tBeat < _g.vozHoldSeg) return;
+            if (DistAlMaestro() < _g.distCharla)
             {
                 CambiarBeat(Beat.Toma);
-                Decir(VozToma);
-                _radioObjetivo = UiStyles.S(RadioToma);
+                Decir(_g.vozToma);
+                _radioObjetivo = UiStyles.S(_g.radioToma);
                 _focoBias = 0.85f;
                 LanzarVueloDelFrasco();
             }
@@ -427,11 +387,11 @@ namespace Alkahest.Game
         private void TickToma()
         {
             if (_frascoVuelo != null) return; // el vuelo sigue en el aire (TickVueloDelFrasco).
-            if (!FrascoBloqueado && _tBeat > TrasTomaSeg)
+            if (!FrascoBloqueado && _tBeat > _g.trasTomaSeg)
             {
                 CambiarBeat(Beat.Agua);
                 _aguaSub = AguaSub.Ir;
-                _radioObjetivo = UiStyles.S(RadioAgua);
+                _radioObjetivo = UiStyles.S(_g.radioAgua);
                 _focoBias = 1f;
             }
         }
@@ -456,18 +416,18 @@ namespace Alkahest.Game
             switch (_aguaSub)
             {
                 case AguaSub.Ir:
-                    if (DistAPoza() < DistZonaAgua)
+                    if (DistAPoza() < _g.distZonaAgua)
                     {
-                        Decir(VozAgua);
+                        Decir(_g.vozAgua);
                         _aguaSub = AguaSub.Aspirar;
                         _aguaBase = _flask.GetCount(MaterialId.Water);
-                        _tutorial.Mostrar(LeyendaAspirar,
+                        _tutorial.Mostrar(_g.leyendaAspirar,
                             new TutorialContextual.Paso { Etiqueta = "CLIC IZQ", Presionada = () => Mouse.current != null && Mouse.current.leftButton.isPressed });
                     }
                     break;
 
                 case AguaSub.Aspirar:
-                    if (_flask.GetCount(MaterialId.Water) >= _aguaBase + AspirarMeta)
+                    if (_flask.GetCount(MaterialId.Water) >= _aguaBase + _g.aspirarMeta)
                     {
                         _tutorial.Confirmar(0);
                         _aguaSub = AguaSub.Verter;
@@ -483,11 +443,11 @@ namespace Alkahest.Game
                         // de enseñar la siguiente (respiración entre gestos).
                         if (_tutorial.Visible || _tBeat < 0.5f) break;
                         _vertidoEnsenado = true;
-                        _tutorial.Mostrar(LeyendaVerter,
+                        _tutorial.Mostrar(_g.leyendaVerter,
                             new TutorialContextual.Paso { Etiqueta = "CLIC DER", Presionada = () => Mouse.current != null && Mouse.current.rightButton.isPressed });
                         break;
                     }
-                    if (_flask.GetCount(MaterialId.Water) <= _aguaBase - VerterMeta)
+                    if (_flask.GetCount(MaterialId.Water) <= _aguaBase - _g.verterMeta)
                     {
                         _tutorial.Confirmar(0);
                         _aguaSub = AguaSub.Libre;
@@ -496,11 +456,11 @@ namespace Alkahest.Game
                     break;
 
                 case AguaSub.Libre:
-                    if (_tBeat > JuegoLibreSeg)
+                    if (_tBeat > _g.juegoLibreSeg)
                     {
                         CambiarBeat(Beat.EntregaAgua);
-                        Decir(VozTraela);
-                        _radioObjetivo = UiStyles.S(RadioTaller);
+                        Decir(_g.vozTraela);
+                        _radioObjetivo = UiStyles.S(_g.radioTaller);
                     }
                     break;
             }
@@ -518,11 +478,11 @@ namespace Alkahest.Game
             // (revisión Opus 73 #5) Si el cuenco ya estaba lleno (jugador
             // previsor durante el juego libre), el TRÁELA. igual se dice
             // entero antes de aceptarse la entrega.
-            if (_tBeat < VozHoldSeg + 0.5f) return;
+            if (_tBeat < _g.vozHoldSeg + 0.5f) return;
 
             if (ContarEnCuenco(mat) >= meta)
             {
-                Decir(VozBien);
+                Decir(_g.vozBien);
                 _drenando = true;
                 _drenandoMat = mat;
                 _drenarTimer = 0.6f; // medio respiro con el cuenco lleno antes de tomarlo.
@@ -539,8 +499,8 @@ namespace Alkahest.Game
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
             int gx = SimLevelBuilder.FundacionDerrumbeX;
 
-            if (_tBeat < DerrumbePausaSeg) return; // respiro tras la entrega del agua.
-            float t = _tBeat - DerrumbePausaSeg;
+            if (_tBeat < _g.derrumbePausaSeg) return; // respiro tras la entrega del agua.
+            float t = _tBeat - _g.derrumbePausaSeg;
 
             if (!_derrumbeArrancado)
             {
@@ -561,7 +521,7 @@ namespace Alkahest.Game
                 for (int dx = -1; dx <= 1; dx++)
                     grid.SetCell(gx + dx, SimLevelBuilder.FundacionY1 + 2, MaterialId.Empty);
                 grid.WakeChunk(gx, SimLevelBuilder.FundacionY1, tick);
-                _burstRestante = LodoBurstCeldas;
+                _burstRestante = _g.lodoBurstCeldas;
             }
 
             // El reventón: los primeros terrones caen en tromba por la grieta.
@@ -592,7 +552,7 @@ namespace Alkahest.Game
             if (t > 2.6f && !_lodoActivo)
             {
                 _lodoActivo = true; // el goteo permanente queda vivo (TickLodo).
-                Decir(VozLodo);
+                Decir(_g.vozLodo);
             }
 
             if (t > 3.4f)
@@ -610,10 +570,10 @@ namespace Alkahest.Game
             // el umbral pueda disparar el TRÁELO. (si el jugador ya aspiró en
             // plena tromba, las dos palabras se pisaban).
             if (_vozTexto != null) return;
-            if (_flask.GetCount(Lodo) >= LodoProbarMeta || _tBeat > LodoLibreSeg)
+            if (_flask.GetCount(Lodo) >= _g.lodoProbarMeta || _tBeat > _g.lodoLibreSeg)
             {
                 CambiarBeat(Beat.EntregaLodo);
-                Decir(VozTraelo);
+                Decir(_g.vozTraelo);
             }
         }
 
@@ -624,7 +584,7 @@ namespace Alkahest.Game
             if (!_recompensaArrancada && _tBeat > 1.0f)
             {
                 _recompensaArrancada = true;
-                Decir(VozObserva);
+                Decir(_g.vozObserva);
                 SimRenderer.FocoCinematico = new Vector3(
                     (SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
                     (SimLevelBuilder.FundacionDepositoY0 + 8) * celda, 0f);
@@ -639,7 +599,7 @@ namespace Alkahest.Game
             {
                 SimRenderer.FocoCinematico = null;
                 CambiarBeat(Beat.LlenarDeposito);
-                Decir(VozLlenalo);
+                Decir(_g.vozLlenalo);
             }
         }
         private bool _recompensaArrancada;
@@ -653,11 +613,11 @@ namespace Alkahest.Game
         /// </summary>
         private void TickLlenarDeposito()
         {
-            if (_tBeat < VozHoldSeg) return; // el LLÉNALO. se dice entero.
-            if (_deposito.AguaDentro() >= LlenarDepositoMeta)
+            if (_tBeat < _g.vozHoldSeg) return; // el LLÉNALO. se dice entero.
+            if (_deposito.AguaDentro() >= _g.llenarDepositoMeta)
             {
-                Decir(VozBien);
-                _radioObjetivo = UiStyles.S(RadioAmanecer); // amanece: el mundo respondió.
+                Decir(_g.vozBien);
+                _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el mundo respondió.
                 Trueque.Activar(); // el tablón despierta con el amanecer, como promete el bootstrap (regla 49).
                 CambiarBeat(Beat.Fin);
             }
@@ -678,8 +638,8 @@ namespace Alkahest.Game
         {
             _manantialTimer -= Time.deltaTime;
             if (_manantialTimer > 0f) return;
-            _manantialTimer = ManantialSeg;
-            for (int i = 0; i < ManantialCeldas; i++)
+            _manantialTimer = _g.manantialSeg;
+            for (int i = 0; i < _g.manantialCeldas; i++)
                 _sim.PaintStable(SimLevelBuilder.FundacionManantialX,
                     SimLevelBuilder.FundacionManantialY + i, 0, MaterialId.Water);
         }
@@ -710,7 +670,7 @@ namespace Alkahest.Game
             _rezumaTimer = 1f / 30f; // una celda por tick de sim, como mucho.
 
             int agua = ContarEnPoza(MaterialId.Water);
-            if (agua <= PozaLlenaCeldas) return;
+            if (agua <= _g.pozaLlenaCeldas) return;
 
             var grid = _sim.Grid;
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
@@ -736,11 +696,11 @@ namespace Alkahest.Game
             if (!_lodoActivo) return;
             _lodoTimer -= Time.deltaTime;
             if (_lodoTimer > 0f) return;
-            _lodoTimer = LodoSeepSeg;
+            _lodoTimer = _g.lodoSeepSeg;
 
             int monticulo = ContarLodoEnCrater();
-            if (_lodoPausado) { if (monticulo <= LodoMonticuloResume) _lodoPausado = false; else return; }
-            else if (monticulo >= LodoMonticuloTope) { _lodoPausado = true; return; }
+            if (_lodoPausado) { if (monticulo <= _g.lodoMonticuloResume) _lodoPausado = false; else return; }
+            else if (monticulo >= _g.lodoMonticuloTope) { _lodoPausado = true; return; }
 
             _lodoIdx++;
             _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX + (_lodoIdx % 3) - 1,
@@ -818,7 +778,7 @@ namespace Alkahest.Game
             sr.sortingOrder = Capas.CarryEnMano;
             float celda = SimRenderer.CellWorldSize;
             go.transform.localScale = Vector3.one * (1.4f * celda * 6f / Mathf.Max(1f, sr.sprite.rect.width));
-            go.transform.position = PosMaestro() + new Vector3(0f, 0.35f, 0f);
+            go.transform.position = PosMaestro();
             _frascoVuelo = go.transform;
             _tVuelo = 0f;
         }
@@ -826,11 +786,11 @@ namespace Alkahest.Game
         private void TickVueloDelFrasco()
         {
             if (_frascoVuelo == null) return;
-            _tVuelo += Time.deltaTime / EntregaFrascoSeg;
+            _tVuelo += Time.deltaTime / _g.entregaFrascoSeg;
             float t = Mathf.Clamp01(_tVuelo);
             float ease = t * t * (3f - 2f * t); // smoothstep: sale suave, llega suave.
 
-            Vector3 a = PosMaestro() + new Vector3(0f, 0.35f, 0f);
+            Vector3 a = PosMaestro();
             Vector3 b = _aprendiz.position + new Vector3(0f, -0.2f, 0f);
             Vector3 m = Vector3.Lerp(a, b, 0.5f) + new Vector3(0f, 0.7f, 0f); // comba por arriba.
             Vector3 p = Vector3.Lerp(Vector3.Lerp(a, m, ease), Vector3.Lerp(m, b, ease), ease);
@@ -843,28 +803,32 @@ namespace Alkahest.Game
                 FrascoBloqueado = false;      // el tarro del aprendiz aparece: AHORA llevas frasco.
                 HudPermitido = true;
                 DayCycle.DespertarHudFundacion();
-                _tBeat = 0f; // (revisión Opus 73 #9) TrasTomaSeg cuenta desde AQUÍ: es el respiro con el frasco ya en la mano, no menos el vuelo.
+                _tBeat = 0f; // (revisión Opus 73 #9) _g.trasTomaSeg cuenta desde AQUÍ: es el respiro con el frasco ya en la mano, no menos el vuelo.
             }
         }
 
         // ------------------------------------------------------------------
         // La silueta del Maestro y su fuego real (conservados de la v1).
         // ------------------------------------------------------------------
-        private GameObject _maestroGo;
+        private GameObject _maestroGo;       // el visual que ESTE director creó (si lo creó).
+        private Transform _maestroTr;        // dónde vive el Maestro: el marcador de escena, o el GO propio de fallback.
+        private bool _maestroVisualPropio;
         private Texture2D _maestroTex;
 
+        /// <summary>El punto del Maestro para triggers, vuelo del frasco y placas. AUTORIDAD: el marcador de ESCENA si existe; si no, el rincón histórico de la mesa.</summary>
         private Vector3 PosMaestro()
         {
+            if (_maestroTr != null) return _maestroTr.position + new Vector3(0f, 0.35f, 0f);
             float celda = SimRenderer.CellWorldSize;
             return new Vector3((SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda,
                 (SimLevelBuilder.FundacionMesaTopY + 4) * celda, 0f);
         }
 
-        private void SpawnMaestroSilueta()
+        /// <summary>La silueta encapuchada, como PÍXELES (pura; también la consume la herramienta de horneado del editor).</summary>
+        public static Texture2D ConstruirTexturaMaestro()
         {
-            float celda = SimRenderer.CellWorldSize;
             const int W = 12, H = 16; // 2 px por celda: 6x8 celdas en el mundo.
-            _maestroTex = new Texture2D(W, H, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var tex = new Texture2D(W, H, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
             var px = new Color32[W * H];
             var tunica = new Color32(54, 39, 26, 255);
             var pliegue = new Color32(92, 66, 41, 255); // luz de borde del lado del fuego.
@@ -883,23 +847,55 @@ namespace Alkahest.Game
             }
             px[10 * W + 3] = ojo;
             px[10 * W + 5] = ojo;
-            _maestroTex.SetPixels32(px);
-            _maestroTex.Apply(false, true);
+            tex.SetPixels32(px);
+            tex.Apply(false, false); // legible: la herramienta de horneado lo exporta a PNG.
+            return tex;
+        }
 
-            _maestroGo = new GameObject("Maestro_Silueta");
-            var sr = _maestroGo.AddComponent<SpriteRenderer>();
-            sr.sprite = Sprite.Create(_maestroTex, new Rect(0, 0, W, H), new Vector2(0.5f, 0f), W / (6f * celda));
+        /// <summary>
+        /// (RONDA 75) EL MAESTRO SOBRE SU MARCADOR: si la escena trae el
+        /// marcador, ÉL es la autoridad de posición y escala — moverlo en el
+        /// editor mueve la silueta Y los triggers, sin código. Si el marcador
+        /// ya tiene un SpriteRenderer hijo (arte horneado, colocado a mano),
+        /// el director no pinta nada: la escena ya vistió al Maestro. Sin
+        /// marcador (escena vieja/sandbox): el GO histórico junto a la mesa.
+        /// </summary>
+        private void SpawnMaestro()
+        {
+            float celda = SimRenderer.CellWorldSize;
+
+            if (_escena != null && _escena.maestro != null)
+            {
+                _maestroTr = _escena.maestro;
+                if (_maestroTr.GetComponentInChildren<SpriteRenderer>() != null)
+                {
+                    _maestroVisualPropio = false; // la escena ya lo vistió.
+                    return;
+                }
+            }
+            else
+            {
+                var raiz = new GameObject("Maestro_Silueta");
+                float mx = (SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda;
+                raiz.transform.position = new Vector3(mx, (SimLevelBuilder.FundacionMesaTopY + 1) * celda, 0f);
+                _maestroTr = raiz.transform;
+            }
+
+            _maestroTex = ConstruirTexturaMaestro();
+            var go = new GameObject("Silueta");
+            go.transform.SetParent(_maestroTr, false); // hijo: hereda posición Y escala del marcador.
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = Sprite.Create(_maestroTex, new Rect(0, 0, 12, 16), new Vector2(0.5f, 0f), 12f / (6f * celda));
             sr.sortingOrder = 30;
-            float mx = (SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda;
-            _maestroGo.transform.position = new Vector3(mx, (SimLevelBuilder.FundacionMesaTopY + 1) * celda, 0f);
+            _maestroGo = _escena != null && _escena.maestro != null ? go : _maestroTr.gameObject;
+            _maestroVisualPropio = true;
         }
 
         private float DistAlMaestro()
         {
             float celda = SimRenderer.CellWorldSize;
-            float mx = (SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda;
-            float my = (SimLevelBuilder.FundacionMesaTopY + 2) * celda;
-            return Vector2.Distance(_aprendiz.position, new Vector2(mx, my)) / celda;
+            Vector3 p = PosMaestro();
+            return Vector2.Distance(_aprendiz.position, new Vector2(p.x, p.y)) / celda;
         }
 
         /// <summary>El lecho de brasas y las lenguas de Fire reales del hogar del Maestro (v1 intacta: la luz tiene causa física o no existe).</summary>
@@ -1025,8 +1021,7 @@ namespace Alkahest.Game
             // en adelante hablan la silueta y la voz).
             if (_beat != Beat.Fin && DistAlMaestro() >= 14f && !DayCycle.InputLocked)
             {
-                var ancla = new Vector3((SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * celda,
-                    (SimLevelBuilder.FundacionMesaTopY + 11) * celda, 0f);
+                var ancla = PosMaestro() + new Vector3(0f, 7f * celda, 0f); // sobre la capucha, siga donde siga el marcador.
                 float alfa = LuzEn(ancla) * 0.85f;
                 UiStyles.PlacaMundo(ancla, "EL MAESTRO", new Color(0.92f, 0.86f, 0.7f, alfa), UiStyles.S(10f));
             }
@@ -1036,7 +1031,7 @@ namespace Alkahest.Game
             if ((_beat == Beat.EntregaAgua || _beat == Beat.EntregaLodo) && !_drenando && !DayCycle.InputLocked)
             {
                 byte mat = _beat == Beat.EntregaAgua ? MaterialId.Water : Lodo;
-                int meta = _beat == Beat.EntregaAgua ? EntregaAguaMeta : EntregaLodoMeta;
+                int meta = _beat == Beat.EntregaAgua ? _g.entregaAguaMeta : _g.entregaLodoMeta;
                 int n = Mathf.Min(ContarEnCuenco(mat), meta);
                 var ancla = new Vector3((SimLevelBuilder.FundacionCuencoX0 + SimLevelBuilder.FundacionCuencoX1) * 0.5f * celda,
                     (SimLevelBuilder.FundacionY0 + 3) * celda, 0f);
@@ -1048,10 +1043,10 @@ namespace Alkahest.Game
             // lenguaje que la del cuenco — dónde y cuánto, nada más.
             if (_beat == Beat.LlenarDeposito && !DayCycle.InputLocked)
             {
-                int n = Mathf.Min(_deposito.AguaDentro(), LlenarDepositoMeta);
+                int n = Mathf.Min(_deposito.AguaDentro(), _g.llenarDepositoMeta);
                 var ancla = _deposito.CentroMundo() + new Vector3(0f, 7f * celda, 0f);
                 float alfa = Mathf.Max(LuzEn(ancla), 0.6f);
-                UiStyles.PlacaMundo(ancla, "LLÉNALO — " + n + " / " + LlenarDepositoMeta, new Color(0.95f, 0.88f, 0.68f, alfa), UiStyles.S(9f));
+                UiStyles.PlacaMundo(ancla, "LLÉNALO — " + n + " / " + _g.llenarDepositoMeta, new Color(0.95f, 0.88f, 0.68f, alfa), UiStyles.S(9f));
             }
 
             if (!DayCycle.InputLocked) DibujarVoz();
@@ -1077,7 +1072,7 @@ namespace Alkahest.Game
 
             float deriva = UiStyles.S(10f) * (_vozT / _vozDur); // sube despacio: respira.
             string texto = UiStyles.Espaciar(_vozTexto);
-            var r = new Rect(0f, Screen.height * 0.24f - deriva, Screen.width, Screen.height * 0.12f);
+            var r = new Rect(0f, Screen.height * _g.vozAlturaFrac - deriva, Screen.width, Screen.height * 0.12f);
 
             var prev = GUI.color;
             GUI.color = new Color(0f, 0f, 0f, 0.55f * alfa);
@@ -1088,16 +1083,17 @@ namespace Alkahest.Game
         }
 
         private static GUIStyle _vozStyle;
-        private static int _vozAlto;
-        private static void PrepararEstiloVoz()
+        private static int _vozAltoPx;
+        private void PrepararEstiloVoz()
         {
-            if (_vozStyle != null && _vozAlto == Screen.height) return;
-            _vozAlto = Screen.height;
+            int objetivo = Mathf.RoundToInt(Screen.height * _g.vozTamFrac);
+            if (_vozStyle != null && _vozAltoPx == objetivo) return;
+            _vozAltoPx = objetivo;
             UiStyles.Preparar();
             _vozStyle = new GUIStyle(UiStyles.Titulo)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = Mathf.RoundToInt(Screen.height * 0.056f),
+                fontSize = objetivo,
             };
         }
 

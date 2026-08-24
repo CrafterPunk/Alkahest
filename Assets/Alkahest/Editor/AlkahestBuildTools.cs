@@ -7,7 +7,7 @@ namespace Alkahest.EditorTools
 {
     /// <summary>
     /// [TenThousandYears] Build de la demo (análogo a FriendsLoopBuildTools).
-    /// La escena AlkahestLab debe existir (menú "Ten Thousand Years/1. Generar escena Lab").
+    /// La escena AlkahestLab debe existir (menú "Ten Thousand Years/1. Validar-completar escena Lab").
     /// </summary>
     public static class AlkahestBuildTools
     {
@@ -18,16 +18,13 @@ namespace Alkahest.EditorTools
         [MenuItem("Ten Thousand Years/3. Build demo Windows (un jugador)", priority = 3)]
         public static void BuildDemoWindows()
         {
-            // (pre-vuelo build) Antes esto solo comprobaba que el .unity EXISTIERA en
-            // disco, nunca que estuviera al día: una escena guardada varias rondas
-            // atrás (p.ej. la cámara vieja de antes del rediseño del espacio) se
-            // habría colado en la build en silencio. Regenerarla aquí usa el mismo
-            // menú idempotente "1. Generar escena Lab" y sirve de red de seguridad:
-            // si algo falla al generarla, la build se aborta ANTES de gastar minutos
-            // compilando sobre una escena potencialmente inválida.
-            // Se guardan antes los cambios pendientes del editor (si los hay) porque
-            // regenerar la escena hace NewScene(...Single) y machacaría sin avisar
-            // cualquier edición sin guardar que hubiera abierta en ese momento.
+            // (pre-vuelo build; R75) La escena pasa por el menú 1 antes de
+            // compilar — que desde la escenificación VALIDA/COMPLETA en vez
+            // de arrasar: añade lo que falte y las EDICIONES MANUALES de la
+            // escena (marcadores movidos, arte colocado) SOBREVIVEN a la
+            // build. Sigue siendo la red de seguridad de siempre: si la
+            // validación truena, la build se aborta antes de gastar minutos.
+            // Se guardan antes los cambios pendientes del editor (si los hay).
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
             {
                 Debug.LogWarning("[TenThousandYears] Build cancelada: hay cambios sin guardar en la escena abierta.");

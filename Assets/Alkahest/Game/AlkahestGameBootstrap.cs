@@ -601,7 +601,7 @@ namespace Alkahest.Game
             // este modo (la criatura es la vida del juego, no el grifo de
             // Azoth), pero no dejarlo al azar: es la razón real, no una
             // casualidad de que el campo se haya quedado en null.
-            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            ObtenerOCrearBackdrop(); // (R75) la ESCENA puede traer el suyo (con su sprite horneado y su transform): find-or-create.
             // (ENCARGO F, Playtest 39) LA CAPA DE PARTÍCULAS DESPRENDIDAS
             // (Game/ParticulasFx.cs, TODO vive ahí): decorativa, NO-SIM,
             // client-local -- se crea aquí igual que el resto de capas
@@ -720,7 +720,7 @@ namespace Alkahest.Game
             // El fondo del cuarto es puramente visual y se genera por código:
             // lo tienen los dos lados, o el invitado vería el taller flotando
             // sobre el vacío.
-            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            ObtenerOCrearBackdrop(); // (R75) la ESCENA puede traer el suyo (con su sprite horneado y su transform): find-or-create.
             // (ENCARGO F, Playtest 39) LA CAPA DE PARTÍCULAS, TAMBIÉN EN LOS
             // DOS LADOS: es client-local por diseño (Game/ParticulasFx.cs) --
             // cada cliente (anfitrión O invitado) genera sus propias motas de
@@ -962,6 +962,21 @@ namespace Alkahest.Game
         /// caños, ni buzón, ni muestras, ni pistas -- el principio rector del
         /// GDD es que nada exista sin favor, préstamo o manos.
         /// </summary>
+        /// <summary>
+        /// (RONDA 75, la escenificación) EL MURO DE FONDO PUEDE VIVIR EN LA
+        /// ESCENA: si el generador (o Cesar a mano) dejó un WorkshopBackdrop
+        /// en la escena — con su sprite horneado, su posición y su tinte —
+        /// ese es EL fondo y este método no crea nada. Solo si la escena no
+        /// trae ninguno (escenas viejas, multi) se crea el histórico por
+        /// código. Autoridad: la escena; el código es el fallback.
+        /// </summary>
+        private static WorkshopBackdrop ObtenerOCrearBackdrop()
+        {
+            var enEscena = FindAnyObjectByType<WorkshopBackdrop>();
+            if (enEscena != null) return enEscena;
+            return new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+        }
+
         private void SpawnFundacion()
         {
             // (RONDA 71, cazado por el reporte de Cesar "no vi nada de
@@ -972,7 +987,7 @@ namespace Alkahest.Game
             // que mover. El muro entra también aquí (es puramente visual; la
             // viñeta de oscuridad del FundacionDirector lo tapa donde debe
             // taparlo, y le da textura y profundidad al greybox).
-            new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+            ObtenerOCrearBackdrop(); // (R75) la ESCENA puede traer el suyo (con su sprite horneado y su transform): find-or-create.
 
             var apprentice = SpawnApprentice();
             // Reposicionar al rincón de la fundación (SpawnApprentice nace en

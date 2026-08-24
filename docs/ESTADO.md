@@ -1,7 +1,7 @@
 # ESTADO DEL PROYECTO — documento vivo
 
 *(Se actualiza cada ronda. Historia completa: `archivo/HISTORIAL_RONDAS.md`. Visión: el GDD.)*
-*Última actualización: ronda 74 — feedback del primer playtest del prólogo (fondo de ruina, bordes mordidos, LLÉNALO).*
+*Última actualización: ronda 75 — LA ESCENIFICACIÓN del prólogo (arquitectura híbrida Scene/Prefab + código).*
 
 ## Dónde estamos
 
@@ -37,8 +37,8 @@
    las fichas y la voz, tubería v2 del depósito, omitir-intro).
 2. **RONDA ESTRUCTURAL** (ver plan abajo): renombre de namespace/escena/asmdef/repo + poda de
    código aparcado. Prerequisito de la escenificación.
-3. **ESCENIFICACIÓN**: mover a la escena las piezas que un dev de Unity pueda tocar desde el
-   editor (ver plan abajo).
+3. **ESCENIFICACIÓN, siguientes familias**: máquinas del taller a prefabs, decoración,
+   escena multi (la del prólogo quedó hecha en la ronda 75 — ver la matriz de autoridad abajo).
 4. Vidrio frontal (sándwich) al resto de máquinas + sprites decorativos niveles 0-2.
 5. Réplicas multi con visual completo; replicar juice/haz de otros jugadores.
 6. Guardado con slots (GDD fase G) · buzón físico F1 · contador F2 · omitir-intro.
@@ -77,22 +77,48 @@ Objetivo: que no quede "Alkahest" visible para un dev externo. En orden, cada pa
 6. **Poda**: borrar los métodos sin llamantes listados arriba + `docs/archivo` de lo que ya no
    sume; correr una partida completa de cada modo antes del push.
 
-## PLAN — Escenificación (para que un dev intervenga desde el editor)
+## LA ARQUITECTURA HÍBRIDA (ronda 75 — HECHA para el prólogo)
 
-Hoy TODO se instancia por código al arrancar (`AlkahestGameBootstrap` + generadores de escena).
-Para abrir la puerta al trabajo visual desde el editor, por fases y sin romper el determinismo:
+La fase 1 del plan de escenificación se ejecutó sobre el PRÓLOGO. Cómo se trabaja ahora:
 
-1. **Lo seguro primero (visual puro, sin estado de sim)**: WorkshopBackdrop, decoración de
-   niveles 0-2, luces/viñetas, cámara → convertirlos en objetos DE ESCENA o prefabs que el
-   bootstrap solo *encuentra* (`FindAnyObjectByType`) en vez de crear. Un dev los edita, mueve
-   y reemplaza sin tocar código.
-2. **Prefabs de estación**: extraer los `BuildVisual` a prefabs (sprites serializados) cuyos
-   parámetros de juego sigan en código. La geometría de mampostería SIGUE saliendo de
-   `SimLevelBuilder` (la sim es la verdad); el prefab es solo la piel.
-3. **Nunca a escena**: el grid, el stepper, el plano de coordenadas y todo lo determinista.
-4. Regla de convivencia: los generadores (`Ten Thousand Years/1-2`) pasan de CREAR a
-   VALIDAR/completar la escena, para que las ediciones manuales del editor sobrevivan a una
-   regeneración.
+**Flujo para Cesar y su hermano**: abrir `AlkahestLab.unity` → retocar → Play. Los retoques
+sobreviven a los generadores y a las builds (el menú 1 y el pre-vuelo VALIDAN, ya no arrasan;
+el destructivo quedó aparte como "1b. REGENERAR DESDE CERO"). El menú
+"6. Hornear arte del prólogo" reescribe los PNG desde el código y crea (solo si faltan) el
+prefab del depósito y el guion.
+
+**MATRIZ DE AUTORIDAD** (quién manda sobre qué — respetarla evita que código y escena peleen):
+
+| Elemento | Autoridad | Dónde se toca |
+|---|---|---|
+| Textos, cantidades, tiempos, triggers, radios de luz, caudales, layout de UI | ASSET | `Arte/Prologo/GuionDelPrologo.asset` (Inspector) |
+| Posición/escala del Maestro (visual Y triggers de proximidad) | ESCENA | marcador `Prologo_Escenografia/Maestro` |
+| Dónde emerge el depósito | ESCENA | marcador `Prologo_Escenografia/Deposito` (base-centro, se ajusta a celdas) |
+| Piel del depósito (capas, offsets, sprites) | PREFAB | `Arte/Prologo/DepositoVisual.prefab` (hijos `Fondo`/`Marco`) |
+| Telón de la ruina (sprite, posición, tinte) | ESCENA | `WorkshopBackdrop` + su hijo `Fondo_Horneado` (sprite: `RuinaFondo.png`) |
+| Beats y su orden, sim, plano tallado (cascada/poza/cráter/cuenco), química, net | CÓDIGO | como siempre |
+
+**Fallbacks (reversibilidad)**: si falta el asset/marcador/prefab, el código reconstruye el
+prólogo histórico completo — una escena vieja o el sandbox corren igual.
+
+**Lo que se quedó en código A PROPÓSITO (candidatos visuales evaluados y descartados)**:
+- La UI (voz, fichas, HUDs) sigue en IMGUI con sus números en el guion: migrarla a
+  uGUI/Canvas sería reescribir TODA la capa de UI del juego por consistencia — acoplamiento y
+  riesgo enormes para ganar un drag que el guion ya da por números.
+- La geometría de la cascada/poza/cuenco/cráter: es plano TALLADO en la sim
+  (SimLevelBuilder); moverla desde escena obligaría a re-carvar y re-sincronizar los rects de
+  conteo del director — la sim es la verdad, se mueve por código.
+- El fuego del Maestro: es Brasa/Fire REAL de la sim (la luz tiene causa física), no un visual.
+
+## PLAN — Escenificación: familias PENDIENTES (mismo criterio y receta)
+
+1. **Máquinas del taller** (Crisol, Prensa, BancoChispa, Alambique...): hornear sus sprites y
+   extraer la piel a prefabs (patrón DepositoVisual: hijos con órdenes de Capas.cs; los
+   parámetros de juego y el tallado siguen en código).
+2. **Decoración niveles 0-2, baldas/cadenas del taller**: marcadores + prefabs.
+3. **Escena MULTI**: su generador (menú 2) sigue siendo destructivo — pasarlo a validar cuando
+   el taller multi gane contenido de escena.
+4. **Nunca a escena** (sin cambios): grid, stepper, plano de coordenadas, todo lo determinista.
 
 ## Operativa con Claude (resumen)
 

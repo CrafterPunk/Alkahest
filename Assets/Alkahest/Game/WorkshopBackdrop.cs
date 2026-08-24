@@ -187,6 +187,23 @@ namespace Alkahest.Game
             _fondoTr.position = _fondoBase + off;
         }
 
+        /// <summary>
+        /// (RONDA 75) EL FONDO DE RUINA HORNEADO: si la escena lo aporta (el
+        /// menú "6. Hornear arte del prólogo" lo asigna aquí), el prólogo lo
+        /// monta TAL CUAL en vez de pintar los 2 millones de téxeles por
+        /// código — y Cesar lo ve y lo retoca en el editor (posición, escala,
+        /// tinte del hijo "Fondo_Horneado"). AUTORIDAD: la escena. Si falta,
+        /// el pintor procedural de siempre (fallback reversible).
+        /// </summary>
+        [SerializeField] private Sprite fondoRuinaHorneado;
+
+        /// <summary>Variante "tal cual" para fondos AUTORADOS EN ESCENA: guarda la base del parallax SIN reescalar ni recentrar — la transform del hijo es de la escena y la escena manda; el código solo anima el offset.</summary>
+        private void RegistrarFondoParallaxTalCual(GameObject go)
+        {
+            _fondoTr = go.transform;
+            _fondoBase = go.transform.position;
+        }
+
         /// <summary>Registra el sprite del muro para el parallax: lo escala con margen, lo recentra y guarda su base. Lo llaman los DOS pintores de fondo (cuarto íntimo y taller clásico) en su único punto de creación.</summary>
         private void RegistrarFondoParallax(GameObject go)
         {
@@ -254,6 +271,26 @@ namespace Alkahest.Game
             // son el taller vestido, y aquí todavía no hay taller).
             if (AlkahestGameBootstrap.ModoFundacion)
             {
+                // (R75) Prioridad: 1) un hijo "Fondo_Horneado" ya colocado en
+                // la escena (lo que Cesar ve en el editor ES lo que sale);
+                // 2) el sprite horneado asignado en el Inspector (se monta en
+                // su sitio estándar); 3) el pintor procedural.
+                var horneado = transform.Find("Fondo_Horneado");
+                if (horneado == null && fondoRuinaHorneado != null)
+                {
+                    var go = new GameObject("Fondo_Horneado");
+                    go.transform.SetParent(transform, false);
+                    var srH = go.AddComponent<SpriteRenderer>();
+                    srH.sprite = fondoRuinaHorneado;
+                    srH.sortingOrder = -10;
+                    srH.color = new Color(0.74f, 0.72f, 0.76f, 1f); // mismo hundimiento 2.5D.
+                    horneado = go.transform;
+                }
+                if (horneado != null)
+                {
+                    RegistrarFondoParallaxTalCual(horneado.gameObject);
+                    yield break;
+                }
                 yield return PintarFondoRuina();
                 yield break;
             }
@@ -279,6 +316,103 @@ namespace Alkahest.Game
         /// Sin fuentes de luz propias: la única luz del prólogo sigue siendo
         /// el fuego del Maestro (mandato pt64, intacto).
         /// </summary>
+
+        // (R75) Los ingredientes de la ruina, a nivel de clase: los comparte
+        // el pintor por filas con la herramienta de horneado del editor.
+        private static readonly Color RuinaAlta = new Color(0.052f, 0.050f, 0.062f); // arriba: frío, vacío.
+        private static readonly Color RuinaBaja = new Color(0.118f, 0.098f, 0.082f); // abajo: polvo tibio.
+        private static readonly int[] VigaX0 = { 352, 396, 428 };
+        private static readonly int[] VigaY0 = { 170, 182, 162 };
+        private static readonly float[] VigaPend = { -0.38f, 0.30f, -0.22f };
+        private static readonly int[] VigaLargo = { 24, 30, 20 };
+        /// <summary>Ancho/alto del lienzo de la ruina (los usa también la herramienta de horneado).</summary>
+        public static int RuinaTexW => TexW;
+        public static int RuinaTexH => TexH;
+        /// <summary>Escala de téxeles por celda del fondo (para el pixelsPerUnit del PNG horneado).</summary>
+        public static int RuinaEscala => Escala;
+
+        /// <summary>
+        /// (R75) UNA fila del fondo de ruina, pura y determinista — la llaman
+        /// la corrutina de runtime (por lotes, cediendo frames) y el
+        /// horneador del editor (todas de golpe, a PNG). Una sola verdad de
+        /// píxeles: el fondo horneado y el procedural son idénticos.
+        /// </summary>
+        public static void PintarFilaRuina(Color32[] px, int y)
+        {
+            const int piezaWc = 8, piezaHc = 4; // la sillería vieja, en celdas.
+            int piezaW = piezaWc * Escala, piezaH = piezaHc * Escala;
+
+            float ty = y / (float)(TexH - 1);
+            int celdaY = y / Escala;
+            Color baseFila = Color.Lerp(RuinaBaja, RuinaAlta, Mathf.Pow(ty, 0.8f));
+            int hilada = y / piezaH;
+            int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
+            int ly = y % piezaH;
+
+            for (int x = 0; x < TexW; x++)
+            {
+                int celdaX = x / Escala;
+                Color c = baseFila;
+
+                // 1) Grano fino del vacío.
+                uint g = HashRoca(x, y, 9313u);
+                c *= 1f + ((g & 31u) / 31f - 0.5f) * 0.05f;
+
+                // 2) PAÑOS SUPERVIVIENTES: rejilla de parches de 34x16
+                // celdas; ~2 de cada 5 conservan muro. La máscara es una
+                // elipse con el borde COMIDO por ruido — nada de recortes
+                // rectos: esto se cayó, no se recortó.
+                int pX = celdaX / 34, pY = celdaY / 16;
+                uint hp = HashRoca(pX, pY, 7717u);
+                if ((hp & 255u) < 104u)
+                {
+                    float dcx = (celdaX - (pX + 0.5f) * 34f) / 17f;
+                    float dcy = (celdaY - (pY + 0.5f) * 16f) / 8f;
+                    float d = dcx * dcx + dcy * dcy;
+                    float mordida = ((HashRoca(celdaX, celdaY, 3559u) & 63u) / 63f) * 0.55f;
+                    float fade = Mathf.Clamp01((0.95f - d - mordida) * 1.6f);
+                    if (fade > 0f)
+                    {
+                        Color m = baseFila * 1.62f;
+                        int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
+                        uint hpz = HashRoca((x + desfase) / piezaW, hilada, 5171u);
+                        m *= 1f + ((hpz & 63u) / 63f - 0.5f) * 0.10f;
+                        if (lx < Escala || ly == 0) m *= 0.85f;      // junta.
+                        else if (ly >= piezaH - 1) m *= 1.06f;       // canto con luz.
+                        c = Color.Lerp(c, m, fade);
+                    }
+                }
+
+                // 3) VIGAS CAÍDAS: silueta oscura de 2 celdas de grosor.
+                for (int k = 0; k < 3; k++)
+                {
+                    int rel = celdaX - VigaX0[k];
+                    if (rel < 0 || rel > VigaLargo[k]) continue;
+                    float yLinea = VigaY0[k] + rel * VigaPend[k];
+                    if (Mathf.Abs(celdaY - yLinea) <= 1f) c *= 0.66f;
+                }
+
+                // 4) ESCOMBRO AL PIE: altura por tramos de 5 celdas +
+                // jitter fino de 1 — montículos, no un peine.
+                int hRel = celdaY - SimLevelBuilder.FundacionY0;
+                if (hRel >= 0 && hRel < 7)
+                {
+                    int tramo = celdaX / 5;
+                    int altura = (int)(HashRoca(tramo, 0, 8117u) % 5u)
+                               + (int)(HashRoca(celdaX, 0, 6329u) % 2u);
+                    if (hRel < altura)
+                    {
+                        uint he = HashRoca(celdaX, celdaY, 4441u);
+                        c = baseFila * (1.32f + ((he & 31u) / 31f) * 0.22f);
+                        if (hRel == altura - 1) c *= 1.14f; // el lomo del montículo recibe luz.
+                    }
+                }
+
+                px[y * TexW + x] = new Color(
+                    Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
+            }
+        }
+
         private IEnumerator PintarFondoRuina()
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
@@ -289,92 +423,10 @@ namespace Alkahest.Game
             };
             var px = new Color32[TexW * TexH];
 
-            var ruinaAlta = new Color(0.052f, 0.050f, 0.062f); // arriba: frío, vacío.
-            var ruinaBaja = new Color(0.118f, 0.098f, 0.082f); // abajo: polvo tibio.
-
-            const int piezaWc = 8, piezaHc = 4; // la sillería vieja, en celdas.
-            int piezaW = piezaWc * Escala, piezaH = piezaHc * Escala;
-
-            // Las tres vigas caídas (x0, y0, pendiente, largo en celdas),
-            // colocadas dentro de la ventana visible de la caverna.
-            int[] vigaX0 = { 352, 396, 428 };
-            int[] vigaY0 = { 170, 182, 162 };
-            float[] vigaPend = { -0.38f, 0.30f, -0.22f };
-            int[] vigaLargo = { 24, 30, 20 };
-
             int rowsSinCeder = 0;
             for (int y = 0; y < TexH; y++)
             {
-                float ty = y / (float)(TexH - 1);
-                int celdaY = y / Escala;
-                Color baseFila = Color.Lerp(ruinaBaja, ruinaAlta, Mathf.Pow(ty, 0.8f));
-                int hilada = y / piezaH;
-                int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
-                int ly = y % piezaH;
-
-                for (int x = 0; x < TexW; x++)
-                {
-                    int celdaX = x / Escala;
-                    Color c = baseFila;
-
-                    // 1) Grano fino del vacío.
-                    uint g = HashRoca(x, y, 9313u);
-                    c *= 1f + ((g & 31u) / 31f - 0.5f) * 0.05f;
-
-                    // 2) PAÑOS SUPERVIVIENTES: rejilla de parches de 34x16
-                    // celdas; ~2 de cada 5 conservan muro. La máscara es una
-                    // elipse con el borde COMIDO por ruido — nada de recortes
-                    // rectos: esto se cayó, no se recortó.
-                    int pX = celdaX / 34, pY = celdaY / 16;
-                    uint hp = HashRoca(pX, pY, 7717u);
-                    if ((hp & 255u) < 104u)
-                    {
-                        float dcx = (celdaX - (pX + 0.5f) * 34f) / 17f;
-                        float dcy = (celdaY - (pY + 0.5f) * 16f) / 8f;
-                        float d = dcx * dcx + dcy * dcy;
-                        float mordida = ((HashRoca(celdaX, celdaY, 3559u) & 63u) / 63f) * 0.55f;
-                        float fade = Mathf.Clamp01((0.95f - d - mordida) * 1.6f);
-                        if (fade > 0f)
-                        {
-                            Color m = baseFila * 1.62f;
-                            int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
-                            uint hpz = HashRoca((x + desfase) / piezaW, hilada, 5171u);
-                            m *= 1f + ((hpz & 63u) / 63f - 0.5f) * 0.10f;
-                            if (lx < Escala || ly == 0) m *= 0.85f;      // junta.
-                            else if (ly >= piezaH - 1) m *= 1.06f;       // canto con luz.
-                            c = Color.Lerp(c, m, fade);
-                        }
-                    }
-
-                    // 3) VIGAS CAÍDAS: silueta oscura de 2 celdas de grosor.
-                    for (int k = 0; k < 3; k++)
-                    {
-                        int rel = celdaX - vigaX0[k];
-                        if (rel < 0 || rel > vigaLargo[k]) continue;
-                        float yLinea = vigaY0[k] + rel * vigaPend[k];
-                        if (Mathf.Abs(celdaY - yLinea) <= 1f) c *= 0.66f;
-                    }
-
-                    // 4) ESCOMBRO AL PIE: altura por tramos de 5 celdas +
-                    // jitter fino de 1 — montículos, no un peine.
-                    int hRel = celdaY - SimLevelBuilder.FundacionY0;
-                    if (hRel >= 0 && hRel < 7)
-                    {
-                        int tramo = celdaX / 5;
-                        int altura = (int)(HashRoca(tramo, 0, 8117u) % 5u)
-                                   + (int)(HashRoca(celdaX, 0, 6329u) % 2u);
-                        if (hRel < altura)
-                        {
-                            uint he = HashRoca(celdaX, celdaY, 4441u);
-                            c = baseFila * (1.32f + ((he & 31u) / 31f) * 0.22f);
-                            if (hRel == altura - 1) c *= 1.14f; // el lomo del montículo recibe luz.
-                        }
-                    }
-
-                    px[y * TexW + x] = new Color(
-                        Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
-                }
-
+                PintarFilaRuina(px, y);
                 rowsSinCeder++;
                 if (rowsSinCeder >= RowsPerBatch)
                 {

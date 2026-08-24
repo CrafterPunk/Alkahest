@@ -10,36 +10,175 @@ using Alkahest.Game;
 namespace Alkahest.EditorTools
 {
     /// <summary>
-    /// Herramientas de Editor para generar/regenerar la escena de pruebas
-    /// "AlkahestLab" desde cero por código (idempotente: cada ejecución
-    /// recrea la escena limpia y machaca la anterior en disco).
+    /// Herramientas de Editor para la escena de pruebas "AlkahestLab".
+    ///
+    /// (RONDA 75 — LA ESCENIFICACIÓN) EL GENERADOR YA NO ARRASA: el menú 1
+    /// pasa de CREAR-desde-cero a VALIDAR/COMPLETAR — abre la escena
+    /// existente, añade SOLO lo que falte (cámara, objeto Alkahest, la
+    /// escenografía del prólogo, el muro de fondo) y jamás toca lo que ya
+    /// está: las ediciones manuales de Cesar y su hermano SOBREVIVEN a la
+    /// regeneración y al pre-vuelo de las builds (la regla 14 evoluciona: la
+    /// build sigue pasando por aquí, pero aquí ya no se destruye nada).
+    /// La reconstrucción total queda como menú aparte y explícito ("1b",
+    /// para la recuperación tras Safe Mode de la regla 20).
     /// </summary>
     public static class AlkahestSceneBuilder
     {
         private const string ScenesFolder = "Assets/Alkahest/Scenes";
         private const string LabScenePath = ScenesFolder + "/AlkahestLab.unity";
 
-        [MenuItem("Ten Thousand Years/1. Generar escena Lab (un jugador)", priority = 1)]
+        [MenuItem("Ten Thousand Years/1. Validar-completar escena Lab (un jugador)", priority = 1)]
         public static void GenerateLabScene()
         {
             EnsureScenesFolder();
 
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            UnityEngine.SceneManagement.Scene scene;
+            bool existia = System.IO.File.Exists(LabScenePath);
+            if (existia)
+            {
+                // VALIDAR: se abre la escena real — nada de NewScene, que era
+                // lo que machacaba las ediciones manuales en cada build.
+                scene = EditorSceneManager.OpenScene(LabScenePath, OpenSceneMode.Single);
+            }
+            else
+            {
+                scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
 
-            BuildMainCamera();
-            BuildAlkahestObject();
+            int agregados = 0;
+            agregados += ValidarCamara();
+            agregados += ValidarAlkahest();
+            agregados += ValidarBackdrop();
+            agregados += ValidarEscenografiaPrologo();
 
             bool saved = EditorSceneManager.SaveScene(scene, LabScenePath);
             if (!saved)
             {
-                Debug.LogError("[Alkahest] No se pudo guardar la escena en " + LabScenePath);
+                Debug.LogError("[TenThousandYears] No se pudo guardar la escena en " + LabScenePath);
                 return;
             }
 
             UpdateBuildSettings(LabScenePath);
             AssetDatabase.Refresh();
 
-            Debug.Log("[Alkahest] Escena Lab generada/actualizada en " + LabScenePath);
+            Debug.Log("[TenThousandYears] Escena Lab " + (existia ? "VALIDADA (piezas añadidas: " + agregados + "; lo existente, intacto)" : "creada desde cero") + " en " + LabScenePath);
+        }
+
+        [MenuItem("Ten Thousand Years/1b. REGENERAR escena Lab DESDE CERO (destructivo)", priority = 1)]
+        public static void RegenerateLabSceneDesdeCero()
+        {
+            // El botón rojo: recuperación tras Safe Mode (regla 20) o escena
+            // corrupta. DESTRUYE toda edición manual — por eso pide confirmar.
+            if (!EditorUtility.DisplayDialog("Regenerar DESDE CERO",
+                "Esto DESTRUYE la escena AlkahestLab actual, incluidas TODAS las ediciones manuales (marcadores movidos, arte colocado, etc.), y la reconstruye limpia.\n\n¿Seguro?",
+                "Sí, regenerar", "Cancelar"))
+                return;
+
+            EnsureScenesFolder();
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            ValidarCamara();
+            ValidarAlkahest();
+            ValidarBackdrop();
+            ValidarEscenografiaPrologo();
+            EditorSceneManager.SaveScene(scene, LabScenePath);
+            UpdateBuildSettings(LabScenePath);
+            AssetDatabase.Refresh();
+            Debug.Log("[TenThousandYears] Escena Lab REGENERADA desde cero en " + LabScenePath);
+        }
+
+        // -----------------------------------------------------------------
+        // Los validadores: cada uno añade su pieza SOLO si falta y devuelve
+        // cuántas cosas creó (0 = la escena ya la tenía). Completan campos
+        // NULOS con los assets horneados si existen; jamás pisan un campo ya
+        // asignado.
+        // -----------------------------------------------------------------
+        private static int ValidarCamara()
+        {
+            if (Object.FindAnyObjectByType<Camera>() != null) return 0;
+            BuildMainCamera();
+            return 1;
+        }
+
+        private static int ValidarAlkahest()
+        {
+            int n = 0;
+            var go = GameObject.Find("Alkahest");
+            if (go == null) { BuildAlkahestObject(); return 1; }
+            // Completar componentes que falten (sin tocar los presentes).
+            if (go.GetComponent<SimRenderer>() == null) { go.AddComponent<SimRenderer>(); n++; }
+            if (go.GetComponent<AlkahestSim>() == null) { go.AddComponent<AlkahestSim>(); n++; }
+            if (go.GetComponent<DevPalette>() == null) { go.AddComponent<DevPalette>(); n++; }
+            if (go.GetComponent<AlkahestGameBootstrap>() == null) { go.AddComponent<AlkahestGameBootstrap>(); n++; }
+            return n;
+        }
+
+        private static int ValidarBackdrop()
+        {
+            int n = 0;
+            var backdrop = Object.FindAnyObjectByType<WorkshopBackdrop>();
+            if (backdrop == null)
+            {
+                backdrop = new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+                n++;
+            }
+            // Completar el sprite horneado si existe el asset y el campo está
+            // vacío (SerializedObject: el campo es privado a propósito).
+            var so = new SerializedObject(backdrop);
+            var prop = so.FindProperty("fondoRuinaHorneado");
+            if (prop != null && prop.objectReferenceValue == null)
+            {
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Alkahest/Arte/Prologo/RuinaFondo.png");
+                if (sprite != null) { prop.objectReferenceValue = sprite; so.ApplyModifiedPropertiesWithoutUndo(); n++; }
+            }
+            return n;
+        }
+
+        private static int ValidarEscenografiaPrologo()
+        {
+            int n = 0;
+            var esc = Object.FindAnyObjectByType<PrologoEscenografia>();
+            if (esc == null)
+            {
+                var raiz = new GameObject("Prologo_Escenografia");
+                esc = raiz.AddComponent<PrologoEscenografia>();
+                n++;
+            }
+
+            float c = SimRenderer.CellWorldSize;
+            if (esc.maestro == null)
+            {
+                var m = new GameObject("Maestro").transform;
+                m.SetParent(esc.transform, false);
+                // El rincón histórico: la base de la silueta sobre la mesa.
+                m.position = new Vector3(
+                    (SimLevelBuilder.FundacionMesaX0 + SimLevelBuilder.FundacionMesaX1) * 0.5f * c,
+                    (SimLevelBuilder.FundacionMesaTopY + 1) * c, 0f);
+                esc.maestro = m;
+                n++;
+            }
+            if (esc.deposito == null)
+            {
+                var d = new GameObject("Deposito").transform;
+                d.SetParent(esc.transform, false);
+                // Base-centro del tanque en su sitio histórico.
+                d.position = new Vector3(
+                    (SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * c,
+                    SimLevelBuilder.FundacionDepositoY0 * c, 0f);
+                esc.deposito = d;
+                n++;
+            }
+            if (esc.guion == null)
+            {
+                var guion = AssetDatabase.LoadAssetAtPath<GuionDelPrologo>("Assets/Alkahest/Arte/Prologo/GuionDelPrologo.asset");
+                if (guion != null) { esc.guion = guion; n++; }
+            }
+            if (esc.depositoVisualPrefab == null)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Alkahest/Arte/Prologo/DepositoVisual.prefab");
+                if (prefab != null) { esc.depositoVisualPrefab = prefab; n++; }
+            }
+            if (n > 0) EditorUtility.SetDirty(esc);
+            return n;
         }
 
         private static void EnsureScenesFolder()

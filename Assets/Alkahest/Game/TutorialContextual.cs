@@ -68,13 +68,15 @@ namespace Alkahest.Game
         /// <summary>Todas confirmadas Y el fade-out terminó: quien dirige puede avanzar.</summary>
         public bool Terminado => _pasos == null && _completado;
 
-        public void Init(Transform aprendiz)
+        public void Init(Transform aprendiz, float offsetPx = 64f)
         {
             _aprendiz = aprendiz;
+            _offsetPx = offsetPx; // (R75) del guion (asset): dónde flotan las fichas respecto al jugador.
             _voz = gameObject.AddComponent<AudioSource>();
             _voz.playOnAwake = false;
             _voz.spatialBlend = 0f;
         }
+        private float _offsetPx = 64f;
 
         /// <summary>Enseña una fila nueva de fichas. Resetea cualquier grupo anterior.</summary>
         public void Mostrar(string leyenda, params Paso[] pasos)
@@ -179,7 +181,7 @@ namespace Alkahest.Game
             // con abrazadera a los bordes para que nunca salga de pantalla.
             Vector3 sp = cam.WorldToScreenPoint(_aprendiz.position);
             float cx = sp.x;
-            float cy = Screen.height - sp.y + UiStyles.S(64f);
+            float cy = Screen.height - sp.y + UiStyles.S(_offsetPx);
 
             float fichaH = UiStyles.S(24f);
             float pad = UiStyles.S(9f);
