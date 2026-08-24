@@ -2890,8 +2890,13 @@ namespace Alkahest.Sim
         // =====================================================================
         public const int FundacionX0 = 340, FundacionX1 = 460; // interior de la caverna (121 celdas de ancho).
         public const int FundacionY0 = 140, FundacionY1 = 200; // suelo interior en Y0, bóveda plana en Y1 (61 de alto).
-        public const int FundacionMesaX0 = 434, FundacionMesaX1 = 446, FundacionMesaTopY = 143; // la mesa del Maestro (bloque macizo).
-        public const int FundacionBrasasX0 = 424, FundacionBrasasX1 = 428, FundacionBrasasY = 141; // el hogar: 5 celdas que el director mantiene al rojo.
+        // (RONDA 74, pedido de Cesar) EL RINCÓN DEL MAESTRO SE CORRE A LA
+        // DERECHA: el fuego quedaba a 2 celdas del sitio del depósito y le
+        // hervía el agua a la primera. Brasas 424-428 -> 428-432 y mesa
+        // 434-446 -> 436-448: seis celdas de aire + un murete de piedra entre
+        // el tanque (muro derecho x421) y el hogar (murete izquierdo x427).
+        public const int FundacionMesaX0 = 436, FundacionMesaX1 = 448, FundacionMesaTopY = 143; // la mesa del Maestro (bloque macizo).
+        public const int FundacionBrasasX0 = 428, FundacionBrasasX1 = 432, FundacionBrasasY = 141; // el hogar: 5 celdas que el director mantiene al rojo.
         // (RONDA 64, feedback pt64 de Cesar) LA GOTERA CAE EN LA POZA, no sobre
         // las brasas: la versión anterior (GoteraX=426, encima del hogar) hacía
         // hervir cada gota -- vapor, charcos de agua hirviendo, "eso no es una
@@ -2899,16 +2904,52 @@ namespace Alkahest.Sim
         // seca: la primera imagen es el fuego crepitando y un hilo de agua
         // inundando el cuenco, plip... plip. El objetivo del beat 2 pasa a ser
         // "recoge lo que se está inundando".
-        public const int FundacionGoteraX = 379, FundacionGoteraDripY = 197;
-        public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // LA POZA: cuenco tallado bajo el nivel del suelo. Nace SECA (ronda 64) -- la llena la gotera delante del jugador.
-        // (RONDA 64) PUNTOS DE ENTREGA del Maestro: donde CAE el material que
-        // él da en cada beat (arcilla al abrir el barro, arena al encender el
-        // fogón). Sustituyen al montón de arcilla y a la orilla de arena
-        // pre-colocados -- Cesar, pt64: "expresamente pedí nada de material
-        // tirado; si me lo da el Maestro, que caiga en ese momento".
-        public const int FundacionDropArcillaX = 366; // ribera izquierda de la poza.
-        public const int FundacionDropArenaX = 400;   // pegado a la mejilla izquierda del fogón (x403).
-        public const int FundacionDropY = 158;        // altura del vertido: cae ~18 celdas a la vista.
+        // (RONDA 73, EL PRÓLOGO REHECHO — "presentar el verbo") LA CASCADA:
+        // la gotera de estalactita se sustituye por un MANANTIAL que brota de
+        // una grieta del muro izquierdo y BAJA FLUYENDO por dos repisas de
+        // roca hasta la poza — el agua se ve reptar, abrirse camino, caer dos
+        // veces. Es la presentación del material protagonista: tiene que dar
+        // ganas de tocarla. El caudal lo mantiene el director (runtime); el
+        // plano solo talla el camino. Las constantes de la GOTERA vieja
+        // (FundacionGoteraX/DripY) y de los PUNTOS DE ENTREGA del Maestro
+        // (DropArcilla/DropArena/DropY) se retiraron con ella: en el prólogo
+        // rehecho el Maestro NO entrega materiales (los encuentra el mundo:
+        // cascada, derrumbe) — regla 15, idea retirada documentada.
+        public const int FundacionManantialX = 340, FundacionManantialY = 175; // donde brota el agua (la grieta perfora la cara del muro en x339).
+        // (revisión Opus 73 #10: la RANURA a mitad de la repisa alta se
+        // retiró — un hueco de 1 celda evacúa ~1 celda/tick, mucho más que
+        // cualquier caudal razonable, así que se tragaba el arroyo entero y
+        // la mitad derecha de la repisa quedaba seca en contra de su propio
+        // comentario, regla 49. El "hueco" que pedía Cesar ES el vano abierto
+        // entre el fin de la repisa alta y la baja: tres caídas francas —
+        // manantial→A, A→B, B→poza — cada una a la vista.)
+        public const int FundacionRepisaAX0 = 340, FundacionRepisaAX1 = 352;  // repisa alta (y172-173), pegada al muro.
+        public const int FundacionRepisaAY = 172;
+        public const int FundacionRepisaBX0 = 346, FundacionRepisaBX1 = 373;  // repisa baja (y162-163): recoge la caída y vuelca en la poza.
+        public const int FundacionRepisaBY = 162;
+        public const int FundacionCharcoX0 = 372, FundacionCharcoX1 = 385; // LA POZA: cuenco tallado bajo el nivel del suelo. La llena la cascada; su fondo REZUMA (director) para que la corriente jamás se detenga.
+        // (RONDA 73) EL DERRUMBE: dónde se abre la grieta del techo por la que
+        // entra el LODO (beat 5) y dónde su impacto excava el cráter que lo
+        // recoge. No hay nada tallado de antemano — el derrumbe lo excava el
+        // director en runtime delante del jugador ("no debe estar en el suelo
+        // antes y no debe entregarlo el Maestro").
+        public const int FundacionDerrumbeX = 396;                            // eje de la grieta del techo.
+        public const int FundacionCraterX0 = 392, FundacionCraterX1 = 400;    // cráter que abre el impacto (y138-139, runtime).
+        // (RONDA 73) EL CUENCO DEL MAESTRO: receptor de entregas placeholder
+        // (Cesar: "no cierres todavía el diseño final del receptor de
+        // líquidos"). Un cuenco de piedra tallado junto a la mesa: el jugador
+        // VIERTE ahí lo pedido — la entrega usa el verbo del juego, no un
+        // menú. El conteo y el "el Maestro lo toma" (drenado) son runtime.
+        public const int FundacionCuencoX0 = 451, FundacionCuencoX1 = 457; // (R74) corrido con la mesa.
+        // (RONDA 74) Los pozos preconstruidos (poza y cuenco) se tallan MÁS
+        // HONDOS — "para que se vea mejor cómo se acomodan las cosas": la
+        // materia entregada apila a la vista dentro del tallado.
+        public const int FundacionPozoHondo = 5;
+        // (RONDA 73) EL DEPÓSITO DE AGUA (la recompensa): sitio donde emerge
+        // el tanque de vidrio y cobre al completar agua+lodo. Sustituye
+        // conceptualmente al grifo antiguo como fuente básica de agua.
+        public const int FundacionDepositoX0 = 414, FundacionDepositoX1 = 421; // muros en X0/X1, interior 415-420.
+        public const int FundacionDepositoY0 = 140, FundacionDepositoY1 = 152; // muros y140..152; boca abierta en y153.
         // (RONDA 64, afinado con capturas) El spawn entra al resplandor del
         // fuego: antes (x352, y luego x388) el aprendiz nacía FUERA del óvalo
         // de luz o en su anillo oscuro -- invisible para sí mismo. Ahora
@@ -2916,10 +2957,10 @@ namespace Alkahest.Sim
         // Maestro a su derecha, la gotera goteando en la poza a su
         // izquierda, él como silueta.
         public const int FundacionAprendizX = 400, FundacionAprendizY = 150;
-        // (RONDA 61, beats 4-6 del GDD §5) La segunda mitad de la fundación:
-        // (la ORILLA de arena pre-colocada x388-399 se retiró en la ronda 64:
-        // la arena la entrega el Maestro al encenderse el fogón, cayendo en
-        // FundacionDropArenaX -- ver arriba.)
+        // (RONDA 61, beats 4-6 del GDD §5) La segunda mitad de la fundación —
+        // HOY FUERA DEL ARCO (ronda 73: el prólogo se centró en el verbo);
+        // el fogón y la veta siguen tallados como escenografía y volverán
+        // cuando el arco crezca:
         public const int FundacionFogonX0 = 404, FundacionFogonX1 = 410;   // EL HOGAR VACÍO: el sitio del fuego PROPIO del jugador (dos mejillas de piedra, lecho libre).
         public const int FundacionFogonY = 140;                            // lecho del hogar = LA FILA DONDE EL POLVO REPOSA (la primera fila de aire sobre el suelo de piedra en y139) -- verificado en vivo ronda 61: con el lecho en 141 el calor y el conteo vivían una fila POR ENCIMA de la turba asentada.
         public const int FundacionVetaX = 340;                             // cara interior del muro izquierdo: el ASOMO de la veta de turba (3 celdas visibles; el bolsón se talla con C).
@@ -2932,7 +2973,7 @@ namespace Alkahest.Sim
         // pedidos al tablón (Game/Trueque.cs). No se talla nada: el hueco ya
         // existe por geometría; estas constantes solo lo NOMBRAN (regla 39:
         // quien dependa del sitio lo lee de aquí).
-        public const int FundacionSalidaX0 = 430, FundacionSalidaX1 = 433;
+        public const int FundacionSalidaX0 = 434, FundacionSalidaX1 = 435; // (R74) el nicho se mudó con el hogar y la mesa (queda entre el murete derecho x433 y la mesa x436).
 
         public static void BuildFundacion(CellGrid grid)
         {
@@ -2954,26 +2995,51 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, FundacionBrasasX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
             RegistrarObra(FundacionBrasasX0 - 1, FundacionY0, FundacionBrasasX1 + 1, FundacionY0 + 3);
 
-            // (RONDA 64: el montón de arcilla y la orilla de arena
-            // pre-colocados SE RETIRARON -- "nada de material tirado". El
-            // Maestro los entrega en su beat, cayendo a la vista, desde
-            // Game/FundacionDirector.TickVertidoDelMaestro. La geometría que
+            // (RONDA 64: "nada de material tirado" — nada suelto se
+            // pre-coloca. RONDA 73: y quien lo trae ya no es el Maestro sino
+            // EL MUNDO: la cascada trae el agua y el derrumbe trae el lodo,
+            // ambos runtime en Game/FundacionDirector.cs. La geometría que
             // los recibe sí es del plano:)
 
-            // LA POZA: cuenco tallado 3 celdas bajo el nivel del suelo, con la
-            // piedra sin tallar como paredes. Nace SECA (ronda 64): la llena
-            // la GOTERA delante del jugador, y recogerla es el beat 2.
-            DrawSolidRect(grid, FundacionCharcoX0, FundacionY0 - 3, FundacionCharcoX1 - FundacionCharcoX0 + 1, 3, MaterialId.Empty);
+            // LA POZA: cuenco tallado FundacionPozoHondo celdas bajo el nivel
+            // del suelo, con la piedra sin tallar como paredes. Nace SECA: la
+            // llena la CASCADA delante del jugador (director, ronda 73).
+            // (R74) Más honda: la materia se acomoda a la vista.
+            DrawSolidRect(grid, FundacionCharcoX0, FundacionY0 - FundacionPozoHondo,
+                FundacionCharcoX1 - FundacionCharcoX0 + 1, FundacionPozoHondo, MaterialId.Empty);
 
-            // (RONDA 64, directiva Opus #3) LA ESTALACTITA: de dónde gotea.
-            // Una púa de piedra colgando de la bóveda sobre la poza -- la gota
-            // ya no aparece "de la nada": nace de una punta visible si alzas
-            // el vuelo, y su hilo de 3 celdas se ve cruzar la caverna.
-            grid.SetCell(FundacionGoteraX - 1, FundacionY1, MaterialId.Stone);
-            grid.SetCell(FundacionGoteraX, FundacionY1, MaterialId.Stone);
-            grid.SetCell(FundacionGoteraX + 1, FundacionY1, MaterialId.Stone);
-            grid.SetCell(FundacionGoteraX, FundacionY1 - 1, MaterialId.Stone);
-            grid.SetCell(FundacionGoteraX, FundacionY1 - 2, MaterialId.Stone);
+            // (RONDA 73) EL CAMINO DE LA CASCADA — la estalactita de la ronda
+            // 64 se retiró con la gotera (regla 15): el agua ya no aparece de
+            // una púa del techo sino que BROTA del muro y BAJA FLUYENDO.
+            // 1) La grieta del manantial: perfora la cara del muro izquierdo.
+            grid.SetCell(FundacionManantialX - 1, FundacionManantialY, MaterialId.Empty);
+            grid.SetCell(FundacionManantialX - 1, FundacionManantialY + 1, MaterialId.Empty);
+            // 2) Repisa ALTA (2 de grosor), pegada al muro: el arroyo corre
+            // por ella y vuelca por su extremo — la primera caída franca.
+            DrawSolidRect(grid, FundacionRepisaAX0, FundacionRepisaAY,
+                FundacionRepisaAX1 - FundacionRepisaAX0 + 1, 2, MaterialId.Stone);
+            // 3) Repisa BAJA (2 de grosor) con un labio alto en su extremo
+            // izquierdo (columna x345, 4 de alto): el agua que recibe solo
+            // puede correr hacia la DERECHA, hasta volcar en la poza por
+            // x374 — la caída final de ~26 celdas es la cascada grande.
+            DrawSolidRect(grid, FundacionRepisaBX0, FundacionRepisaBY,
+                FundacionRepisaBX1 - FundacionRepisaBX0 + 1, 2, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionRepisaBX0 - 1, FundacionRepisaBY, 1, 4, MaterialId.Stone);
+            // (revisión Opus 73 #14) Las repisas y el labio son OBRA: el
+            // cincel del prólogo no puede matar la cascada en silencio (regla
+            // 38 — y el imp tampoco choca con ellas por dentro del chorro).
+            RegistrarObra(FundacionRepisaAX0, FundacionRepisaAY, FundacionRepisaAX1, FundacionRepisaAY + 1);
+            RegistrarObra(FundacionRepisaBX0 - 1, FundacionRepisaBY, FundacionRepisaBX1, FundacionRepisaBY + 3);
+
+            // (RONDA 73) EL CUENCO DEL MAESTRO: el receptor de entregas
+            // placeholder, tallado junto a la mesa (misma factura que la
+            // poza: 3 celdas bajo el suelo, la piedra como paredes) — y sus
+            // paredes registradas como obra (revisión Opus 73 #14): el
+            // receptor de las entregas no se deja desfondar con C.
+            DrawSolidRect(grid, FundacionCuencoX0, FundacionY0 - FundacionPozoHondo,
+                FundacionCuencoX1 - FundacionCuencoX0 + 1, FundacionPozoHondo, MaterialId.Empty);
+            RegistrarObra(FundacionCuencoX0 - 1, FundacionY0 - FundacionPozoHondo - 1,
+                FundacionCuencoX1 + 1, FundacionY0 - 1);
 
             // (RONDA 61; MEJILLAS DOBLES desde la ronda 64, directiva Opus
             // #10: "dos palitos grises de 1 celda no leen como fogón") EL
@@ -3005,6 +3071,57 @@ namespace Alkahest.Sim
             for (int x = FundacionVetaX - 6; x <= FundacionVetaX - 2; x++)
                 for (int y = FundacionVetaY0; y <= FundacionVetaY1; y++)
                     grid.SetCell(x, y, turbaFundacion);
+
+            // =============================================================
+            // (RONDA 74, pedido de Cesar) LA DESTRUCCIÓN MORDIÓ LOS BORDES:
+            // "los bordes de las paredes de bedrock tienen que ser más
+            // irregulares por destrucción". Bocados deterministas (XorShift
+            // posicional, regla 21: cast explícito a uint) por TRAMOS de 3
+            // celdas (bocados con cuerpo, no un peine de ranuras de 1):
+            //  · bóveda: mordidas de 0-2 hacia arriba;
+            //  · muros: mordidas de 0-2 hacia dentro de la roca — saltando
+            //    la banda del sello de la veta (y152-160, lección pt48: una
+            //    mordida ahí derramaría el bolsón entero al piso);
+            //  · suelo del ala izquierda (x342-369, bajo las repisas):
+            //    huecos de 1 y escombros de 1 en pie — terreno roto, sin
+            //    tocar las zonas funcionales (poza, cráter, fogón, depósito,
+            //    hogar, mesa, cuenco: todo de x371 en adelante queda llano).
+            // =============================================================
+            for (int x = FundacionX0 + 2; x <= FundacionX1 - 2; x++)
+            {
+                var rB = XorShift.FromCell(0u, x / 3, 0, 74011u);
+                var rJ = XorShift.FromCell(0u, x, 1, 74013u);
+                int prof = System.Math.Max(0, (int)(rB.NextByte() % 3u) + (int)(rJ.NextByte() % 2u) - 1);
+                for (int d = 1; d <= prof; d++)
+                    grid.SetCell(x, FundacionY1 + d, MaterialId.Empty);
+            }
+            for (int y = FundacionY0 + 1; y <= FundacionY1 - 1; y++)
+            {
+                // El muro IZQUIERDO no se muerde en y152-178: ahí viven el
+                // sello de la veta (pt48: una mordida derrama el bolsón) y
+                // TODA la banda de la cascada — VISTO EN VIVO en la primera
+                // verificación de esta ronda: una mordida en (339,172-173),
+                // pegada a la esquina de la repisa alta, le daba al arroyo
+                // una escalera DIAGONAL (el paso esquinado clásico de los
+                // líquidos de falling-sand) por la que el caudal entero se
+                // colaba al suelo del ala izquierda y lo encharcaba sin
+                // drenaje. La destrucción muerde; la fontanería, no.
+                bool bandaProtegidaIzq = y > 151 && y < 179;
+                var rIzq = XorShift.FromCell(0u, 0, y / 3, 74017u);
+                var rDer = XorShift.FromCell(0u, 1, y / 3, 74019u);
+                int profIzq = bandaProtegidaIzq ? 0
+                    : System.Math.Max(0, (int)(rIzq.NextByte() % 3u) - 1 + (int)(XorShift.FromCell(0u, 2, y, 74021u).NextByte() % 2u));
+                int profDer = System.Math.Max(0, (int)(rDer.NextByte() % 3u) - 1 + (int)(XorShift.FromCell(0u, 3, y, 74023u).NextByte() % 2u));
+                for (int d = 1; d <= profIzq; d++) grid.SetCell(FundacionX0 - d, y, MaterialId.Empty);
+                for (int d = 1; d <= profDer; d++) grid.SetCell(FundacionX1 + d, y, MaterialId.Empty);
+            }
+            for (int x = 342; x <= 369; x++)
+            {
+                var rS = XorShift.FromCell(0u, x, 2, 74027u);
+                byte b = rS.NextByte();
+                if ((b & 7) == 0) grid.SetCell(x, FundacionY0 - 1, MaterialId.Empty);      // hueco de 1 en el suelo.
+                else if ((b & 7) == 3) grid.SetCell(x, FundacionY0, MaterialId.Stone);     // escombro de 1 en pie.
+            }
 
             PaintClimate(grid); // mismo ambiente uniforme de siempre (regla 31).
         }

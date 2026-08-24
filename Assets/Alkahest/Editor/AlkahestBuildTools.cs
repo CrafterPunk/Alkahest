@@ -7,7 +7,7 @@ namespace Alkahest.EditorTools
 {
     /// <summary>
     /// [TenThousandYears] Build de la demo (análogo a FriendsLoopBuildTools).
-    /// La escena AlkahestLab debe existir (menú "Alkahest/1. Generar escena Lab").
+    /// La escena AlkahestLab debe existir (menú "Ten Thousand Years/1. Generar escena Lab").
     /// </summary>
     public static class AlkahestBuildTools
     {

@@ -192,6 +192,11 @@ namespace Alkahest.Game
             // bloqueado, la paleta dev manda, se está escribiendo un nombre, o
             // el diario tapa la pantalla.
             if (DayCycle.InputLocked) { OcultarVisuales(); return; }
+            // (RONDA 73, revisión Opus #14) En el inicio oscuro del prólogo no
+            // llevas herramienta alguna: el cincel tampoco existe hasta que el
+            // Maestro te da el frasco (misma bandera y misma razón que la
+            // guarda de Flask.Update).
+            if (FundacionDirector.FrascoBloqueado) { OcultarVisuales(); return; }
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisuales(); return; }
             if (UiStyles.EscribiendoTexto) { OcultarVisuales(); return; }
             if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisuales(); return; } // (integración pt50, regla 12) también la ficha modal del álbum.

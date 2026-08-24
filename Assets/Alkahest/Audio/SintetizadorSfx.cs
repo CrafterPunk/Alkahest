@@ -55,6 +55,9 @@ namespace Alkahest.Audio
         private static AudioClip _bautizar;
         private static AudioClip _encargoCompletado;
         private static AudioClip _finDeJornada;
+        private static AudioClip _vozDelMaestro;    // (ronda 73) la presencia del Maestro al "hablar" en el prólogo.
+        private static AudioClip _derrumbe;         // (ronda 73) el techo que se abre en el beat del lodo.
+        private static AudioClip _tutorialConfirma; // (ronda 73) "sí, eso era": confirmación suave del tutorial contextual.
 
         public static AudioClip LechoAmbiental => _lechoAmbiental ??= ConstruirLechoAmbiental();
         public static AudioClip FuegoBucle => _fuegoBucle ??= ConstruirFuegoBucle();
@@ -69,6 +72,9 @@ namespace Alkahest.Audio
         public static AudioClip Bautizar => _bautizar ??= ConstruirBautizar();
         public static AudioClip EncargoCompletado => _encargoCompletado ??= ConstruirEncargoCompletado();
         public static AudioClip FinDeJornada => _finDeJornada ??= ConstruirFinDeJornada();
+        public static AudioClip VozDelMaestro => _vozDelMaestro ??= ConstruirVozDelMaestro();
+        public static AudioClip Derrumbe => _derrumbe ??= ConstruirDerrumbe();
+        public static AudioClip TutorialConfirma => _tutorialConfirma ??= ConstruirTutorialConfirma();
 
         // ===================================================================
         // PRIMITIVAS REUTILIZABLES
@@ -821,6 +827,95 @@ namespace Alkahest.Audio
             Normalizar(buf, 0.65f);
             Clamp(buf);
             return CrearClip("TenThousandYears_FinDeJornada", buf, SR_ONESHOT);
+        }
+
+        /// <summary>
+        /// (RONDA 73, el prólogo rehecho) 13) LA VOZ DEL MAESTRO: no es una
+        /// voz — es una PRESENCIA. Dos senos subgraves (una octava: 52+104 Hz)
+        /// con ataque lento y un deslizamiento descendente mínimo (el "peso"
+        /// de algo enorme asentándose), más un aliento de ruido muy filtrado
+        /// que le quita la pureza de laboratorio al seno. Cada palabra del
+        /// Maestro en pantalla dispara este clip; el pitch varía un pelo por
+        /// palabra (lo decide quien lo reproduce), nunca el timbre.
+        /// </summary>
+        private static AudioClip ConstruirVozDelMaestro()
+        {
+            const float dur = 1.1f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+
+            var grave = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(grave, SR_ONESHOT, 56f, 49f, 1f);
+            AplicarEnvolvente(grave, SR_ONESHOT, 0.16f, dur - 0.16f);
+            SumarConDesfase(buf, grave, 1f, 0);
+
+            var octava = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(octava, SR_ONESHOT, 112f, 98f, 1f);
+            AplicarEnvolvente(octava, SR_ONESHOT, 0.2f, dur - 0.2f);
+            SumarConDesfase(buf, octava, 0.4f, 0);
+
+            var aliento = NuevoBuffer(dur, SR_ONESHOT);
+            Ruido(aliento);
+            PasoBajo(aliento, SR_ONESHOT, 240f);
+            AplicarEnvolvente(aliento, SR_ONESHOT, 0.3f, dur - 0.3f);
+            SumarConDesfase(buf, aliento, 0.18f, 0);
+
+            Normalizar(buf, 0.6f);
+            Clamp(buf);
+            return CrearClip("TenThousandYears_VozDelMaestro", buf, SR_ONESHOT);
+        }
+
+        /// <summary>
+        /// (RONDA 73) 14) EL DERRUMBE: rugido de roca. Ruido pardo (paso-bajo
+        /// agresivo con corte que BARRE hacia abajo: el estruendo se "cierra"
+        /// según se asienta) + tres golpes secos de subgrave a destiempo (los
+        /// bloques grandes tocando fondo). Acompaña la sacudida de cámara del
+        /// beat del lodo.
+        /// </summary>
+        private static AudioClip ConstruirDerrumbe()
+        {
+            const float dur = 1.8f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+
+            var rugido = NuevoBuffer(dur, SR_ONESHOT);
+            Ruido(rugido);
+            PasoBajoBarrido(rugido, SR_ONESHOT, 900f, 140f);
+            AplicarEnvolvente(rugido, SR_ONESHOT, 0.03f, dur - 0.03f);
+            SumarConDesfase(buf, rugido, 0.9f, 0);
+
+            float[] golpesSeg = { 0.12f, 0.55f, 1.05f };
+            float[] golpesPeso = { 1f, 0.75f, 0.5f };
+            for (int i = 0; i < golpesSeg.Length; i++)
+            {
+                const float gDur = 0.35f;
+                var golpe = NuevoBuffer(gDur, SR_ONESHOT);
+                SenoDeslizante(golpe, SR_ONESHOT, 85f, 38f, 1f);
+                AplicarEnvolvente(golpe, SR_ONESHOT, 0.004f, gDur - 0.004f);
+                SumarConDesfase(buf, golpe, golpesPeso[i], Mathf.RoundToInt(golpesSeg[i] * SR_ONESHOT));
+            }
+
+            Normalizar(buf, 0.7f);
+            Clamp(buf);
+            return CrearClip("TenThousandYears_Derrumbe", buf, SR_ONESHOT);
+        }
+
+        /// <summary>
+        /// (RONDA 73) 15) LA CONFIRMACIÓN DEL TUTORIAL: el "sí. eso era." en
+        /// audio — una sola nota de triángulo filtrado, corta y QUIETA (sin
+        /// intervalo ascendente: no es una fanfarria, es un asentimiento).
+        /// Suena al confirmarse cada tecla/gesto del tutorial contextual; el
+        /// que la reproduce puede subir el pitch un pelo en la confirmación
+        /// final del grupo.
+        /// </summary>
+        private static AudioClip ConstruirTutorialConfirma()
+        {
+            const float dur = 0.16f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+            Triangulo(buf, SR_ONESHOT, 659.26f, 1f); // E5, discreta.
+            PasoBajo(buf, SR_ONESHOT, 2400f);
+            AplicarEnvolvente(buf, SR_ONESHOT, 0.006f, dur - 0.006f);
+            Normalizar(buf, 0.4f);
+            Clamp(buf);
+            return CrearClip("TenThousandYears_TutorialConfirma", buf, SR_ONESHOT);
         }
     }
 }

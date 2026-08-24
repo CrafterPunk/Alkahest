@@ -685,6 +685,7 @@ namespace Alkahest.Game
             _carriedFlaskTr.localPosition = Vector3.SmoothDamp(_carriedFlaskTr.localPosition, flaskTarget, ref _carriedFlaskVel, CarriedFlaskLag);
             _carriedFlaskTr.localScale = Vector3.one * (1f + _pulsoFrasco); // (ronda 69c) el tarro respira con el muelle del frasco.
             _carriedFlaskTr.localRotation = Quaternion.Euler(0f, 0f, _inclinacionFrasco); // (ronda 69d) y se ladea al verter.
+            _carriedFlaskSr.enabled = !FundacionDirector.FrascoBloqueado; // (ronda 73) antes del TOMA. del prólogo no llevas frasco: el tarro decorativo tampoco existe.
             _carriedFlaskSr.flipX = !_facingRight;
         }
 
@@ -693,6 +694,11 @@ namespace Alkahest.Game
             // Irregular a propósito ("barato y hace que el personaje parezca
             // vivo"): entre 2.2 y 6.5 s, calculado SOLO al reprogramar, nunca
             // por frame.
+            // (R74) ??=: en un hot-reload del editor Unity reconstruye el
+            // objeto y _rng (System.Random, no serializable) resucita en null
+            // — el mismo patrón del diálogo de la ronda 64b. Solo cosmética
+            // del parpadeo (jamás la sim), así que basta con reponerla.
+            _rng ??= new System.Random();
             _nextBlinkAt = Time.time + 2.2f + (float)_rng.NextDouble() * 4.3f;
         }
 

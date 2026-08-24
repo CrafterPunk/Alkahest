@@ -1,7 +1,10 @@
-# HANDOFF — ChaosAlchemy (para Opus u otro modelo que continúe)
+# HISTORIAL DE RONDAS — TEN THOUSAND YEARS (archivo histórico)
 
-*Escrito por Fable (orquestador) al quedar ~20% de créditos. Léelo junto a `CLAUDE.md` (raíz),
-`docs/DECISIONS.md` (visión/20 decisiones) y `docs/SIM_NOTES.md` (detalle técnico de la sim).*
+*Crónica cronológica de 70+ rondas de desarrollo/playtest. Nació como el HANDOFF del proyecto
+cuando aún se llamaba ChaosAlchemy; los nombres viejos que aparecen abajo (ChaosAlchemy,
+menús "Alkahest/…") son HISTORIA y se conservan tal cual — el estado actual vive en
+`README.md`, `docs/ESTADO.md` y `CLAUDE.md`. Consultar este archivo solo para el porqué
+de una decisión vieja.*
 
 ## Qué es esto
 Prototipo vertical de "alquimia emergente": el jugador cae en un universo con leyes de la materia
@@ -4442,3 +4445,146 @@ Recordatorio vigente: REBUILD tras bajar esto (Ctrl+R + "Ten Thousand
 Years/3" o "/4") -- las builds no se reconstruyen solas.
 ca_playtest71.cmd (git add -A) barre también esta pasada; si ya se corrió,
 usar ca_playtest71b.cmd.
+
+### Ronda 72 — la gran depuración para trabajar con un externo (el hermano de Cesar, dev Unity)
+
+Pedido de Cesar: revisar el proyecto completo y "bajar de peso" — quitar de los MD la
+información de "de dónde venimos" que no suma, cazar nombres viejos que quedaran, reducir
+archivos, mejorar el orden y la trazabilidad; todo como paso previo a la escenificación
+(mover piezas generadas por código a la escena para que su hermano intervenga desde el editor).
+
+· DOCS REESTRUCTURADOS EN TRES CAPAS:
+  - `README.md` (raíz, NUEVO): la puerta de entrada para un dev externo — qué es el juego,
+    cómo abrir/correr/build, controles, mapa del código por carpeta, 10 reglas de oro,
+    flujo de trabajo y próximo gran paso. Reemplaza el README del template FriendsLoop.
+  - `docs/ESTADO.md` (NUEVO, documento vivo): dónde estamos por sistema, backlog priorizado,
+    tabla del código APARCADO con evidencia de referencias, y los DOS PLANES escritos:
+    ronda estructural (renombre namespace/escena/asmdef/repo + poda, 6 pasos) y
+    escenificación (4 fases: visual puro → prefabs de estación → nunca-a-escena la sim →
+    generadores pasan de crear a validar).
+  - `CLAUDE.md` REESCRITO COMPACTO: solo operativa del agente + catálogo de reglas con
+    NUMERACIÓN ESTABLE R7–R59 (el código las cita por número). La versión narrativa
+    completa quedó en `docs/archivo/CLAUDE_v1_completo.md`. Reglas nuevas: R58
+    (SerializeField en prefab pisa el código) y R59 (flags estáticos de modo se resetean
+    en todos los caminos multi + línea de la verdad).
+· ARCHIVO: 27 documentos históricos movidos a `docs/archivo/` (CONTRATO_*, INFORME_*,
+  DISENO_*, DECISIONS, INCIDENTES, PIVOT, MANUAL_MAQUINAS desactualizado, y
+  HANDOFF.md → HISTORIAL_RONDAS.md, este archivo). docs/ vivo queda en 4:
+  GDD, GUION_TESTERS_GREYBOX, SIM_NOTES, ESTADO.
+· LIMPIEZA DE DISCO (mv a `_to_delete/`, device_bash no puede borrar; Cesar la vacía
+  cuando quiera): cmds ya pusheados (ca_playtest70/71/71b — verificado en git log),
+  zips viejos, capturas sueltas, y las builds muertas ChaosAlchemyDemo/,
+  ChaosAlchemyMulti/ y FriendsLoopDemo/ (los respaldos "Historica Chaos" y
+  "Respaldo_TramoA_Multi" quedaron INTACTOS).
+· NOMBRES: barrido final — el código quedó en cero menciones a ChaosAlchemy y cero
+  menús "Alkahest/" (último vestigio: un docblock en AlkahestBuildTools.cs, corregido).
+  Los docs vivos también en cero; el archivo conserva los nombres viejos a propósito
+  (es historia). Legado consciente y documentado en CLAUDE.md: namespace `Alkahest.*`,
+  escena AlkahestLab, asmdef Alkahest.Runtime, repo GitHub — su renombre ES la ronda
+  estructural planificada en ESTADO.md.
+· CÓDIGO APARCADO AUDITADO, NO BORRADO (con evidencia): Criatura/Capullo/SerSprites
+  referenciados por 7-9 archivos (volverán como organismos-solución, decisión de Cesar);
+  taller clásico enterrado bajo la piedra del génesis (rama viva en AlkahestSim);
+  BuildCuna/BuildRepisa/PlaceNutrienteMound/BuildTolvaCercana sin llamantes pero con
+  su porqué en docblocks. Todos son candidatos de la PODA de la ronda estructural,
+  que se hará con Unity abierto y partida completa de verificación — no hoy a ciegas.
+· Sin cambios de gameplay: el único .cs tocado fue un comentario. compile_fiel EXIT=0.
+ca_playtest72.cmd barre la ronda.
+
+### Ronda 73 — EL PRÓLOGO REHECHO: presentar el verbo (con los ojos de Opus)
+
+Espec completa de Cesar: rework breve del prólogo, reutilizando lo que funcione, con UNA
+prioridad — que el verbo del juego (absorber y verter materia) quede clarísimo. Inicio
+oscuro con VEN. y WASD contextual; TOMA. y el frasco; el agua FLUYENDO físicamente por el
+escenario; entrega en receptor placeholder; un derrumbe cinematográfico que abre la gotera
+de lodo (el Maestro NO entrega materiales); recompensa: el depósito de agua de su imagen de
+referencia, emergiendo cinematográficamente, usable, con autofill insinuado. Dos canales de
+UI separados (voz narrativa vs tutorial funcional), tutoriales que validan RESULTADOS y no
+teclas, cero checklist ("Sí. Eso era.", no "objetivo 1/7"), y todo como esqueleto editable.
+
+· FundacionDirector REESCRITO (v2): beats Despertar→Ven→Toma→Agua→EntregaAgua→Derrumbe→
+  Lodo→EntregaLodo→Recompensa→Fin, con el bloque EL GUION (palabras de la voz, cantidades,
+  tiempos, triggers, radios de luz, caudales) junto y editable. Se conservan de la v1: la
+  viñeta de luz con causa física, la silueta del Maestro, su fuego de Brasa real, LuzEn y
+  DibujarBandaMaestro (Trueque). Retirados (regla 15, viven en git/este archivo): el arco
+  barro→fogón→vidrio→estante→tablón (volverá tras el verbo), el diálogo por páginas, la
+  banda de objetivo, la gotera de estalactita, el vertido del Maestro y los pedidos guiados.
+· LA VOZ DEL MAESTRO: palabras sueltas enormes (VEN. TOMA. AGUA. TRÁELA. BIEN. LODO.
+  TRÁELO. OBSERVA.), centro-alto, sombra, deriva ascendente, sin panel y SIN bloquear input;
+  clip subgrave propio (SintetizadorSfx.VozDelMaestro) con pitch determinista por palabra.
+  Cola de una palabra: dos voces jamás se pisan.
+· TUTORIAL CONTEXTUAL (Game/TutorialContextual.cs, nuevo y reutilizable): fichas de tecla
+  blancas opacas bajo el jugador; se iluminan al pulsar, se CONFIRMAN al validar el
+  resultado (desplazamiento real por dirección con tecla — el bob idle no cuenta; materia
+  que de verdad entró/salió del frasco), destello + blip + 0.5 s + fade. Sin contadores.
+· LA CASCADA: manantial que brota del muro izquierdo y baja por dos repisas hasta la poza
+  (tres caídas francas), caudal del director + el rezumado de la poza como cierre del ciclo
+  (equilibrio verificado en vivo: 34/34). El agua se presenta EN MOVIMIENTO.
+· EL DERRUMBE: plano cinematográfico (FocoCinematico + Sacudida nuevos en SimRenderer, con
+  la viñeta siguiendo el foco), rugido sintetizado, grieta en cono en la bóveda, tromba de
+  26 terrones, cráter excavado por el impacto, y gotera de lodo PERMANENTE con tope de
+  montículo e histéresis (fuente no agotable que espera si nadie la cosecha). El lodo es
+  arcilla en polvo: SE APILA — el contraste con el agua es el aprendizaje.
+· EL CUENCO DEL MAESTRO (receptor placeholder): entrega = VERTER dentro (el verbo, no un
+  menú); placa de mundo con n/m; al completar, el Maestro lo TOMA drenándolo a la vista.
+  El lodo mojado (barbotina por agua residual) cuenta y se drena también.
+· EL DEPÓSITO DE AGUA (Game/DepositoDeAgua.cs + sprites TanqueMarco/Fondo/Tubo según la
+  referencia): emerge del suelo tras el segundo BIEN. (oculto tras la roca mientras sube,
+  terrones a los flancos, temblor), muros de piedra a la sim al asentarse (esperando a que
+  el jugador no esté en medio — jamás emparedar), primer llenado a la vista con agua REAL
+  aspirable a través del vidrio-sprite, y autofill lento con histéresis. Amanece y el
+  tablón despierta (Trueque.Activar). Referencias de Cesar archivadas en docs/ref/.
+· FRASCO Y CINCEL BLOQUEADOS hasta el TOMA. (FundacionDirector.FrascoBloqueado, guardas en
+  Flask/Cincel/ApprenticeController): en el inicio oscuro no llevas herramientas.
+· REVISIÓN "OPUS CON OJOS" pre-playtest (pedido de Cesar: "con los ojos de Opus"): 21
+  hallazgos, 3 bloqueaban el arco — (1) sin guarda de pausa un ESC se comía el derrumbe
+  entero contra la sim congelada; (2) el lodo disuelto en barbotina rompía el contador de
+  la entrega; (3) los muros del tanque podían emparedar al imp sin salida. Todos aplicados,
+  más: voces que no se pisan, respiros medidos desde el evento real, cono del derrumbe sin
+  celdas huérfanas, rezumado a cadencia fija (no por frame), repisas/cuenco como obra
+  anticincel, fichas sin allocs por frame, PaintStable en los muros (regla 22).
+· VERIFICADO EN VIVO (MCP, jugando por sondas + 3 capturas): cascada fluyendo y poza en
+  equilibrio, arco COMPLETO Despertar→Fin recorrido (frasco entregado, HUD despierto,
+  entregas drenadas, derrumbe con grieta+cráter+montículo 74, depósito emergido y LLENO en
+  régimen de autofill), repetibilidad limpia (reinicio → Despertar, techo restaurado, tanque
+  inexistente, flags a cero), 0 errores y 0 warnings de consola en toda la sesión.
+Queda para el playtest de Cesar: la SENSACIÓN (voz, fichas, luz, tiempos — todo en EL
+GUION), y la validación por INPUT real (las sondas confirman la máquina de estados; las
+teclas físicas las prueba él). ca_playtest73.cmd barre la ronda.
+
+### Ronda 74 — el feedback del primer playtest del prólogo ("me encantó, solo unas modificaciones")
+
+· GIT DESATASCADO: el ca_playtest73.cmd falló con "index.lock: File exists" — el lock lo dejó
+  huérfano un `git status` corrido por el puente de Claude, que NO puede borrar archivos (el
+  unlink del lock falla en el montaje). Movido a _to_delete/ y LECCIÓN OPERATIVA: todo git de
+  solo lectura por device_bash va con `--no-optional-locks`. El cmd de esta ronda barre las
+  DOS rondas (73+74).
+· WARNING CS0162 (Crisol.cs:1638, reporte de Cesar): la guarda `if (CamaraAlto <= 1) return`
+  con CamaraAlto const=9 se plegaba a código inalcanzable. Retirada con nota: la división es
+  segura por construcción mientras sea const > 1.
+· DEPÓSITO SIN AUTOFILL (corrección de diseño de Cesar): el tanque ya NO se rellena solo ni
+  insinúa tubo — eso llega con la tubería de conexión infinita (ref 2). Emerge con un CULO
+  de agua (14) y la TAREA FINAL nueva es LLÉNALO. — el verbo por última vez, al revés:
+  verter dentro de algo tuyo (beat LlenarDeposito, placa "LLÉNALO — n/m", meta 48). Al
+  completar: BIEN., amanecer y Trueque.
+· FONDO DE RUINA: el prólogo deja el ladrillo del taller — WorkshopBackdrop.PintarFondoRuina:
+  vacío casi negro con paños de mampostería superviviente de bordes mordidos, tres vigas
+  caídas en silueta y escombro al pie. "Estamos reconstruyendo porque algo pasó." Sin
+  herrajes (baldas/cadenas son el taller vestido).
+· BORDES MORDIDOS: erosión determinista por tramos en bóveda y muros + suelo roto en el ala
+  izquierda (huecos y escombros de 1). CAZADO EN VIVO EN LA PRIMERA VERIFICACIÓN: una
+  mordida en (339,172-173) pegada a la repisa alta le daba al arroyo una escalera DIAGONAL
+  (el paso esquinado de los líquidos falling-sand) y el caudal entero encharcaba el suelo —
+  el muro izquierdo no se muerde en y152-178 (sello de la veta + TODA la banda de la
+  cascada): la destrucción muerde, la fontanería no.
+· POZOS HONDOS: poza y cuenco a 5 de profundidad (FundacionPozoHondo) — la materia se
+  acomoda a la vista; equilibrio de poza 34→48.
+· EL RINCÓN A LA DERECHA: brasas 424-428→428-432, mesa 434-446→436-448, nicho del trueque y
+  cuenco corridos con ellos: 6 celdas + murete entre el depósito y el fuego — verificado:
+  CERO vapor junto al tanque (antes hervía).
+· NRE del parpadeo (ApprenticeController.ScheduleNextBlink) en hot-reload: _rng
+  (System.Random) resucita null en un domain reload — mismo patrón del diálogo 64b; `??=`.
+· VERIFICADO EN VIVO: arco completo hasta el nuevo Fin (tanque en 59/48, amanecer, 0
+  errores/warnings), fuga sellada (0 celdas fuera del camino, poza 48/48), fondo de ruina
+  montado y el del taller ausente, plano nuevo sondado celda a celda, capturas.
+ca_playtest74.cmd barre las rondas 73 y 74 juntas.

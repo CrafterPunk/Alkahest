@@ -533,6 +533,15 @@ namespace Alkahest.Sim
                 ? _apprentice.transform.position
                 : new Vector3(CellGrid.W * CellWorldSize * 0.5f, CellGrid.H * CellWorldSize * 0.5f, 0f);
 
+            // (RONDA 73) FOCO CINEMATOGRÁFICO: mientras esté fijado (director
+            // del prólogo: derrumbe, nacimiento del depósito), la cámara mira
+            // AHÍ en vez de al aprendiz, con el MISMO suavizado exponencial de
+            // siempre (el traveling de ida y de vuelta salen gratis del Lerp).
+            // La zona muerta se salta a propósito: un plano cinematográfico
+            // centra su sujeto, no lo deja vagar por el 60% del encuadre.
+            bool cine = FocoCinematico.HasValue;
+            if (cine) playerPos = FocoCinematico.Value;
+
             Vector3 camPos = _mainCam.transform.position;
 
             // ZONA MUERTA: el aprendiz se mueve libre dentro del rectángulo
@@ -546,10 +555,14 @@ namespace Alkahest.Sim
             float dy = playerPos.y - camPos.y;
             float targetX = camPos.x;
             float targetY = camPos.y;
-            if (dx > halfDeadW) targetX = playerPos.x - halfDeadW;
-            else if (dx < -halfDeadW) targetX = playerPos.x + halfDeadW;
-            if (dy > halfDeadH) targetY = playerPos.y - halfDeadH;
-            else if (dy < -halfDeadH) targetY = playerPos.y + halfDeadH;
+            if (cine) { targetX = playerPos.x; targetY = playerPos.y; } // sin zona muerta: el plano centra su sujeto.
+            else
+            {
+                if (dx > halfDeadW) targetX = playerPos.x - halfDeadW;
+                else if (dx < -halfDeadW) targetX = playerPos.x + halfDeadW;
+                if (dy > halfDeadH) targetY = playerPos.y - halfDeadH;
+                else if (dy < -halfDeadH) targetY = playerPos.y + halfDeadH;
+            }
 
             float newX = Mathf.Lerp(camPos.x, targetX, t);
             float newY = Mathf.Lerp(camPos.y, targetY, t);
@@ -564,8 +577,37 @@ namespace Alkahest.Sim
             float clampedX = worldW <= orthoW * 2f ? worldW * 0.5f : Mathf.Clamp(newX, orthoW, worldW - orthoW);
             float clampedY = worldH <= orthoH * 2f ? worldH * 0.5f : Mathf.Clamp(newY, orthoH, worldH - orthoH);
 
+            // (RONDA 73) LA SACUDIDA (derrumbe del prólogo): ruido Perlin en
+            // ambos ejes — continuo y sin RNG — con amplitud que decae al
+            // cuadrado del tiempo restante. Se aplica DESPUÉS del clamp: es un
+            // temblor de encuadre, no un desplazamiento real de la cámara (a
+            // amplitudes de ~0.2 unidades enseñar 2 celdas de fuera del mundo
+            // durante 3 frames es invisible; recortarlo sí se notaría como un
+            // temblor "aplastado" contra el borde).
+            if (Sacudida > 0f)
+            {
+                Sacudida = Mathf.Max(0f, Sacudida - dt);
+                float f = Sacudida / SacudidaDuracion; // 1 -> 0.
+                float amp = SacudidaAmplitud * f * f;
+                float tt = Time.time * 23f;
+                clampedX += (Mathf.PerlinNoise(tt, 0.37f) - 0.5f) * 2f * amp;
+                clampedY += (Mathf.PerlinNoise(0.83f, tt) - 0.5f) * 2f * amp * 0.7f;
+            }
+
             _mainCam.transform.position = new Vector3(clampedX, clampedY, -10f);
         }
+
+        // (RONDA 73, el prólogo rehecho) Controles cinematográficos que el
+        // FundacionDirector usa para el derrumbe y el nacimiento del depósito.
+        // Estáticos y auto-limpiables: quien fija el foco es responsable de
+        // volverlo null (el director lo hace en sus transiciones y en
+        // OnDestroy); la sacudida se apaga sola al llegar a 0.
+        /// <summary>Mientras tenga valor, la cámara encuadra ESTE punto del mundo en vez de al aprendiz (mismo suavizado, sin zona muerta).</summary>
+        public static Vector3? FocoCinematico;
+        /// <summary>Segundos restantes de temblor de cámara. Fijar a <see cref="SacudidaDuracion"/> para un derrumbe completo.</summary>
+        public static float Sacudida;
+        public const float SacudidaDuracion = 1.6f;
+        private const float SacudidaAmplitud = 0.22f; // ~2 celdas de mundo en el pico.
 
         /// <summary>
         /// Update() de Unity, INDEPENDIENTE del tick de simulación (playtest

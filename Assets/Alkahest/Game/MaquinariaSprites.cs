@@ -1700,6 +1700,183 @@ namespace Alkahest.Game
             return s;
         }
 
+        // =================================================================
+        // (RONDA 73, el prólogo rehecho) EL DEPÓSITO DE AGUA — la recompensa
+        // del prólogo, construido sobre la FOTO DE REFERENCIA de Cesar: un
+        // cilindro de vidrio con armazón de COBRE (tapa en domo con pomo,
+        // bandas remachadas arriba y abajo, montantes laterales) y pátina de
+        // cardenillo. Tres piezas, sándwich 2.5D completo:
+        //  · TanqueFondo  -> DETRÁS de la sim (Capas.MaquinaFondoInterior):
+        //    la cavidad fría del vidrio; el agua REAL de la sim se ve contra
+        //    ella.
+        //  · TanqueMarco  -> DELANTE de la sim (Capas.MaquinaFrente): el
+        //    armazón entero con la ventana de vidrio TRANSLÚCIDA (alfa bajo
+        //    + brillo diagonal): el agua queda visualmente DENTRO.
+        //  · TanqueTubo   -> el tubo trasero que asoma junto a la base: la
+        //    insinuación de que el depósito está CONECTADO al subsuelo y se
+        //    rellena solo. (La tubería lateral completa hasta el suelo es la
+        //    segunda entrega de la referencia de Cesar — vendrá con el
+        //    autofill definitivo.)
+        // La paleta del cobre es propia (más rojiza que el latón de la
+        // familia) porque la referencia manda: cobre envejecido, no latón.
+        // =================================================================
+        private static readonly Color32 CobreAlto = new Color32(0xE8, 0xA5, 0x6B, 255);
+        private static readonly Color32 Cobre = new Color32(0xA9, 0x66, 0x3C, 255);
+        private static readonly Color32 CobreBajo = new Color32(0x5E, 0x37, 0x22, 255);
+        private static readonly Color32 Cardenillo = new Color32(0x5F, 0x8F, 0x7A, 255); // la pátina verde del cobre viejo.
+
+        /// <summary>¿Lleva pátina este téxel? Hash determinista posicional (regla: cero Random) — manchas pequeñas, ~12% de la superficie de cobre.</summary>
+        private static bool Patina(int x, int y)
+        {
+            uint h = (uint)(x * 374761393 + y * 668265263);
+            h = (h ^ (h >> 13)) * 1274126177u;
+            return ((h >> 8) & 0xFF) < 31;
+        }
+
+        /// <summary>El armazón frontal completo del depósito (ver bloque de arriba). `spanCeldas`/`altoCeldas` = huella TOTAL del sprite; la ventana de vidrio deja ver la sim entre las bandas.</summary>
+        public static Sprite TanqueMarco(int spanCeldas, int altoCeldas)
+        {
+            string clave = "tanquemarco" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            // Proporciones (en fracciones del alto, calcadas de la foto):
+            int baseAlto = S(4);                 // zócalo + banda baja remachada.
+            int bandaAlta0 = h - S(12);          // banda alta remachada.
+            int bandaAlta1 = h - S(8);
+            int domo0 = bandaAlta1;              // el domo con su pomo ocupa lo que queda.
+            int montante = S(4);                 // ancho de cada montante lateral.
+            int ventana0 = montante, ventana1 = w - montante;
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color32 c;
+                    bool cobre = false;
+
+                    if (y < baseAlto)
+                    {
+                        // ZÓCALO: banda maciza, canto superior iluminado,
+                        // remaches cada ~6px en su fila media.
+                        cobre = true;
+                        c = y >= baseAlto - Escala ? CobreAlto : (y < Escala ? CobreBajo : Cobre);
+                        if (y >= baseAlto / 2 - Escala / 2 && y < baseAlto / 2 + Escala && (x + S(1)) % S(3) < Escala)
+                            c = CobreAlto; // remache.
+                    }
+                    else if (y >= domo0)
+                    {
+                        // EL DOMO: se estrecha en dos escalones + pomo central.
+                        int dy = y - domo0;
+                        int alto = h - domo0;
+                        float t = dy / (float)Mathf.Max(1, alto - 1);
+                        float semi = Mathf.Lerp(w * 0.46f, w * 0.16f, t * t * 1.6f);
+                        bool pomo = t > 0.62f && Mathf.Abs(x - w * 0.5f) <= w * 0.10f;
+                        bool dentro = Mathf.Abs(x - w * 0.5f) <= semi || pomo;
+                        if (!dentro) continue;
+                        cobre = true;
+                        c = x < w * 0.5f - semi * 0.5f ? CobreAlto : (x > w * 0.5f + semi * 0.6f ? CobreBajo : Cobre);
+                        if (pomo && t > 0.9f) c = CobreAlto;
+                    }
+                    else if (y >= bandaAlta0 && y < bandaAlta1)
+                    {
+                        // BANDA ALTA remachada (tapa la boca abierta de la sim:
+                        // el chorro del rellenado "entra por la tapa").
+                        cobre = true;
+                        c = y >= bandaAlta1 - Escala ? CobreAlto : (y < bandaAlta0 + Escala ? CobreBajo : Cobre);
+                        int med = (bandaAlta0 + bandaAlta1) / 2;
+                        if (y >= med - Escala / 2 && y < med + Escala && (x + S(1)) % S(3) < Escala)
+                            c = CobreAlto;
+                    }
+                    else if (x < ventana0 || x >= ventana1)
+                    {
+                        // MONTANTES laterales.
+                        cobre = true;
+                        bool izq = x < ventana0;
+                        int d = izq ? x : w - 1 - x;
+                        c = d < Escala ? CobreBajo : (d >= montante - Escala ? CobreAlto : Cobre);
+                    }
+                    else
+                    {
+                        // LA VENTANA DE VIDRIO: translúcida (la sim se ve
+                        // detrás). Un brillo diagonal y un canto frío junto a
+                        // los montantes — vidrio, no agujero.
+                        int rel = x - ventana0;
+                        int anchoV = ventana1 - ventana0;
+                        bool brillo = (rel + y) % Mathf.Max(1, w) < S(3) && rel > anchoV / 6 && rel < anchoV / 2;
+                        bool canto = rel < Escala || rel >= anchoV - Escala;
+                        if (brillo) c = new Color32(0xCF, 0xE4, 0xE8, 62);
+                        else if (canto) c = new Color32(0x9F, 0xB8, 0xBC, 48);
+                        else c = new Color32(0x8A, 0xA6, 0xAE, 22);
+                    }
+
+                    if (cobre && Patina(x, y)) c = Cardenillo;
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsTanqueMarco");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>La cavidad del depósito (DETRÁS de la sim): más fría que la del horno — vidrio en sombra, con una insinuación vertical de reflejo.</summary>
+        public static Sprite TanqueFondo(int spanCeldas, int altoCeldas)
+        {
+            string clave = "tanquefondo" + spanCeldas + "x" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(spanCeldas), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+            var fondo = new Color32(0x14, 0x19, 0x1C, 255);     // azul-gris profundo, no pardo: es vidrio, no refractario.
+            var fondoLuz = new Color32(0x20, 0x2A, 0x2E, 255);
+            var fondoOcl = new Color32(0x0B, 0x0E, 0x10, 255);
+            int margen = Mathf.Max(Escala, Mathf.Min(w, h) / 8);
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool ocl = x < margen || x >= w - margen || y < margen;
+                    bool reflejo = x > w / 5 && x < w / 5 + S(2);
+                    px[y * w + x] = ocl ? fondoOcl : (reflejo ? fondoLuz : fondo);
+                }
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsTanqueFondo");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>El tubo trasero del depósito: un caño corto de cobre oscuro con dos juntas, asomando de la tierra tras la base — dice "esto se rellena solo" sin robarle el diseño a la tubería lateral futura.</summary>
+        public static Sprite TanqueTubo(int altoCeldas)
+        {
+            string clave = "tanquetubo" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(2), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color32 c = x < Escala ? CobreAlto : (x >= w - Escala ? CobreBajo : Cobre);
+                    // Dos juntas anulares (más anchas que el caño un téxel a
+                    // cada lado no se puede sin cambiar w: se marcan a valor).
+                    if (y % S(5) < Escala) c = CobreBajo;
+                    if (Patina(x + 61, y)) c = Cardenillo; // sal posicional distinta a la del marco.
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsTanqueTubo");
+            _cache[clave] = s;
+            return s;
+        }
+
         public static Sprite MarcoBandeja(int spanCeldas, int altoCeldas)
         {
             string clave = "bandeja" + spanCeldas + "x" + altoCeldas;

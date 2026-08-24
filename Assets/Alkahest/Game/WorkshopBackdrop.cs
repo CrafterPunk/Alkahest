@@ -246,8 +246,153 @@ namespace Alkahest.Game
         /// </summary>
         private IEnumerator Start()
         {
+            // (RONDA 74, pedido de Cesar sobre el prólogo) EL FONDO DE LA
+            // FUNDACIÓN NO ES EL DEL TALLER: "no el de ladrillos sino algo
+            // que haga pensar vacío, ligeramente que hubo una destrucción
+            // previa — estamos reconstruyendo porque algo pasó". La fundación
+            // pinta su propia ruina y NO monta los herrajes (baldas, cadenas:
+            // son el taller vestido, y aquí todavía no hay taller).
+            if (AlkahestGameBootstrap.ModoFundacion)
+            {
+                yield return PintarFondoRuina();
+                yield break;
+            }
             yield return PintarFondoCuartoIntimo();
             MontarHerrajesDelTaller(); // (playtest 33) las ménsulas de las baldas y las cadenas -- ver su docblock.
+        }
+
+        /// <summary>
+        /// (RONDA 74) EL FONDO DE LA RUINA — el telón del prólogo. Cuatro
+        /// capas, todas tenues y deterministas (HashRoca, cero Random):
+        ///  1) VACÍO: degradado casi negro, frío arriba (la nada se traga la
+        ///     bóveda) y apenas cálido abajo (polvo asentado).
+        ///  2) PAÑOS SUPERVIVIENTES: islas de la mampostería VIEJA con bordes
+        ///     mordidos que se funden en el vacío — lo que quedó en pie de un
+        ///     muro que ya no existe. Mismo lenguaje de sillería que el
+        ///     taller (hiladas a soga corrida) para que, cuando el taller
+        ///     real se construya, se lea que es EL MISMO lugar restaurado.
+        ///  3) VIGAS CAÍDAS: tres trazos diagonales en silueta dentro de la
+        ///     ventana de la caverna — la carpintería del techo que se vino
+        ///     abajo.
+        ///  4) ESCOMBRO AL PIE: montículos bajos e irregulares a ras del
+        ///     suelo de la fundación.
+        /// Sin fuentes de luz propias: la única luz del prólogo sigue siendo
+        /// el fuego del Maestro (mandato pt64, intacto).
+        /// </summary>
+        private IEnumerator PintarFondoRuina()
+        {
+            var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)
+            {
+                name = "TenThousandYearsRuinaBackdrop",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            var px = new Color32[TexW * TexH];
+
+            var ruinaAlta = new Color(0.052f, 0.050f, 0.062f); // arriba: frío, vacío.
+            var ruinaBaja = new Color(0.118f, 0.098f, 0.082f); // abajo: polvo tibio.
+
+            const int piezaWc = 8, piezaHc = 4; // la sillería vieja, en celdas.
+            int piezaW = piezaWc * Escala, piezaH = piezaHc * Escala;
+
+            // Las tres vigas caídas (x0, y0, pendiente, largo en celdas),
+            // colocadas dentro de la ventana visible de la caverna.
+            int[] vigaX0 = { 352, 396, 428 };
+            int[] vigaY0 = { 170, 182, 162 };
+            float[] vigaPend = { -0.38f, 0.30f, -0.22f };
+            int[] vigaLargo = { 24, 30, 20 };
+
+            int rowsSinCeder = 0;
+            for (int y = 0; y < TexH; y++)
+            {
+                float ty = y / (float)(TexH - 1);
+                int celdaY = y / Escala;
+                Color baseFila = Color.Lerp(ruinaBaja, ruinaAlta, Mathf.Pow(ty, 0.8f));
+                int hilada = y / piezaH;
+                int desfase = (hilada & 1) == 1 ? piezaW / 2 : 0;
+                int ly = y % piezaH;
+
+                for (int x = 0; x < TexW; x++)
+                {
+                    int celdaX = x / Escala;
+                    Color c = baseFila;
+
+                    // 1) Grano fino del vacío.
+                    uint g = HashRoca(x, y, 9313u);
+                    c *= 1f + ((g & 31u) / 31f - 0.5f) * 0.05f;
+
+                    // 2) PAÑOS SUPERVIVIENTES: rejilla de parches de 34x16
+                    // celdas; ~2 de cada 5 conservan muro. La máscara es una
+                    // elipse con el borde COMIDO por ruido — nada de recortes
+                    // rectos: esto se cayó, no se recortó.
+                    int pX = celdaX / 34, pY = celdaY / 16;
+                    uint hp = HashRoca(pX, pY, 7717u);
+                    if ((hp & 255u) < 104u)
+                    {
+                        float dcx = (celdaX - (pX + 0.5f) * 34f) / 17f;
+                        float dcy = (celdaY - (pY + 0.5f) * 16f) / 8f;
+                        float d = dcx * dcx + dcy * dcy;
+                        float mordida = ((HashRoca(celdaX, celdaY, 3559u) & 63u) / 63f) * 0.55f;
+                        float fade = Mathf.Clamp01((0.95f - d - mordida) * 1.6f);
+                        if (fade > 0f)
+                        {
+                            Color m = baseFila * 1.62f;
+                            int lx = ((x + desfase) % piezaW + piezaW) % piezaW;
+                            uint hpz = HashRoca((x + desfase) / piezaW, hilada, 5171u);
+                            m *= 1f + ((hpz & 63u) / 63f - 0.5f) * 0.10f;
+                            if (lx < Escala || ly == 0) m *= 0.85f;      // junta.
+                            else if (ly >= piezaH - 1) m *= 1.06f;       // canto con luz.
+                            c = Color.Lerp(c, m, fade);
+                        }
+                    }
+
+                    // 3) VIGAS CAÍDAS: silueta oscura de 2 celdas de grosor.
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int rel = celdaX - vigaX0[k];
+                        if (rel < 0 || rel > vigaLargo[k]) continue;
+                        float yLinea = vigaY0[k] + rel * vigaPend[k];
+                        if (Mathf.Abs(celdaY - yLinea) <= 1f) c *= 0.66f;
+                    }
+
+                    // 4) ESCOMBRO AL PIE: altura por tramos de 5 celdas +
+                    // jitter fino de 1 — montículos, no un peine.
+                    int hRel = celdaY - SimLevelBuilder.FundacionY0;
+                    if (hRel >= 0 && hRel < 7)
+                    {
+                        int tramo = celdaX / 5;
+                        int altura = (int)(HashRoca(tramo, 0, 8117u) % 5u)
+                                   + (int)(HashRoca(celdaX, 0, 6329u) % 2u);
+                        if (hRel < altura)
+                        {
+                            uint he = HashRoca(celdaX, celdaY, 4441u);
+                            c = baseFila * (1.32f + ((he & 31u) / 31f) * 0.22f);
+                            if (hRel == altura - 1) c *= 1.14f; // el lomo del montículo recibe luz.
+                        }
+                    }
+
+                    px[y * TexW + x] = new Color(
+                        Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
+                }
+
+                rowsSinCeder++;
+                if (rowsSinCeder >= RowsPerBatch)
+                {
+                    rowsSinCeder = 0;
+                    yield return null;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+
+            var go = new GameObject("WorkshopBackdrop_Ruina");
+            var sr = go.AddComponent<SpriteRenderer>();
+            float worldW = CellGrid.W * SimRenderer.CellWorldSize;
+            sr.sprite = Sprite.Create(tex, new Rect(0, 0, TexW, TexH), Vector2.zero, TexW / worldW, 0, SpriteMeshType.FullRect);
+            sr.sortingOrder = -10; // detrás del sprite de la simulación (-5).
+            sr.color = new Color(0.74f, 0.72f, 0.76f, 1f); // mismo hundimiento 2.5D que el fondo del taller.
+            RegistrarFondoParallax(go);
         }
 
         // =================================================================

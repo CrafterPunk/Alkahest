@@ -252,6 +252,14 @@ namespace Alkahest.Game
             // (fix playtest 2) Con la paleta dev (F3) abierta, el pincel manda: el frasco no actúa.
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisualesDeMundo(); return; }
 
+            // (RONDA 73, el prólogo rehecho) ANTES DEL "TOMA." NO LLEVAS
+            // FRASCO: en el inicio oscuro de la fundación el frasco aún es del
+            // Maestro — ni haz, ni aspirar, ni verter hasta que su vuelo
+            // termina en tu mano (FundacionDirector.TickVueloDelFrasco baja la
+            // bandera). Fuera del prólogo la bandera vive en false y esta
+            // línea no existe para nadie (multi incluido).
+            if (FundacionDirector.FrascoBloqueado) { OcultarVisualesDeMundo(); return; }
+
             // (fix playtest 10) Mientras el jugador ESCRIBE un nombre (NamingUi), NINGÚN
             // atajo del frasco debe colarse: ni Q (vaciar) ni Shift (mayúsculas al
             // teclear, no "aspira todo"). Misma regla que ya obedecen M/H/T/E/J/F3/

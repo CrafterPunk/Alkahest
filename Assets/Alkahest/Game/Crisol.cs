@@ -1635,7 +1635,13 @@ namespace Alkahest.Game
         /// </summary>
         private void ProcessConversionFrente()
         {
-            if (CamaraAlto <= 1) return; // guarda: con una sola fila no hay frente que trazar (division por cero más abajo).
+            // (RONDA 74, reporte de Cesar: warning CS0162) La guarda
+            // `if (CamaraAlto <= 1) return;` se RETIRÓ: CamaraAlto es const=9
+            // y el compilador la plegaba a código inalcanzable — el único
+            // warning del proyecto. La división por (CamaraAlto - 1) de abajo
+            // es segura POR CONSTRUCCIÓN mientras CamaraAlto sea una
+            // constante > 1; si algún día se vuelve configurable, la guarda
+            // debe volver con ella.
             var grid = _sim.Grid;
             uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
 
