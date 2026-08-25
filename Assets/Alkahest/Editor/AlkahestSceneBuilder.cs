@@ -178,6 +178,28 @@ namespace Alkahest.EditorTools
                 esc.deposito2 = d2;
                 n++;
             }
+            if (esc.depositoFinal == null)
+            {
+                // (R85, fase B2) Bahía BAJA de la estantería: el tanque de agua reubicado.
+                var df = new GameObject("DepositoFinal_BahiaBaja").transform;
+                df.SetParent(esc.transform, false);
+                df.position = new Vector3(
+                    (SimLevelBuilder.FundacionBahiaX0 + 4) * c,   // base-centro de la huella 8 (x389-396).
+                    SimLevelBuilder.FundacionBahiaBajaY0 * c, 0f);
+                esc.depositoFinal = df;
+                n++;
+            }
+            if (esc.deposito2Final == null)
+            {
+                // (R85, fase B2) Bahía ALTA: el silo del lodo reubicado (la gotera cae a su boca).
+                var d2f = new GameObject("Deposito2Final_BahiaAlta").transform;
+                d2f.SetParent(esc.transform, false);
+                d2f.position = new Vector3(
+                    (SimLevelBuilder.FundacionBahiaX0 + 4) * c,
+                    SimLevelBuilder.FundacionBahiaAltaY0 * c, 0f);
+                esc.deposito2Final = d2f;
+                n++;
+            }
             if (esc.guion == null)
             {
                 var guion = AssetDatabase.LoadAssetAtPath<GuionDelPrologo>("Assets/Alkahest/Arte/Prologo/GuionDelPrologo.asset");

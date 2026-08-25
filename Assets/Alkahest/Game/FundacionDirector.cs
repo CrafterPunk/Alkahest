@@ -878,12 +878,24 @@ namespace Alkahest.Game
                     SimRenderer.Sacudida = 0.5f;
                     _deposito?.Retirar();
                     _silo?.Retirar();
+                    Debug.Log("[TenThousandYears] REORDEN paso 0→1: ORDEN. dicho, retiradas en marcha."); // (R85) cada paso deja su línea: el playtest de Cesar ("no vi el barrido") era indistinguible de "no corrió" (regla 43).
                     _reordenPaso = 1; _tPaso = 0f;
                     break;
 
                 case 1: // esperar los dos hundimientos (tope generoso).
                     bool listos = (_deposito == null || _deposito.Enterrado) && (_silo == null || _silo.Enterrado);
                     if (!listos && _tPaso < 20f) return;
+                    if (!listos)
+                    {
+                        // (R85, fix del tope sucio) Antes, el tope destruía los
+                        // GO a medio drenar: muros huérfanos + obra fantasma
+                        // anticincel en mitad del taller. RetirarDeGolpe cierra
+                        // TODO (cuenta el resto al banco, limpia, desmonta).
+                        Debug.LogWarning("[TenThousandYears] REORDEN paso 1: TOPE de hundimiento — retirada DE GOLPE (tanque="
+                            + (_deposito != null && !_deposito.Enterrado) + " silo=" + (_silo != null && !_silo.Enterrado) + ").");
+                        _deposito?.RetirarDeGolpe();
+                        _silo?.RetirarDeGolpe();
+                    }
                     _bancoAgua = _deposito != null ? _deposito.DrenadoDelDueno : 0;
                     _bancoLodo = _silo != null ? _silo.DrenadoDelDueno : 0;
                     if (_deposito != null) Destroy(_deposito.gameObject);
@@ -892,6 +904,7 @@ namespace Alkahest.Game
                     _barridoEnCurso = true;
                     _barridoFrente = SimLevelBuilder.FundacionX0 - 1;
                     _barridoCol = SimLevelBuilder.FundacionX0 - 1;
+                    Debug.Log("[TenThousandYears] REORDEN paso 1→2: hundimientos cerrados; bancos tras drenado (agua=" + _bancoAgua + ", lodo=" + _bancoLodo + "); barrido ARRANCA.");
                     _reordenPaso = 2; _tPaso = 0f;
                     break;
 
@@ -906,15 +919,19 @@ namespace Alkahest.Game
                     }
                     break;
 
-                case 3: // respiro con el fondo fundiéndose; luego el renacer.
+                case 3: // respiro con el fondo fundiéndose; luego LA ESTANTERÍA y el renacer reubicado (R85, fase B2).
                     if (_tPaso < 1.1f) return;
+                    ConstruirEstanteria();
                     _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
-                    _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76));
+                    _deposito.InitFinal(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76));
                     _deposito.Aparecer();
+                    _deposito.ActivarRefill(); // el tubo toca el suelo Y CUMPLE: goteo hasta el tope del guion.
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, Mathf.Clamp(_bancoLodo, 0, 76));
+                    _silo.InitSiloFinal(_sim, Mathf.Clamp(_bancoLodo, 0, 76));
                     _silo.Aparecer();
+                    _silo.ActivarRefill(); // (plan cap2: en la fase C este arranque pasará al SELLADO del techo — el relevo de la fuente; hasta entonces, gotea ya para que el tubo no mienta).
                     SimRenderer.Sacudida = 0.8f;
+                    Debug.Log("[TenThousandYears] REORDEN paso 3→4: estantería construida; recipientes renaciendo REUBICADOS (agua@bahía baja carga=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76) + ", lodo@bahía alta carga=" + Mathf.Clamp(_bancoLodo, 0, 76) + ") con tubos y refill.");
                     _reordenPaso = 4; _tPaso = 0f;
                     break;
 
@@ -935,6 +952,7 @@ namespace Alkahest.Game
                     SimRenderer.FocoCinematico = null;
                     _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el taller respondió, y ORDENÓ.
                     Trueque.Activar(); // el tablón despierta con el amanecer (regla 49).
+                    Debug.Log("[TenThousandYears] REORDEN paso 4→Fin: cargas listas (tanque=" + (_deposito != null ? _deposito.DelDueno() : -1) + ", silo=" + (_silo != null ? _silo.DelDueno() : -1) + "); amanecer.");
                     CambiarBeat(Beat.Fin);
                     break;
             }
@@ -960,8 +978,27 @@ namespace Alkahest.Game
                 int x = _barridoCol;
                 for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
                 {
-                    if (RectProtegidoDelBarrido(x, y)) continue;
+                    int prot = ProteccionDelBarrido(x, y);
                     byte m = grid.GetMat(x, y);
+                    // (R85, EL BARRIDO INVISIBLE cazado por Cesar: "llegué
+                    // hasta ORDEN y no vi cambio en el desorden") Los rects
+                    // protegidos protegían ENTEROS — y el desastre del
+                    // jugador FLUYE justo ahí: el lodo que escapa acaba en la
+                    // poza, el agua salpicada en el cráter. Ahora la
+                    // protección es DEL DUEÑO, no del rect: la poza conserva
+                    // su agua pero entrega su lodo; el cráter conserva su
+                    // lodo pero entrega su agua. Cuenco/hogar/fogón siguen
+                    // intocables (ahí TODO es del Maestro o del jugador).
+                    switch (prot)
+                    {
+                        case 1: continue; // intocable.
+                        case 2: // la poza: el AGUA es suya; el lodo es intruso.
+                            if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); }
+                            continue;
+                        case 3: // el cráter: el LODO es suyo; el agua es intrusa.
+                            if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); }
+                            continue;
+                    }
                     if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); }
                     else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); }
                     // Todo lo demás (piedra, piso, experimentos del jugador,
@@ -975,24 +1012,119 @@ namespace Alkahest.Game
         }
         private int _barridoCol;
 
-        private static bool RectProtegidoDelBarrido(int x, int y)
+        /// <summary>0 = barrible; 1 = intocable; 2 = poza (solo su agua se queda); 3 = cráter (solo su lodo se queda).</summary>
+        private static int ProteccionDelBarrido(int x, int y)
         {
-            // La poza de la cascada (con su rezumadero).
+            // La poza de la cascada (con su rezumadero): dueña del AGUA.
             if (x >= SimLevelBuilder.FundacionCharcoX0 && x <= SimLevelBuilder.FundacionCharcoX1 &&
-                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return 2;
             // El cuenco del Maestro.
             if (x >= SimLevelBuilder.FundacionCuencoX0 && x <= SimLevelBuilder.FundacionCuencoX1 &&
-                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return 1;
             // El hogar de brasas del Maestro (brasas + tiro).
             if (x >= SimLevelBuilder.FundacionBrasasX0 - 1 && x <= SimLevelBuilder.FundacionBrasasX1 + 1 &&
-                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 4) return true;
+                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 4) return 1;
             // El lecho del fogón del jugador.
             if (x >= SimLevelBuilder.FundacionFogonX0 - 2 && x <= SimLevelBuilder.FundacionFogonX1 + 2 &&
-                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 2) return true;
-            // El cráter del derrumbe (la fuente viva del lodo).
+                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 2) return 1;
+            // El cráter del derrumbe (la fuente viva del lodo): dueño del LODO.
             if (x >= SimLevelBuilder.FundacionCraterX0 && x <= SimLevelBuilder.FundacionCraterX1 &&
-                y >= SimLevelBuilder.FundacionY0 - 2 && y <= SimLevelBuilder.FundacionY0 + 1) return true;
-            return false;
+                y >= SimLevelBuilder.FundacionY0 - 2 && y <= SimLevelBuilder.FundacionY0 + 1) return 3;
+            return 0;
+        }
+
+        /// <summary>
+        /// (R85) La columna de luz del frente del barrido (IMGUI, sobre la
+        /// viñeta — la lección del haz de presentación, Opus R81 #1: los
+        /// sprites de mundo nacen enterrados en lo negro). La textura radial
+        /// de la lucecita, estirada a columna: bordes suaves, sin costuras.
+        /// </summary>
+        private void DibujarFrenteDelBarrido()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            if (_lucecitaTex == null) ConstruirLucecita();
+            float celda = SimRenderer.CellWorldSize;
+
+            float xMundo = Mathf.Clamp(_barridoFrente, SimLevelBuilder.FundacionX0, SimLevelBuilder.FundacionX1 + 1) * celda;
+            float yBajo = (SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo) * celda;
+            float yAlto = (SimLevelBuilder.FundacionY1 + 1) * celda;
+            Vector3 a = cam.WorldToScreenPoint(new Vector3(xMundo, yBajo, 0f));
+            Vector3 b = cam.WorldToScreenPoint(new Vector3(xMundo, yAlto, 0f));
+            float guiYTop = Screen.height - b.y;      // IMGUI: Y invertida.
+            float guiYBot = Screen.height - a.y;
+            if (guiYBot < 0f || guiYTop > Screen.height) return;
+
+            float ancho = UiStyles.S(30f);
+            float pulso = 0.75f + 0.25f * Mathf.Sin(Time.time * 6f); // respira rápido: está TRABAJANDO.
+            var prev = GUI.color;
+            // El resplandor ancho (la textura radial estirada en vertical).
+            GUI.color = new Color(1f, 0.93f, 0.72f, 0.55f * pulso);
+            GUI.DrawTexture(new Rect(a.x - ancho, guiYTop, ancho * 2f, guiYBot - guiYTop), _lucecitaTex, ScaleMode.StretchToFill);
+            // El filo: una línea viva en la x exacta del frente.
+            GUI.color = new Color(1f, 0.98f, 0.9f, 0.8f * pulso);
+            GUI.DrawTexture(new Rect(a.x - 1f, guiYTop, 2f, guiYBot - guiYTop), Texture2D.whiteTexture);
+            GUI.color = prev;
+        }
+
+        // =================================================================
+        // (R85, FASE B2) LA ESTANTERÍA CENTRAL: el mueble del REORDEN. Se
+        // construye en el paso 3, sobre la cicatriz — montantes de piso
+        // estructural (que NO llegan a la bóveda: el imp vuela por encima,
+        // la caverna jamás se sella) y dos tablas donde asientan las bahías.
+        // Obra POR PIEZA (jamás bounding box: el fantasma anticincel R69).
+        // Antes de levantar nada, la HUELLA SE LIMPIA (Opus A12: el
+        // PlanoOverlay o el cincel libre pudieron dejar materia ahí) — el
+        // agua y el lodo sueltos van a los bancos (recoger, no borrar);
+        // piedra y piso del JUGADOR se respetan (el montante pinta encima
+        // solo sus propias celdas). Si el jugador está parado en el sitio,
+        // sale nadando: la colisión suspende el frame que arranca dentro de
+        // sólido (doctrina ApprenticeController, pariente de la regla 38).
+        // =================================================================
+        private bool _estanteriaConstruida;
+
+        private void ConstruirEstanteria()
+        {
+            var grid = _sim.Grid;
+            int x0 = SimLevelBuilder.FundacionEstanteriaX0, x1 = SimLevelBuilder.FundacionEstanteriaX1;
+            int topY = SimLevelBuilder.FundacionEstanteriaTopY;
+
+            // 1) La huella, limpia (banca lo suelto; respeta piedra/piso).
+            for (int x = x0; x <= x1; x++)
+                for (int y = SimLevelBuilder.FundacionY0; y <= SimLevelBuilder.FundacionY1 - 1; y++)
+                {
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Empty || m == MaterialId.Stone || m == MaterialId.PisoEstructural) continue;
+                    if (m == MaterialId.Water) _bancoAgua++;
+                    else if (m == Lodo || m == LodoMojado) _bancoLodo++;
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                }
+
+            // 2) Los montantes (x386-387 y x400-401, y140..y188).
+            for (int y = SimLevelBuilder.FundacionY0; y <= topY; y++)
+            {
+                _sim.PaintStable(x0, y, 0, MaterialId.PisoEstructural);
+                _sim.PaintStable(x0 + 1, y, 0, MaterialId.PisoEstructural);
+                _sim.PaintStable(x1 - 1, y, 0, MaterialId.PisoEstructural);
+                _sim.PaintStable(x1, y, 0, MaterialId.PisoEstructural);
+            }
+            SimLevelBuilder.RegistrarObra(x0, SimLevelBuilder.FundacionY0, x0 + 1, topY);
+            SimLevelBuilder.RegistrarObra(x1 - 1, SimLevelBuilder.FundacionY0, x1, topY);
+
+            // 3) Las tablas (x388-399 en y145 y y166): donde asientan las
+            // bahías; cada tanque funde su propio suelo con la suya.
+            int tablaBaja = SimLevelBuilder.FundacionBahiaBajaY0 - 1;
+            int tablaAlta = SimLevelBuilder.FundacionBahiaAltaY0 - 1;
+            for (int x = x0 + 2; x <= x1 - 2; x++)
+            {
+                _sim.PaintStable(x, tablaBaja, 0, MaterialId.PisoEstructural);
+                _sim.PaintStable(x, tablaAlta, 0, MaterialId.PisoEstructural);
+            }
+            SimLevelBuilder.RegistrarObra(x0 + 2, tablaBaja, x1 - 2, tablaBaja);
+            SimLevelBuilder.RegistrarObra(x0 + 2, tablaAlta, x1 - 2, tablaAlta);
+
+            _estanteriaConstruida = true;
+            Debug.Log("[TenThousandYears] REORDEN: estantería x" + x0 + "-" + x1 + " (montantes hasta y" + topY + ", tablas y" + tablaBaja + "/y" + tablaAlta + "; paso de vuelo libre y" + (topY + 1) + "-" + (SimLevelBuilder.FundacionY1 - 1) + ").");
         }
 
         // ------------------------------------------------------------------
@@ -1111,8 +1243,16 @@ namespace Alkahest.Game
         {
             int n = 0;
             var grid = _sim.Grid;
+            // (R85) Tras el REORDEN la estantería INTERCEPTA la caída: el
+            // lodo de la gotera ya no llega al cráter — aterriza en la tabla
+            // alta y en la boca del silo. Sin subir el techo del conteo, la
+            // histéresis (tope 70) jamás dispararía y la gotera enterraría
+            // la estantería sin freno (regla 55: todo proceso por tick se
+            // demuestra MORTAL). El interior del silo sigue excluido (Opus
+            // A4): lo atesorado no es montículo.
+            int yTope = _estanteriaConstruida ? SimLevelBuilder.FundacionY1 - 1 : SimLevelBuilder.FundacionY0 + 6;
             for (int x = SimLevelBuilder.FundacionCraterX0 - 3; x <= SimLevelBuilder.FundacionCraterX1 + 3; x++)
-                for (int y = SimLevelBuilder.FundacionY0 - 2; y <= SimLevelBuilder.FundacionY0 + 6; y++)
+                for (int y = SimLevelBuilder.FundacionY0 - 2; y <= yTope; y++)
                 {
                     // (R83, revisión Opus A4) EL LODO ATESORADO NO ES
                     // MONTÍCULO: la caja de este conteo solapa el silo
@@ -1526,6 +1666,13 @@ namespace Alkahest.Game
             // negro). En pausa no se dibuja y su reloj tampoco corre: el
             // gesto espera entero al otro lado del menú (revisión Opus #9).
             if (_hazPresT >= 0f && !DayCycle.InputLocked) DibujarHazPresentacion();
+
+            // (R85) EL FRENTE DEL BARRIDO, VISIBLE: una columna de luz que
+            // cruza la caverna de izquierda a derecha con el frente real.
+            // Cesar jugó el REORDEN y "no vio el barrido": lo que la sim
+            // recogía era indistinguible de nada (regla 43) — ahora el ORDEN
+            // se VE pasar, aunque no hubiera una sola celda que recoger.
+            if (_barridoEnCurso && !DayCycle.InputLocked) DibujarFrenteDelBarrido();
 
             // (R81) El aro de la boca del frasco: acompaña el paso de aspirar
             // (y la ficha-recuerdo). Calla ante TODO modo que apague el

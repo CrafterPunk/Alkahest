@@ -160,6 +160,12 @@ namespace Alkahest.Game
         [Tooltip("Duración del fundido del fondo: la ruina cede al muro del taller profundo.")]
         public float fondoTransicionSeg = 3.5f;
 
+        [Header("El refill (R85, fase B2): los tubos que tocan el suelo")]
+        [Tooltip("Cadencia del goteo de reabastecimiento de cada recipiente reubicado (segundos por celda). Cesar: 'que toque el suelo, para que dé la sensación que se reabastece desde el suelo'.")]
+        public float refillSeg = 0.8f;
+        [Tooltip("Tope del refill automático (celdas del dueño): el tubo repone hasta aquí y descansa — el resto del vidrio es del jugador. Interior = 78.")]
+        public int refillTope = 60;
+
         [Header("UI (proporciones de pantalla)")]
         [Tooltip("Altura del centro de la voz del Maestro, como fracción del alto de pantalla desde arriba.")]
         public float vozAlturaFrac = 0.24f;

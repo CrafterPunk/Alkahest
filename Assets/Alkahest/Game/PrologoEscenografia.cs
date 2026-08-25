@@ -44,6 +44,10 @@ namespace Alkahest.Game
         public Transform deposito;
         [Tooltip("(R83, capítulo 2) Dónde emerge el SILO del lodo (base-centro, huella 8x13, gemela del tanque — R84). Sin marcador: el hueco medido entre poza y cráter.")]
         public Transform deposito2;
+        [Tooltip("(R85, fase B2) Dónde RENACE el tanque de agua tras el REORDEN: la bahía BAJA de la estantería central (base-centro). Sin marcador: las constantes del plano.")]
+        public Transform depositoFinal;
+        [Tooltip("(R85, fase B2) Dónde RENACE el silo del lodo tras el REORDEN: la bahía ALTA de la estantería (base-centro; la gotera del derrumbe cae a su boca). Sin marcador: las constantes del plano.")]
+        public Transform deposito2Final;
 
         [Header("Arte horneado (opcional — si falta, el código lo genera igual)")]
         [Tooltip("Prefab visual del tanque (hijos: 'Fondo' detrás de la sim, 'Marco' delante). Solo la piel: el agua y los muros siguen siendo sim.")]
@@ -91,6 +95,20 @@ namespace Alkahest.Game
                 float c = SimRenderer.CellWorldSize;
                 Gizmos.DrawWireCube(deposito2.position + new Vector3(0f, 6.5f * c, 0f), new Vector3(8f * c, 13f * c, 0f));
                 UnityEditor.Handles.Label(deposito2.position + Vector3.up * 1.2f, "SILO (lodo)");
+            }
+            if (depositoFinal != null)
+            {
+                Gizmos.color = new Color(0.4f, 0.75f, 1f, 0.55f);
+                float c = SimRenderer.CellWorldSize;
+                Gizmos.DrawWireCube(depositoFinal.position + new Vector3(0f, 6.5f * c, 0f), new Vector3(8f * c, 13f * c, 0f));
+                UnityEditor.Handles.Label(depositoFinal.position + Vector3.up * 1.6f, "TANQUE final (bahía baja)");
+            }
+            if (deposito2Final != null)
+            {
+                Gizmos.color = new Color(0.75f, 0.55f, 0.35f, 0.55f);
+                float c = SimRenderer.CellWorldSize;
+                Gizmos.DrawWireCube(deposito2Final.position + new Vector3(0f, 6.5f * c, 0f), new Vector3(8f * c, 13f * c, 0f));
+                UnityEditor.Handles.Label(deposito2Final.position + Vector3.up * 1.2f, "SILO final (bahía alta)");
             }
 
             if (mostrarZonasDelPlano) DibujarZonasDelPlano();

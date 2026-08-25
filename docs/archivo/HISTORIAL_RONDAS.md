@@ -4984,3 +4984,67 @@ ca_playtest80.cmd barre la ronda.
   EVIDENCIA FORENSE instalada (regla 54): si el tope vuelve a cerrar con carga
   incompleta, la consola imprime censo de ambos recipientes + bancos.
 ca_playtest84.cmd barre la ronda.
+
+## Ronda 85 — FUGAS SELLADAS + BARRIDO VISIBLE + FASE B2: LA ESTANTERÍA CON TUBOS Y REFILL
+
+· Dos cazas del playtest de Cesar ("el lodo y el agua se filtran cuando hay hueco abajo…
+  llegué hasta ORDEN y no vi cambio en el desorden… tampoco vi los tubos de refill"):
+  1. LA FUGA: los muros del silo pisan los LABIOS de poza/cráter con vacío debajo — el
+     escape DIAGONAL clásico de los líquidos (el mismo mecanismo de la fuga de cascada
+     R74). FIX: el recipiente SELLA SU PROPIO SUELO al asentarse (fila de PisoEstructural
+     bajo TODA la huella, y0-1) y la obra lo incluye. VERIFICADO: lecho 65x8 bajo ambas
+     huellas; 48 lodo + 32 agua pintados de golpe → 48/48 y 32/32 dentro, CERO fugas.
+     Y MEDIDO EN VIVO un daño colateral del primer intento: desmontar dejaba el suelo en
+     Empty = ZANJA en el lecho de roca → ahora _sueloPrevio recuerda qué había y la
+     retirada lo RESTAURA exacto (verificado: 0,1,1,1,1,1,1,1 → sellado → restaurado igual).
+  2. EL BARRIDO INVISIBLE: los rects protegidos protegían ENTEROS — y el desastre FLUYE
+     justo ahí (el lodo escapado acababa en la poza; la poza protegió su mugre). FIX
+     doble: (a) protección DEL DUEÑO, no del rect — la poza conserva su agua y entrega su
+     lodo; el cráter conserva su lodo y entrega su agua (cuenco/hogar/fogón siguen
+     intocables); (b) EL FRENTE VISIBLE: columna de luz IMGUI (lucecita estirada + filo
+     pulsante) que cruza la caverna con el frente real — el ORDEN se VE pasar aunque no
+     haya nada que recoger (regla 43). + Debug.Log en CADA transición de paso del REORDEN.
+· TOPE DEL PASO 1 LIMPIO: RetirarDeGolpe() — si el tope dispara a medio drenar, cuenta lo
+  restante al banco, limpia el interior, desmonta y restaura ANTES del Destroy (sin muros
+  huérfanos ni obra fantasma). Verificado en vivo por partida doble (probe + un ciclo que
+  cruzó el tope de verdad).
+· FASE B2 — LA ESTANTERÍA CENTRAL (constantes FundacionEstanteria*/FundacionBahia*):
+  x386-401 entre la poza (labio x385) y el fogón (obra x402). Montantes 2x en ambos
+  flancos de y140 a y188 — NO llegan a la bóveda A PROPÓSITO: el imp es un VOLADOR y la
+  caverna jamás se sella (paso de vuelo y189-199, 11 celdas; caja del imp 7.8). Tablas
+  x388-399 en y145/y166. Obra POR PIEZA (4 rects), jamás bounding box. La huella se
+  LIMPIA antes de construir (Opus A12) banqueando lo suelto y respetando piedra/piso del
+  jugador. Si alguien está parado ahí, sale nadando (doctrina ApprenticeController).
+· EL RENACER REUBICADO (paso 3 del REORDEN): InitFinal/InitSiloFinal → bahía BAJA y146 =
+  AGUA, bahía ALTA y167 = LODO (y167 medido: el domo del tanque bajo llega a y165).
+  Marcadores depositoFinal/deposito2Final (escenografía + validador + gizmos).
+  Emergencia CORTA (8 celdas) para no atravesar la bahía de abajo. La gotera del
+  derrumbe (x395-397) cae DERECHA a la boca del silo alto: la herida alimenta el almacén
+  hasta que la Fase C selle el techo — y ContarLodoEnCrater sube su techo de conteo tras
+  el reorden (el montículo en la tabla también pausa la gotera: regla 55, proceso mortal).
+· LOS TUBOS AL SUELO (pedido literal: "que toque el suelo, que se reabastece desde el
+  suelo"): TanqueTuboLateral (codo al vidrio + caña con juntas + BRIDA que pisa y139),
+  hijo del GO raíz (no emerge: el tanque "se conecta" al asomar), se enciende al asentar.
+  REFILL: ActivarRefill → goteo refillSeg=0.8 por la columna del inlet (lado del tubo,
+  brota desde abajo) hasta refillTope=60/78; llega EXCLUSIVAMENTE con el renacer (antes,
+  llenar es TU tarea — R74 intacta). En Fase C el arranque del refill del silo pasará al
+  sellado del techo (el relevo de la fuente).
+· OJOS DE OPUS SOBRE LA PUESTA EN ESCENA (mandato de Cesar para todo el cap2) — 8
+  hallazgos; APLICADOS EN CALIENTE los dos accionables:
+  - #5 INVERSIÓN SEMÁNTICA (medida en captura): el tubo del LODO moría junto a la POZA de
+    agua → flancos INTERCAMBIADOS: el agua bebe de la poza (izquierda), el lodo bebe de la
+    herida/cráter (derecha). Capturado y verificado.
+  - #3/#4 un solo material para cuatro funciones: el tubo se fundía con montantes/tablas →
+    COBRE PROPIO de tubería (rojizo oscuro, sin verdín, juntas contadas) — la caña
+    siluetea continua. Capturado y verificado.
+  - DIFERIDOS (backlog, decisión de Cesar): cascada punteada lee como coleccionables
+    (Cesar ya aprobó su look "hasta una revisión final"); color del lodo = identidad de
+    seed (cambiarlo es decisión de arte global); anti-escalera del mueble (escuadras,
+    capiteles) y marcas de nivel/gota subiendo = decoración del greybox que Cesar aplazó
+    ("carteles y cosas decorativas vemos luego"); HUD con tinte por tanque.
+· VERIFICADO EN VIVO (dos ciclos completos hasta beat=Fin): logs de TODOS los pasos;
+  bancos coherentes (drenado+intrusos+barridos); intrusos recogidos de poza y cráter;
+  montantes 98/98, tablas 24/24, paso de vuelo 0 sólidos; tubos activos tocando suelo;
+  refill llenó ambos hasta 60/60 (tope) desde cargas menores; lecho restaurado exacto
+  tras retirada. CAPTURAS: estantería con ambos tanques cargados + tubos legibles.
+· ca_playtest85.cmd barre la ronda.

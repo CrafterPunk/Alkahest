@@ -1877,6 +1877,71 @@ namespace Alkahest.Game
             return s;
         }
 
+        /// <summary>
+        /// (R85, FASE B2 — la segunda referencia de Cesar, la de la tubería)
+        /// EL TUBO LATERAL COMPLETO: codo arriba (entra al vidrio por el
+        /// flanco), caña vertical con juntas anulares, y BRIDA al pie — el
+        /// tubo TOCA EL SUELO ("para que dé la sensación que se reabastece
+        /// desde el suelo", Cesar). Dibujado con el codo hacia la IZQUIERDA
+        /// (hacia el tanque); para el flanco contrario, flipX en el renderer.
+        /// Huella: 4 celdas de ancho (2 de caña a la derecha + 2 de vuelo del
+        /// codo) por `altoCeldas` de alto; el pivote es el centro del sprite.
+        /// </summary>
+        // (R85, revisión Opus B2 #3/#4, medida en captura) EL TUBO TIENE SU
+        // PROPIO COBRE: con la paleta compartida (tan + verdín moteado) la
+        // tubería se FUNDÍA con montantes, tablas y marcos — cuatro
+        // funciones, un material, cero lectura. El cobre del tubo es más
+        // rojizo, más oscuro y SIN pátina: el verdín queda para los marcos,
+        // y la caña siluetea continua (las juntas, más espaciadas, no la
+        // trocean en "cajas apiladas").
+        private static readonly Color32 TuboAlto = new Color32(0xD8, 0x7E, 0x3F, 255);
+        private static readonly Color32 Tubo = new Color32(0x8E, 0x46, 0x22, 255);
+        private static readonly Color32 TuboBajo = new Color32(0x47, 0x22, 0x11, 255);
+
+        public static Sprite TanqueTuboLateral(int altoCeldas)
+        {
+            string clave = "tanquetubolateral" + altoCeldas;
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = Tex(4), h = Tex(altoCeldas);
+            var px = new Color32[w * h];
+            int cana0 = Tex(2);              // la caña ocupa la mitad derecha.
+            int codoAlto = Tex(2);           // el tramo horizontal del codo (arriba del todo).
+            int bridaAlto = Tex(1);          // la brida del pie (todo el ancho de la caña + oreja).
+
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    bool enCana = x >= cana0;
+                    bool enCodo = y >= h - codoAlto;                    // corre hasta el borde izquierdo: entra al vidrio.
+                    bool enBrida = y < bridaAlto && x >= cana0 - S(1);  // pie ensanchado: AGARRA el suelo.
+                    if (!enCana && !enCodo && !enBrida) continue;
+
+                    Color32 c;
+                    if (enCodo)
+                    {
+                        // El codo: sombreado vertical (arriba claro, abajo oscuro).
+                        int dy = y - (h - codoAlto);
+                        c = dy >= codoAlto - Escala ? TuboAlto : (dy < Escala ? TuboBajo : Tubo);
+                    }
+                    else
+                    {
+                        // La caña (o la oreja de la brida): sombreado horizontal
+                        // CONTINUO — el fuste es una sola pieza a la vista.
+                        c = x < cana0 + Escala ? TuboAlto : (x >= w - Escala ? TuboBajo : Tubo);
+                        if (y % S(10) < Escala && y > bridaAlto && y < h - codoAlto - Escala) c = TuboBajo; // juntas contadas, no un troceo.
+                        if (enBrida) c = y < Escala ? TuboBajo : TuboAlto; // la brida brilla: pieza distinta que AGARRA el suelo.
+                    }
+                    px[y * w + x] = c;
+                }
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsTanqueTuboLateral");
+            _cache[clave] = s;
+            return s;
+        }
+
         public static Sprite MarcoBandeja(int spanCeldas, int altoCeldas)
         {
             string clave = "bandeja" + spanCeldas + "x" + altoCeldas;
