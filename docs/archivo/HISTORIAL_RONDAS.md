@@ -4945,3 +4945,42 @@ ca_playtest80.cmd barre la ronda.
     su lodo visible junto al tanque alto del agua — la familia de recipientes se lee sola.
 · Siguiente: FASE B1 (hundir + barrido-que-recoge + fondo), B2 (estantería + bahías
   apiladas + tubos + refill), C (cincel sostenido + la Obra). ca_playtest83.cmd barre.
+
+## Ronda 84 — EL SILO GEMELO + FASE B1: EL REORDEN (la cinemática del capítulo 2)
+
+· Nota de git: otra vez el cmd anterior barrió la ronda siguiente (82 contuvo 83; el 83
+  solo llevó borrados de playtests viejos). GitHub completo; los mensajes van corridos.
+· EL SILO, AL TAMAÑO DEL TANQUE (decisión de Cesar: "que uno sea más chiquito se me hace
+  raro"): huella 8x13 con muros en x385/x392 — sobre los LABIOS de poza y cráter (piedra
+  estática, regla 7: jamás cae; el contenido reposa en x386-391/y139 macizo). Interior 78,
+  gemelo exacto. La distinción vendrá por carteles/decoración (en observación).
+· FASE B1 DEL REORDEN, construida y VERIFICADA EN VIVO de punta a punta:
+  1. LA RETIRADA (DepositoDeAgua.Retirar → Drenando/Hundiendo/Enterrado): drena celda a
+     celda CONTANDO al banco (el mundo lo toma, no lo derrama — Opus C2), borra muros,
+     DEGENERA su rect de obra (el handle ahora se guarda — sin él quedaba obra fantasma
+     anticincel, Opus A8/fantasma R69), se hunde en reversa y el director destruye/recrea.
+  2. EL BARRIDO QUE RECOGE (TickBarrido): un frente de izquierda a derecha que junta SOLO
+     agua y lodo/barbotina sueltos al banco — jamás piedra/piso (la obra del jugador),
+     jamás los rects protegidos (poza/cuenco/hogar/fogón/cráter), jamás los EXPERIMENTOS
+     (otras materias se respetan). Manantial y rezumado EN PAUSA mientras barre (Opus A10).
+  3. EL FONDO DEL CASTILLO (WorkshopBackdrop.TransicionAFondoTaller): el fondo clásico del
+     taller se pinta encima de la ruina y entra en fundido (pintor bombeado A MANO para
+     bajarle el alfa el mismo frame en que nace: cero flash). "Estamos reconstruyendo
+     porque algo pasó" queda pagado: el espacio SE ORDENA a la vista. Sin herrajes aún.
+  4. EL RENACER CARGADO: ambos recipientes reaparecen (por ahora en sus sitios; la
+     estantería central con tubos es la B2) con carga inicial = lo drenado + lo barrido,
+     rellenándose despacio a la vista — "lo que sale primero es lo que tú derramaste".
+     Amanecer + Trueque cierran como siempre.
+· VERIFICADO: cadena completa hasta beat=Fin paso=4; bancos agua=98/lodo=28; el desastre
+  sembrado (6 agua + 3 lodo) recogido a 0; el EXPERIMENTO sembrado (arena) NO fue tocado
+  por el barrido (desapareció por SU QUÍMICA: el agua sembrada al lado lo alcanzó — el
+  barrido no lo tocó, ids ajenos ni se leen); poza protegida intacta (agua viva);
+  fondoTaller vivo; tanque renació 76/76. CAPTURA: el interior ya viste ladrillo del
+  castillo, los dos recipientes cargados, fogata viva, suelo limpio.
+· ANOMALÍA EN CAZA (regla 30: no cerrada): el silo renació UNA vez con 14/28 y fase
+  Listo. No reproducida (vertido re-armado: 27-28 ✓ estable dos veces). Descartados con
+  evidencia: barrido en curso, drenado activo, reacciones (censo homogéneo id26), 
+  rezumaderos (rects ajenos). El TOPE del paso 4 salvó el arco (diseñado para eso).
+  EVIDENCIA FORENSE instalada (regla 54): si el tope vuelve a cerrar con carga
+  incompleta, la consola imprime censo de ambos recipientes + bancos.
+ca_playtest84.cmd barre la ronda.

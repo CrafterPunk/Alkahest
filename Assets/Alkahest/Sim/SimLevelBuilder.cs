@@ -2950,13 +2950,17 @@ namespace Alkahest.Sim
         // conceptualmente al grifo antiguo como fuente básica de agua.
         public const int FundacionDepositoX0 = 414, FundacionDepositoX1 = 421; // muros en X0/X1, interior 415-420.
         public const int FundacionDepositoY0 = 140, FundacionDepositoY1 = 152; // muros y140..152; boca abierta en y153.
-        // (R83, capítulo 2 — revisión Opus A1, MEDIDO) EL SILO DEL LODO: el
-        // hueco real entre la poza (x372-385) y el cráter (x392-400) es de 6
-        // columnas exactas — x386..391. Huella 6x9 (interior x387-390, 4 de
-        // ancho: silueta baja y ancha de "esto se AMONTONA", frente al tanque
-        // alto del agua), muros en X0/X1, base en el suelo de siempre.
-        public const int FundacionSiloX0 = 386, FundacionSiloX1 = 391;
-        public const int FundacionSiloY0 = 140, FundacionSiloY1 = 148;
+        // (R83, capítulo 2 — revisión Opus A1, MEDIDO; R84: MISMO TAMAÑO que
+        // el tanque por decisión de Cesar "que uno sea más chiquito se me
+        // hace raro") EL SILO DEL LODO: el hueco de AIRE entre la poza
+        // (x372-385) y el cráter (x392-400) mide 6 columnas (x386..391) — el
+        // INTERIOR del silo. Con huella 8x13 los muros caen en x385/x392,
+        // sobre los LABIOS de la poza y el cráter: piedra estática (regla 7,
+        // jamás cae) con 1-5 celdas de vacío bajo cada muro — el contenido
+        // reposa en x386-391/y139, que es suelo macizo. Interior 6x13 = 78,
+        // idéntico al tanque del agua.
+        public const int FundacionSiloX0 = 385, FundacionSiloX1 = 392;
+        public const int FundacionSiloY0 = 140, FundacionSiloY1 = 152;
         // (RONDA 64, afinado con capturas) El spawn entra al resplandor del
         // fuego: antes (x352, y luego x388) el aprendiz nacía FUERA del óvalo
         // de luz o en su anillo oscuro -- invisible para sí mismo. Ahora

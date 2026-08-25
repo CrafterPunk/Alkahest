@@ -63,7 +63,7 @@ namespace Alkahest.Game
         // docs/PLAN_PROLOGO_CAP2.md) se insertarán entre LlenarDeposito2 y
         // Fin; hasta entonces el arco cierra igual que siempre (amanecer +
         // Trueque) para que el juego nunca quede a medias entre fases.
-        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Recompensa2, LlenarDeposito2, Fin }
+        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Recompensa2, LlenarDeposito2, Reorden, Fin }
         private enum AguaSub { Ir, Aspirar, Verter, Libre }
 
         // ==================================================================
@@ -310,6 +310,7 @@ namespace Alkahest.Game
                 case Beat.LlenarDeposito: TickLlenarDeposito(); break;
                 case Beat.Recompensa2: TickRecompensa2(); break;
                 case Beat.LlenarDeposito2: TickLlenarDeposito2(); break;
+                case Beat.Reorden: TickReorden(); break;
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
             }
 
@@ -831,17 +832,167 @@ namespace Alkahest.Game
         private bool _recompensa2Arrancada;
         private bool _avisoApartateDado;
 
-        /// <summary>(R83) LLÉNALO. de barro: la gotera del cráter es la fuente; el silo, el destino. Al lograrlo cierra el arco (hasta que la FASE B inserte el REORDEN aquí).</summary>
+        /// <summary>(R83) LLÉNALO. de barro: la gotera del cráter es la fuente; el silo, el destino. Al lograrlo, el REORDEN (R84).</summary>
         private void TickLlenarDeposito2()
         {
             if (_tBeat < _g.vozHoldSeg) return;
             if (_silo != null && _silo.DelDueno() >= _g.llenarDeposito2Meta)
             {
                 Decir(_g.vozBien);
-                _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el mundo respondió dos veces.
-                Trueque.Activar(); // el tablón despierta con el amanecer, como promete el bootstrap (regla 49).
-                CambiarBeat(Beat.Fin);
+                CambiarBeat(Beat.Reorden);
             }
+        }
+
+        // =================================================================
+        // (R84, FASE B1 — plan cap2, con los 19 hallazgos de Opus) EL
+        // REORDEN: la cinemática del capítulo. BIEN. → ORDEN. → los dos
+        // recipientes SE RETIRAN (drenando su contenido al banco, muros
+        // fuera, obra degenerada, hundimiento) → EL BARRIDO recoge el
+        // desastre (agua y lodo sueltos van al banco; los EXPERIMENTOS del
+        // jugador y toda piedra/piso NO se tocan — Opus C2/A11) → la ruina
+        // cede al fondo del taller (WorkshopBackdrop.TransicionAFondoTaller)
+        // → los recipientes RENACEN cargados con lo recogido ("lo que sale
+        // primero es lo que tú derramaste"), rellenándose despacio a la
+        // vista → amanecer + Trueque. En la FASE B2 el renacer será sobre la
+        // estantería central con sus tubos; hoy renacen en sus sitios (el
+        // juego queda entero entre fases).
+        // =================================================================
+        private int _reordenPaso;
+        private float _tPaso;
+        private int _bancoAgua, _bancoLodo;
+        private bool _barridoEnCurso;
+        private float _barridoFrente; // columna (en celdas, float para avanzar por dt).
+
+        private void TickReorden()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            _tPaso += Time.deltaTime;
+            switch (_reordenPaso)
+            {
+                case 0: // el BIEN. se dice entero; luego ORDEN. y las retiradas.
+                    if (_tBeat < _g.vozHoldSeg + 0.4f) return;
+                    Decir(_g.vozOrden);
+                    SimRenderer.FocoCinematico = new Vector3(
+                        (SimLevelBuilder.FundacionX0 + SimLevelBuilder.FundacionX1) * 0.5f * celda,
+                        (SimLevelBuilder.FundacionY0 + 18) * celda, 0f);
+                    SimRenderer.Sacudida = 0.5f;
+                    _deposito?.Retirar();
+                    _silo?.Retirar();
+                    _reordenPaso = 1; _tPaso = 0f;
+                    break;
+
+                case 1: // esperar los dos hundimientos (tope generoso).
+                    bool listos = (_deposito == null || _deposito.Enterrado) && (_silo == null || _silo.Enterrado);
+                    if (!listos && _tPaso < 20f) return;
+                    _bancoAgua = _deposito != null ? _deposito.DrenadoDelDueno : 0;
+                    _bancoLodo = _silo != null ? _silo.DrenadoDelDueno : 0;
+                    if (_deposito != null) Destroy(_deposito.gameObject);
+                    if (_silo != null) Destroy(_silo.gameObject);
+                    _deposito = null; _silo = null;
+                    _barridoEnCurso = true;
+                    _barridoFrente = SimLevelBuilder.FundacionX0 - 1;
+                    _barridoCol = SimLevelBuilder.FundacionX0 - 1;
+                    _reordenPaso = 2; _tPaso = 0f;
+                    break;
+
+                case 2: // EL BARRIDO: un frente que recoge de izquierda a derecha.
+                    TickBarrido();
+                    if (!_barridoEnCurso)
+                    {
+                        var backdrop = FindAnyObjectByType<WorkshopBackdrop>();
+                        if (backdrop != null) backdrop.TransicionAFondoTaller(_g.fondoTransicionSeg);
+                        Debug.Log("[TenThousandYears] REORDEN barrido: agua " + _bancoAgua + " → tanque, lodo " + _bancoLodo + " → silo (drenados incluidos).");
+                        _reordenPaso = 3; _tPaso = 0f;
+                    }
+                    break;
+
+                case 3: // respiro con el fondo fundiéndose; luego el renacer.
+                    if (_tPaso < 1.1f) return;
+                    _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
+                    _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76));
+                    _deposito.Aparecer();
+                    _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
+                    _silo.InitSilo(_sim, Mathf.Clamp(_bancoLodo, 0, 76));
+                    _silo.Aparecer();
+                    SimRenderer.Sacudida = 0.8f;
+                    _reordenPaso = 4; _tPaso = 0f;
+                    break;
+
+                case 4: // esperar el renacer cargado; amanecer.
+                    bool cargados = _deposito != null && _deposito.CargaLista && _silo != null && _silo.CargaLista;
+                    if (!cargados && _tPaso < 30f) return;
+                    // (R84, EVIDENCIA FORENSE — regla 54) En la verificación en
+                    // vivo el silo renació UNA vez con 14/28 (no reproducido;
+                    // descartados: barrido en curso, drenado activo, reacciones
+                    // —censo homogéneo—, rezumaderos). El tope de arriba salvó
+                    // el arco, como debe; si vuelve a pasar, esta línea dirá la
+                    // verdad en la consola del playtest.
+                    if (!cargados)
+                        Debug.LogWarning("[TenThousandYears] REORDEN cerró por TOPE con carga incompleta: tanque="
+                            + (_deposito != null ? _deposito.DelDueno() + "/" + _deposito.Capacidad() : "(null)")
+                            + " silo=" + (_silo != null ? _silo.DelDueno() + "/" + _silo.Capacidad() : "(null)")
+                            + " bancos(agua=" + _bancoAgua + ", lodo=" + _bancoLodo + ")");
+                    SimRenderer.FocoCinematico = null;
+                    _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el taller respondió, y ORDENÓ.
+                    Trueque.Activar(); // el tablón despierta con el amanecer (regla 49).
+                    CambiarBeat(Beat.Fin);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// (R84, Opus A10/A11/C2/C3) El frente del barrido: avanza columnas a
+        /// ritmo del guion recogiendo SOLO agua y lodo/barbotina sueltos —
+        /// jamás piedra ni piso estructural (la obra del JUGADOR), jamás los
+        /// rects protegidos (la poza, el cuenco, el hogar, el fogón, el
+        /// cráter), jamás los experimentos (otras materias se respetan). Lo
+        /// recogido SUMA al banco: es la carga del renacer, no un borrado.
+        /// </summary>
+        private void TickBarrido()
+        {
+            float span = SimLevelBuilder.FundacionX1 - SimLevelBuilder.FundacionX0 + 2;
+            _barridoFrente += span * Time.deltaTime / Mathf.Max(0.5f, _g.reordenBarridoSeg);
+            int hasta = Mathf.Min(SimLevelBuilder.FundacionX1 + 1, Mathf.FloorToInt(_barridoFrente));
+            var grid = _sim.Grid;
+
+            while (_barridoCol <= hasta)
+            {
+                int x = _barridoCol;
+                for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
+                {
+                    if (RectProtegidoDelBarrido(x, y)) continue;
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); }
+                    else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); }
+                    // Todo lo demás (piedra, piso, experimentos del jugador,
+                    // fuego propio) se RESPETA: el barrido recoge lo que se
+                    // derramó, no lo que se creó.
+                }
+                _barridoCol++;
+            }
+
+            if (_barridoCol > SimLevelBuilder.FundacionX1 + 1) _barridoEnCurso = false;
+        }
+        private int _barridoCol;
+
+        private static bool RectProtegidoDelBarrido(int x, int y)
+        {
+            // La poza de la cascada (con su rezumadero).
+            if (x >= SimLevelBuilder.FundacionCharcoX0 && x <= SimLevelBuilder.FundacionCharcoX1 &&
+                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+            // El cuenco del Maestro.
+            if (x >= SimLevelBuilder.FundacionCuencoX0 && x <= SimLevelBuilder.FundacionCuencoX1 &&
+                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+            // El hogar de brasas del Maestro (brasas + tiro).
+            if (x >= SimLevelBuilder.FundacionBrasasX0 - 1 && x <= SimLevelBuilder.FundacionBrasasX1 + 1 &&
+                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 4) return true;
+            // El lecho del fogón del jugador.
+            if (x >= SimLevelBuilder.FundacionFogonX0 - 2 && x <= SimLevelBuilder.FundacionFogonX1 + 2 &&
+                y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 2) return true;
+            // El cráter del derrumbe (la fuente viva del lodo).
+            if (x >= SimLevelBuilder.FundacionCraterX0 && x <= SimLevelBuilder.FundacionCraterX1 &&
+                y >= SimLevelBuilder.FundacionY0 - 2 && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+            return false;
         }
 
         // ------------------------------------------------------------------
@@ -857,6 +1008,7 @@ namespace Alkahest.Game
         /// </summary>
         private void TickManantial()
         {
+            if (_barridoEnCurso) return; // (R84, Opus A10) el barrido no pelea contra la cascada.
             _manantialTimer -= Time.deltaTime;
             if (_manantialTimer > 0f) return;
             _manantialTimer = _g.manantialSeg;
@@ -908,6 +1060,7 @@ namespace Alkahest.Game
         /// </summary>
         private void RezumarPoza()
         {
+            if (_barridoEnCurso) return; // (R84) mismo respiro que el manantial.
             // (revisión Opus 73 #11) A CADENCIA PROPIA, no por frame: era el
             // único proceso del director atado al framerate — el nivel de la
             // poza dependía de los fps de la máquina.

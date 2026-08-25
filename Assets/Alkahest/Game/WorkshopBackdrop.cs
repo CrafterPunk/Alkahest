@@ -413,6 +413,52 @@ namespace Alkahest.Game
             }
         }
 
+        // =================================================================
+        // (R84, FASE B1 del capítulo 2 — el REORDEN) LA RUINA CEDE AL TALLER:
+        // el fondo del castillo profundo (el MISMO PintarFondoCuartoIntimo
+        // del juego completo — una sola verdad de píxeles) se pinta encima de
+        // la ruina (orden -9 sobre -10) y entra en fundido. La promesa de la
+        // R74 ("estamos reconstruyendo porque algo pasó") se paga aquí: el
+        // espacio se ORDENA a la vista. Los herrajes (baldas/cadenas) NO se
+        // montan: son el taller vestido, y eso llega con sus fases.
+        // =================================================================
+        private bool _transicionHecha;
+
+        /// <summary>Arranca el fundido ruina→taller una única vez. La llama el director del prólogo durante el REORDEN.</summary>
+        public void TransicionAFondoTaller(float seg)
+        {
+            if (_transicionHecha) return;
+            _transicionHecha = true;
+            StartCoroutine(TransicionAFondoTallerCo(Mathf.Max(0.2f, seg)));
+        }
+
+        private IEnumerator TransicionAFondoTallerCo(float seg)
+        {
+            // Bombear el pintor A MANO: al terminar seguimos en el MISMO
+            // frame en que creó su GO — así se le baja el alfa a 0 antes de
+            // que se renderice una sola vez (sin bombeo habría un frame de
+            // fondo nuevo a plena luz: un flash).
+            var pintor = PintarFondoCuartoIntimo();
+            while (pintor.MoveNext()) yield return pintor.Current;
+
+            var go = GameObject.Find("WorkshopBackdrop_Sprite");
+            if (go == null) yield break; // imposible hoy; si el pintor cambia de nombre, el fundido simplemente no ocurre (y la ruina se queda — reversible).
+            var sr = go.GetComponent<SpriteRenderer>();
+            sr.sortingOrder = -9; // delante de la ruina (-10), detrás de la sim (-5).
+            var meta = sr.color;
+            sr.color = new Color(meta.r, meta.g, meta.b, 0f);
+
+            float t = 0f;
+            while (t < seg)
+            {
+                t += Time.deltaTime;
+                float a = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / seg));
+                sr.color = new Color(meta.r, meta.g, meta.b, a * meta.a);
+                yield return null;
+            }
+            sr.color = meta;
+        }
+
         private IEnumerator PintarFondoRuina()
         {
             var tex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false)

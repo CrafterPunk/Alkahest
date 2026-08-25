@@ -44,7 +44,13 @@ namespace Alkahest.Game
         private Transform _cuerpo;                    // todas las capas visuales cuelgan de aquí (para el ascenso).
         private float _alturaMundo;
 
-        private enum Fase { Oculto, Emergiendo, CargaInicial, Listo }
+        // (R84, FASE B1 — plan cap2 / Opus A8) Drenando/Hundiendo/Enterrado:
+        // la retirada cinematográfica del REORDEN. Orden obligatorio: drenar
+        // el contenido celda a celda (el mundo lo TOMA, no lo derrama) →
+        // borrar los muros de la sim → degenerar el rect de obra (nada de
+        // obra fantasma anticincel — el fantasma R69) → hundir el visual →
+        // Enterrado (el director destruye el GO y recrea el recipiente).
+        private enum Fase { Oculto, Emergiendo, CargaInicial, Listo, Drenando, Hundiendo, Enterrado }
         private Fase _fase = Fase.Oculto;
         private float _tFase;
         private float _polvoTimer, _rellenoTimer;
@@ -67,6 +73,10 @@ namespace Alkahest.Game
         public bool Asentado => _fase == Fase.CargaInicial || _fase == Fase.Listo;
         /// <summary>La carga inicial terminó: el tanque espera a que el jugador lo LLENE (no se repone solo — R74).</summary>
         public bool CargaLista => _fase == Fase.Listo;
+        /// <summary>(R84) La retirada terminó: muros fuera de la sim, obra degenerada, visual bajo tierra. El director puede destruir y recrear.</summary>
+        public bool Enterrado => _fase == Fase.Enterrado;
+        /// <summary>(R84) Celdas del DUEÑO que el drenado de la retirada recogió — el banco con el que renace el recipiente (Opus C2: recoger, no borrar).</summary>
+        public int DrenadoDelDueno { get; private set; }
 
         // (R83, Opus A4) El rect real, para que el director EXCLUYA el silo
         // del conteo de montículo del cráter: el lodo atesorado no pausa la
@@ -114,28 +124,37 @@ namespace Alkahest.Game
         }
 
         /// <summary>El tanque de agua clásico (marcador `deposito`, huella 8x13, piel de prefab, carga inicial del guion).</summary>
-        public void Init(AlkahestSim sim)
+        public void Init(AlkahestSim sim) => Init(sim, -1);
+
+        /// <summary>(R84) Variante con carga inicial EXPLÍCITA: el renacer del REORDEN arranca con lo que el drenado + el barrido recogieron ("lo que sale primero es lo que tú derramaste").</summary>
+        public void Init(AlkahestSim sim, int cargaInicial)
         {
             var escena = PrologoEscenografia.Buscar();
             InitInterno(sim, escena, escena != null ? escena.deposito : null,
-                MaterialId.Water, MaterialId.Empty, cargaInicial: -1, esSilo: false,
+                MaterialId.Water, MaterialId.Empty, cargaInicial: cargaInicial, esSilo: false,
                 anchoHuella: 8, altoHuella: 13,
                 fallbackX0: SimLevelBuilder.FundacionDepositoX0, fallbackY0: SimLevelBuilder.FundacionDepositoY0);
         }
 
         /// <summary>
-        /// (R83) EL SILO DEL LODO: huella 6x9 en el hueco medido entre la poza
-        /// y el cráter (x386-391 — 6 columnas exactas, Opus A1), dueño
-        /// lodo+barbotina, SIN carga inicial y SIN piel de prefab (la piel
-        /// horneada es la del tanque de agua; el silo viste el fallback
-        /// procedural a su medida hasta su sprite propio en la Fase B).
+        /// (R83; retallado R84 a 8x13 por Cesar) EL SILO DEL LODO: gemelo en
+        /// tamaño del tanque de agua, dueño lodo+barbotina, SIN carga inicial
+        /// y SIN piel de prefab (la piel horneada es la del tanque; el silo
+        /// viste el fallback procedural hasta su sprite propio).
         /// </summary>
-        public void InitSilo(AlkahestSim sim)
+        public void InitSilo(AlkahestSim sim) => InitSilo(sim, 0);
+
+        /// <summary>(R84) Variante con carga explícita para el renacer del REORDEN.</summary>
+        public void InitSilo(AlkahestSim sim, int cargaInicial)
         {
             var escena = PrologoEscenografia.Buscar();
+            // (R84, Cesar) MISMO TAMAÑO que el tanque (8x13): la distinción
+            // vendrá por carteles/decoración, no por silueta. El interior
+            // (x386-391) sigue cabiendo EXACTO en el aire medido poza|cráter;
+            // los muros pisan los labios (ver FundacionSilo* en el plano).
             InitInterno(sim, escena, escena != null ? escena.deposito2 : null,
-                Lodo, Barbotina, cargaInicial: 0, esSilo: true,
-                anchoHuella: 6, altoHuella: 9,
+                Lodo, Barbotina, cargaInicial: cargaInicial, esSilo: true,
+                anchoHuella: 8, altoHuella: 13,
                 fallbackX0: SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0);
         }
 
@@ -242,11 +261,27 @@ namespace Alkahest.Game
             _cuerpo.gameObject.SetActive(true);
         }
 
+        /// <summary>
+        /// (R84, el REORDEN) Arranca la RETIRADA: drena su contenido celda a
+        /// celda (contándolo en <see cref="DrenadoDelDueno"/>), borra sus
+        /// muros de la sim, degenera su rect de obra y se hunde. Al quedar
+        /// <see cref="Enterrado"/>, el director destruye este GO y recrea el
+        /// recipiente donde toque, cargado con lo recogido.
+        /// </summary>
+        public void Retirar()
+        {
+            if (_fase != Fase.Listo && _fase != Fase.CargaInicial) return;
+            _fase = Fase.Drenando;
+            _tFase = 0f;
+            _rellenoTimer = 0.2f;
+        }
+
         private SpriteRenderer _marcoSr;
+        private int _obraHandle = -1; // (R84, Opus A8) el handle de RegistrarObra: sin él, la retirada dejaría obra FANTASMA anticincel (el fantasma R69).
 
         private void Update()
         {
-            if (_sim == null || _sim.Grid == null || _fase == Fase.Oculto) return;
+            if (_sim == null || _sim.Grid == null || _fase == Fase.Oculto || _fase == Fase.Enterrado) return;
             if (DayCycle.InputLocked) return; // (revisión Opus 73 #1) con la pausa delante, la emergencia y el llenado esperan (la sim está congelada).
             float dt = Time.deltaTime;
             _tFase += dt;
@@ -256,6 +291,61 @@ namespace Alkahest.Game
                 case Fase.Emergiendo: TickEmerger(dt); break;
                 case Fase.CargaInicial: TickCargaInicial(dt); break;
                 case Fase.Listo: break; // (R74) no se repone solo: llenarlo es TU tarea.
+                case Fase.Drenando: TickDrenar(dt); break;
+                case Fase.Hundiendo: TickHundir(); break;
+            }
+        }
+
+        /// <summary>
+        /// (R84) EL MUNDO LO TOMA: la celda MÁS ALTA del interior se apaga a
+        /// cadencia visible (el mismo lenguaje del cuenco del Maestro), y lo
+        /// que era del dueño se CUENTA — es el banco del renacer, no un
+        /// borrado (Opus C2). Vacío el vidrio: muros fuera, obra degenerada,
+        /// y a hundirse.
+        /// </summary>
+        private void TickDrenar(float dt)
+        {
+            _rellenoTimer -= dt;
+            if (_rellenoTimer > 0f) return;
+            _rellenoTimer = 0.035f; // más brioso que el cuenco: hay hasta 78 celdas.
+
+            var grid = _sim.Grid;
+            for (int y = _y1; y >= _y0; y--)
+            {
+                for (int x = _x0 + 1; x < _x1; x++)
+                {
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Empty) continue;
+                    if (m == _matDueno || (m != MaterialId.Empty && m == _matDuenoAlt)) DrenadoDelDueno++;
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                    return; // una celda por tick: se VE al mundo tomarlo.
+                }
+            }
+
+            // Vidrio vacío: los muros salen de la sim y la obra se degenera
+            // (rect imposible: EsObraDelTaller lo ignora — precedente del
+            // tapiado de Semilla Cero).
+            for (int y = _y0; y <= _y1; y++)
+            {
+                _sim.Paint(_x0, y, 0, MaterialId.Empty);
+                _sim.Paint(_x1, y, 0, MaterialId.Empty);
+            }
+            if (_obraHandle >= 0) SimLevelBuilder.ActualizarObra(_obraHandle, 0, 0, -1, -1);
+            if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFondoInterior + 2; // vuelve DETRÁS de la sim: se hunde tras la roca, como emergió.
+            _fase = Fase.Hundiendo;
+            _tFase = 0f;
+        }
+
+        /// <summary>(R84) La emergencia en reversa: el cuerpo baja con el mismo easing y desaparece bajo el suelo.</summary>
+        private void TickHundir()
+        {
+            float t = Mathf.Clamp01(_tFase / _g.depositoEmergerSeg);
+            float ease = t * t * (3f - 2f * t);
+            _cuerpo.localPosition = new Vector3(0f, -_alturaMundo * ease, 0f);
+            if (t >= 1f)
+            {
+                _cuerpo.gameObject.SetActive(false);
+                _fase = Fase.Enterrado;
             }
         }
 
@@ -308,7 +398,7 @@ namespace Alkahest.Game
                     _sim.PaintStable(_x0, y, 0, MaterialId.Stone);
                     _sim.PaintStable(_x1, y, 0, MaterialId.Stone);
                 }
-                SimLevelBuilder.RegistrarObra(_x0, _y0, _x1, _y1);
+                _obraHandle = SimLevelBuilder.RegistrarObra(_x0, _y0, _x1, _y1); // (R84) el handle se GUARDA: la retirada lo degenera (Opus A8).
                 if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFrente; // el armazón pasa a ser el vidrio delante del agua.
 
                 _fase = Fase.CargaInicial;

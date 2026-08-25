@@ -145,12 +145,20 @@ namespace Alkahest.Game
         public int depositoCargaInicial = 14;
 
         [Header("El capítulo 2 (R83): el silo del lodo")]
-        [Tooltip("Meta de lodo (lodo + barbotina) del LLÉNALO. del silo. Interior del silo = 36 celdas: dejar aire.")]
+        [Tooltip("Meta de lodo (lodo + barbotina) del LLÉNALO. del silo. Interior del silo = 78 celdas (gemelo del tanque desde R84).")]
         public int llenarDeposito2Meta = 24;
         [Tooltip("Tope de espera de una emergencia antes de seguir el arco aunque el jugador no se aparte (revisión Opus A9).")]
         public float emergerTopeSeg = 12f;
         [Tooltip("La placa dice la verdad cuando la meta está BLOQUEADA por materia ajena ('· sobra AGUA — aspírala'). Apagable si estorba (decisión pendiente de Cesar sobre el contador honesto — aquí es mínimo: solo habla si la meta es imposible).")]
         public bool placaAvisaEstorbo = true;
+
+        [Header("El REORDEN (R84, fase B1 del capítulo 2)")]
+        [Tooltip("La palabra del Maestro que abre la cinemática del orden.")]
+        public string vozOrden = "ORDEN.";
+        [Tooltip("Duración del BARRIDO que recoge el desastre (el frente avanza de izquierda a derecha por la caverna).")]
+        public float reordenBarridoSeg = 2.4f;
+        [Tooltip("Duración del fundido del fondo: la ruina cede al muro del taller profundo.")]
+        public float fondoTransicionSeg = 3.5f;
 
         [Header("UI (proporciones de pantalla)")]
         [Tooltip("Altura del centro de la voz del Maestro, como fracción del alto de pantalla desde arriba.")]
