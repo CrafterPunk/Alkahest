@@ -705,7 +705,14 @@ namespace Alkahest.Game
             // en Semilla Cero). En caótico (o si el matId no tiene identidad -- la
             // arena disuelta, sin entrada en la tabla) el flujo de siempre sigue
             // intacto, sin cambios.
-            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId))
+            // (R89, estudio de nombres con Opus — decisión de Cesar: en la
+            // campaña TODO viene bautizado con nombres reales rastreables)
+            // El PRÓLOGO corre con ModoFundacion y la MISMA química/colores
+            // de Semilla Cero (AlkahestSim aplica los overrides con la misma
+            // condición doble) — pero los nombres eran el único sistema
+            // desalineado: pedían solo ModoSemillaCero, y el jugador veía
+            // "sedimento cobrizo" donde la tabla ya decía "arcilla".
+            if ((AlkahestGameBootstrap.ModoSemillaCero || AlkahestGameBootstrap.ModoFundacion) && Universe.TieneIdentidadReal(matId))
                 return Universe.NombreReal(matId);
 
             if (MaterialId.EsBaseEstado(matId))
@@ -885,7 +892,14 @@ namespace Alkahest.Game
             // real YA distingue "arena de sílice" de "vidrio" de "arenisca"; añadir
             // "(fundido)" sería redundante, la tabla ya lo dice mejor que un sufijo
             // genérico.
-            if (AlkahestGameBootstrap.ModoSemillaCero && Universe.TieneIdentidadReal(matId))
+            // (R89, estudio de nombres con Opus — decisión de Cesar: en la
+            // campaña TODO viene bautizado con nombres reales rastreables)
+            // El PRÓLOGO corre con ModoFundacion y la MISMA química/colores
+            // de Semilla Cero (AlkahestSim aplica los overrides con la misma
+            // condición doble) — pero los nombres eran el único sistema
+            // desalineado: pedían solo ModoSemillaCero, y el jugador veía
+            // "sedimento cobrizo" donde la tabla ya decía "arcilla".
+            if ((AlkahestGameBootstrap.ModoSemillaCero || AlkahestGameBootstrap.ModoFundacion) && Universe.TieneIdentidadReal(matId))
                 return Universe.NombreReal(matId);
 
             if (MaterialId.EsBaseEstado(matId))

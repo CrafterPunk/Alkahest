@@ -963,15 +963,31 @@ namespace Alkahest.Game
             return celdas * SimRenderer.CellWorldSize * pxPorU;
         }
 
-        /// <summary>d(t) del anillo en CELDAS desde el Maestro — la curva de Opus: 22 c/s, la poza a 15, la PAUSA de la cascada, y el último tramo a 14.</summary>
-        private static float DistanciaDelAnillo(float t)
+        // (R89) EL ANILLO SE MIDE CONTRA EL PLANO, no contra una curva
+        // horneada (regla 24: el ensanche del mundo la habría dejado corta).
+        // Velocidades de la dirección Opus: 22 c/s de crucero, 15 sobre la
+        // poza (el trago en sábana), PAUSA de 0.4 s ante la cascada (lo
+        // último natural del mundo, solo en el borde de la luz) y 14 hasta
+        // sellar el manantial. Con la caverna de 141, el anillo respira ~5 s.
+        private float _anilloD;
+        private float _anilloPausaT;
+        private bool _anilloPausaHecha;
+
+        private void AvanzarAnillo(float dt, int colM)
         {
-            if (t < 0.80f) return 32f + 22.5f * t;
-            if (t < 1.10f) return 50f + 23.3f * (t - 0.80f);
-            if (t < 1.97f) return 57f + 15.0f * (t - 1.10f);          // LA POZA: el trago lento.
-            if (t < 2.80f) return 70f + 21.7f * (t - 1.97f);
-            if (t < 3.20f) return 88f;                                 // LA PAUSA: la cascada sola en el borde.
-            return Mathf.Min(102f, 88f + 14f * (t - 3.20f));
+            float dPozaIni = colM - SimLevelBuilder.FundacionCharcoX1;
+            float dPozaFin = colM - SimLevelBuilder.FundacionCharcoX0;
+            float dPausa = colM - (SimLevelBuilder.FundacionManantialX + 10); // la mitad de la caída: la cascada sola.
+            if (!_anilloPausaHecha && _anilloD >= dPausa)
+            {
+                _anilloPausaT += dt;
+                if (_anilloPausaT < 0.40f) return;
+                _anilloPausaHecha = true;
+            }
+            float v = 22f;
+            if (_anilloD >= dPozaIni - 1f && _anilloD <= dPozaFin + 1f) v = 15f;
+            else if (_anilloPausaHecha) v = 14f;
+            _anilloD += v * dt;
         }
 
         private void TickReorden()
@@ -985,7 +1001,9 @@ namespace Alkahest.Game
                 case 0: // EL VACÍO → el cierre sobre el Maestro → ORDEN.
                     if (_tBeat >= 3.65f && !_cascadaMuda) _cascadaMuda = true; // el mundo enmudece; la cascada cae MUDA.
                     if (_tBeat >= 4.05f && SimRenderer.FocoCinematico == null)
-                        SimRenderer.FocoCinematico = new Vector3(400f * celda, 168f * celda, 0f); // la cámara se planta. No se moverá.
+                        SimRenderer.FocoCinematico = new Vector3(
+                            (SimLevelBuilder.FundacionX0 + SimLevelBuilder.FundacionX1) * 0.5f * celda,
+                            168f * celda, 0f); // la cámara se planta en el centro REAL. No se moverá.
                     if (_tBeat >= 4.25f)
                     {
                         if (!_focoDeLuz.HasValue) { _focoDeLuz = PosMaestro(); _radioCierreDesde = _radio; }
@@ -1009,13 +1027,17 @@ namespace Alkahest.Game
                     _lodoActivo = false;
                     _barridoEnCurso = true;
                     _colIzq = colM; _colDer = colM + 1;
+                    _anilloD = 32f; _anilloPausaT = 0f; _anilloPausaHecha = false;
+                    _cosecha.Clear(); _cosechaIdx = 0; _cosechaAcum = 0f; _tCosechaFin = -1f;
                     Debug.Log("[TenThousandYears] EL PULSO: fuentes muertas, anillo en marcha desde x" + colM + ".");
                     _reordenPaso = 2; _tPaso = 0f;
                     break;
 
                 case 2: // EL ANILLO: la luz se abre desde el Maestro; lo que toca, obedece.
                 {
-                    float d = DistanciaDelAnillo(_tPaso);
+                    AvanzarAnillo(Time.deltaTime, colM);
+                    float d = _anilloD;
+                    float dFin = colM - SimLevelBuilder.FundacionX0 + 2;
                     _focoDeLuz = PosMaestro();
                     _radioForzado = Mathf.Max(UiStyles.S(400f), PxDeCeldas(d));
 
@@ -1025,7 +1047,7 @@ namespace Alkahest.Game
                     while (colM - _colIzq <= d && _colIzq >= SimLevelBuilder.FundacionX0 - 1) LimpiarColumna(_colIzq--);
                     while (_colDer - colM <= d && _colDer <= SimLevelBuilder.FundacionX1 + 1) LimpiarColumna(_colDer++);
 
-                    if (!_siloAnulado && d >= 50f)
+                    if (!_siloAnulado && d >= colM - SimLevelBuilder.FundacionSiloX1)
                     {
                         _siloAnulado = true;
                         _silo?.RetirarRapido();
@@ -1041,7 +1063,7 @@ namespace Alkahest.Game
                         _sonRepisaA = true;
                         if (_audio != null) { _audio.pitch = 1.3f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.3f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
                     }
-                    if (!_manantialSellado && d >= 101f)
+                    if (!_manantialSellado && d >= dFin - 1f)
                     {
                         // La boca del manantial SE SELLA con piedra: fin de las fuentes.
                         _manantialSellado = true;
@@ -1049,7 +1071,8 @@ namespace Alkahest.Game
                         _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY + 1, 0, MaterialId.Stone);
                     }
 
-                    if (_tPaso < 4.20f) return;
+                    if (d < dFin || _colIzq >= SimLevelBuilder.FundacionX0 - 1 || _colDer <= SimLevelBuilder.FundacionX1 + 1)
+                        if (_tPaso < 9f) return; // tope de seguridad del anillo.
                     // Cierre del anillo: seguridad + bancos + obra de las repisas.
                     if (_deposito != null && !_deposito.Enterrado) _deposito.RetirarDeGolpe();
                     if (_silo != null && !_silo.Enterrado) _silo.RetirarDeGolpe();
@@ -1066,24 +1089,47 @@ namespace Alkahest.Game
                     break;
                 }
 
-                case 3: // EL DESPUÉS (la sala limpia, entera) → EL IRIS → polvo → renacer.
+                case 3: // EL DESPUÉS → LA COSECHA a plena luz → EL IRIS → polvo → renacer.
                     if (_tPaso < 0.80f)
                     {
-                        _radioForzado = Mathf.Lerp(PxDeCeldas(102f), UiStyles.S(2400f), _tPaso / 0.80f);
+                        _radioForzado = Mathf.Lerp(PxDeCeldas(colM - SimLevelBuilder.FundacionX0 + 2), UiStyles.S(2400f), _tPaso / 0.80f);
+                        _focoDeLuz = null;
                         return;
                     }
-                    if (_tPaso < 1.35f)
+                    // LA COSECHA (R89, Cesar: "disfrutarlo un poquito más… ver
+                    // cómo llegan las partículas"): con la caverna ENTERA
+                    // iluminada, todo lo absorbido se levanta de donde estaba
+                    // — en el mismo orden en que el anillo lo recogió — y
+                    // vuela en arcos a los dos sitios del renacer. ~2.2 s de
+                    // corriente doble cruzando la sala a plena vista.
+                    if (_cosechaIdx < _cosecha.Count || _motas.Count > 0)
+                    {
+                        if (_tPaso < 9.5f)
+                        {
+                            _radioForzado = UiStyles.S(2400f);
+                            _cosechaAcum += Mathf.Max(24f, _cosecha.Count / 2.2f) * Time.deltaTime;
+                            while (_cosechaAcum >= 1f && _cosechaIdx < _cosecha.Count && _motas.Count < MotasTope)
+                            {
+                                _cosechaAcum -= 1f;
+                                var pto = _cosecha[_cosechaIdx++];
+                                SoltarMota(pto.x, pto.y, celda, esAgua: pto.z == 1);
+                            }
+                            return;
+                        }
+                    }
+                    if (_tCosechaFin < 0f) { _tCosechaFin = _tPaso; Debug.Log("[TenThousandYears] LA COSECHA entregada: " + _cosecha.Count + " destellos a sus reservorios."); }
+                    float tiIris = _tPaso - _tCosechaFin;
+                    if (tiIris < 0.55f)
                     {
                         // EL IRIS: la viñeta usada como LENTE — el primer plano del pixel art.
                         SimRenderer.FocoCinematico = new Vector3(
                             (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
                             (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
                         _focoDeLuz = null; // la luz vuelve a la cámara: ambos miran el mismo sitio.
-                        float ti = (_tPaso - 0.80f) / 0.55f;
-                        _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(520f), ti * ti);
+                        _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(520f), (tiIris / 0.55f) * (tiIris / 0.55f));
                         return;
                     }
-                    if (_tPaso < 1.55f)
+                    if (tiIris < 0.75f)
                     {
                         // Polvo ANTES que metal: el suelo avisa.
                         if (_flashT < 0f && _audio != null)
@@ -1170,7 +1216,6 @@ namespace Alkahest.Game
         private void LimpiarColumna(int x)
         {
             var grid = _sim.Grid;
-            float celdaM = SimRenderer.CellWorldSize;
             for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
             {
                 if (ProteccionDelBarrido(x, y)) continue;
@@ -1180,10 +1225,21 @@ namespace Alkahest.Game
                     _sim.Paint(x, y, 0, MaterialId.Empty);
                     continue;
                 }
-                if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: true); }
-                else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: false); }
+                // (R89, Cesar: "como se achica la visión no puedo ver cómo
+                // llegan las partículas… que esa animación empiece hasta que
+                // se vuelve a expandir la luz") El anillo ABSORBE en su
+                // borde; el punto de origen se RECUERDA (_cosecha) y las
+                // motas vuelan DESPUÉS, con la caverna entera iluminada — LA
+                // COSECHA: el mundo devolviendo lo recogido a sus dueños, a
+                // plena vista.
+                if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); _cosecha.Add(new Vector3Int(x, y, 1)); }
+                else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); _cosecha.Add(new Vector3Int(x, y, 0)); }
             }
         }
+        private readonly List<Vector3Int> _cosecha = new List<Vector3Int>(); // (x, y, esAgua?1:0) en ORDEN de absorción: la cosecha se repite como se recogió.
+        private int _cosechaIdx;
+        private float _cosechaAcum;
+        private float _tCosechaFin = -1f;
 
         /// <summary>(R87) ¿(x,y) es parte del andamio de la cascada? Las dos repisas y el labio, con las MISMAS medidas con que las talló BuildFundacion (regla 24: contra constantes, no prosa).</summary>
         private static bool EsCeldaDeRepisa(int x, int y)
@@ -1476,6 +1532,12 @@ namespace Alkahest.Game
         private void TickDesagueFinal()
         {
             if (!_fuentesApagadas) return;
+            // (R89, CAZADO CON NÚMEROS: banco de agua = 9 con la poza llena)
+            // Durante el REORDEN el desagüe se BEBÍA la poza antes de que el
+            // anillo llegara a recogerla (desde el ensanche, el anillo tarda
+            // ~3 s en alcanzarla): el trago final es para el RESIDUO de
+            // después de la cinemática, jamás un competidor del banco.
+            if (_beat == Beat.Reorden) return;
             _desagueTimer -= Time.deltaTime;
             if (_desagueTimer > 0f) return;
             _desagueTimer = 1f / 30f;

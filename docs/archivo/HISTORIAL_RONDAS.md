@@ -5203,3 +5203,54 @@ ca_playtest84.cmd barre la ronda.
   con sus columnas encajadas. Los sonidos nuevos y el ritmo completo los estrena Cesar
   jugando (IMGUI/audio no salen en RenderTexture).
 · ca_playtest88.cmd barre la ronda.
+
+## Ronda 89 — EL MUNDO CRECE AL OESTE + LA COSECHA A PLENA LUZ + LOS NOMBRES REALES
+
+· Tres encargos de Cesar ("vamos 2 min de gameplay pero vamos bien"):
+  1. EL ESTUDIO DE NOMBRES (con Opus leyendo el código): hallazgo mayúsculo — LA TABLA DE
+     NOMBRES REALES YA EXISTÍA (Universe.ConstruirIdentidadReal, 48 entradas con reseña de
+     trivia) y el prólogo NO LA LEÍA (los nombres pedían ModoSemillaCero; el prólogo corre
+     con ModoFundacion — química y colores sí usaban la condición doble; los nombres eran
+     el único sistema desalineado). "Sedimento cobrizo" YA ERA "arcilla" (92% de
+     fidelidad), "tinte pardo" YA ERA "barbotina" (88%, término real de alfarería).
+     APLICADO: (a) tabla enchufada al prólogo; (b) cal viva + agua → cal apagada — la
+     reseña prometía la reacción y NO EXISTÍA (la peor mentira: la que el conocimiento
+     real invita a comprobar); (c) solubles por decreto completados (caliza→agua de cal,
+     sal→salmuera: el comentario lo prometía desde la ronda 56 y el código solo escribía
+     la arcilla); (d) Sand = "arena de río" (colisionaba en pantalla con "arena de
+     sílice"). Estudio completo con %, riesgos y backlog: docs/DISENO_NOMBRES_SEMILLA_CERO.md
+     (el trabajo grande destapado: las 8 leyes sorteadas contradicen los nombres reales —
+     "caliza+turba→agua" es química falsa con nombres verdaderos; pendiente de decisión).
+  2. EL ENSANCHE (+20 AL OESTE, caverna 320-460 = 141): reparto nuevo medido — veta/
+     manantial 320 · repisas · POZA 352-365 · [3 de suelo] · SILO 369-376 + tubo 377-379
+     (¡por fin sobre suelo MACIZO: ni volando sobre la poza ni pisando el cráter!) ·
+     [6 de suelo] · CRÁTER 386-394 (grieta 390) · fogón 396-406 · spawn 395 · TANQUE
+     412-419 + tubo 420-422 · brasas/mesa igual. Los claros del tanque se DUPLICARON
+     (fogón→tanque 6, tubo→hogar 4; antes 2 y 2 — el pedido del "doble respecto a la
+     fogata"). Marcadores de escena movidos al plano nuevo y escena guardada (autoridad de
+     escena: si se quedaban, pisaban a las constantes). OJO: el PlanoOverlay guardado de
+     Cesar (si tiene retoques) usa coordenadas absolutas — sus formas del flanco oeste
+     quedarán 20 celdas corridas respecto a las nuevas posiciones; re-guardar si molesta.
+  3. EL ORDEN "10 de 10, disfrutarlo un poquito más… no veo cómo llegan las partículas":
+     (a) EL ANILLO POR CONSTANTES (regla 24: el ensanche habría dejado corta la curva
+     horneada) — velocidades Opus sobre el plano real, ~5 s de anillo en la caverna de
+     141; (b) LA COSECHA: el anillo ABSORBE en su borde y RECUERDA cada punto de origen;
+     con la caverna ENTERA iluminada (el después), todo lo recogido SE LEVANTA de donde
+     estaba — en el orden en que se recogió — y vuela en arcos a los dos sitios, ~2.2 s de
+     corriente doble a plena vista; recién entonces el iris. El ORDEN creció ~3 s donde
+     Cesar quería mirarlo.
+· DOS BUGS CAZADOS CON NÚMEROS en la primera pasada en vivo: (a) banco de agua = 9 con la
+  poza llena — EL DESAGÜE FINAL se bebía la poza ANTES de que el anillo llegara (desde el
+  ensanche tarda ~3 s): gateado fuera del Beat.Reorden — el trago es para el residuo de
+  después, jamás un competidor del banco; (b) tanque renacido con carga 0 — el spawn
+  nuevo (409) caía DENTRO de la guarda antiemparedamiento del tanque (408-423) y un
+  jugador quieto congelaba el asentado para siempre (el tope del director cerraba el arco
+  con un tanque SIN muros): spawn a 395 (la posición relativa de siempre, sobre el labio
+  del cráter) + LA ESPERA CON TOPE (6 s y los muros entran igual: sales nadando —
+  doctrina ApprenticeController, regla 38).
+· VERIFICADO EN VIVO (ciclo definitivo): pre-ORDEN sano (tanque 14 listo, poza 48); banco
+  agua=63/lodo=22 (nada robado); COSECHA de 82 destellos; renacer 28/22 bajo la mitad;
+  tubos sin topes (3 s, no 12); FINAL 36/72 y 36/72 — LA MITAD EXACTA en ambos; nombres
+  en vivo: mat26="arcilla", mat33="barbotina" ✓; muro oeste macizo (24 de roca hasta el
+  cuarto íntimo); suelo bajo silo+tubo 11/11 macizo ✓. CAPTURAS del mundo ancho.
+· ca_playtest89.cmd barre la ronda.

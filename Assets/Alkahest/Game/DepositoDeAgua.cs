@@ -374,6 +374,7 @@ namespace Alkahest.Game
             _tuboAnimT = 0f;
         }
         private float _tuboFinalY;
+        private float _esperaJugadorT; // (R89) cuánto lleva el asentado esperando a que el jugador se aparte.
 
         private void TickTubo(float dt)
         {
@@ -589,7 +590,18 @@ namespace Alkahest.Game
                     float c2 = SimRenderer.CellWorldSize;
                     float px = jugador.position.x / c2, py = jugador.position.y / c2;
                     if (px > _x0 - 4f && px < _x1 + 4f && py > _y0 - 5f && py < _y1 + 5f)
-                        return; // reintenta el próximo frame.
+                    {
+                        // (R89, medido en vivo) LA ESPERA TIENE TOPE: un
+                        // jugador QUIETO en el sitio congelaba el asentado
+                        // para siempre (el tope del director cerraba el arco
+                        // con un tanque SIN muros ni carga — peor que
+                        // emparedarlo). A los 6 s los muros entran igual:
+                        // la colisión suspende el frame que arranca dentro
+                        // de sólido y SALES NADANDO (doctrina
+                        // ApprenticeController, pariente de la regla 38).
+                        _esperaJugadorT += dt;
+                        if (_esperaJugadorT < 6f) return; // reintenta el próximo frame.
+                    }
                 }
 
                 // Los muros del tanque entran a la sim (PaintStable, regla 22:

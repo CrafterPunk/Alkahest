@@ -3079,6 +3079,7 @@ namespace Alkahest.Sim
         private static readonly byte _cruceBizcocho = MaterialId.MatDe(1, EstadoMateria.Recocido);      // "bizcocho"
         private static readonly byte _cruceCalizaPolvo = MaterialId.MatDe(2, EstadoMateria.Polvo);      // "caliza molida"
         private static readonly byte _cruceCalApagada = MaterialId.MatDe(2, EstadoMateria.Recocido);    // "cal apagada"
+        private static readonly byte _cruceCalViva = MaterialId.MatDe(2, EstadoMateria.Calcinado);      // "cal viva" (R89: su hidratación por fin existe)
 
         private static readonly CruceReceta[] _cruces =
         {
@@ -3098,6 +3099,14 @@ namespace Alkahest.Sim
             new CruceReceta(_cruceArenaPolvo, MaterialId.Ash, MaterialId.VidrioVerde, TierCruce.Pleno, "fundiendo con fundente"),
             // ceniza + agua -> Lejia, bajo, "lixiviando".
             new CruceReceta(MaterialId.Ash, MaterialId.Water, MaterialId.Lejia, TierCruce.Bajo, "lixiviando"),
+            // (R89, estudio de nombres) cal viva + agua -> cal apagada,
+            // cualquiera, "apagando la cal". La reseña de la cal viva
+            // promete desde siempre "con agua reacciona caliente: respétala"
+            // — y NO EXISTÍA la reacción: la peor clase de mentira, la que
+            // el conocimiento real invita a comprobar. Mismo patrón que la
+            // lejía; a cualquier tier porque la hidratación real es
+            // exotérmica de suyo, no pide horno.
+            new CruceReceta(_cruceCalViva, MaterialId.Water, _cruceCalApagada, TierCruce.Cualquiera, "apagando la cal"),
             // bizcocho + arena de sílice -> Esmaltado, pleno, "esmaltando".
             new CruceReceta(_cruceBizcocho, _cruceArenaPolvo, MaterialId.Esmaltado, TierCruce.Pleno, "esmaltando"),
         };
@@ -3437,6 +3446,12 @@ namespace Alkahest.Sim
             tabla[MaterialId.Ice] = new IdentidadReal("hielo", "Agua ordenada en cristal. Flota sobre sí misma: rareza que permite la vida bajo los lagos.");
             tabla[MaterialId.Limo] = new IdentidadReal("lodo de cantera", "Agua y montaña molida: arena, arcilla, caliza, veta vegetal y sal, en suspensión. Todo lo demás sale de aquí — el calor los separa a cada uno a su temperatura.");
             tabla[MaterialId.Brasa] = new IdentidadReal("brasa", "Fuego en reposo. Sopla o alimenta, y vuelve.");
+            // (R89, estudio de nombres) `MaterialId.Sand` (el clásico id 2)
+            // COLISIONABA en pantalla con "arena de sílice" (base0): dos
+            // materiales distintos, la misma palabra. Identidad propia y
+            // honesta: arena de río — suelta, mezclada, NO silícea pura (por
+            // eso no da vidrio; la del vidrio es la de sílice).
+            tabla[MaterialId.Sand] = new IdentidadReal("arena de río", "Granos sueltos de mil rocas, arrastrados y redondeados por el agua. No confundir con la de sílice: esta no da vidrio.");
 
             // ---- base0 = ARENA (la dócil; extracción 100 — el milagro del beat 1) ----
             tabla[MaterialId.MatDe(0, EstadoMateria.Polvo)] = new IdentidadReal("arena de sílice", "Cuarzo molido por eras. De aquí nace el vidrio: los fenicios lo descubrieron en fogatas sobre playa.");
@@ -3960,6 +3975,13 @@ namespace Alkahest.Sim
             // anotado en su figurita como el mismo caso que la arena.
             byte polvoArcilla = MaterialId.MatDe(1, EstadoMateria.Polvo);
             u._solubleEnAguaPorMaterial[polvoArcilla] = true;
+            // (R89, estudio de nombres con Opus — bug latente CAZADO: este
+            // comentario prometía caliza=sí y sal=sí desde la ronda 56, pero
+            // el código solo escribía la arcilla; "agua de cal" y "salmuera"
+            // eran nombres reales de materiales INALCANZABLES si el sorteo
+            // no las sacaba solubles. El decreto ahora cumple su prosa.)
+            u._solubleEnAguaPorMaterial[MaterialId.MatDe(2, EstadoMateria.Polvo)] = true;  // caliza → agua de cal.
+            u._solubleEnAguaPorMaterial[MaterialId.MatDe(4, EstadoMateria.Polvo)] = true;  // sal → salmuera.
             // El calcinado de la arcilla ("ladrillo molido"/chamota) NO se
             // dispersa como la cruda: se deja explícitamente insoluble.
             u._solubleEnAguaPorMaterial[MaterialId.MatDe(1, EstadoMateria.Calcinado)] = false;
