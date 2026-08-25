@@ -288,7 +288,6 @@ namespace Alkahest.Game
             MantenerFuegoDelMaestro();
             TickManantial();
             RezumarPoza();
-            TickDesagueFinal(); // (R86) tras el ORDEN: la poza y el cráter se beben su residuo hasta quedar VACÍOS.
             TickLodo();
             TickDrenarCuenco();
             TickVoz();
@@ -1220,6 +1219,15 @@ namespace Alkahest.Game
                         _silo?.ActivarRefill();
                     }
                     if (_tPaso < _tClank + 3.0f) return;
+                    // (R91, Cesar: "asegura que absorba todas las partículas —
+                    // siempre quedan restos… y eso mancha el reset") EL REPASO
+                    // DEL AMANECER: una pasada silenciosa por la caverna
+                    // entera que se lleva cualquier resto suelto (agua, lodo,
+                    // humo, vapor) que haya caído DETRÁS del anillo — colas
+                    // en vuelo, salpicaduras del drenado. Respeta lo
+                    // protegido, los experimentos y el interior de los
+                    // recipientes: solo borra la mancha, no lo tuyo.
+                    RepasoDelAmanecer();
                     // AMANECER: la luz se libera, la cámara vuelve, el mundo suena distinto.
                     _radioForzado = null;
                     _focoDeLuz = null;
@@ -1231,6 +1239,31 @@ namespace Alkahest.Game
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// (R91) EL REPASO DEL AMANECER: la pasada final silenciosa — todo
+        /// resto de agua/lodo/humo/vapor FUERA de los recipientes y de las
+        /// zonas protegidas se va. El reset queda sin una mancha.
+        /// </summary>
+        private void RepasoDelAmanecer()
+        {
+            var grid = _sim.Grid;
+            int limpiadas = 0;
+            for (int x = SimLevelBuilder.FundacionX0; x <= SimLevelBuilder.FundacionX1; x++)
+                for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
+                {
+                    if (ProteccionDelBarrido(x, y)) continue;
+                    if (_deposito != null && x >= _deposito.X0 && x <= _deposito.X1 && y >= _deposito.Y0 && y <= _deposito.Y1 + 1) continue;
+                    if (_silo != null && x >= _silo.X0 && x <= _silo.X1 && y >= _silo.Y0 && y <= _silo.Y1 + 1) continue;
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Water || m == Lodo || m == LodoMojado || m == MaterialId.Smoke || m == MaterialId.Steam)
+                    {
+                        _sim.Paint(x, y, 0, MaterialId.Empty);
+                        limpiadas++;
+                    }
+                }
+            if (limpiadas > 0) Debug.Log("[TenThousandYears] REPASO del amanecer: " + limpiadas + " restos borrados — el reset sin una mancha.");
         }
 
         /// <summary>
@@ -1263,6 +1296,10 @@ namespace Alkahest.Game
                 float celdaM = SimRenderer.CellWorldSize;
                 if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 0); }
                 else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 1); }
+                // (R91, Cesar: "incluidas las de humo que existan") El humo y
+                // el vapor también obedecen: no van a ningún banco — el
+                // Maestro se los traga y ya (esquirla gris).
+                else if (m == MaterialId.Smoke || m == MaterialId.Steam) { _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 2); }
             }
         }
 
@@ -1305,6 +1342,37 @@ namespace Alkahest.Game
                     {
                         _sim.PaintStable(x, y, 0, MaterialId.Stone);
                         for (int k = 0; k < 5; k++) SoltarMota(x, y, celdaM, tipo: 2, stagger: 0.05f * k);
+                    }
+            }
+
+            // (R91, Cesar: "el pozo que traga el agua y el que traga el lodo
+            // deberían quedar SELLADOS después del ORDEN… la animación debe
+            // incluir el APLANAMIENTO del hueco de agua") LA POZA Y EL
+            // CRÁTER SE APLANAN al paso del anillo, columna a columna — el
+            // suelo vuelve a su línea y los pozos dejan de tragar PARA
+            // SIEMPRE. De regalo mata el reflujo: la piedra que sube columna
+            // a columna impide que el agua vecina fluya de vuelta al hueco
+            // recién vaciado (la "cola" que antes bebía el desagüe).
+            if (x >= SimLevelBuilder.FundacionCharcoX0 && x <= SimLevelBuilder.FundacionCharcoX1)
+            {
+                for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY0 - 1; y++)
+                {
+                    byte mp = grid.GetMat(x, y);
+                    // Solo lo vaciable se aplana: un EXPERIMENTO del jugador
+                    // hundido en la poza no se entierra en piedra (regla 38)
+                    // — deja su muesca honesta.
+                    if (mp != MaterialId.Empty && mp != MaterialId.Water && mp != Lodo && mp != LodoMojado) continue;
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                    SoltarMota(x, y, celdaM, tipo: 2);
+                }
+            }
+            if (x >= SimLevelBuilder.FundacionCraterX0 && x <= SimLevelBuilder.FundacionCraterX1)
+            {
+                for (int y = SimLevelBuilder.FundacionY0 - 2; y <= SimLevelBuilder.FundacionY0 - 1; y++)
+                    if (grid.GetMat(x, y) == MaterialId.Empty || grid.GetMat(x, y) == Lodo || grid.GetMat(x, y) == LodoMojado)
+                    {
+                        _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                        SoltarMota(x, y, celdaM, tipo: 2);
                     }
             }
 
@@ -1613,55 +1681,13 @@ namespace Alkahest.Game
         }
         private float _rezumaTimer;
 
-        /// <summary>
-        /// (R86, medido en vivo) EL TRAGO FINAL: el barrido absorbe la poza
-        /// entera, pero el agua EN VUELO por las repisas llega DETRÁS del
-        /// frente y deja un charco huérfano (13 celdas medidas) — y la cola
-        /// de la gotera hace lo propio en el cráter. Con las fuentes
-        /// apagadas, el fondo de la poza se BEBE su residuo (sin umbral de
-        /// equilibrio: hasta cero) y el cráter el suyo, una celda por pulso,
-        /// a la vista — el mundo termina de tragarse a sus muertos. Lo
-        /// bebido no va al banco: el banco ya renació en los reservorios; a
-        /// esta cola se la lleva el mismo mundo que se llevó el resto.
-        /// </summary>
-        private void TickDesagueFinal()
-        {
-            if (!_fuentesApagadas) return;
-            // (R89, CAZADO CON NÚMEROS: banco de agua = 9 con la poza llena)
-            // Durante el REORDEN el desagüe se BEBÍA la poza antes de que el
-            // anillo llegara a recogerla (desde el ensanche, el anillo tarda
-            // ~3 s en alcanzarla): el trago final es para el RESIDUO de
-            // después de la cinemática, jamás un competidor del banco.
-            if (_beat == Beat.Reorden) return;
-            _desagueTimer -= Time.deltaTime;
-            if (_desagueTimer > 0f) return;
-            _desagueTimer = 1f / 30f;
+        // (R91, regla 15) `TickDesagueFinal` (el "trago final" R86-R89 que
+        // bebía el residuo de poza y cráter tras el ORDEN) SE RETIRÓ: el
+        // APLANAMIENTO del anillo sella ambos pozos con piedra — ya no hay
+        // hueco que trague ni residuo que beber ("deberían quedar sellados
+        // para que no sigan tragando", Cesar R91). El barrido final del
+        // amanecer (abajo) cubre los restos sueltos.
 
-            var grid = _sim.Grid;
-            uint tick = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
-            // El agua residual de la poza (y la que siga cayendo de las repisas).
-            for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY0 + 1; y++)
-                for (int x = SimLevelBuilder.FundacionCharcoX0; x <= SimLevelBuilder.FundacionCharcoX1; x++)
-                    if (grid.GetMat(x, y) == MaterialId.Water)
-                    {
-                        grid.SetCell(x, y, MaterialId.Empty);
-                        grid.WakeChunk(x, y, tick);
-                        return; // una celda por pulso: se VE a la poza vaciarse.
-                    }
-            // El lodo residual del cráter (la cola de la gotera).
-            for (int y = SimLevelBuilder.FundacionY0 - 2; y <= SimLevelBuilder.FundacionY0 + 1; y++)
-                for (int x = SimLevelBuilder.FundacionCraterX0; x <= SimLevelBuilder.FundacionCraterX1; x++)
-                {
-                    byte m = grid.GetMat(x, y);
-                    if (m == Lodo || m == LodoMojado)
-                    {
-                        grid.SetCell(x, y, MaterialId.Empty);
-                        grid.WakeChunk(x, y, tick);
-                        return;
-                    }
-                }
-        }
-        private float _desagueTimer;
 
         /// <summary>
         /// LA GOTERA DE LODO: viva desde el derrumbe, para siempre (fuente no

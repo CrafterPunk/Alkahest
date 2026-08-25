@@ -5299,3 +5299,41 @@ ca_playtest84.cmd barre la ronda.
   y muros en línea recta donde antes había dientes. El negro→flashazo, el halo hinchándose
   y la lluvia de esquirlas grises son IMGUI: se estrenan en el playtest de Cesar.
 · ca_playtest90.cmd barre la ronda.
+
+## Ronda 91 — LOS POZOS SELLADOS, EL TOPE ENTERO, Y NI UNA MANCHA
+
+· Tres frentes de Cesar:
+  1. "El pozo que traga el agua y el que traga el lodo deberían quedar SELLADOS después
+     del ORDEN" + "la animación debe incluir el APLANAMIENTO del hueco de agua y no
+     generar un hueco traga-lodo" → EL APLANAMIENTO ES PARTE DEL ANILLO: al paso del
+     frente, la poza (70 celdas) y el cráter (18) se rellenan de piedra COLUMNA A
+     COLUMNA, cada celda con su esquirla gris al Maestro — los pozos dejan de tragar
+     para siempre, dentro de la coreografía. De regalo mata el REFLUJO (la piedra que
+     sube impide que el agua vecina vuelva al hueco recién vaciado — la "cola" que antes
+     bebía el desagüe). Los EXPERIMENTOS hundidos en la poza NO se entierran (regla 38:
+     dejan su muesca honesta). `TickDesagueFinal` RETIRADO (regla 15): sin pozos no hay
+     residuo que beber.
+  2. "Deberían seguir llenando HASTA EL TOPE aunque no se visualice la última sección…
+     ¿que el total tarde 3 minutos?" → refill al vidrio ENTERO (72): gota visible por el
+     centro mientras hay caída; cuando el tope se ocupa, COLA SILENCIOSA rincón a rincón.
+     Cadencia cuadrática factor 7: la integral de 14 a 72 da ~180 s — los 3 minutos,
+     calculados, no estimados (y sí me parece bien: es una fuente infinita de fondo, no
+     una espera activa). Y LA CAZA DE LA RONDA: el reporte de Cesar "cuando llegan a la
+     mitad dejan de llenarse" no era el tope 66 — era la REGLA 58 EN SU VARIANTE
+     HOT-RELOAD: el GuionDelPrologo VIVO del editor serializó refillTope=36 (el default
+     R88) a través de las recompilaciones AUNQUE el asset del disco jamás tuvo el campo
+     (verificado: guion efectivo decía 36 con el código diciendo 72). Cura doctrinal:
+     RENOMBRE → refillTopeCeldas (la memoria vieja queda ignorada). Catálogo R58
+     ampliado en CLAUDE.md con la tercera vía.
+  3. "Asegura que absorba TODAS las partículas — siempre quedan restos entre los
+     contenedores… incluidas las de humo" → TRES capas: (a) el anillo ahora absorbe
+     también HUMO y VAPOR (esquirla gris, sin banco: el Maestro se los traga y ya);
+     (b) el RENACER ES LIMPIO — los tanques del mundo ordenado ya no escupen terrones
+     (eran exactamente los "restos entre los contenedores"); (c) EL REPASO DEL AMANECER:
+     pasada final silenciosa por la caverna entera que borra cualquier resto suelto
+     (agua/lodo/humo/vapor) caído detrás del anillo, respetando protegidos, experimentos
+     y el interior de los recipientes — con su línea forense de cuántos borró.
+· VERIFICADO EN VIVO: poza 0/70 y cráter 0/18 no-piedra (SELLADOS) ✓; restos sueltos en
+  la caverna entera = 0 ✓; tubos ✓; guion efectivo refillTopeCeldas=72 ✓; la cola
+  silenciosa cerró el caso 71→72 en <7 s (el caso que antes moría mudo) ✓.
+· ca_playtest91.cmd barre la ronda.

@@ -337,19 +337,32 @@ namespace Alkahest.Game
             _refillTimer -= dt;
             if (_refillTimer > 0f) return;
             int n = DelDueno();
-            if (n >= _g.refillTope) { _refillTimer = _g.refillSeg; return; } // completo (66: una fila de aire para que la caída siempre se VEA — Opus R90).
-            // (R90, Cesar: "caer más lento mientras más se llena — así lo ven
-            // al inicio y se percibe que todo toma tiempo") La cadencia crece
-            // AL CUADRADO con el llenado: 0.8 s con el tanque a 1/5, ~4.8 s
-            // cerca del tope (~110 s el llenado entero, medido por Opus: la
-            // curva lineal moría la fase visible enseguida).
-            float t = Mathf.Clamp01(n / (float)Mathf.Max(1, _g.refillTope));
-            _refillTimer = _g.refillSeg * (1f + 5f * t * t);
+            if (n >= _g.refillTopeCeldas) { _refillTimer = _g.refillSeg; return; } // el vidrio ENTERO (R91).
+            // (R90/R91, Cesar: "caer más lento mientras más se llena… que el
+            // total tarde ~3 minutos, pero HASTA EL TOPE") Cadencia
+            // cuadrática 0.8 → ~6.4 s (factor 7: la integral de 14 a 72 da
+            // ~180 s — la cuenta de los 3 minutos, hecha, no estimada).
+            float t = Mathf.Clamp01(n / (float)Mathf.Max(1, _g.refillTopeCeldas));
+            _refillTimer = _g.refillSeg * (1f + 7f * t * t);
             // (R90, Cesar) La gota nace en el TOPE y POR EL CENTRO del vidrio
-            // — cae con física a la vista, por en medio, no pegada a un flanco.
+            // — cae con física a la vista, por en medio, no pegada a un
+            // flanco. (R91) Cuando ya no hay caída (la fila del tope se
+            // ocupó), las últimas celdas se completan EN SILENCIO: "ya les
+            // quedó claro el refill en la primera parte" — el tope se cumple
+            // aunque la última sección no se visualice.
             int inlet = (_x0 + _x1) / 2;
-            if (_sim.Grid.GetMat(inlet, _y1) != MaterialId.Empty) return; // el tope está tomado: espera a que se acomode.
-            _sim.PaintStable(inlet, _y1, 0, _matDueno);
+            if (_sim.Grid.GetMat(inlet, _y1) == MaterialId.Empty)
+            {
+                _sim.PaintStable(inlet, _y1, 0, _matDueno);
+                return;
+            }
+            for (int y = _y1; y >= _y0 + 1; y--)
+                for (int x = _x0 + 1; x < _x1; x++)
+                    if (_sim.Grid.GetMat(x, y) == MaterialId.Empty)
+                    {
+                        _sim.PaintStable(x, y, 0, _matDueno); // la cola silenciosa: rincón a rincón hasta el vidrio lleno.
+                        return;
+                    }
         }
 
         /// <summary>
@@ -573,8 +586,13 @@ namespace Alkahest.Game
                 // se leían como una fuga. Si bajo el flanco no hay suelo, ese
                 // terrón NO se suelta — la tierra desplazada no vuela sobre
                 // los huecos.
+                // (R91, Cesar: "siempre quedan restos de agua y lodo entre
+                // los contenedores… y eso mancha el reset") El RENACER es
+                // LIMPIO: los tanques del mundo ordenado no escupen tierra
+                // (los terrones eran justo esos restos). Solo la emergencia
+                // del primer acto — el mundo aún salvaje — los suelta.
                 int lado = (_polvoIdx & 1) == 0 ? _x0 - 1 : _x1 + 1;
-                if (_sim.Grid.GetMat(lado, _y0 - 1) != MaterialId.Empty)
+                if (!_cargaInstantanea && _sim.Grid.GetMat(lado, _y0 - 1) != MaterialId.Empty)
                     _sim.PaintStable(lado, _y0 + 1 + (_polvoIdx % 3), 0, Lodo);
             }
 

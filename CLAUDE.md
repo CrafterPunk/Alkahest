@@ -128,10 +128,13 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
   evento frecuente) y DESPIERTO (`WakeChunk` sobre sí mismo).
 - **R56** JAMÁS API de Unity en inicializadores estáticos (TypeInitializationException en
   cascada, invisible al compilador): centinela + carga perezosa.
-- **R58** *(ronda 71b)* Un `[SerializeField]` guardado en prefab/escena PISA el default del
-  código: los números de juego se afinan en código y SIN serializar; ante "cambié el valor y
-  no cambió nada", grep al `.prefab`/`.unity` (el prefab de red pisó moveSpeed una ronda
-  entera).
+- **R58** *(ronda 71b; variante 91)* Un `[SerializeField]` guardado en prefab/escena PISA el
+  default del código: los números se afinan en código y SIN serializar; ante "cambié el valor
+  y no cambió nada", grep al `.prefab`/`.unity`. VARIANTE HOT-RELOAD (R91): el ScriptableObject
+  VIVO del editor serializa sus campos a través de las recompilaciones AUNQUE el asset del
+  disco no los tenga — cambiar el default de un campo ya cargado NO llega al juego hasta
+  reimportar o RENOMBRAR el campo (refillTope se clavó en 36 así). El renombre es la cura
+  universal de las tres vías.
 - **R59** *(ronda 69g)* Los flags estáticos de modo (`ModoFundacion`/`ModoSemillaCero`) se
   resetean en TODOS los caminos multi (host, snapshot del invitado, despawn): un flag pegado
   construye el universo equivocado sin un solo error. La consola imprime la "línea de la
