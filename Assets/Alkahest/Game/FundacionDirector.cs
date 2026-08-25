@@ -1050,6 +1050,7 @@ namespace Alkahest.Game
                     // remate quedaba chueco sin visitar.
                     while (colM - _colIzq <= d && _colIzq >= SimLevelBuilder.FundacionX0 - 2) { LimpiarColumna(_colIzq); PerfilarColumna(_colIzq); _colIzq--; }
                     while (_colDer - colM <= d && _colDer <= SimLevelBuilder.FundacionX1 + 2) { LimpiarColumna(_colDer); PerfilarColumna(_colDer); _colDer++; }
+                    RetaguardiaDelAnillo(); // (R92) lo que FLUYE de vuelta detrás del frente, también obedece.
 
                     if (!_siloAnulado && d >= colM - SimLevelBuilder.FundacionSiloX1)
                     {
@@ -1095,6 +1096,7 @@ namespace Alkahest.Game
 
                 case 3: // el trago final: ESPERA de motas → NEGRO → FLASHAZO → apertura → claro breve → IRIS → polvo → renacer.
                 {
+                    RetaguardiaDelAnillo(); // (R92) las colas que aterrizan durante el trago se absorben EN escena, no en el repaso.
                     // (R90, dirección Opus #5) El flashazo NO se dispara al
                     // terminar el anillo: las últimas motas siguen en vuelo.
                     // La luz se queda en el tamaño del anillo hasta que la
@@ -1180,6 +1182,7 @@ namespace Alkahest.Game
 
                 case 4: // asentar (sacudida GANADA) → quietud 0.7 → LOS TUBOS.
                 {
+                    RetaguardiaDelAnillo(); // (R92) el fogón sigue humeando: su humo también es del Maestro hasta el amanecer.
                     bool asentados = _deposito != null && _deposito.Asentado && _silo != null && _silo.Asentado;
                     if (!_asentadoMarcado && (asentados || _tPaso > 12f))
                     {
@@ -1198,6 +1201,7 @@ namespace Alkahest.Game
 
                 case 5: // CLANK único → 0.45 de nada → TOMA. → la primera gota → amanecer.
                 {
+                    RetaguardiaDelAnillo(); // (R92) hasta el último frame antes del amanecer: el repaso debe encontrar CERO.
                     bool instalados = (_deposito == null || _deposito.TuboInstalado) && (_silo == null || _silo.TuboInstalado);
                     if (!_clankHecho && (instalados || _tPaso > 5f))
                     {
@@ -1264,6 +1268,43 @@ namespace Alkahest.Game
                     }
                 }
             if (limpiadas > 0) Debug.Log("[TenThousandYears] REPASO del amanecer: " + limpiadas + " restos borrados — el reset sin una mancha.");
+        }
+
+        /// <summary>
+        /// (R92, Cesar: "las partículas a ras del suelo y hasta algunas
+        /// líneas por encima no se limpian; idealmente tendrían que
+        /// limpiarse con la absorción del Maestro") LA RETAGUARDIA DEL
+        /// ANILLO: el frente pasa UNA vez por columna, pero los charcos
+        /// FLUYEN de vuelta al terreno ya barrido detrás de él y quedaban
+        /// hasta el repaso tardío — que se leía como "limpieza por
+        /// hardcodeo". Cada frame de la ceremonia (del anillo al último
+        /// frame antes del amanecer), el intervalo ya conquistado se
+        /// re-barre a ALTURA COMPLETA: lo que reaparece — charcos que
+        /// fluyen de vuelta Y el humo del fogón protegido, que no deja de
+        /// arder — se absorbe EN la coreografía, mota al Maestro incluida.
+        /// El RepasoDelAmanecer queda como red de seguridad que debe
+        /// reportar 0. Respeta lo protegido y el interior de los recipientes
+        /// (mientras existan: en el paso 2 aún se están drenando).
+        /// </summary>
+        private void RetaguardiaDelAnillo()
+        {
+            var grid = _sim.Grid;
+            float celdaM = SimRenderer.CellWorldSize;
+            int x0 = Mathf.Max(SimLevelBuilder.FundacionX0, _colIzq + 1);
+            int x1 = Mathf.Min(SimLevelBuilder.FundacionX1, _colDer - 1);
+            int yBajo = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo;
+            int yAlto = SimLevelBuilder.FundacionY1 + 3; // ALTURA COMPLETA: el fogón protegido sigue humeando DURANTE la ceremonia — ese humo también vuela al Maestro, en chorro continuo, en vez de esperar al repaso.
+            for (int x = x0; x <= x1; x++)
+                for (int y = yBajo; y <= yAlto; y++)
+                {
+                    if (ProteccionDelBarrido(x, y)) continue;
+                    if (_deposito != null && x >= _deposito.X0 && x <= _deposito.X1 && y >= _deposito.Y0 && y <= _deposito.Y1 + 1) continue;
+                    if (_silo != null && x >= _silo.X0 && x <= _silo.X1 && y >= _silo.Y0 && y <= _silo.Y1 + 1) continue;
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 0); }
+                    else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 1); }
+                    else if (m == MaterialId.Smoke || m == MaterialId.Steam) { _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 2); }
+                }
         }
 
         /// <summary>
@@ -1374,6 +1415,21 @@ namespace Alkahest.Game
                         _sim.PaintStable(x, y, 0, MaterialId.Stone);
                         SoltarMota(x, y, celdaM, tipo: 2);
                     }
+            }
+
+            // (R92) EL CUENCO también se aplana (mismo trato respetuoso que
+            // la poza: solo lo vaciable — un experimento hundido deja muesca).
+            if (x >= SimLevelBuilder.FundacionCuencoX0 && x <= SimLevelBuilder.FundacionCuencoX1)
+            {
+                for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY0 - 1; y++)
+                {
+                    byte mc = grid.GetMat(x, y);
+                    if (mc == MaterialId.Water) _bancoAgua++;
+                    else if (mc == Lodo || mc == LodoMojado) _bancoLodo++;
+                    else if (mc != MaterialId.Empty) continue;
+                    _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                    SoltarMota(x, y, celdaM, tipo: 2);
+                }
             }
 
             // El terreno roto del ala izquierda (R74/R89b): huecos rellenados, escombros absorbidos.
@@ -1520,9 +1576,11 @@ namespace Alkahest.Game
         /// </summary>
         private static bool ProteccionDelBarrido(int x, int y)
         {
-            // El cuenco del Maestro.
-            if (x >= SimLevelBuilder.FundacionCuencoX0 && x <= SimLevelBuilder.FundacionCuencoX1 &&
-                y >= SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo && y <= SimLevelBuilder.FundacionY0 + 1) return true;
+            // (R92, Cesar: "lo mismo para su pocito donde ANTES pedía las
+            // cosas") El CUENCO salió de la lista: el Maestro también se
+            // traga su propio receptor — su contenido va al banco y el
+            // aplanamiento lo sella con el resto de los pozos. Post-ORDEN
+            // las entregas viven en el tablón del Trueque, no en un hoyo.
             // El hogar de brasas del Maestro (brasas + tiro).
             if (x >= SimLevelBuilder.FundacionBrasasX0 - 1 && x <= SimLevelBuilder.FundacionBrasasX1 + 1 &&
                 y >= SimLevelBuilder.FundacionY0 && y <= SimLevelBuilder.FundacionY0 + 4) return true;
