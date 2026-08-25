@@ -520,21 +520,26 @@ namespace Alkahest.Game
                 }
                 // (R85, FUGA CAZADA POR CESAR: "el lodo y el agua se filtran
                 // cuando hay hueco abajo") EL RECIPIENTE SELLA SU PROPIO
-                // SUELO: una fila de piso estructural bajo TODA la huella
-                // (y0-1). Sin ella, un muro sobre un labio de vacío (poza,
-                // cráter, terreno no plano) deja el escape DIAGONAL clásico
-                // de los líquidos de falling-sand — el mismo mecanismo de la
-                // fuga de la cascada en R74. (R86) Con tubo, el sello se
-                // EXTIENDE bajo la columna del tubo (x1+1..x1+3): el tubo
-                // TOCA SUELO FIRME aunque el flanco sea el labio del cráter
-                // (la única queja de Cesar con su referencia era un tubo que
-                // no llegaba al suelo).
+                // SUELO: una fila bajo TODA la huella (y0-1). Sin ella, un
+                // muro sobre un labio de vacío (poza, cráter, terreno no
+                // plano) deja el escape DIAGONAL clásico de los líquidos de
+                // falling-sand — el mismo mecanismo de la fuga de la cascada
+                // en R74. (R86) Con tubo, el sello se EXTIENDE bajo la
+                // columna del tubo (x1+1..x1+3): el tubo TOCA SUELO FIRME
+                // aunque el flanco sea el labio del cráter.
+                // (R87, Cesar: "no necesitan su propio piso de bedrock —
+                // debería ser igual del material del recipiente, ni siquiera
+                // sobresalir visualmente: se entiende que son cerrados por
+                // abajo") El fondo es PIEDRA, el MISMO material de los muros:
+                // no se distingue del lecho, no sobresale, y comparte la
+                // protección de obra de toda la estructura — el fondo del
+                // recipiente es recipiente, no piso.
                 int x1Suelo = _x1 + (_conTubo ? 3 : 0);
                 _sueloPrevio = new byte[x1Suelo - _x0 + 1]; // memoria del lecho: la retirada devuelve lo que el sello pisó.
                 for (int x = _x0; x <= x1Suelo; x++)
                 {
                     _sueloPrevio[x - _x0] = _sim.Grid.GetMat(x, _y0 - 1);
-                    _sim.PaintStable(x, _y0 - 1, 0, MaterialId.PisoEstructural);
+                    _sim.PaintStable(x, _y0 - 1, 0, MaterialId.Stone);
                 }
                 _obraHandle = SimLevelBuilder.RegistrarObra(_x0, _y0 - 1, x1Suelo, _y1 + 1); // (R84/R85) suelo y remate incluidos; el handle se GUARDA: la retirada lo degenera (Opus A8).
                 if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFrente; // el armazón pasa a ser el vidrio delante del agua.

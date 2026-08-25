@@ -5092,3 +5092,45 @@ ca_playtest84.cmd barre la ronda.
   fuentes mueren en el ORDEN — decisión de guion de Cesar que simplifica C: sellar la
   grieta queda como acto constructivo puro).
 · ca_playtest86.cmd barre la ronda.
+
+## Ronda 87 — FONDOS DE PIEDRA, PISO ETERNO DEL FUEGO, Y MÁS CINE PARA EL ORDEN
+
+· Cinco frentes del playtest de Cesar, todos atendidos:
+  1. "ROMPÍ EL SUELO BAJO EL DEPÓSITO y se cayó todo… no necesitan piso de bedrock, debería
+     ser igual del material del recipiente, ni sobresalir: son cerrados por abajo" → el
+     FONDO del recipiente es ahora PIEDRA (el mismo material de los muros): invisible
+     contra el lecho, sin sobresalir, y bajo la MISMA obra que protege los muros
+     (verificado en vivo: fondo 1x8 de piedra + EsObraDelTaller=True en fondo y muros de
+     ambos). El mecanismo exacto del rompimiento que vio no se reprodujo (regla 30: caza
+     ABIERTA) — pero con el fondo en obra, el cincel ahora AVISA "es obra del taller" en
+     vez de morder; si vuelve a romperse, la causa es otra y el aviso la delatará.
+  2. "EL FUEGO NO TIENE PISO — al hacerle hueco empezó a caer incontrolablemente" → el
+     lecho del hogar de brasas (y139) es OBRA: MantenerFuegoDelMaestro repinta brasas por
+     siempre, y un socavón ahí era lluvia de fuego infinita al subsuelo. El fuego eterno
+     exige piso eterno (verificado: obra en el lecho ✓).
+  3. "Al desaparecer después del ORDEN deberían desaparecer las plataformas donde caía el
+     agua" → LAS REPISAS DE LA CASCADA SE VAN CON ELLA: el frente del barrido las deshace
+     columna a columna (EsCeldaDeRepisa contra las constantes del plano, regla 24) y su
+     obra se degenera al terminar (verificado: 84 celdas → 0; obra False).
+  4. "Hace falta notar el ensamble… que se note que me lo dio el Maestro" + "las
+     partículas deberían ingresar en los depósitos… me falta más cine" → DOS GESTOS:
+     (a) LAS MOTAS DEL BARRIDO: cada celda recogida suelta un destello (azul el agua,
+     pardo el lodo) que VUELA en arco hasta el sitio donde su reservorio renacerá y se
+     hunde ahí — la materia SE VE viajar a su nuevo dueño (IMGUI sobre la viñeta, tope 64
+     vivas, duraciones escalonadas deterministas; verificado spawn/tick en vivo — el
+     draw es IMGUI: se ve jugando, no en capturas RenderTexture);
+     (b) LA FIRMA DEL REGALO: al renacer, la cámara viaja al punto medio de los dos
+     reservorios y el Maestro dice TOMA. — la misma palabra con la que entregó el frasco:
+     sus regalos hablan igual.
+  5. "La luz debería dejar de ser focal… después de que cae el lodo, para que se ponga a
+     jugar" → al cerrar el derrumbe (la cámara vuelve al jugador), la viñeta SE ABRE a
+     radioLodoJuego (guion, 1500) y no vuelve a encogerse — la penumbra dramática quedó
+     atrás; el amanecer PLENO (2400) sigue siendo del final.
+· Sobre "las piecitas que no se pueden quitar entre los recipientes": son las MEJILLAS DEL
+  FOGÓN DEL JUGADOR (x402-403 y x411-412, obra desde la ronda 61) — el hogar vacío para el
+  fuego propio del beat futuro. Decisión pendiente de Cesar: se quedan (esperando su beat)
+  o se les da cartel/decoración cuando toque.
+· VERIFICADO EN VIVO (ciclo completo): fondo piedra+obra ✓; lecho del hogar obra ✓;
+  repisas 84→0 con obra degenerada ✓; poza 0 ✓; cargas 60/60 ✓; motas spawn 5→0 por tick ✓;
+  log "TOMA. — recipientes renaciendo EN SUS SITIOS" ✓.
+· ca_playtest87.cmd barre la ronda.

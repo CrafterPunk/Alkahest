@@ -2959,6 +2959,9 @@ namespace Alkahest.Sim
         // jamás cae) con 1-5 celdas de vacío bajo cada muro — el contenido
         // reposa en x386-391/y139, que es suelo macizo. Interior 6x13 = 78,
         // idéntico al tanque del agua.
+        // (R87) Handles de obra de las repisas de la cascada: el REORDEN las
+        // retira (barrido) y degenera estos rects. -1 = plano sin construir.
+        public static int ObraRepisaA = -1, ObraRepisaB = -1;
         public const int FundacionSiloX0 = 385, FundacionSiloX1 = 392;
         public const int FundacionSiloY0 = 140, FundacionSiloY1 = 152;
         // (R86, regla 15) LA ESTANTERÍA CENTRAL (R85: FundacionEstanteria*/
@@ -2998,6 +3001,7 @@ namespace Alkahest.Sim
         {
             ObraDelTaller.Clear();
             ReservasDelPlano.Clear(); // (ronda 69) misma vida que el registro de al lado.
+            ObraRepisaA = ObraRepisaB = -1; // (R87) los handles de las repisas renacen con el plano.
             FillWorldStone(grid);
 
             // La caverna.
@@ -3013,6 +3017,13 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, FundacionBrasasX0 - 1, FundacionY0, 1, 4, MaterialId.Stone);
             DrawSolidRect(grid, FundacionBrasasX1 + 1, FundacionY0, 1, 4, MaterialId.Stone);
             RegistrarObra(FundacionBrasasX0 - 1, FundacionY0, FundacionBrasasX1 + 1, FundacionY0 + 3);
+            // (R87, cazado por Cesar: "el fuego no tiene piso — al hacerle
+            // hueco empezó a caer incontrolablemente") EL LECHO DEL HOGAR ES
+            // OBRA: MantenerFuegoDelMaestro repinta brasas POR SIEMPRE, así
+            // que un socavón bajo el hogar se vuelve una lluvia de fuego
+            // infinita hacia el subsuelo. La fila de suelo bajo el hogar
+            // (y139) no cede al cincel — el fuego eterno exige piso eterno.
+            RegistrarObra(FundacionBrasasX0 - 1, FundacionY0 - 1, FundacionBrasasX1 + 1, FundacionY0 - 1);
 
             // (RONDA 64: "nada de material tirado" — nada suelto se
             // pre-coloca. RONDA 73: y quien lo trae ya no es el Maestro sino
@@ -3047,8 +3058,11 @@ namespace Alkahest.Sim
             // (revisión Opus 73 #14) Las repisas y el labio son OBRA: el
             // cincel del prólogo no puede matar la cascada en silencio (regla
             // 38 — y el imp tampoco choca con ellas por dentro del chorro).
-            RegistrarObra(FundacionRepisaAX0, FundacionRepisaAY, FundacionRepisaAX1, FundacionRepisaAY + 1);
-            RegistrarObra(FundacionRepisaBX0 - 1, FundacionRepisaBY, FundacionRepisaBX1, FundacionRepisaBY + 3);
+            // (R87, Cesar) Los HANDLES se guardan: el ORDEN retira las
+            // repisas con la cascada ("deberían desaparecer las plataformas
+            // donde caía el agua") — el director las barre y degenera su obra.
+            ObraRepisaA = RegistrarObra(FundacionRepisaAX0, FundacionRepisaAY, FundacionRepisaAX1, FundacionRepisaAY + 1);
+            ObraRepisaB = RegistrarObra(FundacionRepisaBX0 - 1, FundacionRepisaBY, FundacionRepisaBX1, FundacionRepisaBY + 3);
 
             // (RONDA 73) EL CUENCO DEL MAESTRO: el receptor de entregas
             // placeholder, tallado junto a la mesa (misma factura que la

@@ -110,6 +110,8 @@ namespace Alkahest.Game
         // en el óvalo horizontal.
         public float radioAguaLuz = 615f;
         public float radioTaller = 540f;
+        [Tooltip("(R87, Cesar: 'la luz debería dejar de ser focal en algún momento… propongo que sea después de que cae el lodo, para que se ponga a jugar') Radio al ABRIRSE la luz cuando el lodo ya cayó: amplio para jugar libre, con un resto de penumbra en los bordes — el amanecer pleno sigue siendo del final.")]
+        public float radioLodoJuego = 1500f;
         public float radioAmanecer = 2400f;
         // (R79, feedback de Cesar: "la luz pierde muy rápido el track del
         // personaje") El VEN. ya no estira la luz hacia el fuego (el bias

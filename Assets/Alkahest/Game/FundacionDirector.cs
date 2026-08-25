@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Alkahest.Sim;
@@ -294,6 +295,7 @@ namespace Alkahest.Game
             TickVueloDelFrasco();
             TickCascadaAudio();
             TickHazPresentacion(); // (R81) el gesto de nacimiento del frasco, si está en curso.
+            if (_motas.Count > 0) TickMotas(); // (R87) los destellos del barrido en vuelo a sus reservorios.
             if (_aroActivo) _aroVida += Time.deltaTime; // (R81) el latido del aro se calma con la edad (revisión Opus #13).
 
             _tBeat += Time.deltaTime;
@@ -729,6 +731,14 @@ namespace Alkahest.Game
             if (t > 3.4f)
             {
                 SimRenderer.FocoCinematico = null; // la cámara vuelve a ti.
+                // (R87, Cesar: "la luz debería dejar de ser focal en algún
+                // momento… propongo que sea después de que cae el lodo, para
+                // que se ponga a jugar") LA LUZ SE ABRE AQUÍ y no vuelve a
+                // encogerse: el jugador ya vio la penumbra dramática entera
+                // (despertar → voz → agua → derrumbe) y entiende que no es
+                // el look permanente del juego. El amanecer PLENO sigue
+                // siendo del final: esto es la sala jugable, no el sol.
+                _radioObjetivo = UiStyles.S(_g.radioLodoJuego);
                 CambiarBeat(Beat.Lodo);
             }
         }
@@ -930,7 +940,12 @@ namespace Alkahest.Game
                     {
                         var backdrop = FindAnyObjectByType<WorkshopBackdrop>();
                         if (backdrop != null) backdrop.TransicionAFondoTaller(_g.fondoTransicionSeg);
-                        Debug.Log("[TenThousandYears] REORDEN barrido: agua " + _bancoAgua + " → tanque, lodo " + _bancoLodo + " → silo (drenados incluidos).");
+                        // (R87, Cesar) Las repisas de la cascada se fueron CON
+                        // la cascada (el frente las deshizo columna a columna);
+                        // aquí su obra se DEGENERA — nada de rects fantasma.
+                        SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaA, 0, 0, -1, -1);
+                        SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaB, 0, 0, -1, -1);
+                        Debug.Log("[TenThousandYears] REORDEN barrido: agua " + _bancoAgua + " → tanque, lodo " + _bancoLodo + " → silo (drenados incluidos); repisas de la cascada retiradas.");
                         _reordenPaso = 3; _tPaso = 0f;
                     }
                     break;
@@ -941,6 +956,15 @@ namespace Alkahest.Game
                     // vuelve A SU SITIO — pero el armazón ya trae el TUBO
                     // GRUESO integrado (su referencia) y el refill infinito:
                     // lo que la cascada y la gotera eran, ahora lo son ellos.
+                    // (R87, Cesar: "hace falta notar el ensamble… que se note
+                    // que me lo dio el Maestro") LA ENTREGA SE FIRMA: la
+                    // cámara viaja al punto medio de los dos reservorios y el
+                    // Maestro dice TOMA. — la MISMA palabra con la que te dio
+                    // el frasco. Sus regalos hablan igual: esto es de él.
+                    SimRenderer.FocoCinematico = new Vector3(
+                        (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
+                        (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
+                    Decir(_g.vozToma);
                     _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
                     _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76), conTubo: true);
                     _deposito.Aparecer();
@@ -950,7 +974,7 @@ namespace Alkahest.Game
                     _silo.Aparecer();
                     _silo.ActivarRefill();
                     SimRenderer.Sacudida = 0.8f;
-                    Debug.Log("[TenThousandYears] REORDEN paso 3→4: recipientes renaciendo EN SUS SITIOS con tubo grueso y refill (agua carga=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76) + ", lodo carga=" + Mathf.Clamp(_bancoLodo, 0, 76) + ").");
+                    Debug.Log("[TenThousandYears] REORDEN paso 3→4: TOMA. — recipientes renaciendo EN SUS SITIOS con tubo grueso y refill (agua carga=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76) + ", lodo carga=" + Mathf.Clamp(_bancoLodo, 0, 76) + ").");
                     _reordenPaso = 4; _tPaso = 0f;
                     break;
 
@@ -992,6 +1016,7 @@ namespace Alkahest.Game
             int hasta = Mathf.Min(SimLevelBuilder.FundacionX1 + 1, Mathf.FloorToInt(_barridoFrente));
             var grid = _sim.Grid;
 
+            float celdaM = SimRenderer.CellWorldSize;
             while (_barridoCol <= hasta)
             {
                 int x = _barridoCol;
@@ -1006,8 +1031,18 @@ namespace Alkahest.Game
                     // el fuego y las entregas no son derrame de nadie.
                     if (ProteccionDelBarrido(x, y)) continue;
                     byte m = grid.GetMat(x, y);
-                    if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); }
-                    else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); }
+                    // (R87, Cesar: "deberían desaparecer las plataformas donde
+                    // caía el agua") LAS REPISAS DE LA CASCADA SE DESHACEN con
+                    // el frente, columna a columna — la cascada murió y su
+                    // andamio se va con ella. Piedra retirada, no banqueada:
+                    // el mundo la reabsorbe (su obra se degenera al terminar).
+                    if (EsCeldaDeRepisa(x, y) && (m == MaterialId.Stone || m == MaterialId.PisoEstructural))
+                    {
+                        _sim.Paint(x, y, 0, MaterialId.Empty);
+                        continue;
+                    }
+                    if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: true); }
+                    else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: false); }
                     // Todo lo demás (piedra, piso, experimentos del jugador,
                     // fuego propio) se RESPETA: el barrido recoge lo que se
                     // derramó, no lo que se creó.
@@ -1018,6 +1053,85 @@ namespace Alkahest.Game
             if (_barridoCol > SimLevelBuilder.FundacionX1 + 1) _barridoEnCurso = false;
         }
         private int _barridoCol;
+
+        /// <summary>(R87) ¿(x,y) es parte del andamio de la cascada? Las dos repisas y el labio, con las MISMAS medidas con que las talló BuildFundacion (regla 24: contra constantes, no prosa).</summary>
+        private static bool EsCeldaDeRepisa(int x, int y)
+        {
+            if (x >= SimLevelBuilder.FundacionRepisaAX0 && x <= SimLevelBuilder.FundacionRepisaAX1 &&
+                y >= SimLevelBuilder.FundacionRepisaAY && y <= SimLevelBuilder.FundacionRepisaAY + 1) return true;
+            if (x >= SimLevelBuilder.FundacionRepisaBX0 && x <= SimLevelBuilder.FundacionRepisaBX1 &&
+                y >= SimLevelBuilder.FundacionRepisaBY && y <= SimLevelBuilder.FundacionRepisaBY + 1) return true;
+            if (x == SimLevelBuilder.FundacionRepisaBX0 - 1 &&
+                y >= SimLevelBuilder.FundacionRepisaBY && y <= SimLevelBuilder.FundacionRepisaBY + 3) return true; // el labio.
+            return false;
+        }
+
+        // =================================================================
+        // (R87, Cesar: "al absorber todas las partículas deberían ingresar
+        // en los depósitos rápidamente… me falta más cine") LAS MOTAS DEL
+        // BARRIDO: cada celda que el frente recoge suelta un destello que
+        // VUELA hasta el sitio donde su reservorio va a renacer y se hunde
+        // ahí — la materia no se borra: SE VE viajar a su nuevo dueño.
+        // IMGUI con la textura de la lucecita (sobre la viñeta, la lección
+        // del haz R81); tope de vivas para que un mapa inundado no ahogue
+        // el draw (las que no caben simplemente no destellan: el banco las
+        // cuenta igual).
+        // =================================================================
+        private struct Mota { public Vector3 desde, hasta; public float t, dur; public bool esAgua; }
+        private readonly List<Mota> _motas = new List<Mota>();
+        private const int MotasTope = 64;
+
+        private void SoltarMota(int x, int y, float celda, bool esAgua)
+        {
+            if (_motas.Count >= MotasTope) return;
+            float dx0 = esAgua ? (SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f
+                               : (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f;
+            _motas.Add(new Mota
+            {
+                desde = new Vector3((x + 0.5f) * celda, (y + 0.5f) * celda, 0f),
+                hasta = new Vector3(dx0 * celda, (SimLevelBuilder.FundacionY0 + 1.5f) * celda, 0f), // se hunde en el SITIO del renacer.
+                t = 0f,
+                dur = 0.55f + 0.35f * (((x * 7 + y * 13) & 7) / 7f), // duraciones escalonadas (determinista): lluvia, no bandada.
+                esAgua = esAgua
+            });
+        }
+
+        private void TickMotas()
+        {
+            for (int i = _motas.Count - 1; i >= 0; i--)
+            {
+                var mo = _motas[i];
+                mo.t += Time.deltaTime;
+                if (mo.t >= mo.dur) { _motas.RemoveAt(i); continue; }
+                _motas[i] = mo;
+            }
+        }
+
+        private void DibujarMotas()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            if (_lucecitaTex == null) ConstruirLucecita();
+            var prev = GUI.color;
+            for (int i = 0; i < _motas.Count; i++)
+            {
+                var mo = _motas[i];
+                float tt = Mathf.Clamp01(mo.t / mo.dur);
+                float ease = tt * tt * (3f - 2f * tt);
+                var pos = Vector3.Lerp(mo.desde, mo.hasta, ease);
+                pos.y += Mathf.Sin(tt * Mathf.PI) * 0.55f;      // el arco del vuelo.
+                Vector3 sp = cam.WorldToScreenPoint(pos);
+                if (sp.z < 0f) continue;
+                float gy = Screen.height - sp.y;
+                float lado = UiStyles.S(9f) * (1f - 0.35f * tt); // encoge al hundirse.
+                float alfa = 0.8f * (0.4f + 0.6f * Mathf.Sin(tt * Mathf.PI)); // nace tenue, brilla en vuelo, se apaga al hundirse.
+                GUI.color = mo.esAgua
+                    ? new Color(0.55f, 0.8f, 1f, alfa)
+                    : new Color(0.85f, 0.62f, 0.4f, alfa);
+                GUI.DrawTexture(new Rect(sp.x - lado, gy - lado, lado * 2f, lado * 2f), _lucecitaTex);
+            }
+            GUI.color = prev;
+        }
 
         /// <summary>
         /// true = intocable para el barrido. (R86) La poza y el cráter SE
@@ -1677,6 +1791,7 @@ namespace Alkahest.Game
             // recogía era indistinguible de nada (regla 43) — ahora el ORDEN
             // se VE pasar, aunque no hubiera una sola celda que recoger.
             if (_barridoEnCurso && !DayCycle.InputLocked) DibujarFrenteDelBarrido();
+            if (_motas.Count > 0 && !DayCycle.InputLocked) DibujarMotas(); // (R87) la materia recogida VIAJA a los reservorios.
 
             // (R81) El aro de la boca del frasco: acompaña el paso de aspirar
             // (y la ficha-recuerdo). Calla ante TODO modo que apague el
