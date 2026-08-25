@@ -5337,3 +5337,132 @@ ca_playtest84.cmd barre la ronda.
   la caverna entera = 0 ✓; tubos ✓; guion efectivo refillTopeCeldas=72 ✓; la cola
   silenciosa cerró el caso 71→72 en <7 s (el caso que antes moría mudo) ✓.
 · ca_playtest91.cmd barre la ronda.
+
+## Ronda 92 — LA RETAGUARDIA DEL ANILLO: la absorción no delega en el hardcodeo
+
+· El reporte de Cesar tras el playtest 91: "después de la absorción TARDA en pasar la
+  limpieza del amanecer, cosa que se siente como una limpieza más por HARDCODEO que
+  absorción de partículas; aun así las partículas A RAS DEL SUELO y hasta algunas líneas
+  por encima NO SE LIMPIAN; idealmente tendrían que limpiarse con la absorción del
+  Maestro, lo mismo para su pocito donde antes pedía las cosas." El diagnóstico: el
+  frente del anillo pasa UNA sola vez por columna, pero los charcos FLUYEN de vuelta al
+  terreno ya barrido detrás de él — y quedaban ahí ~10 s hasta el RepasoDelAmanecer, que
+  al borrarlos de golpe se leía exactamente como lo que era: un wipe. (Su playtest lo
+  midió: 259 restos borrados por el repaso.)
+· Tres piezas: (1) LA RETAGUARDIA DEL ANILLO — cada frame de la ceremonia (pasos 2-5)
+  el intervalo ya conquistado se RE-BARRE a ALTURA COMPLETA: agua/lodo al banco,
+  humo/vapor al trago, mota al Maestro por celda; el humo del fogón protegido vuela en
+  CHORRO CONTINUO hasta el amanecer; respeta protegidos y el interior de los recipientes.
+  (2) EL CUENCO FUERA DE LA PROTECCIÓN: el Maestro se traga su propio receptor (su
+  contenido al banco; post-ORDEN las entregas viven en el tablón). (3) EL CUENCO
+  APLANADO en PerfilarColumna con el trato de la poza (regla 38: experimentos dejan
+  muesca). El RepasoDelAmanecer queda como RED DE SEGURIDAD y su línea forense de
+  termómetro: si un día reporta algo, la retaguardia tiene un agujero.
+· VERIFICADO EN VIVO (desorden sembrado): banda del suelo bajó el repaso 259→30 (humo
+  alto) → altura completa pasos 2-5: REPASO EN SILENCIO = 0 ✓; agua=0 lodo=0 ✓; cuenco
+  0/35 no-piedra ✓; el humo post-Fin es del fogón VIVO (el mundo respira, no es mancha).
+· ca_playtest92.cmd barrió la ronda.
+
+## Ronda 93 — EL FINAL DEL PRÓLOGO: la Obra, el Acomodo y el Adiós (mandato nocturno)
+
+· Mandato de Cesar: terminar el prólogo DESDE su lenguaje (no reutilizar caótico/semilla
+  cero); sin misiones de esquina con la O; tolva descartada/reinventada; el ORDEN
+  repetible para agrandar el espacio; frasco entregado = el que llevas; plataforma con
+  su techo en silueta blanca; V como ESTADO clarísimo; mudanza de los dos reservorios
+  al centro; Maestro ETÉREO cuya despedida es "dejar de prestar atención", canal abierto
+  en el tablón sin figura permanente; fuego primitivo; "sorpréndeme".
+· TRES BEATS NUEVOS tras el Reorden: OBRA (ALZA., cincel volado a la mano + siluetas
+  blancas de plataforma y grieta), ACOMODO (ACOMODA., reservorios IMovible con imán de
+  slots ±2 — regla 36 derogada solo para el mundo ordenado; Reposicionar muda muros,
+  fondo, contenido, obra, visual y tubo sin derramar), ADIÓS (ORDEN. repetido, vano en
+  el muro oeste, DIEZ MIL AÑOS., figura etérea desvaneciéndose en motas hacia el tablón,
+  Trueque activado ahí; el fuego queda). + Maestro etéreo (flota y respira), TarroDeMano
+  en el TOMA, CincelHerramienta, OrdersHud fuera de la Fundación (regla 15), placa de
+  estado de la MUDANZA, gases no bloquean mampostería (el humo del fogón bloqueaba el
+  techo — cazado en vivo), tubo espejado al flanco libre, anti-solape de recipientes.
+· VERIFICADO con dos ciclos Reorden→Fin en vivo (imán, cargas intactas, vano 64,
+  presencia 0, Trueque activo, consola limpia).
+· VEREDICTO DEL PLAYTEST DE CESAR (la mañana siguiente): "le falta mucho" — los
+  contornos de la mudanza no calzan con los sprites; el "manchón de techo" no se
+  entiende; ALZA es "una línea mal pintada que cubre el requisito, más horrible que
+  antes"; C→X incómodo al dedo; y "lo peor: el remate del título totalmente
+  anticlimático — ¿DIEZ MIL AÑOS qué? y pum, rompes 20 píxeles a la izquierda". LA
+  LECCIÓN (pariente de la regla 43): completar el esqueleto de una escena no es
+  dirigirla — el listón del REORDEN (10/10) lo puso una dirección de escena con
+  números; el final del prólogo la recibe en la R94.
+· NOTA DE INTENDENCIA: el sandbox se reseteó tras esta ronda y los commits locales
+  murieron con él — el CÓDIGO sobrevivió entero porque Cesar corrió el barredor
+  (GitHub la verdad, regla 6), pero el HISTORIAL de la 92-93 y el doc de familias
+  NO habían viajado a su disco y hubo que reconstruirlos de memoria. REGLA NUEVA DE
+  FACTO: los docs de la ronda viajan a su disco EN EL MISMO DEPLOY que el código,
+  siempre.
+
+## Ronda 94 — LA CALIDAD DEL FINAL: dirección de escena Opus tras el veredicto
+
+· El reset del sandbox se llevó los commits locales de la 92-93 (el CÓDIGO sobrevivió
+  entero vía GitHub, regla 6; el HISTORIAL y el doc de familias se reconstruyeron de
+  memoria y AHORA VIAJAN al disco de Cesar con cada deploy). Compilador fiel re-stageado
+  desde Builds/TenThousandYearsDemo (regla 7).
+· LOS OJOS DE OPUS midieron por qué falló el final (con números): el vano quedaba a 3
+  celdas del borde del encuadre (FocoCinematico en el plinto → x306..467: literalmente
+  no se veía) y daba a ROCA MACIZA (un nicho, no un umbral); el título competía con una
+  imagen gastada 2.6 s antes, sin silencio, con la tipografía de las órdenes; la
+  migración al tablón eran 7.5 celdas en plano general; la grieta del techo estaba a 58
+  celdas SOBRE el encuadre (el jugador jamás la vio antes de que se la pidieran); ALZA
+  eran 2 filas de Stone crudo sobre piedra recién perfilada (un rasguño), y
+  PisoEstructural — que el renderer YA dibuja fabril — no se usaba nunca.
+· LO CONSTRUIDO (la dirección entera, implementada):
+  1. EL PLINTO ESCALONADO (3 hiladas, 54 exactas: 377-396/378-395/379-394) — un
+     descuido ya no cubre el requisito. SlotY0=143 (los reservorios se apoyan sobre la
+     cara del plinto, 8+8 = los 16 justos de la hilada alta).
+  2. EL PERFILADO DE TU OBRA (2.0 s): 0.30 de silencio → BIEN. + la luz se arrodilla
+     (S(200)) → barrido 20 col a 25 col/s (Stone→PisoEstructural SOLO en las 54
+     pedidas, 3 motas/col, clank cada 4 con pitch subiendo 1.05→1.33: la escalera del
+     cantero) → el sello (SubGrave 0.90 + sacudida 0.18) → la luz se libera. LO PINTADO
+     DE MÁS QUEDA BRUTO a propósito: "lo bruto lo pones tú, el mundo perfila lo que
+     pidió" — verificado (2 celdas extra siguieron Stone).
+  3. EL TECHO, MOSTRADO Y MOTIVADO: plano de establecimiento de 1.6 s al decir ALZA.
+     (la cámara sube a la grieta) + LA HERIDA GOTEA polvo cada 0.75 s con su sonido
+     agudo (pitch 1.40 — lo que hace levantar la vista; aterriza sobre tu plinto; se
+     apaga PARA SIEMPRE al sellar: no es fuente) + premio propio (luz S(140), celdas a
+     PisoEstructural, clanks, el gemido de la montaña asentándose).
+  4. EL UMBRAL NUEVO (766 celdas, ya no "20 píxeles"): el muro RETROCEDE (x319→312,
+     altura completa, 10 col/s, la roca vuela hacia el Maestro y SALE del encuadre) →
+     el ARCO con clave (x311→302, y140-160, 14 col/s) → el RECODO que sube (x302-305,
+     y164-180) y SE PIERDE — desde la caverna no se ve el final del pasaje: una
+     promesa, no una mentira. El suelo y139 intacto: se entra caminando. Y LA LUZ DEL
+     OTRO LADO: dos resplandores FRÍOS (0.80,0.87,1.00) — la primera luz del juego que
+     no es fuego ni Maestro — PERMANENTES (respiran a 0.3 Hz, sobreviven a Beat.Fin).
+  5. EL ADIÓS EN 11 PASOS (~18 s): silencio → ORDEN. (mismo 0.82: es el mismo verbo; la
+     oscuridad VUELVE sobre lo que construiste) → el pulso y EL VIAJE (la luz SE VA de
+     ti hacia el oeste: él ya no es el centro; la cámara rezagada da el traveling
+     gratis) → el muro retrocede → el vano → la luz del otro lado (1.6 s de pura
+     contemplación, EN PRIMER PLANO — aquí se entiende) → EL NEGRO, su firma (sub a
+     0.60, solo su fuego y el mañana al 45%) → EL TÍTULO SOBRE EL NEGRO (0.90 s de la
+     palabra SOLA en pantalla) y el amanecer definitivo naciendo DEBAJO de ella → la
+     imagen completa (1.7 s de nada: tu plinto, sus reservorios, el fuego, el tablón,
+     el destello frío) → LA DESPEDIDA en plano cerrado (brasas + tablón + figura en el
+     MISMO encuadre; ~22 motas DORADAS — tipo 3 nuevo: su atención, no materia — caen
+     de él al tablón, que se enciende ámbar PARA SIEMPRE; un clank agudo: la última
+     posándose; la figura se apaga y nunca más parpadea; su fuego sigue) → EL MUNDO ES
+     TUYO (Trueque + placa "EL TABLÓN — E", la única vez que el juego lo nombra).
+  6. EL TÍTULO CON TRATAMIENTO PROPIO (la única no-orden del Maestro): DecirTitulo —
+     doble capa sonora (voz a 0.62, la nota más baja del prólogo, + sub a 0.50);
+     tipografía 1.55×, centrado vertical EXACTO, SIN deriva (las órdenes flotan; el
+     título está TALLADO), tracking doble, más blanco (0.98,0.96,0.90), sombra doble,
+     fades 0.70/1.20, y DOS FILETES a ±S(34): ninguna palabra suya lleva reglas; esta
+     sí, porque es el nombre de lo que empieza.
+  7. LOS CONTORNOS DE LA MUDANZA CALZAN: el contrato IMovible del recipiente se mide en
+     el rect VISUAL (spanVisual×altoVisual, ancla x0-1) — la silueta de arrastre y los
+     slots cubren EXACTAMENTE el sprite. 8. LA C CICLA (frasco→piedra→piso→frasco): la
+     X queda de alias — "presionar C y luego X es súper incómodo al dedo". 9. CARTELES
+     AGUA/ARCILLA sobre los reservorios de cerca (desde el Acomodo): el pacto de las
+     familias, visible — la distinción REAL lodo-sucio/arcilla-limpia (material
+     variante) queda declarada como ronda propia en el doc de familias.
+· VERIFICADO EN VIVO (ciclo completo Reorden→Fin): plinto 53 objetivos (la mejilla del
+  fogón ya era piedra) → vestido 54/54 de PisoEstructural con lo extra bruto ✓; techo
+  goteando y premiado ✓; imán con Y desviada (380,143)/(388,144) → (379/387,143) ✓;
+  umbral EXACTO 488/210/68 con suelo 18/18 intacto ✓; vano y tablón vivos ✓; Trueque ✓;
+  consola 0 errores 0 warnings ✓. Los 11 pasos y el título son IMGUI: se estrenan en el
+  playtest de Cesar.
+· ca_playtest94.cmd barre la ronda.

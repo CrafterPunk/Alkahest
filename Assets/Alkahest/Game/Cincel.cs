@@ -221,14 +221,29 @@ namespace Alkahest.Game
                 // y lo dejó anotado como hueco; se cierra aquí.
                 if (!ModoActivo) Mudanza.ForzarSalida();
 
-                ModoActivo = !ModoActivo;
-                if (_flask != null)
+                // (R94, Cesar: "presionar la C y luego la X es súper incómodo
+                // al dedo") LA C CICLA con un solo dedo: frasco → cincel
+                // PIEDRA → cincel PISO → frasco. La X sigue viva como alias
+                // directo del alternador piedra/piso (nada se rompe), pero ya
+                // no es obligatoria para nadie.
+                if (!ModoActivo)
                 {
-                    _flask.Avisar(ModoActivo
-                        ? "cincel en mano — clic izq. talla · clic der. construye · X: piedra/piso"
-                        : "frasco en mano");
+                    ModoActivo = true;
+                    _rellenaPiso = false;
+                    if (_flask != null) _flask.Avisar("cincel: PIEDRA — clic izq. talla · clic der. construye · C otra vez: piso");
                 }
-                if (!ModoActivo) OcultarVisuales();
+                else if (!_rellenaPiso)
+                {
+                    _rellenaPiso = true;
+                    if (_flask != null) _flask.Avisar("cincel: PISO ESTRUCTURAL — C otra vez: guardar el cincel");
+                }
+                else
+                {
+                    ModoActivo = false;
+                    _rellenaPiso = false;
+                    if (_flask != null) _flask.Avisar("frasco en mano");
+                    OcultarVisuales();
+                }
             }
 
             // (RONDA 66) X alterna QUÉ construye el clic derecho: piedra o

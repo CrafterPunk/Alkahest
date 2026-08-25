@@ -170,12 +170,18 @@ namespace Alkahest.Game
             if (_movible) Mudanza.OlvidarMovible(this);
         }
 
+        // (R94, Cesar: "los contornos de la mudanza no calzan en el tamaño
+        // de los sprites") EL CONTRATO SE MIDE EN VISUAL: TamanoMundo es el
+        // rect del SPRITE (huella + 1 celda de vuelo por lado, alto + 6 con
+        // banda y domo — los mismos spanVisual/altoVisual de InitInterno) y
+        // AnclaCelda su esquina (x0-1, y0), como exige IMovibleAnclaEsquina.
+        // Las conversiones de vuelta (+1 en x) viven en los wrappers.
         Vector3 IMovible.CentroMundo
         {
             get
             {
                 float c = SimRenderer.CellWorldSize;
-                return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + (_y1 - _y0 + 2) * 0.5f) * c, 0f);
+                return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + (_y1 - _y0 + 7) * 0.5f) * c, 0f);
             }
         }
 
@@ -184,14 +190,15 @@ namespace Alkahest.Game
             get
             {
                 float c = SimRenderer.CellWorldSize;
-                return new Vector2((_x1 - _x0 + 1) * c, (_y1 - _y0 + 2) * c); // muros + remate y1+1.
+                return new Vector2((_x1 - _x0 + 3) * c, (_y1 - _y0 + 7) * c); // spanVisual x altoVisual: el rect que se VE.
             }
         }
 
-        Vector2Int IMovible.AnclaCelda => new Vector2Int(_x0, _y0); // esquina inferior izquierda de la huella (garantía IMovibleAnclaEsquina).
+        Vector2Int IMovible.AnclaCelda => new Vector2Int(_x0 - 1, _y0); // esquina inferior izquierda del rect VISUAL.
 
-        bool IMovible.CabeEnAncla(Vector2Int a)
+        bool IMovible.CabeEnAncla(Vector2Int aVisual)
         {
+            var a = new Vector2Int(aVisual.x + 1, aVisual.y); // visual → huella.
             int w = _x1 - _x0, alto = _y1 - _y0 + 1; // spans (el remate ocupa y+alto).
             if (a.x < 1 || a.x + w > CellGrid.W - 2 || a.y < 1 || a.y + alto > CellGrid.H - 2) return false;
             // (R93) ANTI-SOLAPE: dos recipientes no pueden compartir NI UNA
@@ -206,7 +213,7 @@ namespace Alkahest.Game
             return true;
         }
 
-        void IMovible.Reposicionar(Vector2Int ancla) => Reposicionar(ancla.x, ancla.y);
+        void IMovible.Reposicionar(Vector2Int anclaVisual) => Reposicionar(anclaVisual.x + 1, anclaVisual.y); // visual → huella.
 
         /// <summary>
         /// (R93) LA MUDANZA ENTERA: captura el contenido del vidrio (en orden
