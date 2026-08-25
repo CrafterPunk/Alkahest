@@ -336,14 +336,18 @@ namespace Alkahest.Game
             if (!_refillActivo) return;
             _refillTimer -= dt;
             if (_refillTimer > 0f) return;
-            _refillTimer = _g.refillSeg;
-            if (DelDueno() >= _g.refillTope) return;              // hasta la MITAD y descansa (Cesar R88): el resto del vidrio es tuyo.
-            // (R88, Cesar: "tiene que VERSE cayendo desde arriba, lento") La
-            // gota nace en el TOPE del interior, junto al flanco del tubo, y
-            // CAE con física a la vista — nada de brotar desde la base (el
-            // "algo raro" que vio: primero llenaba abajo y luego goteaba).
-            // Misma cadencia para agua y lodo ("al menos como el agua").
-            int inlet = _x1 - 1;
+            int n = DelDueno();
+            if (n >= _g.refillTope) { _refillTimer = _g.refillSeg; return; } // completo (66: una fila de aire para que la caída siempre se VEA — Opus R90).
+            // (R90, Cesar: "caer más lento mientras más se llena — así lo ven
+            // al inicio y se percibe que todo toma tiempo") La cadencia crece
+            // AL CUADRADO con el llenado: 0.8 s con el tanque a 1/5, ~4.8 s
+            // cerca del tope (~110 s el llenado entero, medido por Opus: la
+            // curva lineal moría la fase visible enseguida).
+            float t = Mathf.Clamp01(n / (float)Mathf.Max(1, _g.refillTope));
+            _refillTimer = _g.refillSeg * (1f + 5f * t * t);
+            // (R90, Cesar) La gota nace en el TOPE y POR EL CENTRO del vidrio
+            // — cae con física a la vista, por en medio, no pegada a un flanco.
+            int inlet = (_x0 + _x1) / 2;
             if (_sim.Grid.GetMat(inlet, _y1) != MaterialId.Empty) return; // el tope está tomado: espera a que se acomode.
             _sim.PaintStable(inlet, _y1, 0, _matDueno);
         }

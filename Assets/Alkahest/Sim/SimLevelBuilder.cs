@@ -3177,7 +3177,9 @@ namespace Alkahest.Sim
                 for (int d = 1; d <= profIzq; d++) grid.SetCell(FundacionX0 - d, y, MaterialId.Empty);
                 for (int d = 1; d <= profDer; d++) grid.SetCell(FundacionX1 + d, y, MaterialId.Empty);
             }
-            for (int x = 342; x <= 369; x++)
+            // (R89b) El ala izquierda se corrió con el ensanche: el rango
+            // viejo (342-369) habría mordido BAJO LA POZA nueva (352-365).
+            for (int x = 322; x <= 349; x++)
             {
                 var rS = XorShift.FromCell(0u, x, 2, 74027u);
                 byte b = rS.NextByte();

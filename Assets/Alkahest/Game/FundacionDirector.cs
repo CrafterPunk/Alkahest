@@ -297,7 +297,7 @@ namespace Alkahest.Game
             TickHazPresentacion(); // (R81) el gesto de nacimiento del frasco, si está en curso.
             if (_motas.Count > 0) TickMotas(); // (R87) los destellos del barrido en vuelo a sus reservorios.
             if (_flashT > 0f) _flashT -= Time.deltaTime; // (R88) el flash del pulso decae.
-            if (_asentadoMarcado && (_poolAgua > 0 || _poolLodo > 0)) { _poolAgua = 0; _poolLodo = 0; } // la carga ya está DENTRO: el resplandor muere con el asentamiento.
+            if (_beat != Beat.Reorden && _maestroHalo > 0f) _maestroHalo = Mathf.MoveTowards(_maestroHalo, 0f, Time.deltaTime); // el halo no sobrevive a la cinemática.
             if (_aroActivo) _aroVida += Time.deltaTime; // (R81) el latido del aro se calma con la edad (revisión Opus #13).
 
             _tBeat += Time.deltaTime;
@@ -951,7 +951,9 @@ namespace Alkahest.Game
         private float _radioCierreDesde;       // radio al empezar el cierre sobre el Maestro.
         private bool _siloAnulado, _sonRepisaB, _sonRepisaA, _manantialSellado, _asentadoMarcado, _clankHecho, _tomaDicha, _gotaActivada;
         private float _tAsentado = -1f, _tClank = -1f;
-        private int _poolAgua, _poolLodo;      // motas aterrizadas por sitio: el resplandor de la carga esperando.
+        private bool _flashazoHecho, _avisoPolvoHecho; // (R90) el trago final y su polvo, una sola vez.
+        private float _tEsperaMotas = -1f, _tNegro = -1f;
+        private float _flashDur = 0.18f, _flashAlfa = 0.22f, _flashHold; // (R90) el flash es paramétrico: pulso chico, flashazo grande.
 
         private int ColMaestro() { return Mathf.RoundToInt(PosMaestro().x / SimRenderer.CellWorldSize); }
 
@@ -1018,7 +1020,8 @@ namespace Alkahest.Game
 
                 case 1: // la palabra llega a alfa 1 → EL PULSO.
                     if (_tPaso < 0.45f) return;
-                    _flashT = 0.18f;
+                    _flashT = 0.18f; _flashDur = 0.18f; _flashAlfa = 0.22f; _flashHold = 0f;
+                    _tEsperaMotas = -1f; _tNegro = -1f; _flashazoHecho = false; _avisoPolvoHecho = false; _maestroHalo = 0f;
                     if (_audio != null) _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 0.9f * Audio.DirectorDeAudio.VolumenEfectos);
                     _deposito?.RetirarRapido(); // lo más cercano y lo más suyo obedece PRIMERO, a plena luz.
                     var backdrop = FindAnyObjectByType<WorkshopBackdrop>();
@@ -1028,7 +1031,6 @@ namespace Alkahest.Game
                     _barridoEnCurso = true;
                     _colIzq = colM; _colDer = colM + 1;
                     _anilloD = 32f; _anilloPausaT = 0f; _anilloPausaHecha = false;
-                    _cosecha.Clear(); _cosechaIdx = 0; _cosechaAcum = 0f; _tCosechaFin = -1f;
                     Debug.Log("[TenThousandYears] EL PULSO: fuentes muertas, anillo en marcha desde x" + colM + ".");
                     _reordenPaso = 2; _tPaso = 0f;
                     break;
@@ -1044,8 +1046,11 @@ namespace Alkahest.Game
                     // Las dos cabezas de limpieza marchan con el filo (el corte
                     // es columnar, pero fuera del óvalo todo es negro: nadie
                     // puede ver que no es circular — coste cero, lectura circular).
-                    while (colM - _colIzq <= d && _colIzq >= SimLevelBuilder.FundacionX0 - 1) LimpiarColumna(_colIzq--);
-                    while (_colDer - colM <= d && _colDer <= SimLevelBuilder.FundacionX1 + 1) LimpiarColumna(_colDer++);
+                    // (Opus R90 BLOQUEA #1) Hasta X0-2/X1+2: las mordidas de
+                    // muro llegan a profundidad 2 y con el tope viejo el
+                    // remate quedaba chueco sin visitar.
+                    while (colM - _colIzq <= d && _colIzq >= SimLevelBuilder.FundacionX0 - 2) { LimpiarColumna(_colIzq); PerfilarColumna(_colIzq); _colIzq--; }
+                    while (_colDer - colM <= d && _colDer <= SimLevelBuilder.FundacionX1 + 2) { LimpiarColumna(_colDer); PerfilarColumna(_colDer); _colDer++; }
 
                     if (!_siloAnulado && d >= colM - SimLevelBuilder.FundacionSiloX1)
                     {
@@ -1071,7 +1076,7 @@ namespace Alkahest.Game
                         _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY + 1, 0, MaterialId.Stone);
                     }
 
-                    if (d < dFin || _colIzq >= SimLevelBuilder.FundacionX0 - 1 || _colDer <= SimLevelBuilder.FundacionX1 + 1)
+                    if (d < dFin || _colIzq >= SimLevelBuilder.FundacionX0 - 2 || _colDer <= SimLevelBuilder.FundacionX1 + 2)
                         if (_tPaso < 9f) return; // tope de seguridad del anillo.
                     // Cierre del anillo: seguridad + bancos + obra de las repisas.
                     if (_deposito != null && !_deposito.Enterrado) _deposito.RetirarDeGolpe();
@@ -1089,67 +1094,90 @@ namespace Alkahest.Game
                     break;
                 }
 
-                case 3: // EL DESPUÉS → LA COSECHA a plena luz → EL IRIS → polvo → renacer.
-                    if (_tPaso < 0.80f)
+                case 3: // el trago final: ESPERA de motas → NEGRO → FLASHAZO → apertura → claro breve → IRIS → polvo → renacer.
+                {
+                    // (R90, dirección Opus #5) El flashazo NO se dispara al
+                    // terminar el anillo: las últimas motas siguen en vuelo.
+                    // La luz se queda en el tamaño del anillo hasta que la
+                    // última entra al Maestro (tope 1.3 s) — el negro cae en
+                    // el fotograma del último trago.
+                    if (_tEsperaMotas < 0f) _tEsperaMotas = _tPaso;
+                    if (_motas.Count > 0 && _tPaso - _tEsperaMotas < 1.3f)
                     {
-                        _radioForzado = Mathf.Lerp(PxDeCeldas(colM - SimLevelBuilder.FundacionX0 + 2), UiStyles.S(2400f), _tPaso / 0.80f);
+                        _radioForzado = PxDeCeldas(colM - SimLevelBuilder.FundacionX0 + 2);
+                        _focoDeLuz = PosMaestro();
+                        return;
+                    }
+                    if (_tNegro < 0f)
+                    {
+                        // EL NEGRO (0.12 s): la oscuridad total que Cesar pidió
+                        // de vuelta ("me lo daba la oscuridad") — solo el sub.
+                        _tNegro = _tPaso;
+                        if (_audio != null) { _audio.pitch = 0.85f; _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 1.0f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    float tn = _tPaso - _tNegro;
+                    if (tn < 0.12f)
+                    {
+                        _radioForzado = UiStyles.S(6f); // negro total: el mundo entero dentro del Maestro.
+                        _focoDeLuz = PosMaestro();
+                        return;
+                    }
+                    if (!_flashazoHecho)
+                    {
+                        // EL FLASHAZO ÉPICO: el halo del Maestro reventando —
+                        // blanco 0.55 sostenido 0.06 s + decaimiento 0.30
+                        // (el doble de alto y de largo que el del pulso, o
+                        // leería como repetición — Opus R90). Sacudida GANADA:
+                        // acaba de tragarse la geología entera.
+                        _flashazoHecho = true;
+                        _flashT = 0.36f; _flashDur = 0.36f; _flashAlfa = 0.55f; _flashHold = 0.06f;
+                        _maestroHalo = 0f;
+                        SimRenderer.Sacudida = 0.35f;
+                    }
+                    if (tn < 0.37f)
+                    {
+                        _radioForzado = Mathf.Lerp(UiStyles.S(6f), UiStyles.S(2400f), Mathf.Clamp01((tn - 0.12f) / 0.25f));
                         _focoDeLuz = null;
                         return;
                     }
-                    // LA COSECHA (R89, Cesar: "disfrutarlo un poquito más… ver
-                    // cómo llegan las partículas"): con la caverna ENTERA
-                    // iluminada, todo lo absorbido se levanta de donde estaba
-                    // — en el mismo orden en que el anillo lo recogió — y
-                    // vuela en arcos a los dos sitios del renacer. ~2.2 s de
-                    // corriente doble cruzando la sala a plena vista.
-                    if (_cosechaIdx < _cosecha.Count || _motas.Count > 0)
-                    {
-                        if (_tPaso < 9.5f)
-                        {
-                            _radioForzado = UiStyles.S(2400f);
-                            _cosechaAcum += Mathf.Max(24f, _cosecha.Count / 2.2f) * Time.deltaTime;
-                            while (_cosechaAcum >= 1f && _cosechaIdx < _cosecha.Count && _motas.Count < MotasTope)
-                            {
-                                _cosechaAcum -= 1f;
-                                var pto = _cosecha[_cosechaIdx++];
-                                SoltarMota(pto.x, pto.y, celda, esAgua: pto.z == 1);
-                            }
-                            return;
-                        }
-                    }
-                    if (_tCosechaFin < 0f) { _tCosechaFin = _tPaso; Debug.Log("[TenThousandYears] LA COSECHA entregada: " + _cosecha.Count + " destellos a sus reservorios."); }
-                    float tiIris = _tPaso - _tCosechaFin;
+                    if (tn < 1.17f) { _radioForzado = UiStyles.S(2400f); return; } // la caverna LIMPIA, perfilada: 0.8 s de revelación — no 3.
+                    float tiIris = tn - 1.17f;
                     if (tiIris < 0.55f)
                     {
                         // EL IRIS: la viñeta usada como LENTE — el primer plano del pixel art.
                         SimRenderer.FocoCinematico = new Vector3(
                             (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
                             (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
-                        _focoDeLuz = null; // la luz vuelve a la cámara: ambos miran el mismo sitio.
                         _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(520f), (tiIris / 0.55f) * (tiIris / 0.55f));
                         return;
                     }
                     if (tiIris < 0.75f)
                     {
                         // Polvo ANTES que metal: el suelo avisa.
-                        if (_flashT < 0f && _audio != null)
+                        if (!_avisoPolvoHecho && _audio != null)
                         {
+                            _avisoPolvoHecho = true;
                             _audio.pitch = 0.6f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.4f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f;
                             SimRenderer.Sacudida = 0.15f;
-                            _flashT = 0f; // reuso como "aviso hecho" (queda <=0: no dibuja).
                         }
                         return;
                     }
-                    // EL RENACER: ambos juntos, YA LLENOS (nada de progress bar).
+                    // EL RENACER: ambos juntos, a 1/5 MÁS el eco del banco
+                    // (Opus R90 #6: con carga fija el "lo que derramaste
+                    // vuelve" de la R84 moría — banco/8 con tope 30 conserva
+                    // ambas promesas: arrancan bajos Y lo tuyo pesa).
+                    int cargaAgua = Mathf.Clamp(14 + _bancoAgua / 8, 14, 30);
+                    int cargaLodo = Mathf.Clamp(14 + _bancoLodo / 8, 14, 30);
                     _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
-                    _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, Mathf.Max(8, _g.refillTope - 8)), conTubo: true, cargaInstantanea: true);
+                    _deposito.Init(_sim, cargaAgua, conTubo: true, cargaInstantanea: true);
                     _deposito.Aparecer();
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, Mathf.Clamp(_bancoLodo, 0, Mathf.Max(8, _g.refillTope - 8)), conTubo: true, cargaInstantanea: true);
+                    _silo.InitSilo(_sim, cargaLodo, conTubo: true, cargaInstantanea: true);
                     _silo.Aparecer();
-                    Debug.Log("[TenThousandYears] RENACER: ambos suben JUNTOS y cargados (agua=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, Mathf.Max(8, _g.refillTope - 8)) + ", lodo=" + Mathf.Clamp(_bancoLodo, 0, Mathf.Max(8, _g.refillTope - 8)) + "); la gota del refill los llevará a la mitad A LA VISTA.");
+                    Debug.Log("[TenThousandYears] RENACER: ambos a ~1/5 (agua=" + cargaAgua + ", lodo=" + cargaLodo + "); el refill los COMPLETARÁ cada vez más lento (todo toma tiempo).");
                     _reordenPaso = 4; _tPaso = 0f;
                     break;
+                }
 
                 case 4: // asentar (sacudida GANADA) → quietud 0.7 → LOS TUBOS.
                 {
@@ -1215,6 +1243,7 @@ namespace Alkahest.Game
         /// </summary>
         private void LimpiarColumna(int x)
         {
+            if (x < SimLevelBuilder.FundacionX0 || x > SimLevelBuilder.FundacionX1) return; // las orillas son del perfilado.
             var grid = _sim.Grid;
             for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
             {
@@ -1225,21 +1254,75 @@ namespace Alkahest.Game
                     _sim.Paint(x, y, 0, MaterialId.Empty);
                     continue;
                 }
-                // (R89, Cesar: "como se achica la visión no puedo ver cómo
-                // llegan las partículas… que esa animación empiece hasta que
-                // se vuelve a expandir la luz") El anillo ABSORBE en su
-                // borde; el punto de origen se RECUERDA (_cosecha) y las
-                // motas vuelan DESPUÉS, con la caverna entera iluminada — LA
-                // COSECHA: el mundo devolviendo lo recogido a sus dueños, a
-                // plena vista.
-                if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); _cosecha.Add(new Vector3Int(x, y, 1)); }
-                else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); _cosecha.Add(new Vector3Int(x, y, 0)); }
+                // (R90) Las motas vuelan EN VIVO hacia EL MAESTRO — desde el
+                // borde oscuro hacia el centro iluminado: siempre visibles.
+                // (La cosecha diferida de la R89 se RETIRÓ, regla 15: abrir
+                // la luz 3 s para verla desinflaba el clímax — "solo
+                // necesitaba un flashazo épico que sí me lo daba la
+                // oscuridad".)
+                float celdaM = SimRenderer.CellWorldSize;
+                if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 0); }
+                else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, tipo: 1); }
             }
         }
-        private readonly List<Vector3Int> _cosecha = new List<Vector3Int>(); // (x, y, esAgua?1:0) en ORDEN de absorción: la cosecha se repite como se recogió.
-        private int _cosechaIdx;
-        private float _cosechaAcum;
-        private float _tCosechaFin = -1f;
+
+        /// <summary>
+        /// (R90, Cesar: "que absorba INCLUSO las rocas madre — las paredes
+        /// más chuecas, para dejarlas PERFILADAS") EL PERFILADO: al paso del
+        /// anillo, las MORDIDAS de la destrucción (R74: bocados en bóveda y
+        /// muros, huecos y escombros del ala izquierda) SE ENDEREZAN — la
+        /// roca vuelve a su línea (PaintStable: regla 22) y cada celda
+        /// corregida suelta esquirlas GRISES hacia el Maestro (3 por celda;
+        /// 5 en los muros: las que "caen de los lados", Opus R90 — así el
+        /// ORDEN es espectacular aunque el jugador no haya tocado nada:
+        /// ~400 destellos de pura geología obedeciendo). La grieta del
+        /// DERRUMBE queda intacta: esa herida es de la Fase C.
+        /// </summary>
+        private void PerfilarColumna(int x)
+        {
+            var grid = _sim.Grid;
+            float celdaM = SimRenderer.CellWorldSize;
+
+            // La bóveda (mordidas de 0-2 hacia arriba), saltando la grieta del derrumbe.
+            if (x >= SimLevelBuilder.FundacionX0 && x <= SimLevelBuilder.FundacionX1 &&
+                (x < SimLevelBuilder.FundacionDerrumbeX - 2 || x > SimLevelBuilder.FundacionDerrumbeX + 2))
+            {
+                for (int y = SimLevelBuilder.FundacionY1 + 1; y <= SimLevelBuilder.FundacionY1 + 2; y++)
+                    if (grid.GetMat(x, y) == MaterialId.Empty)
+                    {
+                        _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                        for (int k = 0; k < 3; k++) SoltarMota(x, y, celdaM, tipo: 2, stagger: 0.05f * k);
+                    }
+            }
+
+            // Los muros (mordidas de 0-2 hacia adentro): las esquirlas que "caen de los lados".
+            bool muro = (x >= SimLevelBuilder.FundacionX0 - 2 && x < SimLevelBuilder.FundacionX0)
+                     || (x > SimLevelBuilder.FundacionX1 && x <= SimLevelBuilder.FundacionX1 + 2);
+            if (muro)
+            {
+                for (int y = SimLevelBuilder.FundacionY0 + 1; y <= SimLevelBuilder.FundacionY1 - 1; y++)
+                    if (grid.GetMat(x, y) == MaterialId.Empty)
+                    {
+                        _sim.PaintStable(x, y, 0, MaterialId.Stone);
+                        for (int k = 0; k < 5; k++) SoltarMota(x, y, celdaM, tipo: 2, stagger: 0.05f * k);
+                    }
+            }
+
+            // El terreno roto del ala izquierda (R74/R89b): huecos rellenados, escombros absorbidos.
+            if (x >= 322 && x <= 349)
+            {
+                if (grid.GetMat(x, SimLevelBuilder.FundacionY0 - 1) == MaterialId.Empty)
+                {
+                    _sim.PaintStable(x, SimLevelBuilder.FundacionY0 - 1, 0, MaterialId.Stone);
+                    for (int k = 0; k < 3; k++) SoltarMota(x, SimLevelBuilder.FundacionY0 - 1, celdaM, tipo: 2, stagger: 0.05f * k);
+                }
+                if (grid.GetMat(x, SimLevelBuilder.FundacionY0) == MaterialId.Stone && !SimLevelBuilder.EsObraDelTaller(x, SimLevelBuilder.FundacionY0))
+                {
+                    _sim.Paint(x, SimLevelBuilder.FundacionY0, 0, MaterialId.Empty);
+                    for (int k = 0; k < 3; k++) SoltarMota(x, SimLevelBuilder.FundacionY0, celdaM, tipo: 2, stagger: 0.05f * k);
+                }
+            }
+        }
 
         /// <summary>(R87) ¿(x,y) es parte del andamio de la cascada? Las dos repisas y el labio, con las MISMAS medidas con que las talló BuildFundacion (regla 24: contra constantes, no prosa).</summary>
         private static bool EsCeldaDeRepisa(int x, int y)
@@ -1254,32 +1337,45 @@ namespace Alkahest.Game
         }
 
         // =================================================================
-        // (R87, Cesar: "al absorber todas las partículas deberían ingresar
-        // en los depósitos rápidamente… me falta más cine") LAS MOTAS DEL
-        // BARRIDO: cada celda que el frente recoge suelta un destello que
-        // VUELA hasta el sitio donde su reservorio va a renacer y se hunde
-        // ahí — la materia no se borra: SE VE viajar a su nuevo dueño.
-        // IMGUI con la textura de la lucecita (sobre la viñeta, la lección
-        // del haz R81); tope de vivas para que un mapa inundado no ahogue
-        // el draw (las que no caben simplemente no destellan: el banco las
-        // cuenta igual).
+        // (R87→R90) LAS MOTAS DEL ORDEN: cada celda que el anillo absorbe
+        // suelta un destello que vuela AL MAESTRO ("debería absorberlas
+        // TODAS el Maestro… y le caen cosas de todos lados" — Cesar R90; el
+        // destino a los tanques de la R87-89 se retiró con la cosecha
+        // diferida: desinflaba el clímax). Tres tipos: agua azul, lodo
+        // pardo, y ROCA gris — la del perfilado. Vuelan desde el borde
+        // oscuro hacia el centro iluminado: siempre visibles, sin diferir
+        // nada. Velocidad ~110 c/s (8× el frente: la luz sale, la materia
+        // entra — Opus R90); las nacidas en el remate llegan apretadas
+        // (dur fija) para que el trago final caiga con la última.
+        // Prioridad: LA ROCA NUNCA SE DESCARTA (es el espectáculo
+        // garantizado); agua/lodo saltean 1 de cada 2 sobre 240 vivas.
         // =================================================================
-        private struct Mota { public Vector3 desde, hasta; public float t, dur; public bool esAgua; }
+        private struct Mota { public Vector3 desde, hasta; public float t, dur; public byte tipo; } // tipo: 0=agua, 1=lodo, 2=roca.
         private readonly List<Mota> _motas = new List<Mota>();
-        private const int MotasTope = 160; // (R88, Opus #4 MEDIDO: la poza sola son ~65 celdas levantándose A LA VEZ — con tope 64 el plano principal quedaba mudo).
+        private const int MotasTope = 300; // (Opus R90: un mapa inundado emite ~840 celdas/s; con 160 la roca se perdía muda detrás del agua.)
+        private int _motasSalteo;
+        private float _maestroHalo; // (R90) el Maestro SE HINCHA tragando: +0.012 por mota que llega; el flashazo es este halo reventando.
 
-        private void SoltarMota(int x, int y, float celda, bool esAgua)
+        private void SoltarMota(int x, int y, float celda, byte tipo, float stagger = 0f)
         {
-            if (_motas.Count >= MotasTope) return;
-            float dx0 = esAgua ? (SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f
-                               : (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f;
+            if (tipo != 2)
+            {
+                if (_motas.Count >= MotasTope) return;
+                if (_motas.Count > 240 && ((_motasSalteo++) & 1) == 1) return; // el banco cuenta igual; el destello se saltea.
+            }
+            else if (_motas.Count >= MotasTope + 40) return; // la roca solo cede ante el colapso total.
+
+            var desde = new Vector3((x + 0.5f) * celda, (y + 0.5f) * celda, 0f);
+            var hasta = PosMaestro();
+            float dCeldas = Vector3.Distance(desde, hasta) / celda;
+            float dRemate = (ColMaestro() - SimLevelBuilder.FundacionX0 + 2) - 15f;
             _motas.Add(new Mota
             {
-                desde = new Vector3((x + 0.5f) * celda, (y + 0.5f) * celda, 0f),
-                hasta = new Vector3(dx0 * celda, (SimLevelBuilder.FundacionY0 + 1.5f) * celda, 0f), // se hunde en el SITIO del renacer.
-                t = 0f,
-                dur = 0.55f + 0.35f * (((x * 7 + y * 13) & 7) / 7f), // duraciones escalonadas (determinista): lluvia, no bandada.
-                esAgua = esAgua
+                desde = desde,
+                hasta = hasta,
+                t = -stagger, // (R90) escalonadas: esquirlas y polvo, no un píxel duplicado.
+                dur = dCeldas > dRemate ? 0.45f : Mathf.Clamp(0.30f + dCeldas / 110f, 0.30f, 1.15f),
+                tipo = tipo
             });
         }
 
@@ -1291,9 +1387,7 @@ namespace Alkahest.Game
                 mo.t += Time.deltaTime;
                 if (mo.t >= mo.dur)
                 {
-                    // (R88) La mota ATERRIZÓ: suma al resplandor del suelo —
-                    // la carga esperando donde el reservorio va a renacer.
-                    if (mo.esAgua) _poolAgua++; else _poolLodo++;
+                    _maestroHalo = Mathf.Min(1.3f, _maestroHalo + 0.012f); // (R90) el Maestro traga: su halo crece.
                     _motas.RemoveAt(i);
                     continue;
                 }
@@ -1310,20 +1404,42 @@ namespace Alkahest.Game
             for (int i = 0; i < _motas.Count; i++)
             {
                 var mo = _motas[i];
+                if (mo.t < 0f) continue; // aún en su escalón.
                 float tt = Mathf.Clamp01(mo.t / mo.dur);
                 float ease = tt * tt * (3f - 2f * tt);
                 var pos = Vector3.Lerp(mo.desde, mo.hasta, ease);
                 pos.y += Mathf.Sin(tt * Mathf.PI) * 0.55f;      // el arco del vuelo.
+                // Jitter determinista por índice: esquirlas, no un punto clonado.
+                pos.x += (((i * 37) & 7) - 3.5f) * 0.012f;
+                pos.y += (((i * 53) & 7) - 3.5f) * 0.012f;
                 Vector3 sp = cam.WorldToScreenPoint(pos);
                 if (sp.z < 0f) continue;
                 float gy = Screen.height - sp.y;
-                float lado = UiStyles.S(9f) * (1f - 0.35f * tt); // encoge al hundirse.
-                float alfa = 0.8f * (0.4f + 0.6f * Mathf.Sin(tt * Mathf.PI)); // nace tenue, brilla en vuelo, se apaga al hundirse.
-                GUI.color = mo.esAgua
-                    ? new Color(0.55f, 0.8f, 1f, alfa)
-                    : new Color(0.85f, 0.62f, 0.4f, alfa);
+                float lado = UiStyles.S(9f) * (1f - 0.35f * tt); // encoge al llegar.
+                float alfa = 0.8f * (0.4f + 0.6f * Mathf.Sin(tt * Mathf.PI));
+                GUI.color = mo.tipo == 0 ? new Color(0.55f, 0.8f, 1f, alfa)
+                          : mo.tipo == 1 ? new Color(0.85f, 0.62f, 0.4f, alfa)
+                          : new Color(0.62f, 0.60f, 0.58f, alfa); // la roca.
                 GUI.DrawTexture(new Rect(sp.x - lado, gy - lado, lado * 2f, lado * 2f), _lucecitaTex);
             }
+            GUI.color = prev;
+        }
+
+        /// <summary>(R90) El halo del Maestro tragando: crece con cada mota que llega, respira, y el FLASHAZO del cierre es este halo reventando.</summary>
+        private void DibujarHaloMaestro()
+        {
+            if (_maestroHalo <= 0.01f) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            if (_lucecitaTex == null) ConstruirLucecita();
+            Vector3 sp = cam.WorldToScreenPoint(PosMaestro());
+            if (sp.z < 0f) return;
+            float gy = Screen.height - sp.y;
+            float resp = 1f + 0.08f * Mathf.Sin(Time.time * 5f);
+            float r = UiStyles.S(26f + 46f * Mathf.Min(1f, _maestroHalo)) * resp;
+            var prev = GUI.color;
+            GUI.color = new Color(0.95f, 0.88f, 0.7f, Mathf.Min(0.55f, 0.18f + 0.3f * _maestroHalo));
+            GUI.DrawTexture(new Rect(sp.x - r, gy - r, r * 2f, r * 2f), _lucecitaTex);
             GUI.color = prev;
         }
 
@@ -1360,47 +1476,26 @@ namespace Alkahest.Game
         private void DibujarFlash()
         {
             if (_flashT <= 0f) return;
-            float a = 0.22f * (_flashT / 0.18f) * (_flashT / 0.18f);
+            float a;
+            if (_flashT > _flashDur - _flashHold) a = _flashAlfa; // el sostenido del flashazo.
+            else
+            {
+                float t = _flashT / Mathf.Max(0.01f, _flashDur - _flashHold);
+                a = _flashAlfa * t * t;
+            }
             var prev = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, a);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = prev;
         }
 
-        /// <summary>
-        /// (R88, Opus #4) LOS RESPLANDORES DE LA CARGA: donde las motas han
-        /// estado aterrizando crece un brillo que respira (0.8 Hz) — azul en
-        /// el sitio del tanque, pardo en el del silo. Ya no son adorno del
-        /// barrido: son la materia ESPERANDO a su dueño. Mueren cuando los
-        /// recipientes asientan (la carga ya está dentro).
-        /// </summary>
-        private void DibujarResplandoresDeCarga()
-        {
-            if (_poolAgua + _poolLodo <= 0) return;
-            var cam = Camera.main;
-            if (cam == null) return;
-            if (_lucecitaTex == null) ConstruirLucecita();
-            float celda = SimRenderer.CellWorldSize;
-            float resp = 0.85f + 0.15f * Mathf.Sin(Time.time * 2f * Mathf.PI * 0.8f);
-            var prev = GUI.color;
-            DibujarPool((SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda, _poolAgua, new Color(0.55f, 0.8f, 1f, 1f), cam, resp);
-            DibujarPool((SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f * celda, _poolLodo, new Color(0.85f, 0.62f, 0.4f, 1f), cam, resp);
-            GUI.color = prev;
-        }
+        // (R90, regla 15) `DibujarResplandoresDeCarga`/`DibujarPool` (los
+        // brillos en los sitios del renacer, R88) SE RETIRARON: las motas ya
+        // no aterrizan ahí — TODO vuela al Maestro ("debería absorberlas
+        // todas él", Cesar R90) y su lugar lo ocupa el HALO del Maestro
+        // tragando (DibujarHaloMaestro) que revienta en el flashazo.
 
-        private void DibujarPool(float xMundo, int n, Color tinte, Camera cam, float resp)
-        {
-            if (n <= 0) return;
-            float celda = SimRenderer.CellWorldSize;
-            Vector3 sp = cam.WorldToScreenPoint(new Vector3(xMundo, (SimLevelBuilder.FundacionY0 + 1f) * celda, 0f));
-            if (sp.z < 0f) return;
-            float gy = Screen.height - sp.y;
-            float r = UiStyles.S(22f + Mathf.Min(30f, n * 0.35f)) * resp;
-            GUI.color = new Color(tinte.r, tinte.g, tinte.b, Mathf.Min(0.4f, 0.12f + n * 0.004f) * resp);
-            GUI.DrawTexture(new Rect(sp.x - r, gy - r * 0.55f, r * 2f, r * 1.1f), _lucecitaTex);
-        }
-
-        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con
+        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con
         // bahías apiladas de la R85 — SE RETIRÓ ENTERO: Cesar vetó el
         // apilado y el guion nuevo apaga las fuentes en el ORDEN, así que
         // la premisa del mueble (atrapar la gotera en la bahía alta) murió.
@@ -2019,8 +2114,8 @@ namespace Alkahest.Game
             if (_motas.Count > 0 && !DayCycle.InputLocked) DibujarMotas(); // (R87) la materia recogida VIAJA a los reservorios.
             if (_beat == Beat.Reorden && !DayCycle.InputLocked)
             {
-                DibujarResplandoresDeCarga(); // (R88) la carga esperando en el suelo.
-                DibujarFlash();               // (R88) el chasquido del PULSO.
+                DibujarHaloMaestro();         // (R90) el Maestro se hincha tragando.
+                DibujarFlash();               // el chasquido del pulso y el FLASHAZO del trago final.
             }
 
             // (R81) El aro de la boca del frasco: acompaña el paso de aspirar

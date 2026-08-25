@@ -165,8 +165,8 @@ namespace Alkahest.Game
         [Header("El refill (R85, fase B2): los tubos que tocan el suelo")]
         [Tooltip("Cadencia del goteo de reabastecimiento (segundos por gota). La gota nace en el TOPE del vidrio y CAE a la vista (Cesar R88: 'se tiene que ver cayendo desde arriba, lento'). Misma cadencia para agua y lodo.")]
         public float refillSeg = 0.8f;
-        [Tooltip("(R88, Cesar: 'los barriles con refill infinito llegan hasta la MITAD de llenos') Tope del refill (celdas del dueño): el tubo repone hasta aquí y descansa — el resto del vidrio es del jugador. Interior útil = 72; 36 = la mitad.")]
-        public int refillTope = 36;
+        [Tooltip("(R90, Cesar: 'debería COMPLETARLO — quizás caer más lento mientras más se llena') Tope del refill (celdas del dueño). 66 y no 72 A PROPÓSITO (medido por Opus): con el vidrio raso la fila de arriba se ocupa y la gota se queda muda en 71 para siempre — una fila de aire y la caída siempre se VE. La cadencia crece al cuadrado con el llenado: 0.8 s al inicio, ~4.8 s al final (todo toma tiempo).")]
+        public int refillTope = 66;
         [Tooltip("(R88) Duración del ENCAJE del tubo: la columna de cobre empuja desde el subsuelo y asienta con overshoot.")]
         public float tuboInstalarSeg = 0.7f;
 

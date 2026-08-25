@@ -5254,3 +5254,48 @@ ca_playtest84.cmd barre la ronda.
   en vivo: mat26="arcilla", mat33="barbotina" ✓; muro oeste macizo (24 de roca hasta el
   cuarto íntimo); suelo bajo silo+tubo 11/11 macizo ✓. CAPTURAS del mundo ancho.
 · ca_playtest89.cmd barre la ronda.
+
+## Ronda 90 — TODO AL MAESTRO: el perfilado de la geología, el flashazo, y el refill que completa
+
+· Dos frentes de Cesar ("apóyate con Opus, ya casi queda"), con revisión Opus que CONTÓ
+  las mordidas ejecutando el XorShift (132 celdas: "eso no es espectáculo, es una gotera")
+  y trajo seis vetos con números:
+  1. EL REFILL v3: renacer a ~1/5 (14 + banco/8, tope 30 — el eco del banco conserva la
+     promesa R84 "lo que derramaste vuelve"); la gota cae POR EL CENTRO del vidrio;
+     COMPLETA el tanque (tope 66, no 72: con el vidrio raso la fila de arriba se ocupaba
+     y la gota moría muda en 71 — medido por Opus); cadencia CUADRÁTICA 0.8→~4.8 s
+     (~110 s el llenado: se VE al inicio, "todo toma tiempo" después — la lineal mataba
+     la fase visible enseguida).
+  2. LA COSECHA DIFERIDA SE RETIRÓ (regla 15): abrir la luz 3 s para verla DESINFLABA el
+     clímax ("solo necesitaba un flashazo épico que sí me lo daba la oscuridad"). Las
+     motas vuelven a volar EN VIVO — pero ahora TODAS AL MAESTRO ("debería absorberlas
+     todas él… y le caen cosas de todos lados"): desde el borde oscuro hacia el centro
+     iluminado, siempre visibles, a ~110 c/s (8× el frente: la luz sale, la materia
+     entra); las del remate llegan apretadas (dur fija) para que el trago caiga con la
+     última.
+  3. EL PERFILADO DE LA GEOLOGÍA: al paso del anillo, las MORDIDAS de la destrucción
+     (R74: bóveda, muros, ala izquierda) SE ENDEREZAN — la roca vuelve a su línea — y
+     cada celda corregida suelta esquirlas GRISES al Maestro (3 por celda; 5 en los
+     muros: las que "caen de los lados"): ~400 destellos de pura geología obedeciendo,
+     espectacular AUNQUE el jugador no haya hecho desorden. La grieta del DERRUMBE queda
+     intacta a propósito: esa herida es de la Fase C. Cabezas extendidas a X0-2/X1+2
+     (Opus BLOQUEA #1: la profundidad 2 de los muros quedaba sin visitar).
+  4. EL HALO Y EL FLASHAZO: el Maestro SE HINCHA tragando (+0.012 de halo por mota que
+     llega) y el cierre es ese halo REVENTANDO — la luz espera a la última mota (tope
+     1.3 s), COLAPSA A NEGRO 0.12 s (la oscuridad que Cesar pidió de vuelta, solo el
+     sub a pitch 0.85), blanco 0.55 sostenido 0.06 + decaimiento 0.30 (el doble del
+     pulso o leería como repetición), apertura 0.25, y la caverna limpia se muestra
+     0.8 s — no 3 — antes del iris. Flash paramétrico (pulso chico / flashazo grande).
+  5. Motas: tope 300 (con 160 la roca se perdía muda detrás del agua en mapas
+     inundados); LA ROCA NUNCA SE DESCARTA (es el espectáculo garantizado); agua/lodo
+     saltean 1 de cada 2 sobre 240; jitter determinista por índice (esquirlas, no un
+     píxel clonado); tres colores (azul/pardo/gris roca).
+  6. BUG DEL ENSANCHE CAZADO: el terreno roto del ala izquierda seguía en el rango viejo
+     (342-369) y MORDÍA BAJO LA POZA nueva (352-365) — corregido a 322-349.
+· VERIFICADO EN VIVO: perfilado 112/114 mordidas enderezadas (bóveda 2 restantes en zona
+  a oscuras — anotadas, regla 30; muros 0/40 ✓); grieta del manantial sellada ✓; grieta
+  del derrumbe intacta ✓; ciclo completo a Fin con cargas 1/5+eco subiendo hacia 66 cada
+  vez más lento ✓; halo y motas en 0 al cierre ✓. CAPTURA: la caverna PERFILADA — bóveda
+  y muros en línea recta donde antes había dientes. El negro→flashazo, el halo hinchándose
+  y la lluvia de esquirlas grises son IMGUI: se estrenan en el playtest de Cesar.
+· ca_playtest90.cmd barre la ronda.
