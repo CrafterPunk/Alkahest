@@ -5134,3 +5134,72 @@ ca_playtest84.cmd barre la ronda.
   repisas 84→0 con obra degenerada ✓; poza 0 ✓; cargas 60/60 ✓; motas spawn 5→0 por tick ✓;
   log "TOMA. — recipientes renaciendo EN SUS SITIOS" ✓.
 · ca_playtest87.cmd barre la ronda.
+
+## Ronda 88 — EL ANILLO DEL ORDEN (la dirección de escena de Opus) + los últimos pisos
+
+· Encargo de Cesar tras el playtest 87: "la animación de ORDEN se ve como algo primarioso
+  hecho con PowerPoint… necesitamos a Opus para afinar lo espectacular — o discreto pero
+  como DECLARACIÓN DE OMNIPOTENCIA. No vi nada que me indicara que el Maestro colocó los
+  refill: más teatralidad omnipotente." + cuatro frentes mecánicos.
+· LA SESIÓN DE DIRECCIÓN CON OPUS (leyó el código real): el hallazgo que tumbó todo — el
+  barrido corría de IZQUIERDA A DERECHA (un wipe horizontal ES una transición de
+  PowerPoint) y el poder viajaba HACIA el Maestro (x442), no desde él. Guion nuevo entero,
+  segundo a segundo, TODO implementado y verificado en vivo:
+  - EL VACÍO (1.6 s): el sonido del mundo muere ANTES de la palabra — la cascada cae MUDA
+    (_cascadaMuda). La cámara se planta al centro y NO se mueve durante la declaración.
+  - LA LUZ SE CIERRA sobre el Maestro (0.7 s): la sala se apaga hacia él; el único punto
+    iluminado es su silueta (_focoDeLuz desacopla la LUZ de la CÁMARA; _radioForzado
+    puentea el suavizado: el guion manda sobre el Lerp).
+  - ORDEN. a pitch 0.82 — la nota más baja del prólogo (DecirConTono: el pitch por
+    módulo aritmético dejaba a ORDEN más neutro que TOMA), hold 3.6 (el texto muere
+    DESPUÉS que el mundo). CERO SACUDIDA: el mundo no se asusta, acata.
+  - EL PULSO: chasquido de luz 320→400 en 0.08, flash blanco 0.22→0, SUB de 38 Hz
+    (SintetizadorSfx.SubGrave, seno con decaimiento exponencial). El tanque del Maestro
+    —lo más cercano y lo más suyo— se ANULA ahí mismo (RetirarRapido: 0.5 s, no 2.7; "no
+    es un vaciado, es una anulación"). El fondo ruina→castillo arranca CON la palabra.
+  - EL ANILLO (4.2 s): la luz se abre del Maestro hacia afuera (~22 c/s, curva
+    DistanciaDelAnillo) y EL BORDE DE LA VIÑETA ES EL FRENTE — lo que la luz toca,
+    obedece (dos cabezas de limpieza columnar invisibles bajo el óvalo: lectura circular,
+    coste cero). El silo se anula a d=50; LA POZA se levanta a 15 c/s (MotasTope 64→160:
+    el tope se comía el plano principal — Opus lo midió); las repisas caen; EL FRENTE SE
+    DETIENE 0.4 s con la cascada cayendo sola en el borde de la luz — lo último natural
+    del mundo — y la boca del manantial SE SELLA con piedra (verificado: (339,175)=Stone).
+  - EL IRIS: la viñeta usada como LENTE (S(520) sobre los dos sitios — el primer plano
+    del pixel art). Dos RESPLANDORES respiran en el suelo donde las motas aterrizaron
+    (contadores _poolAgua/_poolLodo): ya no adorno — la carga ESPERANDO.
+  - EL RENACER: ambos suben JUNTOS y YA LLENOS (cargaInstantanea — la espera de
+    CargaLista era un progress bar; fuera). Sacudida 0.35 AL ASENTAR: ganada.
+  - LOS TUBOS (el encargo textual): quietud 0.7 → polvo ANTES que metal → las columnas
+    de cobre EMPUJAN desde el subsuelo (InstalarTubo, easeOutBack con overshoot,
+    TanqueTuboGrueso como PIEZA PROPIA — el marco vuelve al clásico) → UN SOLO CLANK
+    para los dos (SintetizadorSfx.Clank, parciales inarmónicos; es un acto, no dos
+    piezas) + sacudida 0.5 → 0.45 s de nada (el cobre puesto, inerte) → TOMA. a pitch
+    0.90 (el verbo del frasco: un regalo) → LA PRIMERA GOTA, sola, cayendo desde el
+    tope con física real → el ritmo de 0.8 s: la promesa de infinito.
+  - RETIRADO (regla 15): el frente pulsante a 6 Hz ("un frente que jadea es una máquina;
+    el poder no se esfuerza"), la sacudida en la palabra, los 5 pasos-diapositiva.
+· LOS CUATRO FRENTES MECÁNICOS DE CESAR:
+  1. "No necesitan piso ni de madera ni de tierra NI DE NADA — son de metal y ese es su
+     piso" → EL FONDO VIVE DENTRO: la fila y0 es el fondo del propio recipiente (piedra,
+     tapada por el zócalo de cobre del sprite), interior útil y0+1..y1 (72), y EL LECHO
+     DEL MUNDO NO SE TOCA JAMÁS (adiós piso postizo y adiós _sueloPrevio). Verificado:
+     lecho y139 virgen (0,1,1,1,1,1,1,1), fila y140 = estructura 8/8.
+  2. "El autofill del barro es muy rápido" + 3. "el del agua hace algo raro: llena la
+     base y luego gotea" → LA GOTA NACE EN EL TOPE del vidrio (junto al tubo) y CAE a la
+     vista, misma cadencia 0.8 s ambos; refillTope = 36 = LA MITAD ("los barriles llegan
+     hasta la mitad de llenos y se ve que se refillean") y el renacer entra por DEBAJO de
+     la mitad para que la gota complete a la vista. Verificado: ambos descansan en 36/72.
+  4. "En la esquina inferior izquierda del silo a veces parece que se filtra algo" → eran
+     los TERRONES decorativos de la emergencia cayendo al pozo de la poza: si bajo el
+     flanco no hay suelo, el terrón no se suelta.
+· DECISIÓN DE DISEÑO REGISTRADA (hoja viva): en SEMILLA CERO no hay bautizo — todo viene
+  bautizado con nombres de referente real (lágrima gris, tinte pardo… SON finales); la
+  mecánica de bautizar queda relegada al MODO CAÓTICO. La doctrina R13/17/23 se parte por
+  modo.
+· VERIFICADO EN VIVO: secuencia completa con timestamps al ritmo del guion (ORDEN :44 →
+  PULSO :45 → ANILLO completo :49 → RENACER :51 → TUBOS :54 → AMANECER :57); bancos
+  agua=40/lodo=17; renacer 28/17 (bajo la mitad) → 36/36 por goteo (tope mitad ✓); tubos
+  instalados ✓; manantial sellado ✓; 0 errores. CAPTURAS: los reservorios a media carga
+  con sus columnas encajadas. Los sonidos nuevos y el ritmo completo los estrena Cesar
+  jugando (IMGUI/audio no salen en RenderTexture).
+· ca_playtest88.cmd barre la ronda.

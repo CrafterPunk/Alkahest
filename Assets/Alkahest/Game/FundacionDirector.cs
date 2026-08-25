@@ -296,6 +296,8 @@ namespace Alkahest.Game
             TickCascadaAudio();
             TickHazPresentacion(); // (R81) el gesto de nacimiento del frasco, si está en curso.
             if (_motas.Count > 0) TickMotas(); // (R87) los destellos del barrido en vuelo a sus reservorios.
+            if (_flashT > 0f) _flashT -= Time.deltaTime; // (R88) el flash del pulso decae.
+            if (_asentadoMarcado && (_poolAgua > 0 || _poolLodo > 0)) { _poolAgua = 0; _poolLodo = 0; } // la carga ya está DENTRO: el resplandor muere con el asentamiento.
             if (_aroActivo) _aroVida += Time.deltaTime; // (R81) el latido del aro se calma con la edad (revisión Opus #13).
 
             _tBeat += Time.deltaTime;
@@ -318,7 +320,12 @@ namespace Alkahest.Game
             }
 
             _posAnterior = _aprendiz.position;
-            _radio = Mathf.Lerp(_radio, _radioObjetivo, Time.deltaTime * 1.6f);
+            // (R88, dirección Opus) Durante la cinemática del ORDEN el radio
+            // lo dicta una curva explícita (_radioForzado): el borde de la
+            // LUZ es el frente del anillo y tiene que estar donde el guion
+            // dice, no donde un suavizado exponencial lo deje.
+            if (_radioForzado.HasValue) _radio = _radioForzado.Value;
+            else _radio = Mathf.Lerp(_radio, _radioObjetivo, Time.deltaTime * 1.6f);
         }
 
         private void CambiarBeat(Beat b)
@@ -363,6 +370,28 @@ namespace Alkahest.Game
                 _audio.pitch = 0.96f + 0.03f * (palabra.Length % 3);
                 _audio.PlayOneShot(Audio.SintetizadorSfx.VozDelMaestro,
                     0.8f * Audio.DirectorDeAudio.VolumenEfectos);
+            }
+        }
+
+        /// <summary>
+        /// (R88, dirección Opus #3) La palabra con TONO Y DURACIÓN propios:
+        /// el pitch por longitud (0.96+len%3) dejaba a ORDEN. más neutro que
+        /// TOMA. por accidente aritmético. ORDEN. = 0.82 (la nota más baja
+        /// del prólogo, reservada) con hold 3.6 (la palabra sobrevive al acto
+        /// entero); TOMA. = 0.90 (más cálida que el decreto, más grave que el
+        /// resto: un regalo). Entra DIRECTO, sin cola: en el clímax no hay
+        /// otra palabra viva que respetar.
+        /// </summary>
+        private void DecirConTono(string palabra, float pitch, float holdSeg)
+        {
+            _vozTexto = palabra;
+            _vozT = 0f;
+            _vozDur = 0.45f + holdSeg + VozFadeOutSeg;
+            _vozPendiente = null;
+            if (_audio != null)
+            {
+                _audio.pitch = pitch;
+                _audio.PlayOneShot(Audio.SintetizadorSfx.VozDelMaestro, 0.9f * Audio.DirectorDeAudio.VolumenEfectos);
             }
         }
 
@@ -855,204 +884,306 @@ namespace Alkahest.Game
         }
 
         // =================================================================
-        // (R84, FASE B1 — plan cap2, con los 19 hallazgos de Opus) EL
-        // REORDEN: la cinemática del capítulo. BIEN. → ORDEN. → los dos
-        // recipientes SE RETIRAN (drenando su contenido al banco, muros
-        // fuera, obra degenerada, hundimiento) → EL BARRIDO recoge el
-        // desastre (agua y lodo sueltos van al banco; los EXPERIMENTOS del
-        // jugador y toda piedra/piso NO se tocan — Opus C2/A11) → la ruina
-        // cede al fondo del taller (WorkshopBackdrop.TransicionAFondoTaller)
-        // → los recipientes RENACEN cargados con lo recogido ("lo que sale
-        // primero es lo que tú derramaste"), rellenándose despacio a la
-        // vista → amanecer + Trueque.
-        // (R86, el guion cinematográfico de Cesar) El ORDEN es EL PUNTO DE
-        // EVOLUCIÓN del capítulo: las FUENTES NATURALES mueren aquí — el
-        // barrido absorbe hasta la poza y el cráter, la cascada y la gotera
-        // no vuelven — y los reservorios renacen EN SUS SITIOS con el tubo
-        // grueso integrado y refill infinito. Todo lo que el mundo
-        // derramaba, ahora lo sirven ellos.
+        // (R88 — LA DIRECCIÓN DE ESCENA DE OPUS, encargo de Cesar: "no está
+        // a la altura… necesitamos lo espectacular, o discreto pero como
+        // DECLARACIÓN DE OMNIPOTENCIA") EL ORDEN, reescrito entero.
+        //
+        // El hallazgo que tumbó la versión anterior: el barrido corría de
+        // izquierda a derecha — un wipe horizontal ES una transición de
+        // PowerPoint, y encima el poder viajaba HACIA el Maestro. Ahora la
+        // orden NACE EN EL MAESTRO y se expande como ANILLO: el borde de la
+        // LUZ es el frente — lo que la luz alcanza, obedece en ese instante.
+        // La cámara se planta al centro ANTES de la palabra y no se mueve
+        // hasta que todo terminó; la luz es un instrumento aparte.
+        //
+        // El guion (t desde la entrada al beat, BIEN. ya dicho):
+        //   3.65  el VACÍO: muere el sonido del mundo (la cascada cae MUDA).
+        //   4.05  la cámara se planta al centro. No se moverá.
+        //   4.25  la luz se CIERRA sobre el Maestro (0.7 s): la sala se apaga
+        //         desde los bordes; el único punto iluminado es su silueta.
+        //   4.95  ORDEN. — pitch 0.82, la nota más baja del prólogo. CERO
+        //         sacudida: el mundo no se asusta, acata.
+        //   5.40  EL PULSO: la luz chasquea 320→400, flash blanco 0.22→0,
+        //         SUB de 38 Hz. El tanque del Maestro (lo más cercano) se
+        //         ANULA ahí mismo (drenado 0.5 s). El fondo ruina→castillo
+        //         arranca AQUÍ y termina con el anillo. Fuentes muertas.
+        //   5.40→ EL ANILLO (4.2 s): la luz se abre del Maestro hacia
+        //         afuera (~22 c/s). Cada cosa obedece cuando el filo la
+        //         toca: el cráter entrega su lodo, el silo se anula (d=50),
+        //         LA POZA se levanta en sábana (el anillo frena a 15 c/s),
+        //         las repisas se deshacen, EL FRENTE SE DETIENE 0.4 s con la
+        //         cascada cayendo sola en el borde de la luz — lo último
+        //         natural del mundo — y al final la boca del manantial SE
+        //         SELLA con piedra. Ni un solo "whoosh": solo el sub.
+        //   9.60  EL DESPUÉS: la caverna limpia, entera, iluminada. ORDEN.
+        //         recién ahora se despide (hold 3.6: el texto muere después
+        //         que el mundo).
+        //  10.40  EL IRIS: la luz se cierra a S(520) sobre los dos sitios y
+        //         la cámara viaja ahí — el primer plano del pixel art es la
+        //         viñeta usada como lente. Dos resplandores respiran en el
+        //         suelo: la carga esperando (las motas llevan 4 s cayendo).
+        //  10.95  polvo ANTES que metal; el suelo avisa.
+        //  11.15  EL RENACER: ambos suben JUNTOS y YA LLENOS (la espera del
+        //         llenado era un progress bar; fuera). Sacudida al ASENTAR —
+        //         ahí sí hay causa física.
+        //   +0.7  quietud. "Ya terminó"… y no terminó.
+        //         LOS TUBOS: dos columnas de cobre EMPUJAN desde el suelo y
+        //         encajan. UN clank para los dos (es un acto, no dos piezas).
+        //   +0.45 nada. El cobre puesto, inerte.
+        //         TOMA. — pitch 0.90, el verbo del frasco: un regalo.
+        //   +0.35 LA PRIMERA GOTA, sola, real, cayendo desde el tope. El 80%
+        //         del "sí vi que me pusieron el refill" (dirección Opus #5).
+        //         Luego la segunda, la tercera, y el ritmo de 0.8 s: la
+        //         cadencia estableciéndose ES la promesa de infinito.
+        //   +3.0  AMANECER: la luz se libera, la cámara vuelve, Trueque.
+        //         El paisaje sonoro nuevo — goteo y fuego, sin cascada — es
+        //         la prueba de que el mundo cambió de dueño.
         // =================================================================
         private int _reordenPaso;
         private float _tPaso;
         private int _bancoAgua, _bancoLodo;
-        private bool _barridoEnCurso;
-        private float _barridoFrente; // columna (en celdas, float para avanzar por dt).
+        private bool _barridoEnCurso;          // compat: pausa manantial/rezumadero mientras el anillo trabaja.
+        private float? _radioForzado;          // el guion manda sobre el suavizado de la viñeta.
+        private Vector3? _focoDeLuz;           // la luz desacoplada de la cámara.
+        private bool _cascadaMuda;             // el vacío sonoro previo a la palabra.
+        private float _flashT = -1f;           // el flash del pulso (0.18 s).
+        private int _colIzq, _colDer;          // las dos cabezas de limpieza del anillo.
+        private float _radioCierreDesde;       // radio al empezar el cierre sobre el Maestro.
+        private bool _siloAnulado, _sonRepisaB, _sonRepisaA, _manantialSellado, _asentadoMarcado, _clankHecho, _tomaDicha, _gotaActivada;
+        private float _tAsentado = -1f, _tClank = -1f;
+        private int _poolAgua, _poolLodo;      // motas aterrizadas por sitio: el resplandor de la carga esperando.
+
+        private int ColMaestro() { return Mathf.RoundToInt(PosMaestro().x / SimRenderer.CellWorldSize); }
+
+        /// <summary>Radio de viñeta (px) que cubre `celdas` horizontales de mundo con la cámara actual.</summary>
+        private float PxDeCeldas(float celdas)
+        {
+            var cam = Camera.main;
+            float pxPorU = cam != null ? Screen.height / (2f * cam.orthographicSize) : 100f;
+            return celdas * SimRenderer.CellWorldSize * pxPorU;
+        }
+
+        /// <summary>d(t) del anillo en CELDAS desde el Maestro — la curva de Opus: 22 c/s, la poza a 15, la PAUSA de la cascada, y el último tramo a 14.</summary>
+        private static float DistanciaDelAnillo(float t)
+        {
+            if (t < 0.80f) return 32f + 22.5f * t;
+            if (t < 1.10f) return 50f + 23.3f * (t - 0.80f);
+            if (t < 1.97f) return 57f + 15.0f * (t - 1.10f);          // LA POZA: el trago lento.
+            if (t < 2.80f) return 70f + 21.7f * (t - 1.97f);
+            if (t < 3.20f) return 88f;                                 // LA PAUSA: la cascada sola en el borde.
+            return Mathf.Min(102f, 88f + 14f * (t - 3.20f));
+        }
 
         private void TickReorden()
         {
             float celda = SimRenderer.CellWorldSize;
             _tPaso += Time.deltaTime;
+            int colM = ColMaestro();
+
             switch (_reordenPaso)
             {
-                case 0: // el BIEN. se dice entero; luego ORDEN. y las retiradas.
-                    if (_tBeat < _g.vozHoldSeg + 0.4f) return;
-                    Decir(_g.vozOrden);
-                    SimRenderer.FocoCinematico = new Vector3(
-                        (SimLevelBuilder.FundacionX0 + SimLevelBuilder.FundacionX1) * 0.5f * celda,
-                        (SimLevelBuilder.FundacionY0 + 18) * celda, 0f);
-                    SimRenderer.Sacudida = 0.5f;
-                    _deposito?.Retirar();
-                    _silo?.Retirar();
-                    Debug.Log("[TenThousandYears] REORDEN paso 0→1: ORDEN. dicho, retiradas en marcha."); // (R85) cada paso deja su línea: el playtest de Cesar ("no vi el barrido") era indistinguible de "no corrió" (regla 43).
+                case 0: // EL VACÍO → el cierre sobre el Maestro → ORDEN.
+                    if (_tBeat >= 3.65f && !_cascadaMuda) _cascadaMuda = true; // el mundo enmudece; la cascada cae MUDA.
+                    if (_tBeat >= 4.05f && SimRenderer.FocoCinematico == null)
+                        SimRenderer.FocoCinematico = new Vector3(400f * celda, 168f * celda, 0f); // la cámara se planta. No se moverá.
+                    if (_tBeat >= 4.25f)
+                    {
+                        if (!_focoDeLuz.HasValue) { _focoDeLuz = PosMaestro(); _radioCierreDesde = _radio; }
+                        float tc = Mathf.Clamp01((_tBeat - 4.25f) / 0.70f);
+                        _radioForzado = Mathf.Lerp(_radioCierreDesde, UiStyles.S(320f), tc * tc); // ease-in: la sala se apaga hacia él.
+                    }
+                    if (_tBeat < 4.95f) return;
+                    DecirConTono(_g.vozOrden, 0.82f, 3.6f); // CERO sacudida: el mundo no se asusta — acata.
+                    Debug.Log("[TenThousandYears] ORDEN dicho (anillo Opus R88).");
                     _reordenPaso = 1; _tPaso = 0f;
                     break;
 
-                case 1: // esperar los dos hundimientos (tope generoso).
-                    bool listos = (_deposito == null || _deposito.Enterrado) && (_silo == null || _silo.Enterrado);
-                    if (!listos && _tPaso < 20f) return;
-                    if (!listos)
-                    {
-                        // (R85, fix del tope sucio) Antes, el tope destruía los
-                        // GO a medio drenar: muros huérfanos + obra fantasma
-                        // anticincel en mitad del taller. RetirarDeGolpe cierra
-                        // TODO (cuenta el resto al banco, limpia, desmonta).
-                        Debug.LogWarning("[TenThousandYears] REORDEN paso 1: TOPE de hundimiento — retirada DE GOLPE (tanque="
-                            + (_deposito != null && !_deposito.Enterrado) + " silo=" + (_silo != null && !_silo.Enterrado) + ").");
-                        _deposito?.RetirarDeGolpe();
-                        _silo?.RetirarDeGolpe();
-                    }
-                    _bancoAgua = _deposito != null ? _deposito.DrenadoDelDueno : 0;
-                    _bancoLodo = _silo != null ? _silo.DrenadoDelDueno : 0;
-                    if (_deposito != null) Destroy(_deposito.gameObject);
-                    if (_silo != null) Destroy(_silo.gameObject);
-                    _deposito = null; _silo = null;
-                    // (R86, el guion de Cesar: "con la palabra ORDEN se
-                    // absorbe todo lo del mapa, desaparece la cascada, la
-                    // caída de lodo") LAS FUENTES SE APAGAN PARA SIEMPRE:
-                    // manantial, rezumadero y gotera mueren aquí — el barrido
-                    // que viene se lleva hasta la poza y el cráter, y de este
-                    // punto en adelante el agua y el lodo viven SOLO en los
-                    // reservorios con refill. La naturaleza cede el turno a
-                    // la infraestructura del taller: ese es el punto de
-                    // evolución del capítulo.
+                case 1: // la palabra llega a alfa 1 → EL PULSO.
+                    if (_tPaso < 0.45f) return;
+                    _flashT = 0.18f;
+                    if (_audio != null) _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 0.9f * Audio.DirectorDeAudio.VolumenEfectos);
+                    _deposito?.RetirarRapido(); // lo más cercano y lo más suyo obedece PRIMERO, a plena luz.
+                    var backdrop = FindAnyObjectByType<WorkshopBackdrop>();
+                    if (backdrop != null) backdrop.TransicionAFondoTaller(4.2f); // la ruina cede CON la palabra, no después.
                     _fuentesApagadas = true;
                     _lodoActivo = false;
                     _barridoEnCurso = true;
-                    _barridoFrente = SimLevelBuilder.FundacionX0 - 1;
-                    _barridoCol = SimLevelBuilder.FundacionX0 - 1;
-                    Debug.Log("[TenThousandYears] REORDEN paso 1→2: hundimientos cerrados; bancos tras drenado (agua=" + _bancoAgua + ", lodo=" + _bancoLodo + "); FUENTES APAGADAS; barrido TOTAL arranca.");
+                    _colIzq = colM; _colDer = colM + 1;
+                    Debug.Log("[TenThousandYears] EL PULSO: fuentes muertas, anillo en marcha desde x" + colM + ".");
                     _reordenPaso = 2; _tPaso = 0f;
                     break;
 
-                case 2: // EL BARRIDO: un frente que recoge de izquierda a derecha.
-                    TickBarrido();
-                    if (!_barridoEnCurso)
-                    {
-                        var backdrop = FindAnyObjectByType<WorkshopBackdrop>();
-                        if (backdrop != null) backdrop.TransicionAFondoTaller(_g.fondoTransicionSeg);
-                        // (R87, Cesar) Las repisas de la cascada se fueron CON
-                        // la cascada (el frente las deshizo columna a columna);
-                        // aquí su obra se DEGENERA — nada de rects fantasma.
-                        SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaA, 0, 0, -1, -1);
-                        SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaB, 0, 0, -1, -1);
-                        Debug.Log("[TenThousandYears] REORDEN barrido: agua " + _bancoAgua + " → tanque, lodo " + _bancoLodo + " → silo (drenados incluidos); repisas de la cascada retiradas.");
-                        _reordenPaso = 3; _tPaso = 0f;
-                    }
-                    break;
+                case 2: // EL ANILLO: la luz se abre desde el Maestro; lo que toca, obedece.
+                {
+                    float d = DistanciaDelAnillo(_tPaso);
+                    _focoDeLuz = PosMaestro();
+                    _radioForzado = Mathf.Max(UiStyles.S(400f), PxDeCeldas(d));
 
-                case 3: // respiro con el fondo fundiéndose; luego el renacer CON TUBO (R86).
-                    if (_tPaso < 1.1f) return;
-                    // (R86, veto de Cesar al apilado R85) Cada reservorio
-                    // vuelve A SU SITIO — pero el armazón ya trae el TUBO
-                    // GRUESO integrado (su referencia) y el refill infinito:
-                    // lo que la cascada y la gotera eran, ahora lo son ellos.
-                    // (R87, Cesar: "hace falta notar el ensamble… que se note
-                    // que me lo dio el Maestro") LA ENTREGA SE FIRMA: la
-                    // cámara viaja al punto medio de los dos reservorios y el
-                    // Maestro dice TOMA. — la MISMA palabra con la que te dio
-                    // el frasco. Sus regalos hablan igual: esto es de él.
-                    SimRenderer.FocoCinematico = new Vector3(
-                        (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
-                        (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
-                    Decir(_g.vozToma);
+                    // Las dos cabezas de limpieza marchan con el filo (el corte
+                    // es columnar, pero fuera del óvalo todo es negro: nadie
+                    // puede ver que no es circular — coste cero, lectura circular).
+                    while (colM - _colIzq <= d && _colIzq >= SimLevelBuilder.FundacionX0 - 1) LimpiarColumna(_colIzq--);
+                    while (_colDer - colM <= d && _colDer <= SimLevelBuilder.FundacionX1 + 1) LimpiarColumna(_colDer++);
+
+                    if (!_siloAnulado && d >= 50f)
+                    {
+                        _siloAnulado = true;
+                        _silo?.RetirarRapido();
+                        if (_audio != null) { _audio.pitch = 0.7f; _audio.PlayOneShot(Audio.SintetizadorSfx.TolvaTraga, 0.6f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    if (!_sonRepisaB && _colIzq <= SimLevelBuilder.FundacionRepisaBX1)
+                    {
+                        _sonRepisaB = true;
+                        if (_audio != null) { _audio.pitch = 1.3f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.3f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    if (!_sonRepisaA && _colIzq <= SimLevelBuilder.FundacionRepisaAX1)
+                    {
+                        _sonRepisaA = true;
+                        if (_audio != null) { _audio.pitch = 1.3f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.3f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    if (!_manantialSellado && d >= 101f)
+                    {
+                        // La boca del manantial SE SELLA con piedra: fin de las fuentes.
+                        _manantialSellado = true;
+                        _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY, 0, MaterialId.Stone);
+                        _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY + 1, 0, MaterialId.Stone);
+                    }
+
+                    if (_tPaso < 4.20f) return;
+                    // Cierre del anillo: seguridad + bancos + obra de las repisas.
+                    if (_deposito != null && !_deposito.Enterrado) _deposito.RetirarDeGolpe();
+                    if (_silo != null && !_silo.Enterrado) _silo.RetirarDeGolpe();
+                    _bancoAgua = _deposito != null ? _deposito.DrenadoDelDueno + _bancoAgua : _bancoAgua;
+                    _bancoLodo = _silo != null ? _silo.DrenadoDelDueno + _bancoLodo : _bancoLodo;
+                    if (_deposito != null) Destroy(_deposito.gameObject);
+                    if (_silo != null) Destroy(_silo.gameObject);
+                    _deposito = null; _silo = null;
+                    _barridoEnCurso = false;
+                    SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaA, 0, 0, -1, -1);
+                    SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaB, 0, 0, -1, -1);
+                    Debug.Log("[TenThousandYears] ANILLO completo: agua=" + _bancoAgua + " lodo=" + _bancoLodo + " al banco; repisas y manantial retirados.");
+                    _reordenPaso = 3; _tPaso = 0f;
+                    break;
+                }
+
+                case 3: // EL DESPUÉS (la sala limpia, entera) → EL IRIS → polvo → renacer.
+                    if (_tPaso < 0.80f)
+                    {
+                        _radioForzado = Mathf.Lerp(PxDeCeldas(102f), UiStyles.S(2400f), _tPaso / 0.80f);
+                        return;
+                    }
+                    if (_tPaso < 1.35f)
+                    {
+                        // EL IRIS: la viñeta usada como LENTE — el primer plano del pixel art.
+                        SimRenderer.FocoCinematico = new Vector3(
+                            (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
+                            (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
+                        _focoDeLuz = null; // la luz vuelve a la cámara: ambos miran el mismo sitio.
+                        float ti = (_tPaso - 0.80f) / 0.55f;
+                        _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(520f), ti * ti);
+                        return;
+                    }
+                    if (_tPaso < 1.55f)
+                    {
+                        // Polvo ANTES que metal: el suelo avisa.
+                        if (_flashT < 0f && _audio != null)
+                        {
+                            _audio.pitch = 0.6f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.4f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f;
+                            SimRenderer.Sacudida = 0.15f;
+                            _flashT = 0f; // reuso como "aviso hecho" (queda <=0: no dibuja).
+                        }
+                        return;
+                    }
+                    // EL RENACER: ambos juntos, YA LLENOS (nada de progress bar).
                     _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
-                    _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76), conTubo: true);
+                    _deposito.Init(_sim, Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, Mathf.Max(8, _g.refillTope - 8)), conTubo: true, cargaInstantanea: true);
                     _deposito.Aparecer();
-                    _deposito.ActivarRefill();
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, Mathf.Clamp(_bancoLodo, 0, 76), conTubo: true);
+                    _silo.InitSilo(_sim, Mathf.Clamp(_bancoLodo, 0, Mathf.Max(8, _g.refillTope - 8)), conTubo: true, cargaInstantanea: true);
                     _silo.Aparecer();
-                    _silo.ActivarRefill();
-                    SimRenderer.Sacudida = 0.8f;
-                    Debug.Log("[TenThousandYears] REORDEN paso 3→4: TOMA. — recipientes renaciendo EN SUS SITIOS con tubo grueso y refill (agua carga=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, 76) + ", lodo carga=" + Mathf.Clamp(_bancoLodo, 0, 76) + ").");
+                    Debug.Log("[TenThousandYears] RENACER: ambos suben JUNTOS y cargados (agua=" + Mathf.Clamp(_bancoAgua, _g.depositoCargaInicial, Mathf.Max(8, _g.refillTope - 8)) + ", lodo=" + Mathf.Clamp(_bancoLodo, 0, Mathf.Max(8, _g.refillTope - 8)) + "); la gota del refill los llevará a la mitad A LA VISTA.");
                     _reordenPaso = 4; _tPaso = 0f;
                     break;
 
-                case 4: // esperar el renacer cargado; amanecer.
-                    bool cargados = _deposito != null && _deposito.CargaLista && _silo != null && _silo.CargaLista;
-                    if (!cargados && _tPaso < 30f) return;
-                    // (R84, EVIDENCIA FORENSE — regla 54) En la verificación en
-                    // vivo el silo renació UNA vez con 14/28 (no reproducido;
-                    // descartados: barrido en curso, drenado activo, reacciones
-                    // —censo homogéneo—, rezumaderos). El tope de arriba salvó
-                    // el arco, como debe; si vuelve a pasar, esta línea dirá la
-                    // verdad en la consola del playtest.
-                    if (!cargados)
-                        Debug.LogWarning("[TenThousandYears] REORDEN cerró por TOPE con carga incompleta: tanque="
-                            + (_deposito != null ? _deposito.DelDueno() + "/" + _deposito.Capacidad() : "(null)")
-                            + " silo=" + (_silo != null ? _silo.DelDueno() + "/" + _silo.Capacidad() : "(null)")
-                            + " bancos(agua=" + _bancoAgua + ", lodo=" + _bancoLodo + ")");
+                case 4: // asentar (sacudida GANADA) → quietud 0.7 → LOS TUBOS.
+                {
+                    bool asentados = _deposito != null && _deposito.Asentado && _silo != null && _silo.Asentado;
+                    if (!_asentadoMarcado && (asentados || _tPaso > 12f))
+                    {
+                        _asentadoMarcado = true;
+                        _tAsentado = _tPaso;
+                        SimRenderer.Sacudida = 0.35f; // cayeron cuarenta toneladas: la sacudida está ganada.
+                    }
+                    if (!_asentadoMarcado || _tPaso < _tAsentado + 0.70f) return;
+                    _deposito?.InstalarTubo();
+                    _silo?.InstalarTubo();
+                    if (_audio != null) { _audio.pitch = 0.5f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.35f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; } // el gemido del metal subiendo.
+                    Debug.Log("[TenThousandYears] LOS TUBOS empujan desde el suelo.");
+                    _reordenPaso = 5; _tPaso = 0f;
+                    break;
+                }
+
+                case 5: // CLANK único → 0.45 de nada → TOMA. → la primera gota → amanecer.
+                {
+                    bool instalados = (_deposito == null || _deposito.TuboInstalado) && (_silo == null || _silo.TuboInstalado);
+                    if (!_clankHecho && (instalados || _tPaso > 5f))
+                    {
+                        _clankHecho = true;
+                        _tClank = _tPaso;
+                        SimRenderer.Sacudida = 0.5f;
+                        if (_audio != null) { _audio.pitch = 1f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.85f * Audio.DirectorDeAudio.VolumenEfectos); }
+                    }
+                    if (!_clankHecho) return;
+                    if (!_tomaDicha && _tPaso >= _tClank + 0.90f)
+                    {
+                        _tomaDicha = true;
+                        DecirConTono(_g.vozToma, 0.90f, _g.vozHoldSeg); // el verbo del frasco: un regalo, no un decreto.
+                    }
+                    if (!_gotaActivada && _tPaso >= _tClank + 1.25f)
+                    {
+                        _gotaActivada = true;
+                        _deposito?.ActivarRefill(); // LA PRIMERA GOTA, sola, cayendo desde el tope.
+                        _silo?.ActivarRefill();
+                    }
+                    if (_tPaso < _tClank + 3.0f) return;
+                    // AMANECER: la luz se libera, la cámara vuelve, el mundo suena distinto.
+                    _radioForzado = null;
+                    _focoDeLuz = null;
                     SimRenderer.FocoCinematico = null;
-                    _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el taller respondió, y ORDENÓ.
-                    Trueque.Activar(); // el tablón despierta con el amanecer (regla 49).
-                    Debug.Log("[TenThousandYears] REORDEN paso 4→Fin: cargas listas (tanque=" + (_deposito != null ? _deposito.DelDueno() : -1) + ", silo=" + (_silo != null ? _silo.DelDueno() : -1) + "); amanecer.");
+                    _radioObjetivo = UiStyles.S(_g.radioAmanecer);
+                    Trueque.Activar();
+                    Debug.Log("[TenThousandYears] AMANECER: tanque=" + (_deposito != null ? _deposito.DelDueno() : -1) + " silo=" + (_silo != null ? _silo.DelDueno() : -1) + " — el goteo es el paisaje nuevo.");
                     CambiarBeat(Beat.Fin);
                     break;
+                }
             }
         }
 
         /// <summary>
-        /// (R84, Opus A10/A11/C2/C3) El frente del barrido: avanza columnas a
-        /// ritmo del guion recogiendo SOLO agua y lodo/barbotina sueltos —
-        /// jamás piedra ni piso estructural (la obra del JUGADOR), jamás los
-        /// rects protegidos (la poza, el cuenco, el hogar, el fogón, el
-        /// cráter), jamás los experimentos (otras materias se respetan). Lo
-        /// recogido SUMA al banco: es la carga del renacer, no un borrado.
+        /// (R84→R88) LA OBEDIENCIA DE UNA COLUMNA: lo que el filo de la luz
+        /// alcanza, obedece en ese instante — agua y lodo/barbotina al banco
+        /// (con su mota volando al sitio del renacer), las repisas de la
+        /// cascada deshechas, y NADA más tocado: ni piedra, ni piso, ni los
+        /// experimentos del jugador, ni cuenco/hogar/fogón (fuego y entregas
+        /// no son derrames). Sin whoosh: el poder no hace ruido de esfuerzo.
         /// </summary>
-        private void TickBarrido()
+        private void LimpiarColumna(int x)
         {
-            float span = SimLevelBuilder.FundacionX1 - SimLevelBuilder.FundacionX0 + 2;
-            _barridoFrente += span * Time.deltaTime / Mathf.Max(0.5f, _g.reordenBarridoSeg);
-            int hasta = Mathf.Min(SimLevelBuilder.FundacionX1 + 1, Mathf.FloorToInt(_barridoFrente));
             var grid = _sim.Grid;
-
             float celdaM = SimRenderer.CellWorldSize;
-            while (_barridoCol <= hasta)
+            for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
             {
-                int x = _barridoCol;
-                for (int y = SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo; y <= SimLevelBuilder.FundacionY1 + 3; y++)
+                if (ProteccionDelBarrido(x, y)) continue;
+                byte m = grid.GetMat(x, y);
+                if (EsCeldaDeRepisa(x, y) && (m == MaterialId.Stone || m == MaterialId.PisoEstructural))
                 {
-                    // (R86, el guion de Cesar: "se absorbe TODO lo del mapa")
-                    // El barrido ya no respeta ni la poza ni el cráter: SU
-                    // agua y SU lodo también entran al banco — todo lo que
-                    // las fuentes derramaron ahora vive en los reservorios
-                    // ("hacer entender que todo eso entró en ese refill
-                    // infinito"). Solo cuenco/hogar/fogón siguen intocables:
-                    // el fuego y las entregas no son derrame de nadie.
-                    if (ProteccionDelBarrido(x, y)) continue;
-                    byte m = grid.GetMat(x, y);
-                    // (R87, Cesar: "deberían desaparecer las plataformas donde
-                    // caía el agua") LAS REPISAS DE LA CASCADA SE DESHACEN con
-                    // el frente, columna a columna — la cascada murió y su
-                    // andamio se va con ella. Piedra retirada, no banqueada:
-                    // el mundo la reabsorbe (su obra se degenera al terminar).
-                    if (EsCeldaDeRepisa(x, y) && (m == MaterialId.Stone || m == MaterialId.PisoEstructural))
-                    {
-                        _sim.Paint(x, y, 0, MaterialId.Empty);
-                        continue;
-                    }
-                    if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: true); }
-                    else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: false); }
-                    // Todo lo demás (piedra, piso, experimentos del jugador,
-                    // fuego propio) se RESPETA: el barrido recoge lo que se
-                    // derramó, no lo que se creó.
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                    continue;
                 }
-                _barridoCol++;
+                if (m == MaterialId.Water) { _bancoAgua++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: true); }
+                else if (m == Lodo || m == LodoMojado) { _bancoLodo++; _sim.Paint(x, y, 0, MaterialId.Empty); SoltarMota(x, y, celdaM, esAgua: false); }
             }
-
-            if (_barridoCol > SimLevelBuilder.FundacionX1 + 1) _barridoEnCurso = false;
         }
-        private int _barridoCol;
 
         /// <summary>(R87) ¿(x,y) es parte del andamio de la cascada? Las dos repisas y el labio, con las MISMAS medidas con que las talló BuildFundacion (regla 24: contra constantes, no prosa).</summary>
         private static bool EsCeldaDeRepisa(int x, int y)
@@ -1079,7 +1210,7 @@ namespace Alkahest.Game
         // =================================================================
         private struct Mota { public Vector3 desde, hasta; public float t, dur; public bool esAgua; }
         private readonly List<Mota> _motas = new List<Mota>();
-        private const int MotasTope = 64;
+        private const int MotasTope = 160; // (R88, Opus #4 MEDIDO: la poza sola son ~65 celdas levantándose A LA VEZ — con tope 64 el plano principal quedaba mudo).
 
         private void SoltarMota(int x, int y, float celda, bool esAgua)
         {
@@ -1102,7 +1233,14 @@ namespace Alkahest.Game
             {
                 var mo = _motas[i];
                 mo.t += Time.deltaTime;
-                if (mo.t >= mo.dur) { _motas.RemoveAt(i); continue; }
+                if (mo.t >= mo.dur)
+                {
+                    // (R88) La mota ATERRIZÓ: suma al resplandor del suelo —
+                    // la carga esperando donde el reservorio va a renacer.
+                    if (mo.esAgua) _poolAgua++; else _poolLodo++;
+                    _motas.RemoveAt(i);
+                    continue;
+                }
                 _motas[i] = mo;
             }
         }
@@ -1155,41 +1293,58 @@ namespace Alkahest.Game
         }
         private bool _fuentesApagadas; // (R86) el ORDEN apaga manantial/rezumadero/gotera PARA SIEMPRE: los reservorios con refill son la fuente de ahora en más.
 
-        /// <summary>
-        /// (R85) La columna de luz del frente del barrido (IMGUI, sobre la
-        /// viñeta — la lección del haz de presentación, Opus R81 #1: los
-        /// sprites de mundo nacen enterrados en lo negro). La textura radial
-        /// de la lucecita, estirada a columna: bordes suaves, sin costuras.
-        /// </summary>
-        private void DibujarFrenteDelBarrido()
+        // (R88, regla 15) `DibujarFrenteDelBarrido` — la columna de luz
+        // pulsante a 6 Hz de la R85 — SE RETIRÓ por dirección de Opus: "un
+        // frente que jadea es una máquina, y el poder omnipotente no se
+        // esfuerza". El frente del anillo es ahora EL BORDE DE LA VIÑETA,
+        // quieto, sin latido. En su lugar entran el FLASH del pulso y los
+        // RESPLANDORES de la carga esperando en el suelo.
+
+        /// <summary>(R88) El flash del PULSO: blanco pleno 0.22 → 0 en 0.18 s, curva cuadrática — el chasquido de la palabra tocando el mundo.</summary>
+        private void DibujarFlash()
         {
+            if (_flashT <= 0f) return;
+            float a = 0.22f * (_flashT / 0.18f) * (_flashT / 0.18f);
+            var prev = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, a);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = prev;
+        }
+
+        /// <summary>
+        /// (R88, Opus #4) LOS RESPLANDORES DE LA CARGA: donde las motas han
+        /// estado aterrizando crece un brillo que respira (0.8 Hz) — azul en
+        /// el sitio del tanque, pardo en el del silo. Ya no son adorno del
+        /// barrido: son la materia ESPERANDO a su dueño. Mueren cuando los
+        /// recipientes asientan (la carga ya está dentro).
+        /// </summary>
+        private void DibujarResplandoresDeCarga()
+        {
+            if (_poolAgua + _poolLodo <= 0) return;
             var cam = Camera.main;
             if (cam == null) return;
             if (_lucecitaTex == null) ConstruirLucecita();
             float celda = SimRenderer.CellWorldSize;
-
-            float xMundo = Mathf.Clamp(_barridoFrente, SimLevelBuilder.FundacionX0, SimLevelBuilder.FundacionX1 + 1) * celda;
-            float yBajo = (SimLevelBuilder.FundacionY0 - SimLevelBuilder.FundacionPozoHondo) * celda;
-            float yAlto = (SimLevelBuilder.FundacionY1 + 1) * celda;
-            Vector3 a = cam.WorldToScreenPoint(new Vector3(xMundo, yBajo, 0f));
-            Vector3 b = cam.WorldToScreenPoint(new Vector3(xMundo, yAlto, 0f));
-            float guiYTop = Screen.height - b.y;      // IMGUI: Y invertida.
-            float guiYBot = Screen.height - a.y;
-            if (guiYBot < 0f || guiYTop > Screen.height) return;
-
-            float ancho = UiStyles.S(30f);
-            float pulso = 0.75f + 0.25f * Mathf.Sin(Time.time * 6f); // respira rápido: está TRABAJANDO.
+            float resp = 0.85f + 0.15f * Mathf.Sin(Time.time * 2f * Mathf.PI * 0.8f);
             var prev = GUI.color;
-            // El resplandor ancho (la textura radial estirada en vertical).
-            GUI.color = new Color(1f, 0.93f, 0.72f, 0.55f * pulso);
-            GUI.DrawTexture(new Rect(a.x - ancho, guiYTop, ancho * 2f, guiYBot - guiYTop), _lucecitaTex, ScaleMode.StretchToFill);
-            // El filo: una línea viva en la x exacta del frente.
-            GUI.color = new Color(1f, 0.98f, 0.9f, 0.8f * pulso);
-            GUI.DrawTexture(new Rect(a.x - 1f, guiYTop, 2f, guiYBot - guiYTop), Texture2D.whiteTexture);
+            DibujarPool((SimLevelBuilder.FundacionDepositoX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda, _poolAgua, new Color(0.55f, 0.8f, 1f, 1f), cam, resp);
+            DibujarPool((SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f * celda, _poolLodo, new Color(0.85f, 0.62f, 0.4f, 1f), cam, resp);
             GUI.color = prev;
         }
 
-        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con
+        private void DibujarPool(float xMundo, int n, Color tinte, Camera cam, float resp)
+        {
+            if (n <= 0) return;
+            float celda = SimRenderer.CellWorldSize;
+            Vector3 sp = cam.WorldToScreenPoint(new Vector3(xMundo, (SimLevelBuilder.FundacionY0 + 1f) * celda, 0f));
+            if (sp.z < 0f) return;
+            float gy = Screen.height - sp.y;
+            float r = UiStyles.S(22f + Mathf.Min(30f, n * 0.35f)) * resp;
+            GUI.color = new Color(tinte.r, tinte.g, tinte.b, Mathf.Min(0.4f, 0.12f + n * 0.004f) * resp);
+            GUI.DrawTexture(new Rect(sp.x - r, gy - r * 0.55f, r * 2f, r * 1.1f), _lucecitaTex);
+        }
+
+        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con        // (R86, regla 15) `ConstruirEstanteria` — el mueble central con
         // bahías apiladas de la R85 — SE RETIRÓ ENTERO: Cesar vetó el
         // apilado y el guion nuevo apaga las fuentes en el ORDEN, así que
         // la premisa del mueble (atrapar la gotera en la bahía alta) murió.
@@ -1229,6 +1384,15 @@ namespace Alkahest.Game
         private void TickCascadaAudio()
         {
             if (_cascadaFuente == null || _aprendiz == null) return;
+            // (R88, dirección Opus: EL VACÍO) 1.3 s ANTES de la palabra, el
+            // sonido del mundo muere — la cascada sigue cayendo A LA VISTA,
+            // muda. Ese descuadre es la primera prueba de que algo ya
+            // decidió. El efecto más barato del pliego y el más grande.
+            if (_cascadaMuda)
+            {
+                _cascadaFuente.volume = Mathf.MoveTowards(_cascadaFuente.volume, 0f, Time.deltaTime * 1.6f);
+                return;
+            }
             // (R86) La cascada murió con el ORDEN: su rumor se desvanece en
             // un par de segundos y la fuente se detiene del todo (no un mute:
             // el AudioSource deja de girar).
@@ -1790,8 +1954,12 @@ namespace Alkahest.Game
             // Cesar jugó el REORDEN y "no vio el barrido": lo que la sim
             // recogía era indistinguible de nada (regla 43) — ahora el ORDEN
             // se VE pasar, aunque no hubiera una sola celda que recoger.
-            if (_barridoEnCurso && !DayCycle.InputLocked) DibujarFrenteDelBarrido();
             if (_motas.Count > 0 && !DayCycle.InputLocked) DibujarMotas(); // (R87) la materia recogida VIAJA a los reservorios.
+            if (_beat == Beat.Reorden && !DayCycle.InputLocked)
+            {
+                DibujarResplandoresDeCarga(); // (R88) la carga esperando en el suelo.
+                DibujarFlash();               // (R88) el chasquido del PULSO.
+            }
 
             // (R81) El aro de la boca del frasco: acompaña el paso de aspirar
             // (y la ficha-recuerdo). Calla ante TODO modo que apague el
@@ -1945,13 +2113,16 @@ namespace Alkahest.Game
             // en los planos cinematográficos, donde la luz acompaña a la
             // cámara (revisión Opus 73 #17: el derrumbe ocurría a media luz
             // fuera del óvalo del jugador).
-            _focoActual = SimRenderer.FocoCinematico.HasValue
-                ? SimRenderer.FocoCinematico.Value
-                : Vector3.Lerp(brasas, _aprendiz.position, _focoBias);
+            // (R88) _focoDeLuz desacopla la LUZ de la CÁMARA: en el anillo
+            // del ORDEN la cámara se planta al centro y la luz nace del
+            // MAESTRO — dos instrumentos, dos manos (dirección Opus).
+            _focoActual = _focoDeLuz
+                ?? SimRenderer.FocoCinematico
+                ?? Vector3.Lerp(brasas, _aprendiz.position, _focoBias);
             Vector3 p = cam.WorldToScreenPoint(_focoActual);
             float cx = p.x, cy = Screen.height - p.y;
 
-            float r = _radio * _luzFuego;
+            float r = _radio * (_radioForzado.HasValue ? 1f : _luzFuego); // (R88) el filo del anillo no tirita con la llama.
             float ry = r * VinetaSquashY;
             var agujero = new Rect(cx - r, cy - ry, r * 2f, ry * 2f);
             GUI.DrawTexture(agujero, _vineta);

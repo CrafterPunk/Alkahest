@@ -1877,156 +1877,68 @@ namespace Alkahest.Game
             return s;
         }
 
-        // (R86, regla 15) `TanqueTuboLateral` (el caño fino con codo de la
-        // R85) SE RETIRÓ junto con la estantería: Cesar lo vetó ("no con ese
-        // cosito que has hecho") — el tubo del refill es ahora una COLUMNA
-        // GRUESA integrada al armazón (TanqueMarcoConTubo, abajo), del mismo
-        // cobre del tanque, como en su referencia
-        // docs/ref/deposito_agua_ref2_tuberia_autofill.png.
+        // (R86/R88, regla 15) `TanqueTuboLateral` (caño fino R85) y
+        // `TanqueMarcoConTubo` (armazón con tubo horneado R86) SE RETIRARON:
+        // el primero por veto de Cesar ("no con ese cosito"), el segundo
+        // porque la dirección de escena R88 exige que el tubo sea una PIEZA
+        // SUELTA que el Maestro instala A LA VISTA tras el renacer (empuja
+        // desde el suelo, encaja con un clank). El marco vuelve a ser el
+        // clásico y el tubo vive abajo, en TanqueTuboGrueso.
 
         /// <summary>
-        /// (R86 — la segunda referencia de Cesar, la de la tubería) EL
-        /// ARMAZÓN CON TUBO INTEGRADO: el mismo TanqueMarco de siempre más
-        /// una COLUMNA DE COBRE GRUESA (3 celdas) pegada al flanco derecho,
-        /// del mismo material y pátina del tanque ("no necesariamente se
-        /// tiene que ver como tubería, sino del mismo material" — Cesar).
-        /// La columna nace EN EL PISO del sprite (su única queja de la
-        /// referencia: el tubo quedaba unos píxeles sobre el suelo), sube
-        /// hasta el hombro del domo y remata en TAPÓN ROSCADO (anillos
-        /// horizontales). Dos ABRAZADERAS remachadas la amarran al cuerpo.
-        /// `spanCeldas`/`altoCeldas` = la huella CLÁSICA del marco; el
-        /// sprite devuelto mide spanCeldas+3 de ancho (el tubo en vuelo).
+        /// (R88 — la referencia de la tubería de Cesar) EL TUBO GRUESO como
+        /// PIEZA PROPIA: columna de cobre de 3 celdas de ancho, mismo cobre y
+        /// misma pátina del tanque ("del mismo material"), pie remachado que
+        /// PISA el suelo, dos anillos-abrazadera, y TAPÓN ROSCADO arriba.
+        /// La instala DepositoDeAgua.InstalarTubo (sube desde el subsuelo y
+        /// encaja junto al hombro del tanque — teatralidad del REORDEN R88).
         /// </summary>
-        public static Sprite TanqueMarcoConTubo(int spanCeldas, int altoCeldas)
+        public static Sprite TanqueTuboGrueso(int altoCeldas)
         {
-            string clave = "tanquemarcotubo" + spanCeldas + "x" + altoCeldas;
+            string clave = "tanquetubogrueso" + altoCeldas;
             if (_cache.TryGetValue(clave, out var s)) return s;
 
-            // 1) El marco clásico, pintado en la franja izquierda del lienzo
-            // ancho (misma lógica que TanqueMarco, con wM en lugar de w).
-            int wM = Tex(spanCeldas), h = Tex(altoCeldas);
-            int wT = Tex(3);
-            int w = wM + wT;
+            int w = Tex(3), h = Tex(altoCeldas);
             var px = new Color32[w * h];
 
-            int baseAlto = S(4);
-            int bandaAlta0 = h - S(12);
-            int bandaAlta1 = h - S(8);
-            int domo0 = bandaAlta1;
-            int montante = S(4);
-            int ventana0 = montante, ventana1 = wM - montante;
+            int tapon0 = h - S(4);                    // el tapón corona los últimos 2 celdas.
+            int[] anillos = { Mathf.RoundToInt(h * 0.30f), Mathf.RoundToInt(h * 0.62f) };
 
             for (int y = 0; y < h; y++)
             {
-                for (int x = 0; x < wM; x++)
+                for (int x = 0; x < w; x++)
                 {
-                    Color32 c;
-                    bool cobre = false;
-
-                    if (y < baseAlto)
-                    {
-                        cobre = true;
-                        c = y >= baseAlto - Escala ? CobreAlto : (y < Escala ? CobreBajo : Cobre);
-                        if (y >= baseAlto / 2 - Escala / 2 && y < baseAlto / 2 + Escala && (x + S(1)) % S(3) < Escala)
-                            c = CobreAlto;
-                    }
-                    else if (y >= domo0)
-                    {
-                        int dy = y - domo0;
-                        int alto = h - domo0;
-                        float t = dy / (float)Mathf.Max(1, alto - 1);
-                        float semi = Mathf.Lerp(wM * 0.46f, wM * 0.16f, t * t * 1.6f);
-                        bool pomo = t > 0.62f && Mathf.Abs(x - wM * 0.5f) <= wM * 0.10f;
-                        bool dentro = Mathf.Abs(x - wM * 0.5f) <= semi || pomo;
-                        if (!dentro) continue;
-                        cobre = true;
-                        c = x < wM * 0.5f - semi * 0.5f ? CobreAlto : (x > wM * 0.5f + semi * 0.6f ? CobreBajo : Cobre);
-                        if (pomo && t > 0.9f) c = CobreAlto;
-                    }
-                    else if (y >= bandaAlta0 && y < bandaAlta1)
-                    {
-                        cobre = true;
-                        c = y >= bandaAlta1 - Escala ? CobreAlto : (y < bandaAlta0 + Escala ? CobreBajo : Cobre);
-                        int med = (bandaAlta0 + bandaAlta1) / 2;
-                        if (y >= med - Escala / 2 && y < med + Escala && (x + S(1)) % S(3) < Escala)
-                            c = CobreAlto;
-                    }
-                    else if (x < ventana0 || x >= ventana1)
-                    {
-                        cobre = true;
-                        bool izq = x < ventana0;
-                        int d = izq ? x : wM - 1 - x;
-                        c = d < Escala ? CobreBajo : (d >= montante - Escala ? CobreAlto : Cobre);
-                    }
-                    else
-                    {
-                        int rel = x - ventana0;
-                        int anchoV = ventana1 - ventana0;
-                        bool brillo = (rel + y) % Mathf.Max(1, wM) < S(3) && rel > anchoV / 6 && rel < anchoV / 2;
-                        bool canto = rel < Escala || rel >= anchoV - Escala;
-                        if (brillo) c = new Color32(0xCF, 0xE4, 0xE8, 62);
-                        else if (canto) c = new Color32(0x9F, 0xB8, 0xBC, 48);
-                        else c = new Color32(0x8A, 0xA6, 0xAE, 22);
-                    }
-
-                    if (cobre && Patina(x, y)) c = Cardenillo;
-                    px[y * w + x] = c;
-                }
-            }
-
-            // 2) EL TUBO GRUESO: columna [wM, w) del piso al hombro del domo.
-            int topeTubo = h - S(6);       // el cuerpo del tubo llega al hombro.
-            int tapon0 = topeTubo;         // el tapón roscado corona.
-            int tapon1 = Mathf.Min(h, topeTubo + S(4));
-            for (int y = 0; y < tapon1; y++)
-            {
-                for (int x = wM; x < w; x++)
-                {
-                    int rel = x - wM;
                     Color32 c;
                     if (y >= tapon0)
                     {
                         // EL TAPÓN ROSCADO: anillos horizontales alternados,
-                        // 1 px metido por flanco (silueta de pieza torneada).
-                        if (rel < Escala / 2 || rel >= wT - Escala / 2) continue;
+                        // 1 px metido por flanco (pieza torneada).
+                        if (x < Escala / 2 || x >= w - Escala / 2) continue;
                         c = ((y - tapon0) / Mathf.Max(1, Escala)) % 2 == 0 ? CobreAlto : CobreBajo;
                     }
                     else
                     {
                         // EL CUERPO: sombreado cilíndrico (luz a la izquierda),
-                        // pie remachado EN EL SUELO (y=0: Cesar dixit) y dos
-                        // juntas anulares espaciadas.
-                        c = rel < Escala ? CobreAlto : (rel >= wT - Escala ? CobreBajo : Cobre);
+                        // pie con remaches EN EL SUELO (y=0: Cesar dixit).
+                        c = x < Escala ? CobreAlto : (x >= w - Escala ? CobreBajo : Cobre);
                         if (y < S(2))
                         {
-                            c = y < Escala ? CobreBajo : CobreAlto; // el pie: zócalo propio que PISA el suelo.
-                            if ((rel + S(1)) % S(2) < Escala && y >= Escala) c = Cobre; // remaches del pie.
+                            c = y < Escala ? CobreBajo : CobreAlto;                       // el zócalo del pie.
+                            if ((x + S(1)) % S(2) < Escala && y >= Escala) c = Cobre;     // remaches.
                         }
-                        else if (y % S(9) < Escala) c = CobreBajo;  // juntas anulares.
+                        else
+                        {
+                            foreach (int ya in anillos)
+                                if (y >= ya && y < ya + S(2))
+                                    c = y < ya + Escala ? CobreAlto : CobreBajo;           // anillo-abrazadera.
+                        }
                     }
-                    if (Patina(x + 53, y)) c = Cardenillo;          // la MISMA pátina de la familia (Cesar: mismo material).
+                    if (Patina(x + 53, y)) c = Cardenillo;                                 // la MISMA pátina de la familia.
                     px[y * w + x] = c;
                 }
             }
 
-            // 3) LAS ABRAZADERAS: dos bandas remachadas que amarran el tubo
-            // al cuerpo (cruzan del montante derecho al tubo).
-            int[] abrazaderas = { Mathf.RoundToInt(h * 0.30f), Mathf.RoundToInt(h * 0.62f) };
-            foreach (int ya in abrazaderas)
-            {
-                for (int y = ya; y < ya + S(2) && y < h; y++)
-                {
-                    for (int x = ventana1; x < w; x++)
-                    {
-                        Color32 c = y < ya + Escala ? CobreAlto : CobreBajo;
-                        if ((x + S(1)) % S(3) < Escala && y >= ya + Escala / 2 && y < ya + Escala + Escala / 2) c = CobreAlto;
-                        if (Patina(x + 91, y)) c = Cardenillo;
-                        px[y * w + x] = c;
-                    }
-                }
-            }
-
-            s = Crear(px, w, h, "TenThousandYearsTanqueMarcoConTubo");
+            s = Crear(px, w, h, "TenThousandYearsTanqueTuboGrueso");
             _cache[clave] = s;
             return s;
         }

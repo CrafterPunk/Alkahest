@@ -56,6 +56,8 @@ namespace Alkahest.Audio
         private static AudioClip _encargoCompletado;
         private static AudioClip _finDeJornada;
         private static AudioClip _vozDelMaestro;    // (ronda 73) la presencia del Maestro al "hablar" en el prólogo.
+        private static AudioClip _subGrave;         // (R88) el peso de la palabra ORDEN.
+        private static AudioClip _clank;            // (R88) el encaje del tubo de cobre.
         private static AudioClip _derrumbe;         // (ronda 73) el techo que se abre en el beat del lodo.
         private static AudioClip _tutorialConfirma; // (ronda 73) "sí, eso era": confirmación suave del tutorial contextual.
 
@@ -73,6 +75,10 @@ namespace Alkahest.Audio
         public static AudioClip EncargoCompletado => _encargoCompletado ??= ConstruirEncargoCompletado();
         public static AudioClip FinDeJornada => _finDeJornada ??= ConstruirFinDeJornada();
         public static AudioClip VozDelMaestro => _vozDelMaestro ??= ConstruirVozDelMaestro();
+        /// <summary>(R88, dirección Opus del ORDEN) El SUB de la palabra: seno grave con decaimiento — peso físico, no "efecto".</summary>
+        public static AudioClip SubGrave => _subGrave ??= ConstruirSubGrave();
+        /// <summary>(R88) El CLANK del tubo al encajar: dos parciales metálicos inarmónicos + golpe seco.</summary>
+        public static AudioClip Clank => _clank ??= ConstruirClank();
         public static AudioClip Derrumbe => _derrumbe ??= ConstruirDerrumbe();
         public static AudioClip TutorialConfirma => _tutorialConfirma ??= ConstruirTutorialConfirma();
 
@@ -734,6 +740,57 @@ namespace Alkahest.Audio
         }
 
         /// <summary>7) La tolva traga: retumbo grave (chirrido seno descendente) + un puñado de granos de ruido muy filtrados encima, para la textura "granular" pedida.</summary>
+        /// <summary>
+        /// (R88, dirección de escena Opus para el ORDEN) EL SUB: un seno de
+        /// 38 Hz que cae a 33 con decaimiento exponencial de 1.4 s. No es un
+        /// golpe ni un temblor: es el PESO de la palabra en el aire. El poder
+        /// no hace ruido de esfuerzo.
+        /// </summary>
+        private static AudioClip ConstruirSubGrave()
+        {
+            const float dur = 1.4f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(buf, SR_ONESHOT, 38f, 33f, 1f);
+            for (int i = 0; i < buf.Length; i++)
+                buf[i] *= Mathf.Exp(-3.0f * i / (float)buf.Length); // decaimiento exponencial: presencia, luego nada.
+            AplicarEnvolvente(buf, SR_ONESHOT, 0.015f, 0.25f);
+            Normalizar(buf, 0.6f);
+            Clamp(buf);
+            return CrearClip("TenThousandYears_SubGrave", buf, SR_ONESHOT);
+        }
+
+        /// <summary>
+        /// (R88) EL CLANK: el tubo de cobre encajando en su asiento — dos
+        /// parciales metálicos inarmónicos (relación no entera: campana
+        /// industrial, no nota musical) sobre un golpe granular seco. UN solo
+        /// sonido para los dos tubos: es un acto, no dos piezas.
+        /// </summary>
+        private static AudioClip ConstruirClank()
+        {
+            const float dur = 0.38f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+
+            var p1 = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(p1, SR_ONESHOT, 1243f, 1178f, 1f);
+            AplicarEnvolvente(p1, SR_ONESHOT, 0.002f, 0.30f);
+            Sumar(buf, p1, 0.45f);
+
+            var p2 = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(p2, SR_ONESHOT, 831f, 796f, 1f);
+            AplicarEnvolvente(p2, SR_ONESHOT, 0.002f, 0.22f);
+            Sumar(buf, p2, 0.38f);
+
+            var golpe = NuevoBuffer(dur, SR_ONESHOT);
+            AnadirGranulos(golpe, SR_ONESHOT, 6, 0.008f, 1f);
+            PasoBajo(golpe, SR_ONESHOT, 2400f);
+            AplicarEnvolvente(golpe, SR_ONESHOT, 0.001f, 0.06f);
+            Sumar(buf, golpe, 0.6f);
+
+            Normalizar(buf, 0.6f);
+            Clamp(buf);
+            return CrearClip("TenThousandYears_Clank", buf, SR_ONESHOT);
+        }
+
         private static AudioClip ConstruirTolvaTraga()
         {
             const float dur = 0.42f;
