@@ -2961,39 +2961,14 @@ namespace Alkahest.Sim
         // idéntico al tanque del agua.
         public const int FundacionSiloX0 = 385, FundacionSiloX1 = 392;
         public const int FundacionSiloY0 = 140, FundacionSiloY1 = 152;
-        // (RONDA 85, FASE B2 del capítulo 2) LA ESTANTERÍA CENTRAL: el mueble
-        // del REORDEN — dos montantes de piso estructural y dos bahías
-        // APILADAS donde los recipientes RENACEN reubicados (Cesar: "al
-        // centro, sobre el primer estante de madera de piso a techo").
-        // Geometría medida contra las obras vecinas: la poza termina en x385
-        // (labio) y el fogón del jugador empieza en x402 (mejilla oeste) —
-        // la estantería vive JUSTA entre ambos, sobre la cicatriz del cráter.
-        //  · Montantes x386-387 y x400-401, de y140 a y188. NO llegan a la
-        //    bóveda (y200) A PROPÓSITO: el aprendiz es un VOLADOR y la
-        //    caverna JAMÁS se sella en dos mitades — el paso queda por
-        //    arriba (y189-199, 11 celdas de luz; la caja del imp mide 7.8).
-        //    Piso a techo en la LECTURA (88% del alto), pasable en el juego.
-        //  · Bahías x389-396 (huella 8 de los tanques; muros x389/x396):
-        //    AGUA abajo (base y146, tubo corto al suelo), LODO arriba (base
-        //    y167, tubo largo) — el tubo "hasta el suelo" de Cesar EXIGE
-        //    recipiente elevado (revisión Opus del plan cap2). y167 sale de
-        //    medir el visual del tanque bajo: 13 de muros + 6 de domo desde
-        //    y146 = techo del sprite en y165; la repisa alta (y166) arranca
-        //    donde el domo termina, sin solaparse.
-        //  · Repisas (tablas) x388-399 en y145 y y166: la fila donde cada
-        //    tanque asienta; los tanques pintan su propio suelo ENCIMA
-        //    (mismo material, misma fila — se funden).
-        //  · La gotera del derrumbe (x395-397 desde la bóveda) cae DERECHA
-        //    a la boca abierta del silo alto: la herida alimenta el almacén
-        //    hasta que la Fase C selle el techo (plan cap2: el lodo cayendo
-        //    sobre la estantería ES el marcador de la herida).
-        // Obra registrada POR PIEZA (montante a montante, tabla a tabla) —
-        // jamás bounding box: el fantasma anticincel R69.
-        public const int FundacionEstanteriaX0 = 386, FundacionEstanteriaX1 = 401;
-        public const int FundacionEstanteriaTopY = 188;   // techo de los montantes (paso de vuelo por encima).
-        public const int FundacionBahiaX0 = 389;          // huella 8: x389-396 (interior x390-395).
-        public const int FundacionBahiaBajaY0 = 146;      // el TANQUE DE AGUA (tubo de 6 al suelo).
-        public const int FundacionBahiaAltaY0 = 167;      // el SILO DEL LODO (tubo de 27 al suelo).
+        // (R86, regla 15) LA ESTANTERÍA CENTRAL (R85: FundacionEstanteria*/
+        // FundacionBahia* — montantes x386-401, bahías apiladas y146/y167)
+        // SE RETIRÓ ENTERA: Cesar vetó el apilado ("prefiero los dos
+        // reservorios, cada uno en su sitio, con su tubo grueso") y el guion
+        // nuevo del REORDEN apaga las fuentes — la premisa de la bahía alta
+        // (atrapar la gotera) murió con ellas. Los recipientes renacen en
+        // FundacionDeposito*/FundacionSilo* con el tubo integrado
+        // (MaquinariaSprites.TanqueMarcoConTubo).
         // (RONDA 64, afinado con capturas) El spawn entra al resplandor del
         // fuego: antes (x352, y luego x388) el aprendiz nacía FUERA del óvalo
         // de luz o en su anillo oscuro -- invisible para sí mismo. Ahora

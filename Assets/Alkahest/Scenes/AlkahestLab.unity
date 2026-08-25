@@ -150,37 +150,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 894369479}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &319150388
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 319150389}
-  m_Layer: 0
-  m_Name: DepositoFinal_BahiaBaja
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &319150389
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 319150388}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 39.3, y: 14.6, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 894369479}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &537250029
 GameObject:
   m_ObjectHideFlags: 0
@@ -244,37 +213,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 894369479}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &786401199
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 786401200}
-  m_Layer: 0
-  m_Name: Deposito2Final_BahiaAlta
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &786401200
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 786401199}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 39.3, y: 16.7, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 894369479}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &894369477
 GameObject:
   m_ObjectHideFlags: 0
@@ -308,8 +246,6 @@ MonoBehaviour:
   maestro: {fileID: 537250030}
   deposito: {fileID: 65343462}
   deposito2: {fileID: 674146523}
-  depositoFinal: {fileID: 319150389}
-  deposito2Final: {fileID: 786401200}
   depositoVisualPrefab: {fileID: 2530118568032828713, guid: 22310212d81261f4684209aed095d2ce, type: 3}
   planoOverlay: {fileID: 0}
   mostrarZonasDelPlano: 1
@@ -329,8 +265,6 @@ Transform:
   - {fileID: 537250030}
   - {fileID: 65343462}
   - {fileID: 674146523}
-  - {fileID: 319150389}
-  - {fileID: 786401200}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &977024199

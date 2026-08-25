@@ -5048,3 +5048,47 @@ ca_playtest84.cmd barre la ronda.
   refill llenó ambos hasta 60/60 (tope) desde cargas menores; lecho restaurado exacto
   tras retirada. CAPTURAS: estantería con ambos tanques cargados + tubos legibles.
 · ca_playtest85.cmd barre la ronda.
+
+## Ronda 86 — EL ORDEN ABSORBE TODO: adiós estantería, tanques con tubo integrado
+
+· Feedback de Cesar sobre la R85 (tres frentes): (1) "el agua se sigue filtrando por el
+  extremo derecho de su tanque"; (2) "no quiero uno apilado del otro… esas estructuras de
+  tubos y armazón hay que retirarlas… el sprite completo con un tubo GRUESO, del mismo
+  material"; (3) el guion cinematográfico: "con la palabra ORDEN se absorbe todo lo del
+  mapa, desaparece la cascada, la caída de lodo, y ahora tienes este nuevo punto de
+  evolución" — el refill infinito REEMPLAZA a las fuentes naturales.
+· LA FILTRACIÓN DEL EXTREMO, cazada: muro e interior rasaban a la MISMA altura (y152) —
+  la celda líquida del tope pegada al muro se escurría en DIAGONAL por encima. FIX: los
+  muros suben UNA fila sobre el interior (y0..y1+1); la boca sigue abierta para verter.
+  VERIFICADO A LO BRUTO: ambos recipientes llenados a tope (78/78) → CERO escapes.
+· LA ESTANTERÍA SE RETIRÓ ENTERA (regla 15 en cuatro archivos): ConstruirEstanteria,
+  consts FundacionEstanteria*/FundacionBahia*, marcadores depositoFinal/deposito2Final
+  (el validador BARRE los GOs huérfanos de la escena — verificado), InitFinal/InitSiloFinal
+  y el caño fino TanqueTuboLateral ("no con ese cosito"). La lógica era sana (el lodo
+  arriba bebiendo de la gotera) pero el guion nuevo mata la premisa: sin gotera, el mueble
+  no paga su silueta.
+· EL GUION NUEVO DEL REORDEN (paso 1): _fuentesApagadas PARA SIEMPRE — manantial,
+  rezumadero y gotera mueren con el ORDEN; el rumor de la cascada se desvanece y el
+  AudioSource se DETIENE; el barrido pierde la protección de poza y cráter (se absorben
+  ENTEROS al banco — "todo eso entró en ese refill infinito"); cuenco/hogar/fogón siguen
+  intocables. Y EL TRAGO FINAL (TickDesagueFinal, medido en vivo): el agua EN VUELO por
+  las repisas llegaba DETRÁS del frente y dejaba un charco huérfano de 13 celdas — ahora
+  el fondo de la poza se bebe su residuo hasta CERO (y el cráter su cola de lodo), una
+  celda por pulso, a la vista.
+· EL RENACER (paso 3): cada reservorio EN SU SITIO (marcadores de siempre), pero el
+  armazón procedural es TanqueMarcoConTubo — el marco clásico + una COLUMNA DE COBRE
+  GRUESA (3 celdas) al flanco derecho, mismo cobre y misma pátina ("no necesariamente se
+  tiene que ver como tubería, sino del mismo material"), tapón ROSCADO arriba, dos
+  abrazaderas remachadas, y el pie EN EL SUELO del sprite (la única queja de Cesar con su
+  referencia). El sello del suelo se EXTIENDE bajo la columna (x1+1..x1+3): el tubo pisa
+  piso firme aunque el flanco sea el labio del cráter. El prefab de piel clásico se salta
+  cuando hay tubo (volverá cuando Cesar hornee su sprite v2). Refill en ambos.
+· VERIFICADO EN VIVO (ciclo completo con gotera activa): muros y153 en ambos ✓; 78/78 sin
+  escapes ✓; beat=Fin con tanques en x414/x385 cargas 60/60 (tope del refill) ✓; poza=0,
+  cráter=0, cascada en vuelo=0 SOSTENIDO tras el trago final ✓; audio de cascada
+  playing=False ✓; marcadores huérfanos barridos de la escena ✓. CAPTURAS: los dos
+  reservorios con su columna de cobre y tapón, la caverna ordenada SIN cascada.
+· Pendiente que viaja a la FASE C: el arranque del refill ya no espera al techo (las
+  fuentes mueren en el ORDEN — decisión de guion de Cesar que simplifica C: sellar la
+  grieta queda como acto constructivo puro).
+· ca_playtest86.cmd barre la ronda.

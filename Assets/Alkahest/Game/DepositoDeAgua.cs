@@ -20,11 +20,11 @@ namespace Alkahest.Game
     /// (RONDA 74, corrección de Cesar) SIN AUTOFILL AL NACER: el depósito
     /// llega con solo un culo de agua y la tarea final del prólogo es
     /// LLENARLO — el verbo, una vez más, ahora al revés (verter DENTRO de
-    /// algo tuyo). (R85, FASE B2) El día del autofill LLEGÓ, pero solo para
-    /// el RENACER REUBICADO del REORDEN (InitFinal/InitSiloFinal): tubería
-    /// lateral que toca el suelo (segunda referencia de Cesar,
-    /// docs/ref/deposito_agua_ref2_tuberia_autofill.png) + goteo lento por
-    /// ActivarRefill. Antes del reorden, llenar sigue siendo TU tarea.
+    /// algo tuyo). (R85/R86) El día del autofill LLEGÓ, pero solo para el
+    /// RENACER del REORDEN (Init/InitSilo con `conTubo:true`): el armazón
+    /// trae el TUBO GRUESO integrado de la referencia de Cesar
+    /// (docs/ref/deposito_agua_ref2_tuberia_autofill.png) que toca el suelo,
+    /// + goteo lento por ActivarRefill. Antes del reorden, llenar es TU tarea.
     ///
     /// Regla 36: Init/Aparecer NO son idempotentes; el depósito no es
     /// IMovible (emerge donde el plano lo decreta y ahí se queda).
@@ -69,15 +69,19 @@ namespace Alkahest.Game
         private int _cargaInicial = -1;               // -1 = la del guion (tanque de agua); 0 = nace vacío (silo).
         private bool _esSilo;
 
-        // (R85, FASE B2) EL RENACER REUBICADO: en la estantería el recipiente
-        // vive ELEVADO, con un tubo lateral que toca el suelo y un goteo de
-        // reabastecimiento (el primer refill infinito del juego). La
-        // emergencia se ACORTA (~8 celdas): subir el alto entero atravesaría
-        // la bahía de abajo — el tanque asoma desde detrás de su repisa.
-        private bool _reubicado;
-        private bool _tuboIzquierda;                  // flanco del tubo (y del inlet del goteo).
-        private GameObject _tuboGo;
-        private float _alturaEmergencia;              // cuánto sube el cuerpo al emerger (= _alturaMundo salvo reubicado).
+        // (R86, veto de Cesar a la estantería R85: "no quiero uno apilado
+        // del otro… el Sprite completo con un tubo grueso, del mismo
+        // material") EL TANQUE CON TUBO INTEGRADO: en el renacer del REORDEN
+        // el recipiente vuelve A SU SITIO, pero su armazón ya trae el TUBO
+        // GRUESO lateral de la referencia de Cesar (columna de cobre con
+        // tapón roscado, pegada al flanco derecho, que TOCA EL SUELO — su
+        // única queja de la referencia era que el tubo quedaba unos píxeles
+        // arriba). El tubo dice "refill infinito" sin una palabra; el goteo
+        // lo cumple. La estantería/bahías apiladas de la R85 quedan
+        // RETIRADAS (regla 15): la lógica era sana (lodo arriba bebiendo de
+        // la gotera) pero el guion nuevo APAGA las fuentes en el ORDEN — ya
+        // no hay gotera que atrapar, y el mueble no pagaba su silueta.
+        private bool _conTubo;
         private bool _refillActivo;
         private float _refillTimer;
 
@@ -138,14 +142,15 @@ namespace Alkahest.Game
         /// <summary>El tanque de agua clásico (marcador `deposito`, huella 8x13, piel de prefab, carga inicial del guion).</summary>
         public void Init(AlkahestSim sim) => Init(sim, -1);
 
-        /// <summary>(R84) Variante con carga inicial EXPLÍCITA: el renacer del REORDEN arranca con lo que el drenado + el barrido recogieron ("lo que sale primero es lo que tú derramaste").</summary>
-        public void Init(AlkahestSim sim, int cargaInicial)
+        /// <summary>(R84) Variante con carga inicial EXPLÍCITA: el renacer del REORDEN arranca con lo que el drenado + el barrido recogieron ("lo que sale primero es lo que tú derramaste"). (R86) `conTubo`: renace con el tubo grueso integrado (referencia de Cesar) — la marca visual del refill infinito.</summary>
+        public void Init(AlkahestSim sim, int cargaInicial, bool conTubo = false)
         {
             var escena = PrologoEscenografia.Buscar();
             InitInterno(sim, escena, escena != null ? escena.deposito : null,
                 MaterialId.Water, MaterialId.Empty, cargaInicial: cargaInicial, esSilo: false,
                 anchoHuella: 8, altoHuella: 13,
-                fallbackX0: SimLevelBuilder.FundacionDepositoX0, fallbackY0: SimLevelBuilder.FundacionDepositoY0);
+                fallbackX0: SimLevelBuilder.FundacionDepositoX0, fallbackY0: SimLevelBuilder.FundacionDepositoY0,
+                conTubo: conTubo);
         }
 
         /// <summary>
@@ -156,8 +161,8 @@ namespace Alkahest.Game
         /// </summary>
         public void InitSilo(AlkahestSim sim) => InitSilo(sim, 0);
 
-        /// <summary>(R84) Variante con carga explícita para el renacer del REORDEN.</summary>
-        public void InitSilo(AlkahestSim sim, int cargaInicial)
+        /// <summary>(R84) Variante con carga explícita para el renacer del REORDEN. (R86) `conTubo`: con el tubo grueso integrado.</summary>
+        public void InitSilo(AlkahestSim sim, int cargaInicial, bool conTubo = false)
         {
             var escena = PrologoEscenografia.Buscar();
             // (R84, Cesar) MISMO TAMAÑO que el tanque (8x13): la distinción
@@ -167,57 +172,29 @@ namespace Alkahest.Game
             InitInterno(sim, escena, escena != null ? escena.deposito2 : null,
                 Lodo, Barbotina, cargaInicial: cargaInicial, esSilo: true,
                 anchoHuella: 8, altoHuella: 13,
-                fallbackX0: SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0);
+                fallbackX0: SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0,
+                conTubo: conTubo);
         }
 
-        /// <summary>
-        /// (R85, FASE B2) El tanque de agua RENACIDO en la bahía BAJA de la
-        /// estantería (marcador `depositoFinal`; sin él, las constantes del
-        /// plano). Tubo lateral al suelo por la IZQUIERDA — revisión Opus
-        /// B2 #5 (inversión semántica, medida en captura): el pie del tubo
-        /// del AGUA aterriza HACIA LA POZA; el jugador lee "este bebe del
-        /// charco" y es verdad en espíritu.
-        /// </summary>
-        public void InitFinal(AlkahestSim sim, int cargaInicial)
-        {
-            var escena = PrologoEscenografia.Buscar();
-            InitInterno(sim, escena, escena != null ? escena.depositoFinal : null,
-                MaterialId.Water, MaterialId.Empty, cargaInicial: cargaInicial, esSilo: false,
-                anchoHuella: 8, altoHuella: 13,
-                fallbackX0: SimLevelBuilder.FundacionBahiaX0, fallbackY0: SimLevelBuilder.FundacionBahiaBajaY0,
-                reubicado: true, tuboIzquierda: true);
-        }
-
-        /// <summary>
-        /// (R85, FASE B2) El silo del lodo RENACIDO en la bahía ALTA
-        /// (marcador `deposito2Final`). Tubo LARGO al suelo por la DERECHA
-        /// (revisión Opus B2 #5): su brida pisa el flanco del CRÁTER — el
-        /// lodo bebe de la herida, no de la poza. Y la gotera del derrumbe
-        /// cae derecha a su boca abierta: la herida alimenta el almacén por
-        /// arriba Y por abajo hasta que la Fase C selle el techo.
-        /// </summary>
-        public void InitSiloFinal(AlkahestSim sim, int cargaInicial)
-        {
-            var escena = PrologoEscenografia.Buscar();
-            InitInterno(sim, escena, escena != null ? escena.deposito2Final : null,
-                Lodo, Barbotina, cargaInicial: cargaInicial, esSilo: true,
-                anchoHuella: 8, altoHuella: 13,
-                fallbackX0: SimLevelBuilder.FundacionBahiaX0, fallbackY0: SimLevelBuilder.FundacionBahiaAltaY0,
-                reubicado: true, tuboIzquierda: false);
-        }
+        // (R86, regla 15) InitFinal/InitSiloFinal — el renacer REUBICADO en
+        // las bahías apiladas de la estantería (R85) — se RETIRARON: Cesar
+        // vetó el apilado ("prefiero los dos reservorios, cada uno en su
+        // sitio, con su tubo grueso") y el guion nuevo apaga las fuentes en
+        // el ORDEN, así que la premisa del mueble (atrapar la gotera) murió
+        // con ellas. Los marcadores depositoFinal/deposito2Final se fueron
+        // con esto.
 
         private void InitInterno(AlkahestSim sim, PrologoEscenografia escena, Transform marcador,
             byte matDueno, byte matDuenoAlt, int cargaInicial, bool esSilo,
             int anchoHuella, int altoHuella, int fallbackX0, int fallbackY0,
-            bool reubicado = false, bool tuboIzquierda = false)
+            bool conTubo = false)
         {
             _sim = sim;
             _matDueno = matDueno;
             _matDuenoAlt = matDuenoAlt;
             _cargaInicial = cargaInicial;
             _esSilo = esSilo;
-            _reubicado = reubicado;
-            _tuboIzquierda = tuboIzquierda;
+            _conTubo = conTubo;
 
             // (RONDA 75) AUTORIDAD DE POSICIÓN: el marcador de la escenografía
             // (base-centro), ajustado a celdas. Sin marcador: el sitio del
@@ -244,10 +221,6 @@ namespace Alkahest.Game
             int spanVisual = (_x1 - _x0 + 1) + 2;      // 1 celda de vuelo a cada lado.
             int altoVisual = (_y1 - _y0 + 1) + 6;      // banda alta + domo por encima de los muros.
             _alturaMundo = altoVisual * c;
-            // (R85) La emergencia CORTA del reubicado: subir el alto entero
-            // (19 celdas) haría atravesar la bahía de abajo al silo alto —
-            // el cuerpo asoma solo ~8 celdas desde detrás de su repisa.
-            _alturaEmergencia = _reubicado ? Mathf.Min(_alturaMundo, 8f * c) : _alturaMundo;
 
             _cuerpo = new GameObject("DepositoCuerpo").transform;
             _cuerpo.SetParent(transform, false);
@@ -264,7 +237,11 @@ namespace Alkahest.Game
             // "Marco" (el armazón con vidrio; el director le baja el orden
             // mientras emerge y se lo sube al asentarse). Sin prefab, las
             // capas procedurales de siempre (fallback reversible).
-            if (!_esSilo && escena != null && escena.depositoVisualPrefab != null)
+            // (R86) Con tubo integrado, el prefab clásico (sin tubo) NO
+            // sirve de piel: se usa el procedural TanqueMarcoConTubo hasta
+            // que Cesar hornee su sprite v2 (entonces: nuevo prefab con el
+            // tubo dibujado y este guard aprende a usarlo).
+            if (!_esSilo && !_conTubo && escena != null && escena.depositoVisualPrefab != null)
             {
                 var piel = Instantiate(escena.depositoVisualPrefab, _cuerpo);
                 piel.name = "PielPrefab";
@@ -273,7 +250,7 @@ namespace Alkahest.Game
                 _marcoSr = marcoPrefab != null ? marcoPrefab.GetComponent<SpriteRenderer>() : null;
                 if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFondoInterior + 2; // emerge OCULTO tras la roca (revisión Opus 73 #15).
                 transform.position = new Vector3(cx, baseY, 0f);
-                _cuerpo.localPosition = new Vector3(0f, -_alturaEmergencia, 0f);
+                _cuerpo.localPosition = new Vector3(0f, -_alturaMundo, 0f);
                 _cuerpo.gameObject.SetActive(false);
                 return; // la piel procedural de abajo no se construye.
             }
@@ -292,18 +269,23 @@ namespace Alkahest.Game
             // para hacer de vidrio delante del agua.
             var marcoGo = new GameObject("Marco");
             marcoGo.transform.SetParent(_cuerpo, false);
+            // (R86) Con tubo: el sprite crece 3 celdas a la DERECHA (la
+            // columna del tubo grueso) y se desplaza +1.5 celdas para que el
+            // tanque siga clavado sobre sus muros — el tubo queda en vuelo.
+            int tuboAncho = _conTubo ? 3 : 0;
             _marcoSr = MaquinariaSprites.CrearCapa(marcoGo.transform, "Sprite",
-                MaquinariaSprites.TanqueMarco(spanVisual, altoVisual),
-                Capas.MaquinaFondoInterior + 2, spanVisual * c, altoVisual * c);
+                _conTubo ? MaquinariaSprites.TanqueMarcoConTubo(spanVisual, altoVisual)
+                         : MaquinariaSprites.TanqueMarco(spanVisual, altoVisual),
+                Capas.MaquinaFondoInterior + 2, (spanVisual + tuboAncho) * c, altoVisual * c);
 
             // Posiciones locales definitivas (relativas al centro del cuerpo):
-            marcoGo.transform.localPosition = new Vector3(0f, altoVisual * 0.5f * c, 0f);
+            marcoGo.transform.localPosition = new Vector3(tuboAncho * 0.5f * c, altoVisual * 0.5f * c, 0f);
             fondoGo.transform.localPosition = new Vector3(0f, (_y1 - _y0 + 1) * 0.5f * c, 0f);
 
             // El cuerpo entero arranca ENTERRADO (invisible bajo el suelo);
             // Aparecer() lo hace emerger.
             transform.position = new Vector3(cx, baseY, 0f);
-            _cuerpo.localPosition = new Vector3(0f, -_alturaEmergencia, 0f);
+            _cuerpo.localPosition = new Vector3(0f, -_alturaMundo, 0f);
             _cuerpo.gameObject.SetActive(false);
         }
 
@@ -314,42 +296,16 @@ namespace Alkahest.Game
             _fase = Fase.Emergiendo;
             _tFase = 0f;
             _cuerpo.gameObject.SetActive(true);
-            if (_reubicado && _tuboGo == null) CrearTubo();
         }
 
         /// <summary>
-        /// (R85, FASE B2) EL TUBO LATERAL AL SUELO — visual puro, hijo del
-        /// GO raíz (NO del cuerpo: el tubo no emerge, ya estaba ahí; el
-        /// tanque "se conecta" al asomar). Nace oculto y se enciende cuando
-        /// el recipiente ASIENTA (TickEmerger). DELANTE de la sim (y detrás
-        /// del vidrio del marco): medido con captura — detrás de la sim, el
-        /// montante de la estantería (madera EN la grilla) se tragaba el
-        /// tubo del silo entero; delante, la tubería corre montada SOBRE el
-        /// mueble, como en la referencia 2 de Cesar.
-        /// </summary>
-        private void CrearTubo()
-        {
-            float c = SimRenderer.CellWorldSize;
-            int sueloY = SimLevelBuilder.FundacionY0;            // primera fila de aire: la brida PISA el suelo macizo de y139.
-            int altoCeldas = (_y0 + 2) - sueloY;                 // caña hasta el codo, que entra al vidrio en y0..y0+1.
-            _tuboGo = new GameObject("Tubo");
-            _tuboGo.transform.SetParent(transform, false);
-            var sr = MaquinariaSprites.CrearCapa(_tuboGo.transform, "Sprite",
-                MaquinariaSprites.TanqueTuboLateral(altoCeldas),
-                Capas.MaquinaFrente - 5, 4f * c, altoCeldas * c);
-            sr.flipX = _tuboIzquierda;                            // dibujado con el codo a la izquierda (tubo al flanco derecho).
-            float centroX = (_tuboIzquierda ? (_x0 - 1f) : (_x1 + 2f)) * c;
-            _tuboGo.transform.position = new Vector3(centroX, (sueloY + altoCeldas * 0.5f) * c, 0f);
-            _tuboGo.SetActive(false);
-        }
-
-        /// <summary>
-        /// (R85) Enciende el goteo de reabastecimiento (cadencia y tope del
-        /// guion): el tubo repone el material DUEÑO celda a celda por su
-        /// columna del inlet hasta `refillTope`, y de ahí en más solo cubre
-        /// lo que el jugador se lleve. El primer refill infinito del juego —
-        /// llega EXCLUSIVAMENTE con el renacer reubicado (antes del REORDEN,
-        /// llenar los recipientes es TU tarea: R74).
+        /// (R85/R86) Enciende el goteo de reabastecimiento (cadencia y tope
+        /// del guion): el tubo repone el material DUEÑO celda a celda por la
+        /// columna del inlet (el flanco derecho, donde vive el tubo grueso)
+        /// hasta `refillTope`, y de ahí en más solo cubre lo que el jugador
+        /// se lleve. El primer refill infinito del juego — llega
+        /// EXCLUSIVAMENTE con el renacer del REORDEN (antes, llenar los
+        /// recipientes es TU tarea: R74).
         /// </summary>
         public void ActivarRefill()
         {
@@ -364,7 +320,7 @@ namespace Alkahest.Game
             if (_refillTimer > 0f) return;
             _refillTimer = _g.refillSeg;
             if (DelDueno() >= _g.refillTope) return;              // lleno hasta el tope: el tubo descansa.
-            int inlet = _tuboIzquierda ? _x0 + 1 : _x1 - 1;       // la columna interior del flanco del tubo.
+            int inlet = _x1 - 1;                                  // la columna interior del flanco del TUBO (derecha).
             var grid = _sim.Grid;
             for (int y = _y0; y <= _y1; y++)                      // la celda LIBRE más baja del inlet: brota desde abajo, como del suelo.
             {
@@ -453,12 +409,13 @@ namespace Alkahest.Game
         /// </summary>
         private void DesmontarEstructura()
         {
-            for (int y = _y0; y <= _y1; y++)
+            for (int y = _y0; y <= _y1 + 1; y++) // (R86) el remate de y1+1 también sale.
             {
                 _sim.Paint(_x0, y, 0, MaterialId.Empty);
                 _sim.Paint(_x1, y, 0, MaterialId.Empty);
             }
-            for (int x = _x0; x <= _x1; x++)
+            int x1Suelo = _sueloPrevio != null ? _x0 + _sueloPrevio.Length - 1 : _x1;
+            for (int x = _x0; x <= x1Suelo; x++)
             {
                 byte previo = _sueloPrevio != null ? _sueloPrevio[x - _x0] : MaterialId.Empty;
                 if (previo == MaterialId.Empty) _sim.Paint(x, _y0 - 1, 0, MaterialId.Empty);
@@ -498,7 +455,7 @@ namespace Alkahest.Game
         {
             float t = Mathf.Clamp01(_tFase / _g.depositoEmergerSeg);
             float ease = t * t * (3f - 2f * t);
-            _cuerpo.localPosition = new Vector3(0f, -_alturaEmergencia * ease, 0f);
+            _cuerpo.localPosition = new Vector3(0f, -_alturaMundo * ease, 0f);
             if (t >= 1f)
             {
                 _cuerpo.gameObject.SetActive(false);
@@ -517,7 +474,7 @@ namespace Alkahest.Game
         {
             float t = Mathf.Clamp01(_tFase / _g.depositoEmergerSeg);
             float ease = 1f - (1f - t) * (1f - t) * (1f - t); // cúbico: frena al asentarse.
-            _cuerpo.localPosition = new Vector3(0f, -_alturaEmergencia * (1f - ease), 0f);
+            _cuerpo.localPosition = new Vector3(0f, -_alturaMundo * (1f - ease), 0f);
 
             _polvoTimer -= dt;
             if (_polvoTimer <= 0f && t < 0.85f)
@@ -549,8 +506,14 @@ namespace Alkahest.Game
                 }
 
                 // Los muros del tanque entran a la sim (PaintStable, regla 22:
-                // materia nueva nace a temperatura estable).
-                for (int y = _y0; y <= _y1; y++)
+                // materia nueva nace a temperatura estable). (R86, LA
+                // FILTRACIÓN DEL EXTREMO cazada por Cesar) Los muros suben
+                // UNA FILA por encima del interior (y1+1): con muro e
+                // interior rasos a la misma altura, la celda líquida del tope
+                // pegada al muro se ESCURRÍA en diagonal por encima —
+                // "el agua se sigue filtrando por el extremo derecho". La
+                // boca sigue abierta (y1+2 en adelante) para verter.
+                for (int y = _y0; y <= _y1 + 1; y++)
                 {
                     _sim.PaintStable(_x0, y, 0, MaterialId.Stone);
                     _sim.PaintStable(_x1, y, 0, MaterialId.Stone);
@@ -561,18 +524,20 @@ namespace Alkahest.Game
                 // (y0-1). Sin ella, un muro sobre un labio de vacío (poza,
                 // cráter, terreno no plano) deja el escape DIAGONAL clásico
                 // de los líquidos de falling-sand — el mismo mecanismo de la
-                // fuga de la cascada en R74 ("la destrucción muerde; la
-                // fontanería, no"). Además garantiza base plana en cualquier
-                // terreno (Opus A3, ahora obligatorio y no aplazable).
-                _sueloPrevio = new byte[_x1 - _x0 + 1]; // memoria del lecho: la retirada devuelve lo que el sello pisó.
-                for (int x = _x0; x <= _x1; x++)
+                // fuga de la cascada en R74. (R86) Con tubo, el sello se
+                // EXTIENDE bajo la columna del tubo (x1+1..x1+3): el tubo
+                // TOCA SUELO FIRME aunque el flanco sea el labio del cráter
+                // (la única queja de Cesar con su referencia era un tubo que
+                // no llegaba al suelo).
+                int x1Suelo = _x1 + (_conTubo ? 3 : 0);
+                _sueloPrevio = new byte[x1Suelo - _x0 + 1]; // memoria del lecho: la retirada devuelve lo que el sello pisó.
+                for (int x = _x0; x <= x1Suelo; x++)
                 {
                     _sueloPrevio[x - _x0] = _sim.Grid.GetMat(x, _y0 - 1);
                     _sim.PaintStable(x, _y0 - 1, 0, MaterialId.PisoEstructural);
                 }
-                _obraHandle = SimLevelBuilder.RegistrarObra(_x0, _y0 - 1, _x1, _y1); // (R84/R85) suelo incluido; el handle se GUARDA: la retirada lo degenera (Opus A8).
+                _obraHandle = SimLevelBuilder.RegistrarObra(_x0, _y0 - 1, x1Suelo, _y1 + 1); // (R84/R85) suelo y remate incluidos; el handle se GUARDA: la retirada lo degenera (Opus A8).
                 if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFrente; // el armazón pasa a ser el vidrio delante del agua.
-                if (_tuboGo != null) _tuboGo.SetActive(true); // (R85) el tanque ASENTÓ: el tubo al suelo se descubre con él.
 
                 _fase = Fase.CargaInicial;
                 _tFase = 0f;
