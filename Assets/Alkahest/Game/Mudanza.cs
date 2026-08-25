@@ -876,9 +876,29 @@ namespace Alkahest.Game
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked) return;
-            if (!ModoActivo || _llevando == null || !_hasCursorWorld || !_sinCubeta) return;
+            if (!ModoActivo) return;
 
             UiStyles.Preparar();
+
+            // (R93, Cesar: "no es una herramienta — es un ESTADO que debe
+            // resaltar que estás ahí hasta que vuelves a presionar la V,
+            // tiene que quedar muy claro") LA PLACA DE ESTADO: mientras la
+            // mudanza está en la mano, el estado se DECLARA sobre la cabeza
+            // del aprendiz, latiendo despacio — el diamante azul-latón era
+            // demasiado tímido para un modo que cambia el significado de
+            // todos los clics. El texto cambia con la fase del gesto, así la
+            // placa además enseña el siguiente paso.
+            if (enabled && _apprentice != null)
+            {
+                float pulso = 0.68f + 0.20f * Mathf.Sin(Time.time * 3.1f);
+                var cabeza = _apprentice.transform.position + new Vector3(0f, 0.72f, 0f);
+                UiStyles.PlacaMundo(cabeza,
+                    _llevando == null ? "MUDANZA — clic agarra · V sale" : "MUDANZA — clic suelta · R cancela",
+                    new Color(IconoMudanza.r / 255f, IconoMudanza.g / 255f, IconoMudanza.b / 255f, pulso),
+                    UiStyles.S(10f));
+            }
+
+            if (_llevando == null || !_hasCursorWorld || !_sinCubeta) return;
             UiStyles.PlacaMundo(_cursorWorld, "sin cubeta aquí — tendrás que construirla",
                 UiStyles.Aviso, UiStyles.S(30f));
         }

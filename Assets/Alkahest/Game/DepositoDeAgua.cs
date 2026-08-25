@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Alkahest.Sim;
 
@@ -26,10 +27,15 @@ namespace Alkahest.Game
     /// (docs/ref/deposito_agua_ref2_tuberia_autofill.png) que toca el suelo,
     /// + goteo lento por ActivarRefill. Antes del reorden, llenar es TU tarea.
     ///
-    /// Regla 36: Init/Aparecer NO son idempotentes; el depósito no es
-    /// IMovible (emerge donde el plano lo decreta y ahí se queda).
+    /// Regla 36: Init/Aparecer NO son idempotentes. (R93, mandato de Cesar:
+    /// "que él haga la MUDANZA de los dos cosos a esa plataforma") El "no es
+    /// IMovible" histórico QUEDA DEROGADO a propósito para el mundo ordenado:
+    /// tras el renacer del REORDEN, <see cref="HabilitarMudanza"/> registra el
+    /// recipiente en el modo Mudanza (V) y <see cref="Reposicionar(int,int)"/>
+    /// lo muda ENTERO — muros, fondo, contenido, obra, visual y tubo — a otra
+    /// ancla. Antes del ORDEN sigue clavado donde el plano lo decreta.
     /// </summary>
-    public sealed class DepositoDeAgua : MonoBehaviour
+    public sealed class DepositoDeAgua : MonoBehaviour, IMovible, IMovibleAnclaEsquina
     {
         // ---- Los números del esqueleto ----
         // (R75) Duración de la emergencia y carga inicial viven en el GUION
@@ -136,6 +142,146 @@ namespace Alkahest.Game
 
         /// <summary>Alias histórico (el tanque de agua nació contando solo agua). Consumidores viejos intactos.</summary>
         public int AguaDentro() => DelDueno();
+
+        // =================================================================
+        // (R93) LA MUDANZA DE LOS RESERVORIOS — contrato IMovible, explícito
+        // para no chocar con el método histórico CentroMundo() de la placa.
+        // Solo existe para el mundo ordenado (post-renacer): HabilitarMudanza
+        // lo registra; antes del ORDEN el recipiente es del plano, no tuyo.
+        // =================================================================
+        private bool _movible;
+        // (R93) Todos los recipientes vivos: la guardia anti-solape de
+        // CabeEnAncla los consulta (dos tanques no pueden fundir muros).
+        private static readonly List<DepositoDeAgua> _todos = new List<DepositoDeAgua>(4);
+
+        /// <summary>(R93) Entra al registro del modo Mudanza (V). Idempotente; solo con el recipiente Listo.</summary>
+        public void HabilitarMudanza()
+        {
+            if (_movible || _fase != Fase.Listo) return;
+            _movible = true;
+            Mudanza.RegistrarMovible(this);
+        }
+
+        private void Awake() { if (!_todos.Contains(this)) _todos.Add(this); }
+
+        private void OnDestroy()
+        {
+            _todos.Remove(this);
+            if (_movible) Mudanza.OlvidarMovible(this);
+        }
+
+        Vector3 IMovible.CentroMundo
+        {
+            get
+            {
+                float c = SimRenderer.CellWorldSize;
+                return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + (_y1 - _y0 + 2) * 0.5f) * c, 0f);
+            }
+        }
+
+        Vector2 IMovible.TamanoMundo
+        {
+            get
+            {
+                float c = SimRenderer.CellWorldSize;
+                return new Vector2((_x1 - _x0 + 1) * c, (_y1 - _y0 + 2) * c); // muros + remate y1+1.
+            }
+        }
+
+        Vector2Int IMovible.AnclaCelda => new Vector2Int(_x0, _y0); // esquina inferior izquierda de la huella (garantía IMovibleAnclaEsquina).
+
+        bool IMovible.CabeEnAncla(Vector2Int a)
+        {
+            int w = _x1 - _x0, alto = _y1 - _y0 + 1; // spans (el remate ocupa y+alto).
+            if (a.x < 1 || a.x + w > CellGrid.W - 2 || a.y < 1 || a.y + alto > CellGrid.H - 2) return false;
+            // (R93) ANTI-SOLAPE: dos recipientes no pueden compartir NI UNA
+            // celda — los muros se fundirían y la mudanza del uno se tragaría
+            // el interior del otro. Muro contra muro (huellas adyacentes sin
+            // compartir columna) SÍ cabe: "uno al lado del otro" es legal.
+            foreach (var otro in _todos)
+            {
+                if (otro == null || otro == this || otro._fase == Fase.Oculto || otro._fase == Fase.Enterrado) continue;
+                if (a.x <= otro._x1 && a.x + w >= otro._x0 && a.y <= otro._y1 + 1 && a.y + alto >= otro._y0) return false;
+            }
+            return true;
+        }
+
+        void IMovible.Reposicionar(Vector2Int ancla) => Reposicionar(ancla.x, ancla.y);
+
+        /// <summary>
+        /// (R93) LA MUDANZA ENTERA: captura el contenido del vidrio (en orden
+        /// de asentado, de abajo arriba), desmonta muros y fondo del sitio
+        /// viejo, replanta la estructura en la ancla nueva, re-registra la
+        /// obra en el MISMO handle (nada de obra fantasma), recoloca el
+        /// contenido compactado desde el fondo y muda el visual entero (el
+        /// tubo es hijo del raíz: viaja gratis). Si el jugador está parado en
+        /// el destino, la piedra nace igual y "sale nadando" (doctrina
+        /// ApprenticeController, pariente de la regla 38 — el mismo trato que
+        /// el asentado del renacer tras su tope de 6 s).
+        /// </summary>
+        public void Reposicionar(int nx0, int ny0)
+        {
+            if (_fase != Fase.Listo || _sim == null || _sim.Grid == null) return;
+            if (nx0 == _x0 && ny0 == _y0) return;
+
+            var grid = _sim.Grid;
+            var contenido = new List<byte>();
+            for (int y = _y0 + 1; y <= _y1; y++)
+                for (int x = _x0 + 1; x < _x1; x++)
+                {
+                    byte m = grid.GetMat(x, y);
+                    if (m == MaterialId.Empty) continue;
+                    contenido.Add(m);
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                }
+
+            for (int y = _y0; y <= _y1 + 1; y++)
+            {
+                _sim.Paint(_x0, y, 0, MaterialId.Empty);
+                _sim.Paint(_x1, y, 0, MaterialId.Empty);
+            }
+            for (int x = _x0 + 1; x < _x1; x++)
+                _sim.Paint(x, _y0, 0, MaterialId.Empty);
+
+            int wSpan = _x1 - _x0, altoSpan = _y1 - _y0;
+            _x0 = nx0; _x1 = nx0 + wSpan;
+            _y0 = ny0; _y1 = ny0 + altoSpan;
+
+            for (int y = _y0; y <= _y1 + 1; y++)
+            {
+                _sim.PaintStable(_x0, y, 0, MaterialId.Stone);
+                _sim.PaintStable(_x1, y, 0, MaterialId.Stone);
+            }
+            for (int x = _x0 + 1; x < _x1; x++)
+                _sim.PaintStable(x, _y0, 0, MaterialId.Stone);
+            if (_obraHandle >= 0) SimLevelBuilder.ActualizarObra(_obraHandle, _x0, _y0, _x1, _y1 + 1);
+            else _obraHandle = SimLevelBuilder.RegistrarObra(_x0, _y0, _x1, _y1 + 1);
+
+            int i = 0;
+            for (int y = _y0 + 1; y <= _y1 && i < contenido.Count; y++)
+                for (int x = _x0 + 1; x < _x1 && i < contenido.Count; x++)
+                    _sim.PaintStable(x, y, 0, contenido[i++]);
+
+            float cM = SimRenderer.CellWorldSize;
+            transform.position = new Vector3((_x0 + _x1 + 1) * 0.5f * cM, _y0 * cM, 0f);
+
+            // (R93, cazado en la repasada) EL TUBO ELIGE FLANCO: pegados "uno
+            // al lado del otro" en la plataforma, el tubo derecho del
+            // recipiente izquierdo quedaba SEPULTADO detrás del vecino — la
+            // marca visual del refill infinito, muda. Si el flanco derecho ya
+            // no tiene aire (muro, mejilla o el otro tanque), el tubo se
+            // ESPEJA al flanco izquierdo (sprite simétrico en X: el tapón
+            // sigue arriba).
+            if (_tuboGo != null && _tuboInstalado)
+            {
+                bool derechaLibre = _sim.Grid.GetMat(_x1 + 2, _y0 + 3) == MaterialId.Empty;
+                float offX = ((_x1 + 2.5f) - (_x0 + _x1 + 1) * 0.5f) * cM;
+                _tuboGo.transform.localPosition = new Vector3(derechaLibre ? offX : -offX, _tuboFinalY, 0f);
+                var esc = _tuboGo.transform.localScale;
+                esc.x = Mathf.Abs(esc.x) * (derechaLibre ? 1f : -1f);
+                _tuboGo.transform.localScale = esc;
+            }
+        }
 
         /// <summary>Celdas NO vacías dentro del vidrio (dueño + estorbo). Con Capacidad(), da la placa honesta del guion (Opus A5).</summary>
         public int Ocupado()

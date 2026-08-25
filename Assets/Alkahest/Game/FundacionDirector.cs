@@ -64,7 +64,7 @@ namespace Alkahest.Game
         // docs/PLAN_PROLOGO_CAP2.md) se insertarán entre LlenarDeposito2 y
         // Fin; hasta entonces el arco cierra igual que siempre (amanecer +
         // Trueque) para que el juego nunca quede a medias entre fases.
-        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Recompensa2, LlenarDeposito2, Reorden, Fin }
+        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Recompensa2, LlenarDeposito2, Reorden, Obra, Acomodo, Adios, Fin }
         private enum AguaSub { Ir, Aspirar, Verter, Libre }
 
         // ==================================================================
@@ -208,6 +208,15 @@ namespace Alkahest.Game
             _g = PrologoEscenografia.GuionEfectivo(_escena);
 
             SpawnMaestro();
+            // (R93, Cesar: "una figura etérea, con algo de movimiento") El
+            // sprite del Maestro (el propio o el que vistió la escena) queda
+            // en manos de TickMaestroEtereo: flote, aliento y presencia.
+            _maestroSr = _maestroTr != null ? _maestroTr.GetComponentInChildren<SpriteRenderer>() : null;
+            if (_maestroSr != null)
+            {
+                _maestroSrBase = _maestroSr.transform.localPosition;
+                _maestroColorBase = _maestroSr.color;
+            }
             HudPermitido = false;
             FrascoBloqueado = true;
 
@@ -292,6 +301,8 @@ namespace Alkahest.Game
             TickDrenarCuenco();
             TickVoz();
             TickVueloDelFrasco();
+            TickVueloDelCincel();  // (R93) el regalo de la herramienta, si está en el aire.
+            TickMaestroEtereo();   // (R93) la figura FLOTA y respira: etérea, no clavada.
             TickCascadaAudio();
             TickHazPresentacion(); // (R81) el gesto de nacimiento del frasco, si está en curso.
             if (_motas.Count > 0) TickMotas(); // (R87) los destellos del barrido en vuelo a sus reservorios.
@@ -315,6 +326,9 @@ namespace Alkahest.Game
                 case Beat.Recompensa2: TickRecompensa2(); break;
                 case Beat.LlenarDeposito2: TickLlenarDeposito2(); break;
                 case Beat.Reorden: TickReorden(); break;
+                case Beat.Obra: TickObra(); break;       // (R93) ALZA.: la plataforma y el techo, con el cincel regalado.
+                case Beat.Acomodo: TickAcomodo(); break; // (R93) ACOMODA.: la mudanza de los reservorios al centro nuevo.
+                case Beat.Adios: TickAdios(); break;     // (R93) el ORDEN repetido, el vano, DIEZ MIL AÑOS., y el Maestro deja de mirar.
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
             }
 
@@ -1237,9 +1251,12 @@ namespace Alkahest.Game
                     _focoDeLuz = null;
                     SimRenderer.FocoCinematico = null;
                     _radioObjetivo = UiStyles.S(_g.radioAmanecer);
-                    Trueque.Activar();
-                    Debug.Log("[TenThousandYears] AMANECER: tanque=" + (_deposito != null ? _deposito.DelDueno() : -1) + " silo=" + (_silo != null ? _silo.DelDueno() : -1) + " — el goteo es el paisaje nuevo.");
-                    CambiarBeat(Beat.Fin);
+                    // (R93) El Trueque ya NO se activa aquí: el canal se abre
+                    // con el ADIÓS, cuando el Maestro deja su atención en el
+                    // tablón. El prólogo sigue: la OBRA.
+                    Debug.Log("[TenThousandYears] AMANECER: tanque=" + (_deposito != null ? _deposito.DelDueno() : -1) + " silo=" + (_silo != null ? _silo.DelDueno() : -1) + " — el goteo es el paisaje nuevo. Sigue la OBRA.");
+                    _obraFase = 0;
+                    CambiarBeat(Beat.Obra);
                     break;
                 }
             }
@@ -1838,6 +1855,421 @@ namespace Alkahest.Game
             CambiarBeat(_beatTrasDrenar);
         }
 
+        // ==================================================================
+        // (R93 — EL FINAL DEL PRÓLOGO, mandato nocturno de Cesar) Tres beats
+        // nuevos construidos DESDE el lenguaje del prólogo (voz de una
+        // palabra, fichas contextuales, placas de mundo, luz con causa):
+        //
+        //   OBRA    — el Maestro regala el CINCEL (vuela a tu mano como voló
+        //             el frasco) y pide ALZA.: una PLATAFORMA de piedra en el
+        //             centro (silueta blanca que hay que cubrir) y EL TECHO —
+        //             sellar la grieta del derrumbe, la única herida que el
+        //             ORDEN dejó a propósito. Tu primera edición del mundo.
+        //   ACOMODO — ACOMODA.: la MUDANZA (V) se enseña y los dos
+        //             reservorios se llevan a la plataforma, uno al lado del
+        //             otro — el centro del taller lo defines TÚ. "Eso se
+        //             parece más a la presentación final del mapa al iniciar
+        //             semilla cero" (Cesar).
+        //   ADIOS   — el Maestro repite ORDEN. (el poder es un verbo suyo,
+        //             no un evento único): la luz se cierra sobre TU obra,
+        //             abre EL VANO en el muro oeste (el espacio crece), se
+        //             revela el mapa entero, dice DIEZ MIL AÑOS. — y su
+        //             figura etérea se DESVANECE hacia el tablón del Trueque:
+        //             no te abandona, deja de prestarte atención ("ya te
+        //             enseñó, ya estás listo") y su atención queda viva en el
+        //             canal abierto: el tablón. Su fuego sigue ardiendo.
+        // ==================================================================
+
+        // La geometría del final (regla 47: coordenadas explícitas del plano
+        // de la Fundación, medidas contra SimLevelBuilder R89):
+        private const int ObraPlatX0 = 378, ObraPlatX1 = 395;  // la plataforma: entre el sitio del silo (369-376) y el fogón del jugador (396-406), sobre el cráter sellado.
+        private const int ObraPlatY0 = 140, ObraPlatY1 = 141;  // dos filas: "un poco de altura".
+        private const int ObraTechoX0 = 388, ObraTechoX1 = 392; // la grieta del derrumbe (DerrumbeX±2) en la bóveda.
+        private const int ObraTechoY0 = 201, ObraTechoY1 = 202;
+        private const int SlotAX0 = 379, SlotBX0 = 387;        // anclas exactas de los dos reservorios (8 de ancho, adyacentes).
+        private const int SlotY0 = 142;                        // sobre la plataforma (top y141).
+        private const int VanoX0 = 310, VanoX1 = 319;          // el vano del muro oeste: el umbral del mañana.
+        private const int VanoY0 = 140, VanoY1 = 146;
+
+        private int _obraFase;                 // 0=regalo del cincel, 1=construyendo, 2=respiro.
+        private Transform _cincelVuelo;
+        private float _tVueloCincel;
+        private readonly List<Vector2Int> _obraPlatObjetivo = new List<Vector2Int>();
+        private readonly List<Vector2Int> _obraTechoObjetivo = new List<Vector2Int>();
+        private GameObject _silPlataforma, _silTecho, _silSlotA, _silSlotB;
+        private bool _fichaColocaMostrada, _fichaLlevalosMostrada;
+        private int _acomodoFase;              // 0=palabra+fichas, 1=mudando, 2=respiro.
+        private bool _slotAOcupado, _slotBOcupado;
+        private int _adiosPaso;
+        private float _motaAdiosTimer;
+        private SpriteRenderer _maestroSr;
+        private Vector3 _maestroSrBase;
+        private Color _maestroColorBase = Color.white;
+        private float _maestroPresencia = 1f;  // 1 = presente; el adiós la lleva a 0 (la figura se va; el fuego y el tablón quedan).
+
+        /// <summary>(R93) Una silueta blanca de mundo: el rectángulo que la voz pide cubrir. Solido() estirado, alfa lo late el tick del beat.</summary>
+        private GameObject CrearSilueta(string nombre, int x0, int y0, int x1, int y1)
+        {
+            float c = SimRenderer.CellWorldSize;
+            var go = new GameObject(nombre);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = MaquinariaSprites.Solido();
+            sr.sortingOrder = 42; // bajo el aprendiz (47+) y la silueta de Mudanza (44).
+            sr.color = new Color(1f, 1f, 1f, 0.14f);
+            go.transform.position = new Vector3((x0 + x1 + 1) * 0.5f * c, (y0 + y1 + 1) * 0.5f * c, 0f);
+            go.transform.localScale = new Vector3((x1 - x0 + 1) * c, (y1 - y0 + 1) * c, 1f);
+            return go;
+        }
+
+        private void LatirSilueta(GameObject go, float baseAlfa)
+        {
+            if (go == null) return;
+            var sr = go.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = new Color(1f, 1f, 1f, baseAlfa + 0.06f * Mathf.Sin(Time.time * 2.4f));
+        }
+
+        private int ContarCubiertas(List<Vector2Int> objetivo)
+        {
+            var grid = _sim.Grid;
+            int n = 0;
+            for (int i = 0; i < objetivo.Count; i++)
+            {
+                byte m = grid.GetMat(objetivo[i].x, objetivo[i].y);
+                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) n++;
+            }
+            return n;
+        }
+
+        private Vector3 CentroPlataformaMundo()
+        {
+            float c = SimRenderer.CellWorldSize;
+            return new Vector3((ObraPlatX0 + ObraPlatX1 + 1) * 0.5f * c, (SlotY0 + 7) * c, 0f);
+        }
+
+        private Vector3 TablonMundo()
+        {
+            float c = SimRenderer.CellWorldSize;
+            return new Vector3((SimLevelBuilder.FundacionSalidaX0 + SimLevelBuilder.FundacionSalidaX1) * 0.5f * c,
+                (SimLevelBuilder.FundacionY0 + 3) * c, 0f);
+        }
+
+        /// <summary>(R93) EL REGALO DE LA HERRAMIENTA: el cincel vuela de la mesa a tu mano, con la comba del frasco — "que se note que me lo dio el Maestro".</summary>
+        private void LanzarVueloDelCincel()
+        {
+            var go = new GameObject("CincelEnVuelo");
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = MaquinariaSprites.CincelHerramienta();
+            sr.sortingOrder = Capas.CarryEnMano;
+            float celda = SimRenderer.CellWorldSize;
+            go.transform.localScale = Vector3.one * (0.9f * celda * 6f / Mathf.Max(1f, sr.sprite.rect.width));
+            go.transform.position = PosMaestro();
+            _cincelVuelo = go.transform;
+            _tVueloCincel = 0f;
+        }
+
+        private void TickVueloDelCincel()
+        {
+            if (_cincelVuelo == null) return;
+            _tVueloCincel += Time.deltaTime / Mathf.Max(0.4f, _g.entregaFrascoSeg);
+            float t = Mathf.Clamp01(_tVueloCincel);
+            float ease = t * t * (3f - 2f * t);
+            Vector3 a = PosMaestro();
+            Vector3 b = _aprendiz.position + new Vector3(0f, -0.2f, 0f);
+            Vector3 m = Vector3.Lerp(a, b, 0.5f) + new Vector3(0f, 0.7f, 0f);
+            _cincelVuelo.position = Vector3.Lerp(Vector3.Lerp(a, m, ease), Vector3.Lerp(m, b, ease), ease);
+            _cincelVuelo.rotation = Quaternion.Euler(0f, 0f, -35f * ease); // se ladea al llegar: pieza que se acomoda, no proyectil.
+            if (t >= 1f)
+            {
+                Destroy(_cincelVuelo.gameObject);
+                _cincelVuelo = null;
+                if (_audio != null) { _audio.pitch = 1.5f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.25f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; } // el toque metálico chico: herramienta en mano.
+            }
+        }
+
+        /// <summary>(R93, Cesar: "una figura etérea, con algo de movimiento") El Maestro FLOTA (solo hacia arriba: los pies nunca se hunden) y su alfa RESPIRA; _maestroPresencia lo desvanece en el adiós.</summary>
+        private void TickMaestroEtereo()
+        {
+            if (_maestroSr == null) return;
+            float flote = Mathf.Max(0f, Mathf.Sin(Time.time * 0.85f)) * 0.06f;
+            _maestroSr.transform.localPosition = _maestroSrBase + new Vector3(0f, flote, 0f);
+            float aliento = 0.84f + 0.12f * Mathf.Sin(Time.time * 0.6f + 1.7f);
+            var c = _maestroColorBase;
+            c.a = _maestroColorBase.a * aliento * Mathf.Clamp01(_maestroPresencia);
+            _maestroSr.color = c;
+        }
+
+        /// <summary>(R93) Mota con destino EXPLÍCITO (el adiós las manda al tablón, no al Maestro).</summary>
+        private void SoltarMotaHacia(Vector3 desde, Vector3 hasta, byte tipo, float stagger = 0f)
+        {
+            if (_motas.Count >= MotasTope + 40) return;
+            float dCeldas = Vector3.Distance(desde, hasta) / SimRenderer.CellWorldSize;
+            _motas.Add(new Mota
+            {
+                desde = desde,
+                hasta = hasta,
+                t = -stagger,
+                dur = Mathf.Clamp(0.35f + dCeldas / 90f, 0.35f, 1.1f),
+                tipo = tipo
+            });
+        }
+
+        /// <summary>14) LA OBRA (ALZA.): el cincel llega volando, la silueta blanca dice dónde, y el jugador ALZA su plataforma + sella el techo herido.</summary>
+        private void TickObra()
+        {
+            switch (_obraFase)
+            {
+                case 0:
+                    if (_tBeat < 0.9f) return;
+                    if (_cincelVuelo == null && _tVueloCincel <= 0f) { LanzarVueloDelCincel(); return; }
+                    if (_cincelVuelo != null) return; // el vuelo sigue en el aire.
+                    // El cincel aterrizó: la palabra, las siluetas y la ficha.
+                    DecirConTono("ALZA.", 0.95f, 2.4f);
+                    _obraPlatObjetivo.Clear();
+                    _obraTechoObjetivo.Clear();
+                    var grid0 = _sim.Grid;
+                    for (int x = ObraPlatX0; x <= ObraPlatX1; x++)
+                        for (int y = ObraPlatY0; y <= ObraPlatY1; y++)
+                            if (grid0.GetMat(x, y) != MaterialId.Stone && grid0.GetMat(x, y) != MaterialId.PisoEstructural)
+                                _obraPlatObjetivo.Add(new Vector2Int(x, y));
+                    for (int x = ObraTechoX0; x <= ObraTechoX1; x++)
+                        for (int y = ObraTechoY0; y <= ObraTechoY1; y++)
+                            if (grid0.GetMat(x, y) == MaterialId.Empty)
+                                _obraTechoObjetivo.Add(new Vector2Int(x, y));
+                    _silPlataforma = CrearSilueta("SiluetaPlataforma", ObraPlatX0, ObraPlatY0, ObraPlatX1, ObraPlatY1);
+                    if (_obraTechoObjetivo.Count > 0)
+                        _silTecho = CrearSilueta("SiluetaTecho", ObraTechoX0, ObraTechoY0, ObraTechoX1, ObraTechoY1);
+                    _tutorial.Mostrar("el cincel talla y construye",
+                        new TutorialContextual.Paso { Etiqueta = "C", Presionada = () => Cincel.ModoActivo });
+                    _obraFase = 1;
+                    _tBeat = 0f;
+                    break;
+
+                case 1:
+                {
+                    LatirSilueta(_silPlataforma, 0.13f);
+                    LatirSilueta(_silTecho, 0.13f);
+                    if (!_fichaColocaMostrada)
+                    {
+                        if (Cincel.ModoActivo && _tutorial.Visible) _tutorial.Confirmar(0);
+                        if (!_tutorial.Visible && _tBeat > 0.6f && Cincel.ModoActivo)
+                        {
+                            _fichaColocaMostrada = true;
+                            _tutorial.Mostrar("cubre lo blanco con piedra",
+                                new TutorialContextual.Paso { Etiqueta = "CLIC DER", Presionada = () => Mouse.current != null && Mouse.current.rightButton.isPressed });
+                        }
+                        if (!_fichaColocaMostrada) return;
+                    }
+                    int hechasP = ContarCubiertas(_obraPlatObjetivo);
+                    int hechasT = ContarCubiertas(_obraTechoObjetivo);
+                    if (_fichaColocaMostrada && _tutorial.Visible && hechasP + hechasT >= 6) _tutorial.Confirmar(0);
+                    if (hechasP >= _obraPlatObjetivo.Count && _silPlataforma != null)
+                    {
+                        Destroy(_silPlataforma); _silPlataforma = null;
+                        if (_audio != null) { _audio.pitch = 1.3f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.3f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    if (_obraTechoObjetivo.Count > 0 && hechasT >= _obraTechoObjetivo.Count && _silTecho != null)
+                    {
+                        Destroy(_silTecho); _silTecho = null;
+                        if (_audio != null) { _audio.pitch = 1.15f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.3f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    }
+                    if (hechasP >= _obraPlatObjetivo.Count && hechasT >= _obraTechoObjetivo.Count)
+                    {
+                        Debug.Log("[TenThousandYears] OBRA completa: plataforma " + hechasP + "/" + _obraPlatObjetivo.Count + ", techo " + hechasT + "/" + _obraTechoObjetivo.Count + ".");
+                        _obraFase = 2;
+                        _tBeat = 0f;
+                    }
+                    break;
+                }
+
+                case 2:
+                    if (_tBeat < 1.1f) return;
+                    _acomodoFase = 0;
+                    _slotAOcupado = _slotBOcupado = false;
+                    CambiarBeat(Beat.Acomodo);
+                    break;
+            }
+        }
+
+        /// <summary>15) EL ACOMODO (ACOMODA.): la mudanza se enseña y los dos reservorios se llevan a la plataforma — el taller queda con SU centro.</summary>
+        private void TickAcomodo()
+        {
+            switch (_acomodoFase)
+            {
+                case 0:
+                    if (_tBeat < 0.5f) return;
+                    DecirConTono("ACOMODA.", 0.95f, 2.6f);
+                    _deposito?.HabilitarMudanza();
+                    _silo?.HabilitarMudanza();
+                    _silSlotA = CrearSilueta("SiluetaSlotA", SlotAX0, SlotY0, SlotAX0 + 7, SlotY0 + 13);
+                    _silSlotB = CrearSilueta("SiluetaSlotB", SlotBX0, SlotY0, SlotBX0 + 7, SlotY0 + 13);
+                    _tutorial.Mostrar("la mudanza recoloca el taller",
+                        new TutorialContextual.Paso { Etiqueta = "V", Presionada = () => Mudanza.ModoActivo });
+                    _acomodoFase = 1;
+                    _tBeat = 0f;
+                    break;
+
+                case 1:
+                {
+                    LatirSilueta(_silSlotA, _slotAOcupado ? 0f : 0.11f);
+                    LatirSilueta(_silSlotB, _slotBOcupado ? 0f : 0.11f);
+                    if (!_fichaLlevalosMostrada)
+                    {
+                        if (Mudanza.ModoActivo && _tutorial.Visible) _tutorial.Confirmar(0);
+                        if (!_tutorial.Visible && Mudanza.ModoActivo)
+                        {
+                            _fichaLlevalosMostrada = true;
+                            _tutorial.Mostrar("llévalos a la plataforma",
+                                new TutorialContextual.Paso { Etiqueta = "CLIC IZQ", Presionada = () => Mouse.current != null && Mouse.current.leftButton.isPressed });
+                        }
+                    }
+                    // El IMÁN de los slots: un reservorio soltado a ±2 celdas
+                    // de un ancla libre ENCAJA solo (Reposicionar exacto) —
+                    // la mudanza enseña el gesto, el slot perdona el pulso.
+                    IntentarEncajar(_deposito);
+                    IntentarEncajar(_silo);
+                    bool aEn = HayReservorioEn(SlotAX0), bEn = HayReservorioEn(SlotBX0);
+                    if (aEn && !_slotAOcupado) { _slotAOcupado = true; BlipSlot(); }
+                    if (bEn && !_slotBOcupado) { _slotBOcupado = true; BlipSlot(); }
+                    _slotAOcupado = aEn; _slotBOcupado = bEn;
+                    if (aEn && bEn)
+                    {
+                        if (_fichaLlevalosMostrada && _tutorial.Visible) _tutorial.Confirmar(0);
+                        if (_silSlotA != null) { Destroy(_silSlotA); _silSlotA = null; }
+                        if (_silSlotB != null) { Destroy(_silSlotB); _silSlotB = null; }
+                        Debug.Log("[TenThousandYears] ACOMODO completo: los dos reservorios en la plataforma.");
+                        _acomodoFase = 2;
+                        _tBeat = 0f;
+                    }
+                    break;
+                }
+
+                case 2:
+                    if (_tBeat < 1.3f) return;
+                    _adiosPaso = 0;
+                    _tPaso = 0f;
+                    CambiarBeat(Beat.Adios);
+                    break;
+            }
+        }
+
+        private void BlipSlot()
+        {
+            if (_audio != null) { _audio.pitch = 1.25f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.35f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+        }
+
+        private bool HayReservorioEn(int slotX0)
+        {
+            bool En(DepositoDeAgua r) => r != null && r.X0 == slotX0 && r.Y0 == SlotY0;
+            return En(_deposito) || En(_silo);
+        }
+
+        private void IntentarEncajar(DepositoDeAgua r)
+        {
+            if (r == null || r.Y0 < SlotY0 - 1 || r.Y0 > SlotY0 + 1) return;
+            foreach (int slot in new[] { SlotAX0, SlotBX0 })
+            {
+                if (r.X0 == slot && r.Y0 == SlotY0) return;         // ya encajado.
+                if (Mathf.Abs(r.X0 - slot) > 2) continue;            // lejos de este slot.
+                if (HayReservorioEn(slot)) continue;                 // ocupado por el otro.
+                r.Reposicionar(slot, SlotY0);
+                return;
+            }
+        }
+
+        /// <summary>16) EL ADIÓS: ORDEN. repetido sobre TU obra → el VANO → la revelación del mapa → DIEZ MIL AÑOS. → la figura deja su atención en el tablón. El fuego queda.</summary>
+        private void TickAdios()
+        {
+            _tPaso += Time.deltaTime;
+            switch (_adiosPaso)
+            {
+                case 0: // quietud → la palabra, otra vez. El poder es un verbo, no un evento.
+                    if (_tPaso < 0.9f) return;
+                    DecirConTono(_g.vozOrden, 0.82f, 2.4f);
+                    _adiosPaso = 1; _tPaso = 0f;
+                    break;
+
+                case 1: // el pulso chico + la luz se CIERRA — esta vez sobre TU plataforma, no sobre él.
+                    if (_tPaso < 0.75f) return;
+                    _flashT = 0.18f; _flashDur = 0.18f; _flashAlfa = 0.22f; _flashHold = 0f;
+                    if (_audio != null) _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 0.8f * Audio.DirectorDeAudio.VolumenEfectos);
+                    _focoDeLuz = CentroPlataformaMundo();
+                    _radioCierreDesde = _radio;
+                    _adiosPaso = 2; _tPaso = 0f;
+                    break;
+
+                case 2: // el cierre (0.7 s) → EL VANO se abre en el muro oeste: el espacio crece.
+                {
+                    float tc = Mathf.Clamp01(_tPaso / 0.7f);
+                    _radioForzado = Mathf.Lerp(_radioCierreDesde, UiStyles.S(340f), tc * tc);
+                    if (tc < 1f) return;
+                    AbrirVano();
+                    SimRenderer.Sacudida = 0.25f;
+                    if (_audio != null) { _audio.pitch = 0.7f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.5f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+                    _adiosPaso = 3; _tPaso = 0f;
+                    break;
+                }
+
+                case 3: // LA APERTURA: la luz revienta hacia afuera y la cámara se planta en TU centro — la presentación del mapa.
+                    SimRenderer.FocoCinematico = CentroPlataformaMundo();
+                    _radioForzado = Mathf.Lerp(UiStyles.S(340f), UiStyles.S(2400f), Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_tPaso / 1.3f)));
+                    if (_tPaso < 2.6f) return;
+                    _adiosPaso = 4; _tPaso = 0f;
+                    break;
+
+                case 4: // la palabra final: EL TÍTULO.
+                    DecirConTono("DIEZ MIL AÑOS.", 0.75f, 3.4f);
+                    _adiosPaso = 5; _tPaso = 0f;
+                    break;
+
+                case 5: // el desvanecer: la figura se apaga y sus motas MIGRAN al tablón — la atención cambia de sitio, no desaparece.
+                {
+                    _maestroPresencia = 1f - Mathf.Clamp01(_tPaso / 3.2f);
+                    _motaAdiosTimer -= Time.deltaTime;
+                    if (_motaAdiosTimer <= 0f && _maestroPresencia > 0f)
+                    {
+                        _motaAdiosTimer = 0.14f;
+                        var desde = PosMaestro() + new Vector3(
+                            Mathf.Sin(_tPaso * 7.3f) * 0.22f,
+                            0.2f + Mathf.Abs(Mathf.Sin(_tPaso * 4.1f)) * 0.45f, 0f);
+                        SoltarMotaHacia(desde, TablonMundo(), 2);
+                    }
+                    if (_tPaso < 3.6f) return;
+                    _maestroPresencia = 0f;
+                    _adiosPaso = 6; _tPaso = 0f;
+                    break;
+                }
+
+                case 6: // el canal queda ABIERTO: el Trueque despierta y el mundo es tuyo.
+                    if (_tPaso < 0.7f) return;
+                    Trueque.Activar();
+                    _radioForzado = null;
+                    _focoDeLuz = null;
+                    SimRenderer.FocoCinematico = null;
+                    _radioObjetivo = UiStyles.S(_g.radioAmanecer);
+                    Debug.Log("[TenThousandYears] EL ADIÓS: el Maestro deja su atención en el tablón; el fuego queda; el prólogo TERMINÓ.");
+                    CambiarBeat(Beat.Fin);
+                    break;
+            }
+        }
+
+        /// <summary>(R93) EL VANO: el umbral tallado en el muro oeste — arco de 10 de fondo por 7 de alto; la piedra que sale vuela al Maestro (él la absorbe: mismo lenguaje del anillo).</summary>
+        private void AbrirVano()
+        {
+            float celdaM = SimRenderer.CellWorldSize;
+            int k = 0;
+            for (int x = VanoX0; x <= VanoX1; x++)
+                for (int y = VanoY0; y <= VanoY1; y++)
+                {
+                    // El arco: las esquinas altas se quedan de piedra.
+                    if (y == VanoY1 && (x <= VanoX0 + 1 || x >= VanoX1 - 1)) continue;
+                    if (y == VanoY1 - 1 && (x == VanoX0 || x == VanoX1)) continue;
+                    if (_sim.Grid.GetMat(x, y) == MaterialId.Empty) continue;
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                    SoltarMota(x, y, celdaM, tipo: 2, stagger: 0.018f * (k++));
+                }
+            Debug.Log("[TenThousandYears] EL VANO abierto (" + k + " celdas al Maestro): el espacio creció hacia el oeste.");
+        }
+
         // ------------------------------------------------------------------
         // El frasco volando de la mesa a la mano (el TOMA. hecho imagen).
         // ------------------------------------------------------------------
@@ -1845,7 +2277,7 @@ namespace Alkahest.Game
         {
             var go = new GameObject("FrascoEnVuelo");
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = MaquinariaSprites.VidrioRedoma();
+            sr.sprite = MaquinariaSprites.TarroDeMano(); // (R93, Cesar: "debería entregarle algo que se parezca más a lo que lleva en la mano") — el tarro redondo del aprendiz, no la redoma antigua del estante.
             sr.sortingOrder = Capas.CarryEnMano;
             float celda = SimRenderer.CellWorldSize;
             go.transform.localScale = Vector3.one * (1.4f * celda * 6f / Mathf.Max(1f, sr.sprite.rect.width));
@@ -2197,10 +2629,9 @@ namespace Alkahest.Game
             // se VE pasar, aunque no hubiera una sola celda que recoger.
             if (_motas.Count > 0 && !DayCycle.InputLocked) DibujarMotas(); // (R87) la materia recogida VIAJA a los reservorios.
             if (_beat == Beat.Reorden && !DayCycle.InputLocked)
-            {
                 DibujarHaloMaestro();         // (R90) el Maestro se hincha tragando.
-                DibujarFlash();               // el chasquido del pulso y el FLASHAZO del trago final.
-            }
+            if ((_beat == Beat.Reorden || _beat == Beat.Adios) && !DayCycle.InputLocked)
+                DibujarFlash();               // el chasquido del pulso — también en el ORDEN repetido del adiós (R93).
 
             // (R81) El aro de la boca del frasco: acompaña el paso de aspirar
             // (y la ficha-recuerdo). Calla ante TODO modo que apague el
@@ -2227,7 +2658,7 @@ namespace Alkahest.Game
             // texto hasta después que hable") También se oculta durante el
             // DESPERTAR entero: la primera vez que lees su nombre es cuando
             // su voz ya sonó (el VEN. entra junto con la lucecita de arriba).
-            if (_beat != Beat.Despertar && _beat != Beat.Fin && DistAlMaestro() >= 14f && !DayCycle.InputLocked)
+            if (_beat != Beat.Despertar && _beat != Beat.Fin && DistAlMaestro() >= 14f && !DayCycle.InputLocked && _maestroPresencia > 0.5f)
             {
                 var ancla = PosMaestro() + new Vector3(0f, 7f * celda, 0f); // sobre la capucha, siga donde siga el marcador.
                 float alfa = LuzEn(ancla) * 0.85f;
@@ -2261,6 +2692,36 @@ namespace Alkahest.Game
             // (R83) La placa del SILO durante su LLÉNALO. de barro.
             if (_beat == Beat.LlenarDeposito2 && !DayCycle.InputLocked)
                 DibujarPlacaRecipiente(_silo, _g.llenarDeposito2Meta, "sobra lo que NO es lodo — aspíralo");
+
+            // (R93) La placa de la OBRA: dónde y cuánto, el lenguaje del
+            // cuenco y los recipientes — una para la plataforma, otra para
+            // el techo herido si sigue pendiente.
+            if (_beat == Beat.Obra && _obraFase == 1 && !DayCycle.InputLocked)
+            {
+                int hp = ContarCubiertas(_obraPlatObjetivo);
+                if (hp < _obraPlatObjetivo.Count)
+                {
+                    var anclaP = CentroPlataformaMundo() + new Vector3(0f, -3f * celda, 0f);
+                    UiStyles.PlacaMundo(anclaP, "ALZA — " + hp + " / " + _obraPlatObjetivo.Count,
+                        new Color(0.95f, 0.88f, 0.68f, 0.85f), UiStyles.S(9f));
+                }
+                int ht = ContarCubiertas(_obraTechoObjetivo);
+                if (_obraTechoObjetivo.Count > 0 && ht < _obraTechoObjetivo.Count)
+                {
+                    var anclaT = new Vector3((ObraTechoX0 + ObraTechoX1 + 1) * 0.5f * celda, (ObraTechoY0 - 2) * celda, 0f);
+                    UiStyles.PlacaMundo(anclaT, "EL TECHO — " + ht + " / " + _obraTechoObjetivo.Count,
+                        new Color(0.95f, 0.88f, 0.68f, 0.85f), UiStyles.S(9f));
+                }
+            }
+
+            // (R93) La placa del ACOMODO: cuántos reservorios ya están en casa.
+            if (_beat == Beat.Acomodo && _acomodoFase == 1 && !DayCycle.InputLocked)
+            {
+                int n = (_slotAOcupado ? 1 : 0) + (_slotBOcupado ? 1 : 0);
+                var ancla = CentroPlataformaMundo() + new Vector3(0f, 9f * celda, 0f);
+                UiStyles.PlacaMundo(ancla, "AQUÍ — " + n + " / 2",
+                    new Color(0.95f, 0.88f, 0.68f, 0.85f), UiStyles.S(9f));
+            }
 
             if (!DayCycle.InputLocked) DibujarVoz();
         }

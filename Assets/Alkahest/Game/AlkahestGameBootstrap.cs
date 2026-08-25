@@ -1021,7 +1021,14 @@ namespace Alkahest.Game
             var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
             var orderSystem = SpawnOrderSystem(knowledge);
             SpawnJournalHud(knowledge);
-            SpawnOrdersHud(orderSystem);
+            // (R93, regla 15 — mandato de Cesar: "ya no nos sirven las
+            // misiones en la esquina superior derecha, al menos no que se
+            // abran con la letra O que parece un cero") El OrdersHud NO se
+            // spawnea en la Fundación: el prólogo guía con la voz del
+            // Maestro, las fichas del tutorial y las placas de mundo, y tras
+            // el adiós el canal es el TABLÓN del Trueque (físico, E de
+            // cerca). El panel de encargos clásico sigue vivo en los otros
+            // modos hasta su rediseño desde el lenguaje del prólogo.
             SpawnDirectorDeAudio(orderSystem, knowledge, flask, apprentice.transform);
 
             // (FIX ronda 62b, cazado por Opus-con-ojos EN PANTALLA: "el HUD no

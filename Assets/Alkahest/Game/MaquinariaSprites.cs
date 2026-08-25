@@ -971,6 +971,120 @@ namespace Alkahest.Game
             return s;
         }
 
+        /// <summary>
+        /// (R93, Cesar: "cuando le entrega su frasco al personaje le entrega
+        /// el diseño de la redoma antigua; debería entregarle algo que se
+        /// parezca más a lo que lleva en la mano") EL TARRO DE MANO: el
+        /// frasco que el TOMA. hace volar de la mesa a tu mano, dibujado con
+        /// la MISMA silueta que el tarro decorativo del aprendiz
+        /// (ApprenticeController.GenerateCarriedFlaskTexture: panza redonda
+        /// de vidrio, licor ámbar abajo, tapa de latón) — lo que recibes ES
+        /// lo que llevarás.
+        /// </summary>
+        public static Sprite TarroDeMano()
+        {
+            const string clave = "tarroDeMano";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(16), h = S(21);
+            var px = new Color32[w * h];
+
+            // La paleta del tarro del aprendiz (ColGlass/ColLiquid/ColBrass*).
+            Color32 vidrio = new Color32(0xBD, 0xD8, 0xE4, 150);
+            Color32 canto = new Color32(0xE4, 0xF2, 0xFB, 200);
+            Color32 licor = new Color32(0xE0, 0xA8, 0x4E, 235);
+            Color32 latonAlto = new Color32(0xD8, 0xB0, 0x6A, 255);
+            Color32 laton = new Color32(0xA8, 0x7E, 0x3A, 255);
+            Color32 latonBajo = new Color32(0x6E, 0x50, 0x24, 255);
+            Color32 reflejo = new Color32(255, 255, 255, 140);
+
+            float cx = w * 0.5f - 0.5f;
+            float cyPanza = S(8), rx = 6.4f * Escala, ry = 7.6f * Escala;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float nx = (x - cx) / rx, ny = (y - cyPanza) / ry;
+                    float d = nx * nx + ny * ny;
+                    if (d > 1f) continue;
+                    bool pared = d > 0.72f;
+                    // El licor ámbar reposa en el tercio bajo de la panza.
+                    px[y * w + x] = pared ? canto : (y <= S(6) ? licor : vidrio);
+                }
+            // La tapa de latón (tronco corto, más ancha arriba — como la del aprendiz).
+            for (int y = h - S(5); y < h; y++)
+            {
+                float t = (y - (h - S(5))) / (float)S(4);
+                int semi = Mathf.RoundToInt(Mathf.Lerp(3.2f * Escala, 2.2f * Escala, 1f - t));
+                for (int x = Mathf.RoundToInt(cx) - semi; x <= Mathf.RoundToInt(cx) + semi; x++)
+                {
+                    if (x < 0 || x >= w) continue;
+                    px[y * w + x] = y >= h - S(1) ? latonAlto : (y <= h - S(4) ? latonBajo : laton);
+                }
+            }
+            // El reflejo del vidrio, tercio izquierdo.
+            for (int y = S(4); y < S(12); y++)
+            {
+                int x = Mathf.RoundToInt(cx) - S(3);
+                if (x >= 0 && x < w && px[y * w + x].a > 0) px[y * w + x] = reflejo;
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsTarroDeMano");
+            _cache[clave] = s;
+            return s;
+        }
+
+        /// <summary>
+        /// (R93, la OBRA del prólogo) EL CINCEL como pieza de regalo: la
+        /// herramienta que el Maestro hace volar a tu mano antes del ALZA. —
+        /// hoja de acero gris con filo claro, virola de latón y mango oscuro.
+        /// Misma familia material que el resto del taller (latón + piedra).
+        /// </summary>
+        public static Sprite CincelHerramienta()
+        {
+            const string clave = "cincelHerr";
+            if (_cache.TryGetValue(clave, out var s)) return s;
+
+            int w = S(8), h = S(22);
+            var px = new Color32[w * h];
+
+            Color32 acero = new Color32(0x9A, 0xA4, 0xAA, 255);
+            Color32 aceroAlto = new Color32(0xC8, 0xD2, 0xD8, 255);
+            Color32 filo = new Color32(0xE8, 0xEF, 0xF4, 255);
+            Color32 laton = new Color32(0xA8, 0x7E, 0x3A, 255);
+            Color32 latonAlto = new Color32(0xD8, 0xB0, 0x6A, 255);
+            Color32 mango = new Color32(0x4A, 0x36, 0x22, 255);
+            Color32 mangoAlto = new Color32(0x6E, 0x50, 0x30, 255);
+
+            int cx = w / 2;
+            for (int y = 0; y < h; y++)
+            {
+                int semi;
+                Color32 c;
+                if (y < S(3)) { semi = S(2) - (S(3) - 1 - y) / 2; c = filo; }                    // la punta: cuña que se afila.
+                else if (y < S(11)) { semi = S(2); c = acero; }                                  // la hoja.
+                else if (y < S(14)) { semi = S(3); c = laton; }                                  // la virola.
+                else { semi = S(2); c = mango; }                                                // el mango.
+                for (int dx = -semi; dx <= semi; dx++)
+                {
+                    int x = cx + dx;
+                    if (x < 0 || x >= w) continue;
+                    Color32 final = c;
+                    if (dx == -semi)
+                    {
+                        // Luz de canto por el flanco izquierdo, por familia.
+                        if (y < S(11)) final = aceroAlto;
+                        else if (y < S(14)) final = latonAlto;
+                        else final = mangoAlto;
+                    }
+                    px[y * w + x] = final;
+                }
+            }
+
+            s = Crear(px, w, h, "TenThousandYearsCincelHerramienta");
+            _cache[clave] = s;
+            return s;
+        }
+
         /// <summary>Listón de madera del estante con anillos de latón: el mueble donde se apoyan las redomas.</summary>
         public static Sprite ListonEstante(int anchoPx)
         {

@@ -486,10 +486,20 @@ namespace Alkahest.Game
                         // la estructura limpia REEMPLAZA lo bruto (mandato:
                         // "no requiere haber excavado un hueco perfecto").
                         // Nunca sobre materia viva ni sobre obra del taller.
+                        // (R93, cazado en la repasada del final del prólogo)
+                        // LOS GASES NO BLOQUEAN LA MAMPOSTERÍA: el humo del
+                        // fogón se acumulaba justo en la grieta del techo que
+                        // la OBRA pide sellar, y "solo sobre vacías" volvía la
+                        // celda incolocable — el jugador no podía terminar su
+                        // techo por culpa de su propio fuego. Poner piedra
+                        // DESPLAZA un gas en el mundo real; humo y vapor
+                        // cuentan como hueco (agua/aceite/polvos siguen
+                        // protegidos: rellenar no se traga materia que pesa).
                         int mAqui = _sim.SampleMaterial(x, y);
+                        bool huecoLibre = mAqui == MaterialId.Empty || mAqui == MaterialId.Smoke || mAqui == MaterialId.Steam;
                         bool colocable = _rellenaPiso
-                            ? (mAqui == MaterialId.Empty || (mAqui == MaterialId.Stone && !SimLevelBuilder.EsObraDelTaller(x, y)))
-                            : mAqui == MaterialId.Empty;
+                            ? (huecoLibre || (mAqui == MaterialId.Stone && !SimLevelBuilder.EsObraDelTaller(x, y)))
+                            : huecoLibre;
                         if (!colocable) continue;
 
                         // PaintStable, no Paint/PaintCell (regla 22 de
