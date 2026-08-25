@@ -57,7 +57,13 @@ namespace Alkahest.Game
     /// </summary>
     public sealed class FundacionDirector : MonoBehaviour
     {
-        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Fin }
+        // (R83, capítulo 2 — FASE A) Recompensa2/LlenarDeposito2: el SILO del
+        // lodo emerge tras llenarse el tanque de agua, y llenarlo de barro es
+        // la nueva penúltima tarea. El REORDEN y LA OBRA (fases B/C del plan,
+        // docs/PLAN_PROLOGO_CAP2.md) se insertarán entre LlenarDeposito2 y
+        // Fin; hasta entonces el arco cierra igual que siempre (amanecer +
+        // Trueque) para que el juego nunca quede a medias entre fases.
+        private enum Beat { Despertar, Ven, Toma, Agua, EntregaAgua, Derrumbe, Lodo, EntregaLodo, Recompensa, LlenarDeposito, Recompensa2, LlenarDeposito2, Fin }
         private enum AguaSub { Ir, Aspirar, Verter, Libre }
 
         // ==================================================================
@@ -100,6 +106,7 @@ namespace Alkahest.Game
         private ApprenticeController _aprendizCtrl; // (R81) para CarryAnchor (la mano real).
         private TutorialContextual _tutorial;
         private DepositoDeAgua _deposito;
+        private DepositoDeAgua _silo; // (R83) el segundo recipiente: lodo.
         private AudioSource _audio;
 
         // (R81, revisión Opus #15) LA VERDAD DE INSTANCIA del frasco: un
@@ -209,6 +216,11 @@ namespace Alkahest.Game
             _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
             _deposito.Init(sim);
 
+            // (R83, capítulo 2) EL SILO DEL LODO: nace oculto como el tanque;
+            // lo despierta el beat Recompensa2 al completarse el agua.
+            _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
+            _silo.InitSilo(sim);
+
             _audio = gameObject.AddComponent<AudioSource>();
             _audio.playOnAwake = false;
             _audio.spatialBlend = 0f;
@@ -296,6 +308,8 @@ namespace Alkahest.Game
                 case Beat.EntregaLodo: TickEntrega(Lodo, _g.entregaLodoMeta, Beat.Recompensa); break;
                 case Beat.Recompensa: TickRecompensa(); break;
                 case Beat.LlenarDeposito: TickLlenarDeposito(); break;
+                case Beat.Recompensa2: TickRecompensa2(); break;
+                case Beat.LlenarDeposito2: TickLlenarDeposito2(); break;
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
             }
 
@@ -771,8 +785,60 @@ namespace Alkahest.Game
             if (_tBeat < _g.vozHoldSeg) return; // el LLÉNALO. se dice entero.
             if (_deposito.AguaDentro() >= _g.llenarDepositoMeta)
             {
+                // (R83, capítulo 2) El agua ya no cierra el arco: convoca al
+                // SILO. El amanecer y el Trueque esperan al final del lodo.
                 Decir(_g.vozBien);
-                _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el mundo respondió.
+                CambiarBeat(Beat.Recompensa2);
+            }
+        }
+
+        /// <summary>
+        /// (R83, FASE A) EL SILO EMERGE: misma cinemática que el tanque
+        /// (OBSERVA. + foco + sacudida + salida de la tierra), junto al
+        /// cráter — recolectas donde brota. Espera a `Asentado` (nace VACÍO:
+        /// no hay carga que esperar) con tope `emergerTopeSeg` (Opus A9), y
+        /// si el jugador estorba los muros a los 3 s, se lo dice.
+        /// </summary>
+        private void TickRecompensa2()
+        {
+            float celda = SimRenderer.CellWorldSize;
+            if (!_recompensa2Arrancada && _tBeat > 1.2f)
+            {
+                _recompensa2Arrancada = true;
+                Decir(_g.vozObserva);
+                SimRenderer.FocoCinematico = _silo != null ? _silo.CentroMundo()
+                    : new Vector3((SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f * celda,
+                        (SimLevelBuilder.FundacionSiloY0 + 5) * celda, 0f);
+                SimRenderer.Sacudida = 0.8f;
+                _silo?.Aparecer();
+            }
+
+            if (_recompensa2Arrancada && !_avisoApartateDado && _tBeat > 4.2f && _silo != null && !_silo.Asentado)
+            {
+                // La caja anti-emparedamiento del silo está esperando al
+                // jugador (el beat lo plantó ahí recogiendo lodo): decirlo.
+                _avisoApartateDado = true;
+                _flask.Avisar("apártate — algo sube");
+            }
+
+            if (_recompensa2Arrancada && ((_silo != null && _silo.Asentado) || _tBeat > _g.emergerTopeSeg))
+            {
+                SimRenderer.FocoCinematico = null;
+                CambiarBeat(Beat.LlenarDeposito2);
+                Decir(_g.vozLlenalo);
+            }
+        }
+        private bool _recompensa2Arrancada;
+        private bool _avisoApartateDado;
+
+        /// <summary>(R83) LLÉNALO. de barro: la gotera del cráter es la fuente; el silo, el destino. Al lograrlo cierra el arco (hasta que la FASE B inserte el REORDEN aquí).</summary>
+        private void TickLlenarDeposito2()
+        {
+            if (_tBeat < _g.vozHoldSeg) return;
+            if (_silo != null && _silo.DelDueno() >= _g.llenarDeposito2Meta)
+            {
+                Decir(_g.vozBien);
+                _radioObjetivo = UiStyles.S(_g.radioAmanecer); // amanece: el mundo respondió dos veces.
                 Trueque.Activar(); // el tablón despierta con el amanecer, como promete el bootstrap (regla 49).
                 CambiarBeat(Beat.Fin);
             }
@@ -894,7 +960,16 @@ namespace Alkahest.Game
             var grid = _sim.Grid;
             for (int x = SimLevelBuilder.FundacionCraterX0 - 3; x <= SimLevelBuilder.FundacionCraterX1 + 3; x++)
                 for (int y = SimLevelBuilder.FundacionY0 - 2; y <= SimLevelBuilder.FundacionY0 + 6; y++)
+                {
+                    // (R83, revisión Opus A4) EL LODO ATESORADO NO ES
+                    // MONTÍCULO: la caja de este conteo solapa el silo
+                    // (x389-391), y sin esta exclusión la histéresis
+                    // (lodoMonticuloTope/Resume) pausaba la gotera con el
+                    // cráter vacío en cuanto el jugador GUARDABA lodo —
+                    // softlock lento, silencioso (reglas 38/43).
+                    if (_silo != null && x >= _silo.X0 && x <= _silo.X1 && y >= _silo.Y0 && y <= _silo.Y1) continue;
                     if (grid.GetMat(x, y) == Lodo) n++;
+                }
             return n;
         }
 
@@ -1315,8 +1390,8 @@ namespace Alkahest.Game
             // viñeta como señal de rumbo. Sobre la capa oscura, así se ve
             // aunque el jugador esté lejos.
             if (_beat == Beat.Ven && !DayCycle.InputLocked) DibujarLucecitaMaestro();
-            // (R81, revisión Opus #3) ...y camino de la poza, la poza brilla igual.
-            if (_beat == Beat.Agua && _aguaSub == AguaSub.Ir && !DayCycle.InputLocked) DibujarLucecitaPoza();
+            // (R82) La lucecita de la poza se RETIRÓ — ver la nota junto a
+            // DibujarLucecitaMaestro (enseñaba una mecánica inexistente).
 
             // La chapa "EL MAESTRO" sobre la mesa (se oculta de cerca: de ahí
             // en adelante hablan la silueta y la voz).
@@ -1346,15 +1421,47 @@ namespace Alkahest.Game
 
             // (R74) La placa del DEPÓSITO durante el LLÉNALO. final: mismo
             // lenguaje que la del cuenco — dónde y cuánto, nada más.
+            // (R83, revisión Opus A5) ...salvo cuando la meta está BLOQUEADA
+            // por materia ajena: entonces la placa dice la verdad y la
+            // salida ("sobra X — aspíralo": la purga ES el frasco). Solo
+            // habla si la meta es matemáticamente imposible con el hueco que
+            // queda — gateado por guion (placaAvisaEstorbo) por si Cesar
+            // decide apagarlo también en esta forma mínima.
             if (_beat == Beat.LlenarDeposito && !DayCycle.InputLocked)
-            {
-                int n = Mathf.Min(_deposito.AguaDentro(), _g.llenarDepositoMeta);
-                var ancla = _deposito.CentroMundo() + new Vector3(0f, 7f * celda, 0f);
-                float alfa = Mathf.Max(LuzEn(ancla), 0.6f);
-                UiStyles.PlacaMundo(ancla, "LLÉNALO — " + n + " / " + _g.llenarDepositoMeta, new Color(0.95f, 0.88f, 0.68f, alfa), UiStyles.S(9f));
-            }
+                DibujarPlacaRecipiente(_deposito, _g.llenarDepositoMeta, "sobra lo que NO es agua — aspíralo");
+
+            // (R83) La placa del SILO durante su LLÉNALO. de barro.
+            if (_beat == Beat.LlenarDeposito2 && !DayCycle.InputLocked)
+                DibujarPlacaRecipiente(_silo, _g.llenarDeposito2Meta, "sobra lo que NO es lodo — aspíralo");
 
             if (!DayCycle.InputLocked) DibujarVoz();
+        }
+
+        /// <summary>
+        /// (R83) La placa de un recipiente con meta: "LLÉNALO — n/m", y la
+        /// línea honesta SOLO si la meta quedó imposible por estorbo (el
+        /// hueco libre + lo del dueño no alcanza la meta). Compartida por el
+        /// tanque y el silo — un solo lenguaje para toda la familia.
+        /// </summary>
+        private void DibujarPlacaRecipiente(DepositoDeAgua rec, int meta, string lineaEstorbo)
+        {
+            if (rec == null) return;
+            float celda = SimRenderer.CellWorldSize;
+            int n = Mathf.Min(rec.DelDueno(), meta);
+            var ancla = rec.CentroMundo() + new Vector3(0f, 7f * celda, 0f);
+            float alfa = Mathf.Max(LuzEn(ancla), 0.6f);
+            var color = new Color(0.95f, 0.88f, 0.68f, alfa);
+            UiStyles.PlacaMundo(ancla, "LLÉNALO — " + n + " / " + meta, color, UiStyles.S(9f));
+
+            if (_g.placaAvisaEstorbo)
+            {
+                int hueco = rec.Capacidad() - rec.Ocupado();
+                if (rec.DelDueno() + hueco < meta)
+                {
+                    var ancla2 = ancla + new Vector3(0f, -3.2f * celda, 0f);
+                    UiStyles.PlacaMundo(ancla2, lineaEstorbo, new Color(0.95f, 0.7f, 0.55f, alfa), UiStyles.S(8f));
+                }
+            }
         }
 
         /// <summary>
@@ -1539,27 +1646,31 @@ namespace Alkahest.Game
 
         private void DibujarLucecitaMaestro()
         {
+            // (R82, Cesar tras jugar) La lucecita es un DESTELLO, no una
+            // lámpara: nace con la palabra, vive ~lucecitaVidaSeg y se
+            // desvanece — después la chapa "EL MAESTRO" queda de referencia.
+            // (Y a mitad de intensidad: lucecitaAlfa 0.6→0.3 en el guion.)
+            float subida = Mathf.Clamp01(_tBeat / 0.25f);
+            float bajada = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.Clamp01((_tBeat - 0.3f) / Mathf.Max(0.2f, _g.lucecitaVidaSeg - 0.3f)));
+            float envolvente = subida * bajada;
+            if (envolvente <= 0.01f) return;
+
             float celda = SimRenderer.CellWorldSize;
             var brasas = new Vector3((SimLevelBuilder.FundacionBrasasX0 + 2.5f) * celda,
                 (SimLevelBuilder.FundacionBrasasY + 2) * celda, 0f);
-            DibujarLucecitaEn(brasas, Mathf.Clamp01(_tBeat / 1.2f)); // nace con la palabra, no de golpe.
+            DibujarLucecitaEn(brasas, envolvente);
         }
 
-        /// <summary>
-        /// (R81, revisión Opus #3) LA LUCECITA DE LA POZA: el mismo indicador
-        /// aprobado en R79 ("una luz diminuta desde esa área"), aplicado al
-        /// destino SIGUIENTE. Tras el TOMA., el jugador quedaba con la
-        /// herramienta nueva y CERO señal de a dónde ir (la poza está más
-        /// allá del óvalo de luz y el rumor de la cascada era inaudible —
-        /// medido). Durante Agua/Ir, la poza brilla como brilló el Maestro.
-        /// </summary>
-        private void DibujarLucecitaPoza()
-        {
-            float celda = SimRenderer.CellWorldSize;
-            var poza = new Vector3((SimLevelBuilder.FundacionCharcoX0 + SimLevelBuilder.FundacionCharcoX1 + 1) * 0.5f * celda,
-                (SimLevelBuilder.FundacionY0 + 2) * celda, 0f);
-            DibujarLucecitaEn(poza, Mathf.Clamp01(_tBeat / 1.2f));
-        }
+        // (R82, RETIRADA — regla 15) LA LUCECITA DE LA POZA (R81, revisión
+        // Opus #3) se quitó tras el playtest de Cesar: el vuelo del frasco
+        // ya lee como "atrapar una luz que agranda tu visión", y una SEGUNDA
+        // luz sobre el agua enseñaba una mecánica inexistente ("es un
+        // plataformero de atrapar luces"). El hueco TOMA.→AGUA. queda
+        // cubierto por el rumor de la cascada (audible desde el spawn tras
+        // el recalibrado R81) y por el radio de luz ya crecido. Si el
+        // playtest final muestra que falta guía, la alternativa NO es otra
+        // luz: es un reflejo/brillo EN el agua misma (materia, no premio).
 
         private void DibujarLucecitaEn(Vector3 mundo, float entrada01)
         {

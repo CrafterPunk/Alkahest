@@ -110,24 +110,13 @@ namespace Alkahest.Game
     /// estilo de Game/HintSystem.cs, no una restricción silenciosa de esta
     /// clase.
     ///
-    /// LIMITACIÓN DOCUMENTADA -- Game/Flask.cs es de SOLO LECTURA en este
-    /// encargo (lista de archivos del playtest 16): el diseño ideal es que
-    /// activar el Cincel apague a Flask "limpiamente", igual que Flask ya
-    /// apaga sus propios visuales de mundo en sus `return` tempranos (ver
-    /// Flask.OcultarVisualesDeMundo). Sin poder tocar Flask.Update() para
-    /// añadirle esa guarda, esta clase NO puede desactivar al frasco de
-    /// verdad: mientras <see cref="ModoActivo"/> está encendido, Flask sigue
-    /// leyendo clic izq./der. en paralelo. En la práctica el solapamiento es
-    /// estrecho, no total: el propio filtro de aspirado de Flask
-    /// (Flask.EsAspirable) YA excluye Piedra, así que apuntar el Cincel a
-    /// piedra sólida no dispara nada en Flask salvo que haya OTRO material
-    /// aspirable a &lt;= SuckRadius=4 celdas de ese punto (Flask.
-    /// BloquearMaterialBajoElCursor busca en anillos crecientes si lo que hay
-    /// bajo el cursor no es aspirable) -- p.ej. tallar justo al borde de una
-    /// cuba con agua SÍ puede hacer que el frasco empiece a aspirar esa agua a
-    /// la vez. Pendiente para una ronda futura con propiedad de Flask.cs:
-    /// añadir ahí `if (Cincel.ModoActivo) { OcultarVisualesDeMundo(); return; }`
-    /// justo con el resto de guardas de la regla 12 de CLAUDE.md.
+    /// (R83, revisión Opus B1 — regla 49) LA "LIMITACIÓN DOCUMENTADA" que
+    /// vivía aquí (Flask leyendo clics en paralelo al cincel) SE RETIRÓ:
+    /// estaba CADUCA desde hace rondas — Flask.Update ya cede limpiamente con
+    /// `if (Cincel.ModoActivo) { OcultarVisualesDeMundo(); return; }` (la
+    /// guarda exacta que este docblock pedía "para una ronda futura"). Un
+    /// docblock que documenta como pendiente lo que otro archivo ya arregló
+    /// es un bug de documentación: promesa sin línea, al revés.
     /// </summary>
     [RequireComponent(typeof(ApprenticeController))]
     public sealed class Cincel : MonoBehaviour
@@ -662,10 +651,15 @@ namespace Alkahest.Game
             Vector3 alcanceOrigen = transform.position;
             Vector3 delta = _cursorWorld - alcanceOrigen; delta.z = 0f;
             float distDesdeAprendiz = delta.magnitude;
-            bool fueraDeAlcance = distDesdeAprendiz > Flask.ReachWorld;
+            // (R83, revisión Opus B4 — BUG VIVO cazado de paso) El anillo
+            // usaba Flask.ReachWorld (6u = 60 celdas) mientras el cincel
+            // llega a ReachWorldCincel (2.2u = 22): pintaba "esto sale" hasta
+            // 60 celdas y el cincel contestaba "demasiado lejos" desde 22.
+            // El visual dice la verdad DE ESTA herramienta, no la del frasco.
+            bool fueraDeAlcance = distDesdeAprendiz > ReachWorldCincel;
 
             Vector3 destino = fueraDeAlcance
-                ? alcanceOrigen + delta.normalized * Flask.ReachWorld
+                ? alcanceOrigen + delta.normalized * ReachWorldCincel
                 : _cursorWorld;
 
             Vector3 tramo = destino - origen; tramo.z = 0f;

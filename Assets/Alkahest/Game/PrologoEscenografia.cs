@@ -42,6 +42,8 @@ namespace Alkahest.Game
         public Transform maestro;
         [Tooltip("Dónde emerge el depósito de agua (base del tanque; se ajusta a celdas al arrancar).")]
         public Transform deposito;
+        [Tooltip("(R83, capítulo 2) Dónde emerge el SILO del lodo (base-centro, huella 6x9). Sin marcador: el hueco medido entre poza y cráter (x386-391).")]
+        public Transform deposito2;
 
         [Header("Arte horneado (opcional — si falta, el código lo genera igual)")]
         [Tooltip("Prefab visual del tanque (hijos: 'Fondo' detrás de la sim, 'Marco' delante). Solo la piel: el agua y los muros siguen siendo sim.")]
@@ -82,6 +84,13 @@ namespace Alkahest.Game
                 float c = SimRenderer.CellWorldSize;
                 Gizmos.DrawWireCube(deposito.position + new Vector3(0f, 6.5f * c, 0f), new Vector3(8f * c, 13f * c, 0f));
                 UnityEditor.Handles.Label(deposito.position + Vector3.up * 1.6f, "DEPÓSITO");
+            }
+            if (deposito2 != null)
+            {
+                Gizmos.color = new Color(0.75f, 0.55f, 0.35f, 0.9f);
+                float c = SimRenderer.CellWorldSize;
+                Gizmos.DrawWireCube(deposito2.position + new Vector3(0f, 4.5f * c, 0f), new Vector3(6f * c, 9f * c, 0f));
+                UnityEditor.Handles.Label(deposito2.position + Vector3.up * 1.2f, "SILO (lodo)");
             }
 
             if (mostrarZonasDelPlano) DibujarZonasDelPlano();

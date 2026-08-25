@@ -4903,3 +4903,45 @@ ca_playtest80.cmd barre la ronda.
   errores. La constatación VISUAL final es el playtest de Cesar (el haz/aro son IMGUI: no
   salen en capturas de RenderTexture).
 · compile_fiel EXIT=0; editor 0 errores. ca_playtest81.cmd barre la ronda.
+
+## Ronda 83 — EL CAPÍTULO 2 DEL PRÓLOGO: el plan, los ojos de Opus y la FASE A (el silo)
+
+· Mandato grande de Cesar ("sorpréndeme"): extender el prólogo — segundo depósito a llenar
+  de BARRO; cinemática de REORDEN (fondo al castillo, estantería central piso-techo,
+  tanques reubicados con tubería que TOCA EL SUELO, refill lento); y el CINCEL rediseñado
+  (la gente lo activa y olvida — igual que la mudanza) con tutorial de construcción
+  (piso/techo/completar/destruir) justificado en el arco.
+· EL PLAN: docs/PLAN_PROLOGO_CAP2.md — arco, beats, cinemática, cincel SOSTENIDO
+  (quasimode: mantener C = cincel; soltar = frasco; precedentes Terraria smart-cursor-hold
+  / cuasimodos clásicos / herramienta-visible-en-mano), fases A/B1/B2/C.
+· LOS OJOS DE OPUS SOBRE EL PLAN (antes de una línea de código): 19 hallazgos, 7
+  BLOQUEA-PLAN — la geometría no cabía (el hueco poza|cráter mide 6 columnas, medido), la
+  estantería pisaba el fogón, el tubo "hasta el suelo" medía CERO con el tanque en el
+  suelo (→ bahías APILADAS: el mueble es la premisa del tubo), el tanque de lodo
+  estrangulaba su propia fuente (montículo), sellar la grieta no apagaba la gotera (pinta
+  en y200, el sello va en y201+), el capítulo duplicaba el softlock R78 §1 en simétrico, y
+  el barrido "borraba" el desastre del jugador (→ el barrido RECOGE: cada celda suelta
+  reaparece EN su tanque — ese es el mínimo del refill). Todo integrado al plan; dos bugs
+  vivos cazados de paso (el anillo del cincel mentía el alcance 60 vs 22; docblock caduco
+  de Cincel — regla 49).
+· FASE A CONSTRUIDA Y VERIFICADA EN VIVO:
+  - DepositoDeAgua PARAMETRIZADO (dueño/huella/carga/piel): Init clásico intacto +
+    InitSilo (lodo+barbotina, 6x9 en x386-391 — FundacionSilo* medidas, interior 36,
+    nace VACÍO). DelDueno/Ocupado/Capacidad/CentroMundo generalizados; AguaDentro queda
+    de alias histórico.
+  - Beats Recompensa2 (OBSERVA. + foco + sacudida + tope emergerTopeSeg + aviso
+    "apártate — algo sube" si el jugador empareda) y LlenarDeposito2 (meta
+    llenarDeposito2Meta=24; al lograrlo: BIEN. + amanecer + Trueque — puente temporal
+    hasta que la Fase B inserte el REORDEN).
+  - PLACA HONESTA MÍNIMA (Opus A5, compartida tanque/silo): "· sobra lo que NO es X —
+    aspíralo" SOLO cuando la meta es matemáticamente imposible por estorbo; gateada por
+    guion (placaAvisaEstorbo) — respeta el derecho de veto de Cesar sobre el contador.
+  - ContarLodoEnCrater EXCLUYE el rect del silo (el lodo atesorado no pausa la gotera).
+  - Marcador Deposito2 en la escenografía + gizmo + validador del menú 1.
+  - VERIFICADO: rect (386,140)-(391,148) cap 36 ✓; cadena LlenarDeposito→Recompensa2→
+    LlenarDeposito2 al llenar el agua ✓; muros 18/18 en la sim ✓; estorbo de 20 aguas →
+    metaBloqueada=True (la línea honesta se enciende) ✓; 24 de lodo → beat=Fin ✓;
+    montículo=3 con 24 de lodo dentro del silo (exclusión ✓); CAPTURA: el silo bajo con
+    su lodo visible junto al tanque alto del agua — la familia de recipientes se lee sola.
+· Siguiente: FASE B1 (hundir + barrido-que-recoge + fondo), B2 (estantería + bahías
+  apiladas + tubos + refill), C (cincel sostenido + la Obra). ca_playtest83.cmd barre.

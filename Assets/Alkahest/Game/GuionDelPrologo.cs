@@ -120,8 +120,10 @@ namespace Alkahest.Game
         public float luzBiasVen = 0.92f;
         [Tooltip("(R79) Radio en px escalados de la lucecita del área del Maestro durante el VEN. (el indicador de 'algo ocurre allá').")]
         public float lucecitaRadioPx = 52f;
-        [Tooltip("(R79) Alfa máxima de la lucecita (parpadea con el fuego).")]
-        public float lucecitaAlfa = 0.6f;
+        [Tooltip("(R79; recalibrada R82 por Cesar: '50% menos intensa') Alfa máxima de la lucecita (parpadea con el fuego).")]
+        public float lucecitaAlfa = 0.3f;
+        [Tooltip("(R82, Cesar) Vida de la lucecita del VEN.: aparece con la palabra y se DESVANECE en ~este tiempo — después, la chapa EL MAESTRO queda de referencia.")]
+        public float lucecitaVidaSeg = 1.0f;
 
         [Header("La cascada")]
         public float manantialSeg = 0.14f;
@@ -141,6 +143,14 @@ namespace Alkahest.Game
         [Header("El depósito")]
         public float depositoEmergerSeg = 2.4f;
         public int depositoCargaInicial = 14;
+
+        [Header("El capítulo 2 (R83): el silo del lodo")]
+        [Tooltip("Meta de lodo (lodo + barbotina) del LLÉNALO. del silo. Interior del silo = 36 celdas: dejar aire.")]
+        public int llenarDeposito2Meta = 24;
+        [Tooltip("Tope de espera de una emergencia antes de seguir el arco aunque el jugador no se aparte (revisión Opus A9).")]
+        public float emergerTopeSeg = 12f;
+        [Tooltip("La placa dice la verdad cuando la meta está BLOQUEADA por materia ajena ('· sobra AGUA — aspírala'). Apagable si estorba (decisión pendiente de Cesar sobre el contador honesto — aquí es mínimo: solo habla si la meta es imposible).")]
+        public bool placaAvisaEstorbo = true;
 
         [Header("UI (proporciones de pantalla)")]
         [Tooltip("Altura del centro de la voz del Maestro, como fracción del alto de pantalla desde arriba.")]

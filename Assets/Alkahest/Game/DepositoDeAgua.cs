@@ -51,55 +51,123 @@ namespace Alkahest.Game
         private int _polvoIdx;
 
         private static readonly byte Lodo = MaterialId.MatDe(1, EstadoMateria.Polvo); // los terrones que suelta al emerger.
+        private static readonly byte Barbotina = MaterialId.MatDe(1, EstadoMateria.Solucion); // el lodo MOJADO cuenta como lodo (lección del cuenco, revisión Opus 73 #2).
+
+        // (R83, FASE A del capítulo 2) EL RECIPIENTE SE PARAMETRIZA: la misma
+        // clase sirve al TANQUE de agua (8x13, prefab de piel, carga inicial
+        // del guion) y al SILO de lodo (6x9, boca para lo que se AMONTONA,
+        // nace VACÍO: el mundo no regala lo que te pide — plan cap2 / Opus
+        // A1+C1). El material dueño deja de estar horneado en los conteos.
+        private byte _matDueno = MaterialId.Water;
+        private byte _matDuenoAlt = MaterialId.Empty; // forma alternativa que cuenta como dueño (barbotina para el silo).
+        private int _cargaInicial = -1;               // -1 = la del guion (tanque de agua); 0 = nace vacío (silo).
+        private bool _esSilo;
 
         /// <summary>Ya asentado (muros en la sim, carga inicial en marcha o hecha).</summary>
         public bool Asentado => _fase == Fase.CargaInicial || _fase == Fase.Listo;
         /// <summary>La carga inicial terminó: el tanque espera a que el jugador lo LLENE (no se repone solo — R74).</summary>
         public bool CargaLista => _fase == Fase.Listo;
 
-        /// <summary>Agua REAL dentro del vidrio (el director la cuenta para el LLÉNALO. final).</summary>
-        public int AguaDentro()
+        // (R83, Opus A4) El rect real, para que el director EXCLUYA el silo
+        // del conteo de montículo del cráter: el lodo atesorado no pausa la
+        // gotera.
+        public int X0 => _x0; public int X1 => _x1; public int Y0 => _y0; public int Y1 => _y1;
+
+        /// <summary>Celdas del MATERIAL DUEÑO (más su forma alterna — barbotina en el silo) dentro del vidrio.</summary>
+        public int DelDueno()
         {
             if (_sim == null || _sim.Grid == null || _fase == Fase.Oculto || _fase == Fase.Emergiendo) return 0;
             int n = 0;
             var grid = _sim.Grid;
             for (int x = _x0 + 1; x < _x1; x++)
                 for (int y = _y0; y <= _y1; y++)
-                    if (grid.GetMat(x, y) == MaterialId.Water) n++;
+                {
+                    byte m = grid.GetMat(x, y);
+                    if (m == _matDueno || (m != MaterialId.Empty && m == _matDuenoAlt)) n++;
+                }
             return n;
         }
-        /// <summary>Centro del tanque en el mundo (ancla de la placa del director).</summary>
+
+        /// <summary>Alias histórico (el tanque de agua nació contando solo agua). Consumidores viejos intactos.</summary>
+        public int AguaDentro() => DelDueno();
+
+        /// <summary>Celdas NO vacías dentro del vidrio (dueño + estorbo). Con Capacidad(), da la placa honesta del guion (Opus A5).</summary>
+        public int Ocupado()
+        {
+            if (_sim == null || _sim.Grid == null || _fase == Fase.Oculto || _fase == Fase.Emergiendo) return 0;
+            int n = 0;
+            var grid = _sim.Grid;
+            for (int x = _x0 + 1; x < _x1; x++)
+                for (int y = _y0; y <= _y1; y++)
+                    if (grid.GetMat(x, y) != MaterialId.Empty) n++;
+            return n;
+        }
+
+        /// <summary>Celdas del interior del vidrio.</summary>
+        public int Capacidad() => (_x1 - _x0 - 1) * (_y1 - _y0 + 1);
+
+        /// <summary>Centro del recipiente en el mundo (ancla de la placa del director) — general para cualquier alto.</summary>
         public Vector3 CentroMundo()
         {
             float c = SimRenderer.CellWorldSize;
-            return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + 8) * c, 0f);
+            return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + (_y1 - _y0 + 1) * 0.5f + 2f) * c, 0f);
         }
 
+        /// <summary>El tanque de agua clásico (marcador `deposito`, huella 8x13, piel de prefab, carga inicial del guion).</summary>
         public void Init(AlkahestSim sim)
         {
-            _sim = sim;
-
-            // (RONDA 75) AUTORIDAD DE POSICIÓN: el marcador "Deposito" de la
-            // escenografía, ajustado a la grilla de celdas (el marcador es la
-            // BASE-CENTRO del tanque). Sin marcador: el sitio histórico del
-            // plano. La huella (8x13, interior 6 de ancho) es fija: la piel
-            // puede moverse, el vidrio no cambia de capacidad desde la escena.
             var escena = PrologoEscenografia.Buscar();
+            InitInterno(sim, escena, escena != null ? escena.deposito : null,
+                MaterialId.Water, MaterialId.Empty, cargaInicial: -1, esSilo: false,
+                anchoHuella: 8, altoHuella: 13,
+                fallbackX0: SimLevelBuilder.FundacionDepositoX0, fallbackY0: SimLevelBuilder.FundacionDepositoY0);
+        }
+
+        /// <summary>
+        /// (R83) EL SILO DEL LODO: huella 6x9 en el hueco medido entre la poza
+        /// y el cráter (x386-391 — 6 columnas exactas, Opus A1), dueño
+        /// lodo+barbotina, SIN carga inicial y SIN piel de prefab (la piel
+        /// horneada es la del tanque de agua; el silo viste el fallback
+        /// procedural a su medida hasta su sprite propio en la Fase B).
+        /// </summary>
+        public void InitSilo(AlkahestSim sim)
+        {
+            var escena = PrologoEscenografia.Buscar();
+            InitInterno(sim, escena, escena != null ? escena.deposito2 : null,
+                Lodo, Barbotina, cargaInicial: 0, esSilo: true,
+                anchoHuella: 6, altoHuella: 9,
+                fallbackX0: SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0);
+        }
+
+        private void InitInterno(AlkahestSim sim, PrologoEscenografia escena, Transform marcador,
+            byte matDueno, byte matDuenoAlt, int cargaInicial, bool esSilo,
+            int anchoHuella, int altoHuella, int fallbackX0, int fallbackY0)
+        {
+            _sim = sim;
+            _matDueno = matDueno;
+            _matDuenoAlt = matDuenoAlt;
+            _cargaInicial = cargaInicial;
+            _esSilo = esSilo;
+
+            // (RONDA 75) AUTORIDAD DE POSICIÓN: el marcador de la escenografía
+            // (base-centro), ajustado a celdas. Sin marcador: el sitio del
+            // plano. La HUELLA es fija por tipo: la piel puede moverse, el
+            // vidrio no cambia de capacidad desde la escena.
             _g = PrologoEscenografia.GuionEfectivo(escena);
-            if (escena != null && escena.deposito != null)
+            if (marcador != null)
             {
                 float celdaM = SimRenderer.CellWorldSize;
-                int cx0 = Mathf.RoundToInt(escena.deposito.position.x / celdaM);
-                int cy0 = Mathf.RoundToInt(escena.deposito.position.y / celdaM);
-                _x0 = cx0 - 4; _x1 = cx0 + 3;
-                _y0 = cy0; _y1 = cy0 + (SimLevelBuilder.FundacionDepositoY1 - SimLevelBuilder.FundacionDepositoY0);
+                int cx0 = Mathf.RoundToInt(marcador.position.x / celdaM);
+                int cy0 = Mathf.RoundToInt(marcador.position.y / celdaM);
+                _x0 = cx0 - anchoHuella / 2; _x1 = _x0 + anchoHuella - 1;
+                _y0 = cy0; _y1 = cy0 + altoHuella - 1;
             }
             else
             {
-                _x0 = SimLevelBuilder.FundacionDepositoX0;
-                _x1 = SimLevelBuilder.FundacionDepositoX1;
-                _y0 = SimLevelBuilder.FundacionDepositoY0;
-                _y1 = SimLevelBuilder.FundacionDepositoY1;
+                _x0 = fallbackX0;
+                _x1 = fallbackX0 + anchoHuella - 1;
+                _y0 = fallbackY0;
+                _y1 = fallbackY0 + altoHuella - 1;
             }
 
             float c = SimRenderer.CellWorldSize;
@@ -122,7 +190,7 @@ namespace Alkahest.Game
             // "Marco" (el armazón con vidrio; el director le baja el orden
             // mientras emerge y se lo sube al asentarse). Sin prefab, las
             // capas procedurales de siempre (fallback reversible).
-            if (escena != null && escena.depositoVisualPrefab != null)
+            if (!_esSilo && escena != null && escena.depositoVisualPrefab != null)
             {
                 var piel = Instantiate(escena.depositoVisualPrefab, _cuerpo);
                 piel.name = "PielPrefab";
@@ -257,11 +325,16 @@ namespace Alkahest.Game
         /// </summary>
         private void TickCargaInicial(float dt)
         {
+            // (R83) La meta de la carga es por-recipiente: el silo nace VACÍO
+            // (_cargaInicial=0 → pasa a Listo al primer tick), el tanque usa
+            // la del guion.
+            int meta = _cargaInicial >= 0 ? _cargaInicial : _g.depositoCargaInicial;
+
             _rellenoTimer -= dt;
             if (_rellenoTimer > 0f) return;
             _rellenoTimer = CargaInicialSeg;
 
-            if (AguaDentro() >= _g.depositoCargaInicial)
+            if (DelDueno() >= meta)
             {
                 _fase = Fase.Listo;
                 return;
@@ -269,7 +342,7 @@ namespace Alkahest.Game
 
             // Alterna las dos columnas centrales: el chorro serpentea un pelo.
             int cx = ((_x0 + _x1) / 2) + (_polvoIdx++ & 1);
-            _sim.PaintStable(cx, _y1, 0, MaterialId.Water);
+            _sim.PaintStable(cx, _y1, 0, _matDueno);
         }
     }
 }

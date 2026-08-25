@@ -2950,6 +2950,13 @@ namespace Alkahest.Sim
         // conceptualmente al grifo antiguo como fuente básica de agua.
         public const int FundacionDepositoX0 = 414, FundacionDepositoX1 = 421; // muros en X0/X1, interior 415-420.
         public const int FundacionDepositoY0 = 140, FundacionDepositoY1 = 152; // muros y140..152; boca abierta en y153.
+        // (R83, capítulo 2 — revisión Opus A1, MEDIDO) EL SILO DEL LODO: el
+        // hueco real entre la poza (x372-385) y el cráter (x392-400) es de 6
+        // columnas exactas — x386..391. Huella 6x9 (interior x387-390, 4 de
+        // ancho: silueta baja y ancha de "esto se AMONTONA", frente al tanque
+        // alto del agua), muros en X0/X1, base en el suelo de siempre.
+        public const int FundacionSiloX0 = 386, FundacionSiloX1 = 391;
+        public const int FundacionSiloY0 = 140, FundacionSiloY1 = 148;
         // (RONDA 64, afinado con capturas) El spawn entra al resplandor del
         // fuego: antes (x352, y luego x388) el aprendiz nacía FUERA del óvalo
         // de luz o en su anillo oscuro -- invisible para sí mismo. Ahora

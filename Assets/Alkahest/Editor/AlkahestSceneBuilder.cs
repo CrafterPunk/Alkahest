@@ -167,6 +167,17 @@ namespace Alkahest.EditorTools
                 esc.deposito = d;
                 n++;
             }
+            if (esc.deposito2 == null)
+            {
+                // (R83) El silo del lodo, en el hueco medido poza|cráter.
+                var d2 = new GameObject("Deposito2_Silo").transform;
+                d2.SetParent(esc.transform, false);
+                d2.position = new Vector3(
+                    (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionSiloX1 + 1) * 0.5f * c,
+                    SimLevelBuilder.FundacionSiloY0 * c, 0f);
+                esc.deposito2 = d2;
+                n++;
+            }
             if (esc.guion == null)
             {
                 var guion = AssetDatabase.LoadAssetAtPath<GuionDelPrologo>("Assets/Alkahest/Arte/Prologo/GuionDelPrologo.asset");
