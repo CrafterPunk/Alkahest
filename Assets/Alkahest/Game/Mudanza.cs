@@ -496,6 +496,14 @@ namespace Alkahest.Game
         // -----------------------------------------------------------------
         private void SpawnBaldasYAnclajesSiCorresponde()
         {
+            // (R102, Cesar con captura: "elimina esos residuos que se ven de
+            // la roca madre a la izquierda") LA FUNDACIÓN NO TIENE ESTANTERÍA:
+            // baldas/anclajes/pilas son geometría del taller de Semilla Cero
+            // (BaldaPlanes y compañía miden ESE mundo) — en el prólogo sus
+            // coordenadas caen sobre la roca madre del oeste y los herrajes
+            // de latón flotaban ahí como residuos. El mueble entra al juego
+            // cuando entra su mundo.
+            if (AlkahestGameBootstrap.ModoFundacion) return;
             if (SimSync.EnEscena && !SimSync.EsServidor) return; // multi: solo el anfitrión talla. Clásico (EnEscena=false): siempre entra.
             Balda.SpawnTodas(_sim);
             Anclaje.SpawnDeposito(_sim, transform);

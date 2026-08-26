@@ -2017,7 +2017,15 @@ namespace Alkahest.Game
         private static readonly int[] PlintoX1 = { 396, 395, 394 };
         private const int ObraTechoX0 = 388, ObraTechoX1 = 392; // la grieta del derrumbe (DerrumbeX±2) en la bóveda.
         private const int ObraTechoY0 = 201, ObraTechoY1 = 202;
-        private const int SlotAX0 = 379, SlotBX0 = 387;        // anclas exactas (8+8 = los 16 justos de la hilada alta: encajan al ras).
+        // (R93: 379/387, muro a muro — los 16 justos de la hilada alta.
+        // R102, Cesar: "ambos contornos se invaden, deberían a lo mucho
+        // colindar, idealmente equidistantes a los dos reservorios") Los
+        // slots se separan a 10: las huellas (378-385 / 388-395) dejan 2
+        // celdas de aire entre tanques, los rects VISUALES (377-387 /
+        // 387-397) COLINDAN exactamente en 387 — cero invasión — y el par
+        // queda centrado en el plinto (386.5). Cada huella cuelga 1 celda
+        // sobre el escalón medio del zigurat (7/8 de apoyo: pasa el 70%).
+        private const int SlotAX0 = 378, SlotBX0 = 388;
         private const int SlotY0 = 143;                        // sobre la cara del plinto (top y142).
 
         private int _obraFase;                 // 0=regalo del cincel, 1=plano de la herida, 2=construyendo, 3=perfilando el plinto, 4=respiro.
@@ -2044,7 +2052,6 @@ namespace Alkahest.Game
         // (R94) Luces PERSISTENTES: el mañana frío del vano y el ámbar del
         // tablón sobreviven al prólogo entero (Beat.Fin incluido).
         private bool _vanoAbierto;
-        private float _vanoLuzT;
         private bool _tablonVivo;
         private float _tablonLuzT;
         private float _placaTablonHasta;
@@ -2077,24 +2084,19 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (R100 → R101, Cesar: "las siluetas no tienen la misma dimensión ni
-        /// forma de los contornos de los contenedores") El marcador de cada
-        /// slot LIBRE es ahora LA MISMA L del contorno del contenedor en su
-        /// POSE FINAL: rect visual completo (10 celdas de vuelo a vuelo, domo
-        /// incluido) + el saliente del tubo, ESPEJADO como quedará al
-        /// encajar los dos (A tubo a la izquierda, B a la derecha — dos
-        /// sujetalibros). El trazo sigue QUIETO (el destino espera, no
-        /// desfila) en papel cálido. Los cuerpos se cruzan 2 columnas al
-        /// centro — como se cruzarán los sprites reales: verdad, no error.
-        /// (R101.b) Y por dentro, UN RELLENO LATIENTE en el tono de las
-        /// fichas del tutorial WASD (mismo orden de menú), dibujado en IMGUI
-        /// — el espacio GAMMA, donde un alfa chico ES chico (la lección de la
-        /// losa gris del velo R100, que vivía en el mundo lineal). El relleno
-        /// se parte en el eje compartido (387) para que el cruce no sume
-        /// doble brillo.
+        /// (R100 → R101 → R102) El marcador de cada slot LIBRE. Historia
+        /// corta de tres veredictos: la huella a secas "no tiene la forma
+        /// del contorno" (R101) → la L exacta con tubo "se invade con la
+        /// otra" (R102) → EL CUERPO del contenedor (rect visual 10x19, domo
+        /// incluido, sin tubo), con los slots separados a 10: los marcos
+        /// COLINDAN exacto, el par centra el plinto, y el tubo lo decreta el
+        /// imán al encajar. El trazo sigue QUIETO (el destino espera, no
+        /// desfila) en papel cálido, y por dentro UN RELLENO LATIENTE al
+        /// tono de las fichas del tutorial WASD (mismo orden de menú), en
+        /// IMGUI — el espacio GAMMA, donde un alfa chico ES chico (la
+        /// lección de la losa gris del velo R100, que vivía en el mundo
+        /// lineal).
         /// </summary>
-        private static readonly List<Vector2> _poliSlot = new List<Vector2>(8);
-
         private void DibujarMarcosDeSlots()
         {
             if (_silSlotA == null && _silSlotB == null) return; // solo viven durante el Acomodo con slots libres.
@@ -2102,38 +2104,25 @@ namespace Alkahest.Game
             var papel = new Color(0.95f, 0.93f, 0.86f);
             var ficha = new Color(0.93f, 0.93f, 0.90f); // TutorialContextual.FichaFondo literal: el tono del orden WASD.
             float lat = 0.050f + 0.028f * Mathf.Sin(Time.time * 2.4f); // late suave; IMGUI=gamma: esto SÍ es sutil.
-            // La geometría del contenedor, calcada de IMovibleSilueta:
-            // span visual 10, alto 19, tapón del tubo en +16, saliente 2.
-            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES.
-            int eje = SlotBX0;                              // 387: la costura entre huellas.
-            float piso = SlotY0 * c, tapon = (SlotY0 + 16) * c, domo = (SlotY0 + 19) * c;
+            // (R101: la L con tubo; R102, Cesar: "se invaden, deberían a lo
+            // mucho colindar") Los marcos son ahora EL CUERPO del contenedor
+            // (rect visual 10x19, domo incluido, SIN el saliente del tubo):
+            // con los slots a 10, colindan EXACTO en 387 — cero invasión — y
+            // el par queda centrado en el plinto, con aire hacia el silo.
+            // El tubo no se dibuja en el marco: su flanco lo decreta el imán
+            // al encajar (IntentarEncajar) y se ve en el contenedor real.
+            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES (377 / 387).
+            float piso = SlotY0 * c, domo = (SlotY0 + 19) * c;
 
             if (_silSlotA != null && !_slotAOcupado)
             {
-                // Relleno (cuerpo hasta la costura + tubo), luego la L.
-                RellenarMundo((aA) * c, piso, eje * c, domo, ficha, lat);
-                RellenarMundo((aA - 2) * c, piso, aA * c, tapon, ficha, lat);
-                _poliSlot.Clear();
-                _poliSlot.Add(new Vector2((aA - 2) * c, piso));
-                _poliSlot.Add(new Vector2((aA - 2) * c, tapon));
-                _poliSlot.Add(new Vector2(aA * c, tapon));
-                _poliSlot.Add(new Vector2(aA * c, domo));
-                _poliSlot.Add(new Vector2((aA + 10) * c, domo));
-                _poliSlot.Add(new Vector2((aA + 10) * c, piso));
-                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
+                RellenarMundo(aA * c, piso, (aA + 10) * c, domo, ficha, lat);
+                Mudanza.MarcarRectMundo(aA * c, piso, (aA + 10) * c, domo, papel, 0.60f);
             }
             if (_silSlotB != null && !_slotBOcupado)
             {
-                RellenarMundo(eje * c, piso, (aB + 10) * c, domo, ficha, lat);
-                RellenarMundo((aB + 10) * c, piso, (aB + 12) * c, tapon, ficha, lat);
-                _poliSlot.Clear();
-                _poliSlot.Add(new Vector2(aB * c, piso));
-                _poliSlot.Add(new Vector2(aB * c, domo));
-                _poliSlot.Add(new Vector2((aB + 10) * c, domo));
-                _poliSlot.Add(new Vector2((aB + 10) * c, tapon));
-                _poliSlot.Add(new Vector2((aB + 12) * c, tapon));
-                _poliSlot.Add(new Vector2((aB + 12) * c, piso));
-                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
+                RellenarMundo(aB * c, piso, (aB + 10) * c, domo, ficha, lat);
+                Mudanza.MarcarRectMundo(aB * c, piso, (aB + 10) * c, domo, papel, 0.60f);
             }
         }
 
@@ -2290,7 +2279,7 @@ namespace Alkahest.Game
                     // Aterrizó: la palabra + EL PLANO DE LA HERIDA (1.6 s):
                     // la cámara sube a la grieta — el jugador la VE antes de
                     // que se la pidan (Opus: nunca estuvo en pantalla).
-                    DecirConTono("ALZA.", 0.95f, 2.4f);
+                    DecirConTono("REPARA.", 0.95f, 2.4f); // (R102, Cesar: "Alza no se entiende") El verbo de la Obra entera: el derrumbe se repara — plataforma y techo.
                     SimRenderer.FocoCinematico = new Vector3(390f * celda, 196f * celda, 0f);
                     _radioForzado = UiStyles.S(340f);
                     if (_audio != null) { _audio.pitch = 1.10f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.30f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
@@ -2627,6 +2616,12 @@ namespace Alkahest.Game
                 if (r.X0 == slot && r.Y0 == SlotY0) return;         // ya encajado.
                 if (Mathf.Abs(r.X0 - slot) > 2) continue;            // lejos de este slot.
                 if (HayReservorioEn(slot)) continue;                 // ocupado por el otro.
+                // (R102) EL IMÁN DECRETA LA POSE: con las huellas a 10, el
+                // hueco central (2 celdas) no le alcanza a ningún tubo — el
+                // slot A vive espejado a la izquierda y el B a la derecha
+                // (los sujetalibros). El jugador puede re-espejar con L
+                // después; el aire seguirá mandando.
+                ((IMovibleEspejable)r).EspejoPendiente = slot == SlotAX0;
                 r.Reposicionar(slot, SlotY0);
                 return;
             }
@@ -2727,7 +2722,7 @@ namespace Alkahest.Game
                     break;
 
                 case 5: // LA LUZ DEL OTRO LADO (1.60 s): los resplandores fríos entran. Sin sonido, sin palabra. Pura contemplación.
-                    if (!_vanoAbierto) { _vanoAbierto = true; _vanoLuzT = 0f; }
+                    if (!_vanoAbierto) _vanoAbierto = true; // (R102) la luz fría que arrancaba aquí se retiró — ver DibujarLucesPersistentes.
                     if (_tPaso < 1.60f) return;
                     _adiosPaso = 6; _tPaso = 0f;
                     break;
@@ -3351,7 +3346,7 @@ namespace Alkahest.Game
                 if (hp < _obraPlatObjetivo.Count)
                 {
                     var anclaP = CentroPlataformaMundo() + new Vector3(0f, -2f * celda, 0f);
-                    UiStyles.PlacaMundo(anclaP, "ALZA — " + hp + " / " + _obraPlatObjetivo.Count,
+                    UiStyles.PlacaMundo(anclaP, "REPARA — " + hp + " / " + _obraPlatObjetivo.Count,
                         new Color(0.95f, 0.88f, 0.68f, 0.85f), UiStyles.S(9f));
                 }
                 int ht = ContarCubiertas(_obraTechoObjetivo);
@@ -3689,16 +3684,15 @@ namespace Alkahest.Game
         private void DibujarLucesPersistentes()
         {
             float celda = SimRenderer.CellWorldSize;
-            if (_vanoAbierto)
-            {
-                _vanoLuzT += Time.deltaTime;
-                float entrada = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_vanoLuzT / 0.9f));
-                float factor = (_beat == Beat.Adios && _adiosPaso >= 6 && _adiosPaso <= 7) ? 0.45f : 1f;
-                float respira = 1f + 0.12f * Mathf.Sin(Time.time * 1.9f); // 0.3 Hz.
-                var frio = new Color(0.80f, 0.87f, 1.00f);
-                DibujarResplandor(new Vector3(303.5f * celda, 176f * celda, 0f), UiStyles.S(150f), frio, 0.42f * entrada * factor * respira);
-                DibujarResplandor(new Vector3(309f * celda, 150f * celda, 0f), UiStyles.S(90f), frio, 0.22f * entrada * factor);
-            }
+            // (R102, regla 15) LA LUZ FRÍA DEL VANO SE RETIRÓ por mandato de
+            // Cesar: "las luces perennes esas al extremo izquierdo, quítalas
+            // sí o sí, haremos otra cosa ahí". Era la promesa del mañana de
+            // la R94 (fondo frío 303.5,176 S(150) 0.42 respirando + derrame
+            // 309,150 S(90) 0.22, ambos al 45% durante el negro del título).
+            // El paso 6 del Adiós (la pausa de 1.6 s tras abrirse el arco)
+            // queda como respiro sobre el vano en sombra — el hueco mismo,
+            // recortado contra la roca, sigue contando la salida. Cuando
+            // Cesar decida qué vive ahí, esta función es el sitio.
             if (_tablonVivo)
             {
                 _tablonLuzT += Time.deltaTime;

@@ -5732,3 +5732,42 @@ ca_playtest84.cmd barre la ronda.
   losa, 0 errores de consola. El check sonoro se estrena con Cesar (audio no
   capturable).
 · ca_playtest101.cmd barre la ronda.
+
+## Ronda 102 — LA LIMPIEZA DEL OESTE, LOS SLOTS QUE COLINDAN Y EL REPARA
+
+· Cesar con dos capturas: (1) "elimina esos residuos que se ven de la roca
+  madre a la izquierda, y las luces perennes esas al extremo izquierdo,
+  quítalas sí o sí — haremos otra cosa ahí"; (2) "ambos contornos se invaden,
+  cuando deberían a lo mucho colindar, idealmente equidistantes a los dos
+  reservorios y no pegaditos al de arcilla"; (3) "cambiar el verbo ALZA que no
+  se entiende por REPARA o algo así".
+· LOS RESIDUOS ERAN LA ESTANTERÍA DE SEMILLA CERO: Mudanza.Init spawneaba
+  baldas/anclajes/pilas también en la fundación — su geometría (BaldaPlanes y
+  compañía) mide el taller del OTRO mundo, y en el prólogo los herrajes de
+  latón caían flotando sobre la roca madre del oeste. Compuerta en
+  SpawnBaldasYAnclajesSiCorresponde: ModoFundacion → return (el mueble entra
+  al juego cuando entra su mundo). Bonus: el censo de la mudanza del prólogo
+  queda en 2 movibles reales, sin 16 fantasmas.
+· LA LUZ FRÍA DEL VANO SE RETIRÓ (regla 15): era la "promesa del mañana" de
+  la R94 (fondo + derrame respirando, al 45% durante el negro del título).
+  El paso 6 del Adiós queda como respiro sobre el vano en sombra — el hueco
+  recortado contra la roca sigue contando la salida. Cesar hará otra cosa ahí;
+  DibujarLucesPersistentes es el sitio cuando lo decida.
+· LOS SLOTS SE SEPARAN A 10 (SlotAX0/BX0 = 378/388): las huellas dejan 2
+  celdas de aire entre tanques, los marcos (ahora EL CUERPO del contenedor:
+  rect visual 10x19 con domo, SIN saliente de tubo) COLINDAN exacto en 387 —
+  cero invasión — y el par centra el plinto (386.5), con aire hacia el silo
+  corrido de la R101. Cada huella cuelga 1 celda sobre el escalón medio del
+  zigurat (7/8 de apoyo: pasa el 70%). EL IMÁN DECRETA LA POSE al encajar:
+  slot A espejado a la izquierda, B a la derecha — los sujetalibros; el
+  jugador puede re-espejar con L, el aire seguirá mandando.
+· ALZA → REPARA (voz y placa de la Obra): el derrumbe se repara — plataforma
+  y techo bajo el mismo verbo, ahora comprensible.
+· SEXTO RESET del sandbox al abrir la ronda; recuperación GitHub (R100) +
+  disco de Cesar (R101 completa, aún sin push). Y un corte del puente en
+  plena verificación — el deploy inmediato ya había pagado: cero pérdida.
+· VERIFICADO EN VIVO: baldas=0, anclajes=0, pilas=0 en fundación; encaje
+  simulado por sondas — dep.x0=378 tubo IZQUIERDA, silo.x0=388 tubo DERECHA
+  (captura RT del par sujetalibros con sus tubos a los flancos y 2 de aire
+  entre huellas); REPARA en voz y placa; 0 errores de consola.
+· ca_playtest102.cmd barre la ronda.
