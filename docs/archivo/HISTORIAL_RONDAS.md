@@ -5641,3 +5641,48 @@ ca_playtest84.cmd barre la ronda.
   distinta entre capturas (la marcha marcha), manita del puntero visible,
   0 errores de consola. Los 16 muebles de la estantería también censados.
 · ca_playtest99.cmd barre la ronda.
+
+## Ronda 100 — LA MUDANZA COMPLETA: forma, suelo honesto, espejo y los marcos
+
+· Veredicto del playtest 99 (Cesar): (1) "el contorno está hermoso... el cuadrado
+  verde no tiene la forma exacta del contorno, sigue siendo básico"; (2) "puedo
+  colocar las cosas volando con un poco de paciencia" (colocar→agarrar→una línea
+  arriba→repetir); (3) "presioné la L para espejar y no vi nada"; (4) "los
+  cuadros blancos que indican dónde posicionar están bien básicos y se sobreponen".
+· LA SOMBRA CON FORMA (IMovibleSilueta.SiluetaRelativa): al agarrar se hornea UNA
+  textura de 1 px por celda con la silueta exacta (la L con su tubo, del lado
+  pedido) y el preview la usa en vez del 1x1 estirado. Cero costo por frame: solo
+  se rehornea al agarrar o al pulsar L. El rect genérico queda de fallback.
+· EL SUELO HONESTO (ApoyoFirme, extraído del bloque R68): EL APARATO NO SE APOYA
+  EN SÍ MISMO — como el aparato real queda plantado mientras lo llevas, su propio
+  muro era Stone+obra un renglón arriba: la torre voladora. Toda celda de su rect
+  visual actual cuenta como evaluada pero jamás como apoyo. Y LA SILUETA YA NO
+  MIENTE: el apoyo entra a la validez visual (verde = las TRES verdades: mundo +
+  alcance + suelo), antes se pintaba verde sobre el aire y el soltar la desmentía.
+· LA L ESPEJA (IMovibleEspejable, práctica estándar de todo modo de colocación —
+  RimWorld/Factorio/Sims rotan con tecla sobre el fantasma): llevando, el deseo
+  queda PENDIENTE y la silueta voltea al instante; sobre un candidato sin agarrar,
+  espeja EN SITIO. El aire manda (flanco tapado → el otro; ninguno → se queda) y
+  cada resultado tiene su aviso. AplicarFlancoTubo (extraído de R93) honra la
+  preferencia; soltar en el mismo sitio también espeja (el early-return lo aplica).
+· LOS MARCOS DE LOS SLOTS: los rects visuales de los tanques se pisan 2 columnas
+  (anclas a 8, vuelo +1 por lado) — por eso "se sobreponen". Ahora cada slot es un
+  marco punteado QUIETO sobre la huella real (8 celdas, adyacentes muro a muro,
+  cero solape) vía Mudanza.MarcarRectMundo (el trazo del delineante extraído y
+  prestado: ProyectarPoliAPantalla + MarcharPoliEnPantalla; fase 0 = el destino
+  espera, no desfila — dos lenguajes, cero confusión).
+· EL ESPECTROFOTÓMETRO: el velo blanco de los slots salía como LOSA GRIS aunque
+  bajáramos el alfa — medido en el PNG: rgb 64 con alfa 0.05. El proyecto rinde en
+  espacio LINEAL: alfa chico sobre negro ≈ (alfa)^(1/2.2) percibido, 0.05→~25%.
+  No hay número chico que lo salve: el velo MURIÓ (ApagarSilueta — los objetos
+  quedan como puro estado del beat) y el marco punteado es el marcador entero.
+· CUARTO RESET del sandbox a mitad de ronda: recuperado de GitHub (Cesar subió
+  la R99) + los 3 archivos R100 rescatados DEL DISCO (la regla del deploy
+  inmediato volvió a pagar). Y cazado en vivo: Unity NO recompila en Play — el
+  Refresh con el editor corriendo difiere el reload y las sondas mienten
+  (verificar con un cambio de firma: LatirSilueta params=3).
+· VERIFICADO EN VIVO (sondas + capturas de escritorio): apoyo(en sitio)=true /
+  apoyo(1 arriba)=FALSE (la torre muere); forma 12x19 celdas, offset -2 al
+  espejar; espejo en sitio: tubo derecha→izquierda logrado; marcos punteados
+  limpios con divisor doble al centro y CERO losa; 0 errores de consola.
+· ca_playtest100.cmd barre la ronda.

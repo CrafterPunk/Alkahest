@@ -124,6 +124,38 @@ namespace Alkahest.Game
     public interface IMovibleSilueta : IMovible
     {
         bool PerimetroVisual(List<Vector2> puntos);
+
+        /// <summary>
+        /// (R100, Cesar: "el cuadrado verde no tiene la forma exacta del
+        /// contorno") La MISMA silueta pero RELATIVA al ancla visual (el
+        /// (0,0) es la esquina del rect que mide TamanoMundo) y con el
+        /// espejo PEDIDO — no el vigente: la silueta de arrastre enseña lo
+        /// que va a pasar al soltar, no lo que hay. Mudanza la rasteriza a
+        /// una textura de 1 px por celda al agarrar y al espejar (L).
+        /// </summary>
+        bool SiluetaRelativa(bool espejado, List<Vector2> puntos);
+    }
+
+    /// <summary>
+    /// (R100, Cesar: "presioné la L para espejar pero no vi nada") El
+    /// aparato con un accesorio de flanco (hoy: el tubo de refill del
+    /// depósito) que puede vivir a izquierda o derecha. La práctica
+    /// estándar de todo modo de colocación (RimWorld/Factorio/Sims rotan
+    /// con R/tecla mientras llevas el fantasma): L espeja — llevándolo, el
+    /// deseo queda PENDIENTE y la silueta voltea al instante; sobre un
+    /// candidato sin agarrar, se espeja EN SITIO. El deseo se honra si hay
+    /// aire en ese flanco; si no, el accesorio se queda y el aviso lo dice.
+    /// </summary>
+    public interface IMovibleEspejable : IMovible
+    {
+        /// <summary>¿El accesorio vive HOY en el flanco izquierdo?</summary>
+        bool EspejadoHoy { get; }
+
+        /// <summary>El deseo del jugador (izquierda = true). Lo escribe Mudanza; Reposicionar lo honra si hay aire.</summary>
+        bool EspejoPendiente { get; set; }
+
+        /// <summary>Espeja EN SITIO (sin mudanza) honrando EspejoPendiente. Devuelve si el accesorio quedó en el flanco deseado.</summary>
+        bool AplicarEspejoAhora();
     }
 
     /// <summary>
@@ -576,6 +608,7 @@ namespace Alkahest.Game
 
             bool clicEsteFrame = mouse != null && mouse.leftButton.wasPressedThisFrame && !ratonCapturado;
             bool cancelarEsteFrame = kb != null && kb.rKey.wasPressedThisFrame;
+            bool espejarEsteFrame = kb != null && kb.lKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto;
 
             if (_llevando == null)
             {
@@ -585,11 +618,13 @@ namespace Alkahest.Game
                 // alcance según lleve algo o no.
                 if (cancelarEsteFrame) DevolverTodoASuSitio();
                 else if (clicEsteFrame) IntentarAgarrar();
+                else if (espejarEsteFrame) EspejarEnSitio(); // (R100) L sobre un candidato: espeja SIN mudanza.
             }
             else
             {
                 if (cancelarEsteFrame) CancelarYSoltar();
                 else if (clicEsteFrame) IntentarSoltar();
+                else if (espejarEsteFrame) EspejarLlevado(); // (R100) L llevando: el deseo queda pendiente y la silueta voltea YA.
             }
 
             ActualizarVisuales();
@@ -728,7 +763,61 @@ namespace Alkahest.Game
 
             _llevando = mejor;
             _offsetArrastreCeldas = mejor.AnclaCelda - _cursorCell;
-            if (_flask != null) _flask.Avisar("agarrado — clic izq. suelta, R cancela");
+            // (R100) El espejo del arrastre arranca COMO ESTÁ el aparato hoy
+            // (la silueta no miente al agarrar) y la forma se hornea una vez.
+            var espejable = mejor as IMovibleEspejable;
+            _espejoLlevando = espejable != null && espejable.EspejadoHoy;
+            ConstruirFormaSilueta();
+            if (_flask != null)
+                _flask.Avisar(espejable != null
+                    ? "agarrado — clic suelta, L espeja, R cancela"
+                    : "agarrado — clic izq. suelta, R cancela");
+        }
+
+        /// <summary>
+        /// (R100) L mientras llevas algo: alterna el deseo de flanco. La
+        /// silueta voltea EN ESTE FRAME (se rehornea la forma) — la práctica
+        /// de todo modo de colocación: el fantasma responde a la tecla al
+        /// instante, el mundo espera al soltar.
+        /// </summary>
+        private void EspejarLlevado()
+        {
+            if (!(_llevando is IMovibleEspejable))
+            {
+                if (_flask != null) _flask.Avisar("este aparato no tiene lado — nada que espejar");
+                return;
+            }
+            _espejoLlevando = !_espejoLlevando;
+            ConstruirFormaSilueta();
+            if (_flask != null)
+                _flask.Avisar(_espejoLlevando ? "espejado — el tubo al flanco izquierdo" : "espejado — el tubo al flanco derecho");
+        }
+
+        /// <summary>
+        /// (R100) L sobre un candidato con las manos vacías: espejo EN SITIO,
+        /// sin agarrar — el accesorio salta de flanco ahí mismo si hay aire.
+        /// </summary>
+        private void EspejarEnSitio()
+        {
+            var esp = _candidato as IMovibleEspejable;
+            if (esp == null)
+            {
+                if (_flask != null) _flask.Avisar(_candidato == null
+                    ? "apunta a un aparato — L espeja su accesorio"
+                    : "este aparato no tiene lado — nada que espejar");
+                return;
+            }
+            if (!_candidatoEnAlcance)
+            {
+                if (_flask != null) _flask.Avisar("demasiado lejos — acércate para espejarlo");
+                return;
+            }
+            esp.EspejoPendiente = !esp.EspejadoHoy;
+            bool logrado = esp.AplicarEspejoAhora();
+            if (_flask != null)
+                _flask.Avisar(logrado
+                    ? (esp.EspejadoHoy ? "espejado — el tubo al flanco izquierdo" : "espejado — el tubo al flanco derecho")
+                    : "no hay aire en el otro flanco — despeja ese lado primero");
         }
 
         // ---------------------------------------------------------------------------------
@@ -769,29 +858,57 @@ namespace Alkahest.Game
             // la boquilla) y los seres (criatura/capullo: ancla de cuna)
             // quedan fuera a propósito -- su ancla no describe una huella de
             // suelo y exigirles piso rompería su colocación de siempre.
-            if (_llevando is IMovibleAnclaEsquina)
+            if (!ApoyoFirme(_llevando, anclaCandidata))
             {
-                int anchoCeldas = Mathf.Max(1, Mathf.RoundToInt(_llevando.TamanoMundo.x / SimRenderer.CellWorldSize));
-                int apoyo = 0, evaluadas = 0;
-                for (int i = 0; i < anchoCeldas; i++)
-                {
-                    int xx = anclaCandidata.x + i, yy = anclaCandidata.y - 1;
-                    if (!CellGrid.InBounds(xx, yy)) continue;
-                    evaluadas++;
-                    int m = _sim.SampleMaterial(xx, yy);
-                    if (m == MaterialId.Stone || m == MaterialId.PisoEstructural || SimLevelBuilder.EsObraDelTaller(xx, yy)) apoyo++;
-                }
-                if (evaluadas > 0 && apoyo * 100 < evaluadas * 70)
-                {
-                    if (_flask != null) _flask.Avisar("necesita apoyo firme — construye piso o roca debajo (cincel: C, luego X)");
-                    return;
-                }
+                if (_flask != null) _flask.Avisar("necesita apoyo firme — construye piso o roca debajo (cincel: C, luego X)");
+                return;
             }
+
+            // (R100) El deseo de flanco viaja con el soltar: Reposicionar lo
+            // honra si hay aire (y si no, el tubo se queda donde pueda).
+            var espejable = _llevando as IMovibleEspejable;
+            if (espejable != null) espejable.EspejoPendiente = _espejoLlevando;
 
             _llevando.Reposicionar(anclaCandidata);
             MaquinaSync.PedirLiberar(_llevando); // (fix Cesar playtest 33, MULTI) el cerrojo se suelta AQUÍ, con el aparato ya en su sitio final -- no antes.
             if (_flask != null) _flask.Avisar("colocado");
             _llevando = null;
+        }
+
+        /// <summary>
+        /// (RONDA 68, mandato 2.5D de Cesar; R100, la cirugía) "Una máquina
+        /// solo puede colocarse cuando existe superficie estructural válida
+        /// debajo". SOLO estaciones IMovibleAnclaEsquina (su ancla ES la
+        /// esquina de su huella): la fila bajo la huella debe ser >=70% roca/
+        /// piso/obra. (R100, Cesar: "puedo colocar las cosas volando con un
+        /// poco de paciencia") EL APARATO NO SE APOYA EN SÍ MISMO: como el
+        /// aparato real se queda plantado mientras lo llevas (ver docblock),
+        /// su propio muro inferior era Stone+obra a un renglón de altura — se
+        /// colocaba, se volvía a agarrar, una línea más arriba, y así hasta
+        /// la torre voladora. Toda celda dentro de su rect visual ACTUAL
+        /// cuenta como evaluada pero JAMÁS como apoyo.
+        /// </summary>
+        private bool ApoyoFirme(IMovible m, Vector2Int anclaCandidata)
+        {
+            if (!(m is IMovibleAnclaEsquina)) return true; // aparatos de pared/seres: su ancla no describe huella de suelo.
+            float cM = SimRenderer.CellWorldSize;
+            int anchoCeldas = Mathf.Max(1, Mathf.RoundToInt(m.TamanoMundo.x / cM));
+            Vector2Int anclaHoy = m.AnclaCelda;
+            int wHoy = Mathf.Max(1, Mathf.RoundToInt(m.TamanoMundo.x / cM));
+            int hHoy = Mathf.Max(1, Mathf.RoundToInt(m.TamanoMundo.y / cM));
+            int apoyo = 0, evaluadas = 0;
+            for (int i = 0; i < anchoCeldas; i++)
+            {
+                int xx = anclaCandidata.x + i, yy = anclaCandidata.y - 1;
+                if (!CellGrid.InBounds(xx, yy)) continue;
+                evaluadas++;
+                bool propio = xx >= anclaHoy.x && xx < anclaHoy.x + wHoy
+                           && yy >= anclaHoy.y && yy < anclaHoy.y + hHoy;
+                if (propio) continue; // tu propia mampostería no es suelo.
+                int mat = _sim.SampleMaterial(xx, yy);
+                if (mat == MaterialId.Stone || mat == MaterialId.PisoEstructural || SimLevelBuilder.EsObraDelTaller(xx, yy)) apoyo++;
+            }
+            return evaluadas == 0 || apoyo * 100 >= evaluadas * 70;
         }
 
         /// <summary>
@@ -869,6 +986,80 @@ namespace Alkahest.Game
             _modeIconSr.color = new Color(0f, 0f, 0f, 0f);
         }
 
+        // =================================================================
+        // (R100) LA SOMBRA CON FORMA: al agarrar (y al espejar con L) se
+        // hornea UNA textura de 1 px por celda con la silueta exacta del
+        // aparato (SiluetaRelativa: la L con su tubo, del lado pedido) y el
+        // preview la usa en vez del 1x1 estirado — "el cuadrado verde no
+        // tiene la forma exacta del contorno" muere aquí. Cero costo por
+        // frame: la textura solo se rehornea al agarrar o al pulsar L.
+        // =================================================================
+        private Texture2D _formaTex;
+        private Sprite _formaSprite;
+        private Vector2 _formaOffset;   // bbox.min RELATIVO al ancla candidata (mundo).
+        private Vector2 _formaTam;      // tamaño mundo del bbox horneado.
+        private bool _formaViva;        // ¿el preview lleva forma propia este arrastre?
+        private bool _espejoLlevando;   // deseo de flanco del arrastre en curso (L lo alterna).
+        private static readonly List<Vector2> _formaPts = new List<Vector2>(8);
+
+        private static bool DentroDePoligono(List<Vector2> poli, Vector2 p)
+        {
+            bool dentro = false;
+            for (int i = 0, j = poli.Count - 1; i < poli.Count; j = i++)
+            {
+                if ((poli[i].y > p.y) != (poli[j].y > p.y)
+                    && p.x < (poli[j].x - poli[i].x) * (p.y - poli[i].y) / (poli[j].y - poli[i].y) + poli[i].x)
+                    dentro = !dentro;
+            }
+            return dentro;
+        }
+
+        private void ConstruirFormaSilueta()
+        {
+            _formaViva = false;
+            if (_previewSr == null) return;
+            var conSilueta = _llevando as IMovibleSilueta;
+            _formaPts.Clear();
+            if (conSilueta == null || !conSilueta.SiluetaRelativa(_espejoLlevando, _formaPts) || _formaPts.Count < 4)
+            {
+                _previewSr.sprite = MaquinariaSprites.Solido(); // el rect genérico de siempre.
+                return;
+            }
+            float c = SimRenderer.CellWorldSize;
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            for (int i = 0; i < _formaPts.Count; i++)
+            {
+                minX = Mathf.Min(minX, _formaPts[i].x); maxX = Mathf.Max(maxX, _formaPts[i].x);
+                minY = Mathf.Min(minY, _formaPts[i].y); maxY = Mathf.Max(maxY, _formaPts[i].y);
+            }
+            int w = Mathf.Max(1, Mathf.RoundToInt((maxX - minX) / c));
+            int h = Mathf.Max(1, Mathf.RoundToInt((maxY - minY) / c));
+            if (_formaTex == null || _formaTex.width != w || _formaTex.height != h)
+            {
+                if (_formaSprite != null) Destroy(_formaSprite);
+                if (_formaTex != null) Destroy(_formaTex);
+                _formaTex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+                _formaSprite = null;
+            }
+            var px = new Color32[w * h];
+            var lleno = new Color32(255, 255, 255, 255);
+            var nada = new Color32(0, 0, 0, 0);
+            for (int iy = 0; iy < h; iy++)
+                for (int ix = 0; ix < w; ix++)
+                {
+                    var centroCelda = new Vector2(minX + (ix + 0.5f) * c, minY + (iy + 0.5f) * c);
+                    px[iy * w + ix] = DentroDePoligono(_formaPts, centroCelda) ? lleno : nada;
+                }
+            _formaTex.SetPixels32(px);
+            _formaTex.Apply(false, false);
+            if (_formaSprite == null)
+                _formaSprite = Sprite.Create(_formaTex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 1f / c);
+            _previewSr.sprite = _formaSprite;
+            _formaOffset = new Vector2(minX, minY);
+            _formaTam = new Vector2(w * c, h * c);
+            _formaViva = true;
+        }
+
         /// <summary>Apaga todos los visuales de golpe. Se llama en los `return` tempranos de Update para que nada quede pegado en pantalla mientras Mudanza no está activa -- mismo patrón que Flask.OcultarVisualesDeMundo/Cincel.OcultarVisuales.</summary>
         private void OcultarVisuales()
         {
@@ -900,7 +1091,11 @@ namespace Alkahest.Game
             Vector2Int anclaCandidata = _hasCursorCell ? _cursorCell + _offsetArrastreCeldas : _llevando.AnclaCelda;
             bool dentroDelMundo = _hasCursorCell && _llevando.CabeEnAncla(anclaCandidata);
             bool dentroDeAlcance = DentroDeAlcance(_cursorWorld);
-            bool valido = dentroDelMundo && dentroDeAlcance;
+            // (R100) LA SILUETA NO MIENTE: el apoyo firme entra a la validez
+            // visual — antes la sombra se pintaba verde sobre el aire y el
+            // soltar la desmentía con un aviso. Verde = se puede soltar AQUÍ,
+            // con las tres verdades juntas (mundo + alcance + suelo).
+            bool valido = dentroDelMundo && dentroDeAlcance && (!_hasCursorCell || ApoyoFirme(_llevando, anclaCandidata));
             _sitioValidoCache = valido; // (R98) el puntero (mano cerrada verde/roja) habla con ESTA misma verdad.
 
             Vector2 tamano = _llevando.TamanoMundo;
@@ -926,16 +1121,34 @@ namespace Alkahest.Game
             if (_llevando is IMovibleAnclaEsquina && _hasCursorCell)
             {
                 float c = SimRenderer.CellWorldSize;
-                _previewTr.position = new Vector3(
-                    anclaCandidata.x * c + tamano.x * 0.5f,
-                    anclaCandidata.y * c + tamano.y * 0.5f,
-                    _cursorWorld.z);
+                if (_formaViva)
+                {
+                    // (R100) LA SOMBRA CON FORMA: el sprite horneado por
+                    // ConstruirFormaSilueta (la L con su tubo, ya espejada si
+                    // L lo pidió) — su bbox se pega al ancla candidata igual
+                    // que la sombra rectangular de siempre.
+                    _previewTr.position = new Vector3(
+                        anclaCandidata.x * c + _formaOffset.x + _formaTam.x * 0.5f,
+                        anclaCandidata.y * c + _formaOffset.y + _formaTam.y * 0.5f,
+                        _cursorWorld.z);
+                    _previewTr.localScale = Vector3.one;
+                }
+                else
+                {
+                    _previewTr.position = new Vector3(
+                        anclaCandidata.x * c + tamano.x * 0.5f,
+                        anclaCandidata.y * c + tamano.y * 0.5f,
+                        _cursorWorld.z);
+                    _previewTr.localScale = new Vector3(Mathf.Max(0.02f, tamano.x), Mathf.Max(0.02f, tamano.y), 1f);
+                }
             }
             else
             {
                 _previewTr.position = _cursorWorld; // la silueta sigue al cursor -- se puede soltar "en el aire" (ver docblock de la clase).
+                _previewTr.localScale = _formaViva
+                    ? Vector3.one
+                    : new Vector3(Mathf.Max(0.02f, tamano.x), Mathf.Max(0.02f, tamano.y), 1f);
             }
-            _previewTr.localScale = new Vector3(Mathf.Max(0.02f, tamano.x), Mathf.Max(0.02f, tamano.y), 1f);
 
             Color32 colorBase = valido ? ColorValido : ColorInvalido;
             float alfa = valido ? AlfaPreviewValido : AlfaPreviewInvalido;
@@ -1191,20 +1404,7 @@ namespace Alkahest.Game
                 InflarPoligono(_poliMundo, aireMundo);
 
                 // 2) A pantalla (GUI: Y hacia abajo) + culling por caja.
-                _poliPantalla.Clear();
-                float bx0 = float.MaxValue, bx1 = float.MinValue, by0 = float.MaxValue, by1 = float.MinValue;
-                bool detras = false;
-                for (int k = 0; k < _poliMundo.Count; k++)
-                {
-                    Vector3 sp = cam.WorldToScreenPoint(new Vector3(_poliMundo[k].x, _poliMundo[k].y, 0f));
-                    if (sp.z < 0f) { detras = true; break; }
-                    var q = new Vector2(sp.x, Screen.height - sp.y);
-                    _poliPantalla.Add(q);
-                    bx0 = Mathf.Min(bx0, q.x); bx1 = Mathf.Max(bx1, q.x);
-                    by0 = Mathf.Min(by0, q.y); by1 = Mathf.Max(by1, q.y);
-                }
-                if (detras) continue;
-                if (bx1 < -margen || bx0 > Screen.width + margen || by1 < -margen || by0 > Screen.height + margen) continue;
+                if (!ProyectarPoliAPantalla(cam, margen)) continue;
 
                 // 3) EL ALFA (escalones R98) y EL COLOR: el candidato bajo el
                 //    cursor marcha en LATÓN — la misma promesa que el puntero.
@@ -1230,32 +1430,81 @@ namespace Alkahest.Game
                 //    perímetro entero con fase compartida — los guiones
                 //    CRUZAN las esquinas partiéndose (mitad en cada arista),
                 //    que es justo lo que vende el desfile.
-                float s = 0f;
-                int nPts = _poliPantalla.Count;
-                for (int k = 0; k < nPts; k++)
-                {
-                    Vector2 a = _poliPantalla[k], b = _poliPantalla[(k + 1) % nPts];
-                    float len = (b - a).magnitude;
-                    if (len < 0.5f) continue;
-                    Vector2 d = (b - a) / len;
-                    // guiones del patrón global [fase + j*periodo, +guion) que tocan [s, s+len).
-                    float j0 = Mathf.Floor((s - fase - guion) / periodo);
-                    for (float j = j0; ; j++)
-                    {
-                        float g0 = fase + j * periodo;
-                        if (g0 >= s + len) break;
-                        float s0 = Mathf.Max(s, g0), s1 = Mathf.Min(s + len, g0 + guion);
-                        if (s1 <= s0) continue;
-                        Vector2 q = a + d * (s0 - s);
-                        float w = s1 - s0;
-                        if (Mathf.Abs(d.x) > 0.5f)
-                            UiStyles.Rellenar(new Rect(Mathf.Min(q.x, q.x + d.x * w), q.y - grosor * 0.5f, w, grosor), c);
-                        else
-                            UiStyles.Rellenar(new Rect(q.x - grosor * 0.5f, Mathf.Min(q.y, q.y + d.y * w), grosor, w), c);
-                    }
-                    s += len;
-                }
+                MarcharPoliEnPantalla(c, fase, guion, huecoG, grosor);
             }
+        }
+
+        /// <summary>(R100, extraído) _poliMundo → _poliPantalla (GUI: Y hacia abajo). False = detrás de cámara o fuera del encuadre + margen.</summary>
+        private static bool ProyectarPoliAPantalla(Camera cam, float margen)
+        {
+            _poliPantalla.Clear();
+            float bx0 = float.MaxValue, bx1 = float.MinValue, by0 = float.MaxValue, by1 = float.MinValue;
+            for (int k = 0; k < _poliMundo.Count; k++)
+            {
+                Vector3 sp = cam.WorldToScreenPoint(new Vector3(_poliMundo[k].x, _poliMundo[k].y, 0f));
+                if (sp.z < 0f) return false;
+                var q = new Vector2(sp.x, Screen.height - sp.y);
+                _poliPantalla.Add(q);
+                bx0 = Mathf.Min(bx0, q.x); bx1 = Mathf.Max(bx1, q.x);
+                by0 = Mathf.Min(by0, q.y); by1 = Mathf.Max(by1, q.y);
+            }
+            return bx1 >= -margen && bx0 <= Screen.width + margen && by1 >= -margen && by0 <= Screen.height + margen;
+        }
+
+        /// <summary>(R100, extraído) La corrida de guiones sobre _poliPantalla — fase 0 = trazo quieto (destino), fase viva = hormigas (mudanza).</summary>
+        private static void MarcharPoliEnPantalla(Color c, float fase, float guion, float huecoG, float grosor)
+        {
+            float periodo = guion + huecoG;
+            float s = 0f;
+            int nPts = _poliPantalla.Count;
+            for (int k = 0; k < nPts; k++)
+            {
+                Vector2 a = _poliPantalla[k], b = _poliPantalla[(k + 1) % nPts];
+                float len = (b - a).magnitude;
+                if (len < 0.5f) continue;
+                Vector2 d = (b - a) / len;
+                // guiones del patrón global [fase + j*periodo, +guion) que tocan [s, s+len).
+                float j0 = Mathf.Floor((s - fase - guion) / periodo);
+                for (float j = j0; ; j++)
+                {
+                    float g0 = fase + j * periodo;
+                    if (g0 >= s + len) break;
+                    float s0 = Mathf.Max(s, g0), s1 = Mathf.Min(s + len, g0 + guion);
+                    if (s1 <= s0) continue;
+                    Vector2 q = a + d * (s0 - s);
+                    float w = s1 - s0;
+                    if (Mathf.Abs(d.x) > 0.5f)
+                        UiStyles.Rellenar(new Rect(Mathf.Min(q.x, q.x + d.x * w), q.y - grosor * 0.5f, w, grosor), c);
+                    else
+                        UiStyles.Rellenar(new Rect(q.x - grosor * 0.5f, Mathf.Min(q.y, q.y + d.y * w), grosor, w), c);
+                }
+                s += len;
+            }
+        }
+
+        /// <summary>
+        /// (R100, Cesar: "los cuadros blancos... están bien básicos y se
+        /// sobreponen") Un marco punteado ESTÁTICO de mundo, para terceros —
+        /// los slots del Acomodo del director lo usan en vez de sus cajas
+        /// llenas. El mismo trazo del delineante del censo, pero SIN marcha:
+        /// el desfile es de la mudanza viva; el destino espera quieto (dos
+        /// lenguajes, cero confusión). Llamar desde OnGUI.
+        /// </summary>
+        public static void MarcarRectMundo(float wx0, float wy0, float wx1, float wy1, Color color, float alfa)
+        {
+            if (alfa <= 0.01f) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            _poliMundo.Clear();
+            _poliMundo.Add(new Vector2(wx0, wy0));
+            _poliMundo.Add(new Vector2(wx0, wy1));
+            _poliMundo.Add(new Vector2(wx1, wy1));
+            _poliMundo.Add(new Vector2(wx1, wy0));
+            float pxPorMundo = Screen.height / (2f * cam.orthographicSize);
+            InflarPoligono(_poliMundo, UiStyles.S(2f) / Mathf.Max(1e-3f, pxPorMundo));
+            if (!ProyectarPoliAPantalla(cam, UiStyles.S(24f))) return;
+            float grosor = Mathf.Max(1f, Mathf.Round(UiStyles.Escala));
+            MarcharPoliEnPantalla(new Color(color.r, color.g, color.b, alfa), 0f, UiStyles.S(5f), UiStyles.S(4f), grosor);
         }
 
         private void OnGUI()

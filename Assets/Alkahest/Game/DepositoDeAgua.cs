@@ -35,7 +35,7 @@ namespace Alkahest.Game
     /// lo muda ENTERO — muros, fondo, contenido, obra, visual y tubo — a otra
     /// ancla. Antes del ORDEN sigue clavado donde el plano lo decreta.
     /// </summary>
-    public sealed class DepositoDeAgua : MonoBehaviour, IMovible, IMovibleAnclaEsquina, IMovibleSilueta
+    public sealed class DepositoDeAgua : MonoBehaviour, IMovible, IMovibleAnclaEsquina, IMovibleSilueta, IMovibleEspejable
     {
         // ---- Los números del esqueleto ----
         // (R75) Duración de la emergencia y carga inicial viven en el GUION
@@ -218,48 +218,106 @@ namespace Alkahest.Game
         // (R99, Cesar: "no lo cubre con su tubo de refill") LA SILUETA REAL:
         // el rect visual del cuerpo + el saliente del tubo grueso — una L,
         // solo cuando el tubo está INSTALADO y del flanco donde vive HOY
-        // (Reposicionar lo espeja; el signo de su localPosition.x es la
-        // verdad). Números medidos de InstalarTubo/Reposicionar: sprite de
-        // 3c centrado a ±(_x1+2.5 − centro) ⇒ sobresale 2 celdas del borde
-        // visual; su tapón remata en _y1+4 (altoCeldas = span+4 desde _y0),
-        // 3 celdas por debajo del domo (_y1+7). Sentido HORARIO, Y arriba —
-        // el contrato exacto de InflarPoligono.
+        // (el signo de su localPosition.x es la verdad). Números medidos de
+        // InstalarTubo/Reposicionar: sprite de 3c centrado a ±(_x1+2.5 −
+        // centro) ⇒ sobresale 2 celdas del borde visual; su tapón remata en
+        // _y1+4 (altoCeldas = span+4 desde _y0), 3 celdas por debajo del
+        // domo (_y1+7). Sentido HORARIO, Y arriba — el contrato exacto de
+        // InflarPoligono. (R100) La versión RELATIVA es la fuente única: el
+        // perímetro absoluto = relativa(flanco de hoy) + ancla visual.
         bool IMovibleSilueta.PerimetroVisual(List<Vector2> puntos)
+        {
+            if (!((IMovibleSilueta)this).SiluetaRelativa(EspejadoHoy, puntos)) return false;
+            float c = SimRenderer.CellWorldSize;
+            var ancla = new Vector2((_x0 - 1) * c, _y0 * c);
+            for (int i = 0; i < puntos.Count; i++) puntos[i] += ancla;
+            return true;
+        }
+
+        // (R100) La silueta RELATIVA al ancla visual (0,0 = esquina inferior
+        // izquierda del rect que mide TamanoMundo), con el espejo PEDIDO —
+        // la consume la sombra de arrastre de Mudanza, que enseña lo que va
+        // a pasar al soltar (L voltea esta forma antes de que exista).
+        bool IMovibleSilueta.SiluetaRelativa(bool espejado, List<Vector2> puntos)
         {
             if (_fase != Fase.Listo) return false;
             float c = SimRenderer.CellWorldSize;
-            float izq = (_x0 - 1) * c, der = (_x1 + 2) * c, piso = _y0 * c, domo = (_y1 + 7) * c;
+            float span = (_x1 - _x0 + 3) * c;      // ancho visual.
+            float domo = (_y1 - _y0 + 7) * c;      // alto visual.
             bool conSaliente = _tuboInstalado && _tuboGo != null;
             if (!conSaliente)
             {
-                puntos.Add(new Vector2(izq, piso));
-                puntos.Add(new Vector2(izq, domo));
-                puntos.Add(new Vector2(der, domo));
-                puntos.Add(new Vector2(der, piso));
+                puntos.Add(new Vector2(0f, 0f));
+                puntos.Add(new Vector2(0f, domo));
+                puntos.Add(new Vector2(span, domo));
+                puntos.Add(new Vector2(span, 0f));
                 return true;
             }
-            float tapon = (_y1 + 4) * c;
-            if (_tuboGo.transform.localPosition.x > 0f) // flanco derecho.
+            float tapon = (_y1 - _y0 + 4) * c;
+            float saliente = 2f * c;
+            if (!espejado) // tubo al flanco derecho.
             {
-                float tuboDer = (_x1 + 4) * c;
-                puntos.Add(new Vector2(izq, piso));
-                puntos.Add(new Vector2(izq, domo));
-                puntos.Add(new Vector2(der, domo));
-                puntos.Add(new Vector2(der, tapon));
-                puntos.Add(new Vector2(tuboDer, tapon));
-                puntos.Add(new Vector2(tuboDer, piso));
+                puntos.Add(new Vector2(0f, 0f));
+                puntos.Add(new Vector2(0f, domo));
+                puntos.Add(new Vector2(span, domo));
+                puntos.Add(new Vector2(span, tapon));
+                puntos.Add(new Vector2(span + saliente, tapon));
+                puntos.Add(new Vector2(span + saliente, 0f));
             }
-            else // espejado al flanco izquierdo.
+            else // tubo al flanco izquierdo.
             {
-                float tuboIzq = (_x0 - 3) * c;
-                puntos.Add(new Vector2(tuboIzq, piso));
-                puntos.Add(new Vector2(tuboIzq, tapon));
-                puntos.Add(new Vector2(izq, tapon));
-                puntos.Add(new Vector2(izq, domo));
-                puntos.Add(new Vector2(der, domo));
-                puntos.Add(new Vector2(der, piso));
+                puntos.Add(new Vector2(-saliente, 0f));
+                puntos.Add(new Vector2(-saliente, tapon));
+                puntos.Add(new Vector2(0f, tapon));
+                puntos.Add(new Vector2(0f, domo));
+                puntos.Add(new Vector2(span, domo));
+                puntos.Add(new Vector2(span, 0f));
             }
             return true;
+        }
+
+        // =================================================================
+        // (R100, Cesar: "presioné la L para espejar pero no vi nada") EL
+        // ESPEJO DEL TUBO: el jugador decide el flanco; el aire manda. La
+        // preferencia PERSISTE (colocas espejado y espejado se queda hasta
+        // que digas lo contrario) y el fallback de la R93 (flanco sepultado
+        // → el otro) sigue vivo dentro de AplicarFlancoTubo.
+        // =================================================================
+        private bool _tuboPreferirIzquierda; // el deseo vigente; falso = derecha (el flanco de nacimiento, R86).
+
+        public bool EspejadoHoy => _tuboGo != null && _tuboGo.transform.localPosition.x < 0f;
+
+        public bool EspejoPendiente
+        {
+            get => _tuboPreferirIzquierda;
+            set => _tuboPreferirIzquierda = value;
+        }
+
+        public bool AplicarEspejoAhora()
+        {
+            AplicarFlancoTubo();
+            return EspejadoHoy == _tuboPreferirIzquierda;
+        }
+
+        /// <summary>
+        /// (R100, extraído del bloque R93 de Reposicionar) El tubo elige
+        /// flanco: honra la preferencia del jugador SI ese flanco tiene aire
+        /// (muestra a la altura del hombro, _y0+3); si está tapado, cruza al
+        /// otro con aire; si ninguno respira, se queda en el preferido — la
+        /// marca del refill nunca desaparece.
+        /// </summary>
+        private void AplicarFlancoTubo()
+        {
+            if (_tuboGo == null || !_tuboInstalado || _sim == null || _sim.Grid == null) return;
+            bool derLibre = _sim.Grid.GetMat(_x1 + 2, _y0 + 3) == MaterialId.Empty;
+            bool izqLibre = _sim.Grid.GetMat(_x0 - 2, _y0 + 3) == MaterialId.Empty;
+            bool izquierda = _tuboPreferirIzquierda ? (izqLibre || !derLibre) : (!derLibre && izqLibre);
+            float cM = SimRenderer.CellWorldSize;
+            float offX = ((_x1 + 2.5f) - (_x0 + _x1 + 1) * 0.5f) * cM;
+            _tuboGo.transform.localPosition = new Vector3(izquierda ? -offX : offX, _tuboFinalY, 0f);
+            var esc = _tuboGo.transform.localScale;
+            esc.x = Mathf.Abs(esc.x) * (izquierda ? -1f : 1f);
+            _tuboGo.transform.localScale = esc;
         }
 
         /// <summary>
@@ -276,7 +334,7 @@ namespace Alkahest.Game
         public void Reposicionar(int nx0, int ny0)
         {
             if (_fase != Fase.Listo || _sim == null || _sim.Grid == null) return;
-            if (nx0 == _x0 && ny0 == _y0) return;
+            if (nx0 == _x0 && ny0 == _y0) { AplicarFlancoTubo(); return; } // (R100) soltar en el mismo sitio TAMBIÉN honra el espejo (agarrar, L, soltar donde estaba).
 
             var grid = _sim.Grid;
             var contenido = new List<byte>();
@@ -319,22 +377,10 @@ namespace Alkahest.Game
             float cM = SimRenderer.CellWorldSize;
             transform.position = new Vector3((_x0 + _x1 + 1) * 0.5f * cM, _y0 * cM, 0f);
 
-            // (R93, cazado en la repasada) EL TUBO ELIGE FLANCO: pegados "uno
-            // al lado del otro" en la plataforma, el tubo derecho del
-            // recipiente izquierdo quedaba SEPULTADO detrás del vecino — la
-            // marca visual del refill infinito, muda. Si el flanco derecho ya
-            // no tiene aire (muro, mejilla o el otro tanque), el tubo se
-            // ESPEJA al flanco izquierdo (sprite simétrico en X: el tapón
-            // sigue arriba).
-            if (_tuboGo != null && _tuboInstalado)
-            {
-                bool derechaLibre = _sim.Grid.GetMat(_x1 + 2, _y0 + 3) == MaterialId.Empty;
-                float offX = ((_x1 + 2.5f) - (_x0 + _x1 + 1) * 0.5f) * cM;
-                _tuboGo.transform.localPosition = new Vector3(derechaLibre ? offX : -offX, _tuboFinalY, 0f);
-                var esc = _tuboGo.transform.localScale;
-                esc.x = Mathf.Abs(esc.x) * (derechaLibre ? 1f : -1f);
-                _tuboGo.transform.localScale = esc;
-            }
+            // (R93, cazado en la repasada; R100, extraído + preferencia) EL
+            // TUBO ELIGE FLANCO: la preferencia del jugador (L) primero, el
+            // aire manda — ver AplicarFlancoTubo.
+            AplicarFlancoTubo();
         }
 
         /// <summary>Celdas NO vacías dentro del vidrio (dueño + estorbo). Con Capacidad(), da la placa honesta del guion (Opus A5).</summary>

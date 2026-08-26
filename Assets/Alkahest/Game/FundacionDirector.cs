@@ -2072,11 +2072,37 @@ namespace Alkahest.Game
             return go;
         }
 
-        private void LatirSilueta(GameObject go, float baseAlfa)
+        /// <summary>
+        /// (R100) El marco punteado de cada slot LIBRE del Acomodo: la huella
+        /// real (8 celdas, adyacentes sin solape) a la altura visual del
+        /// tanque, en blanco papel cálido y trazo QUIETO — el mismo delineante
+        /// del censo de la mudanza, pero el destino no desfila: espera. La
+        /// respiración va en el velo de fondo (LatirSilueta), no aquí.
+        /// </summary>
+        private void DibujarMarcosDeSlots()
+        {
+            if (_silSlotA == null && _silSlotB == null) return; // solo viven durante el Acomodo con slots libres.
+            float c = SimRenderer.CellWorldSize;
+            var papel = new Color(0.95f, 0.93f, 0.86f);
+            if (_silSlotA != null && !_slotAOcupado)
+                Mudanza.MarcarRectMundo(SlotAX0 * c, SlotY0 * c, (SlotAX0 + 8) * c, (SlotY0 + 19) * c, papel, 0.60f);
+            if (_silSlotB != null && !_slotBOcupado)
+                Mudanza.MarcarRectMundo(SlotBX0 * c, SlotY0 * c, (SlotBX0 + 8) * c, (SlotY0 + 19) * c, papel, 0.60f);
+        }
+
+        /// <summary>(R100) Deja una silueta como puro estado: sprite invisible, el GameObject sigue marcando "este slot existe y esta libre".</summary>
+        private void ApagarSilueta(GameObject go)
         {
             if (go == null) return;
             var sr = go.GetComponent<SpriteRenderer>();
-            if (sr != null) sr.color = new Color(1f, 1f, 1f, baseAlfa + 0.06f * Mathf.Sin(Time.time * 2.4f));
+            if (sr != null) sr.color = new Color(1f, 1f, 1f, 0f);
+        }
+
+        private void LatirSilueta(GameObject go, float baseAlfa, float amplitud = 0.06f)
+        {
+            if (go == null) return;
+            var sr = go.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = new Color(1f, 1f, 1f, baseAlfa + amplitud * Mathf.Sin(Time.time * 2.4f));
         }
 
         private int ContarCubiertas(List<Vector2Int> objetivo)
@@ -2418,12 +2444,27 @@ namespace Alkahest.Game
                     DecirConTono("ACOMODA.", 0.95f, 2.6f);
                     _deposito?.HabilitarMudanza();
                     _silo?.HabilitarMudanza();
-                    // (R94, Cesar: "los contornos no calzan en el tamaño de
-                    // los sprites") Los slots miden el rect VISUAL del tanque
-                    // (huella+1 de vuelo por lado, alto+6 con el domo) — la
-                    // silueta cubre EXACTAMENTE lo que se verá ahí.
-                    _silSlotA = CrearSilueta("SiluetaSlotA", SlotAX0 - 1, SlotY0, SlotAX0 + 8, SlotY0 + 18);
-                    _silSlotB = CrearSilueta("SiluetaSlotB", SlotBX0 - 1, SlotY0, SlotBX0 + 8, SlotY0 + 18);
+                    // (R94 → R100, Cesar: "los cuadros blancos están bien
+                    // básicos y se sobreponen") Los rects VISUALES de los dos
+                    // tanques se pisan 2 columnas en el centro (anclas a 8,
+                    // vuelo de +1 por lado): los slots ahora miden la HUELLA
+                    // (la mampostería real, x0..x0+7 — adyacentes muro a
+                    // muro, CERO solape) a la altura visual completa. El
+                    // relleno baja a un velo y el cuerpo del marcador es un
+                    // MARCO PUNTEADO quieto (Mudanza.MarcarRectMundo, en
+                    // DibujarMarcosDeSlots): mismo trazo del delineante del
+                    // censo, sin marcha — el destino espera, no desfila.
+                    _silSlotA = CrearSilueta("SiluetaSlotA", SlotAX0, SlotY0, SlotAX0 + 7, SlotY0 + 18);
+                    _silSlotB = CrearSilueta("SiluetaSlotB", SlotBX0, SlotY0, SlotBX0 + 7, SlotY0 + 18);
+                    // (R100, segunda pasada con captura + espectrofotometro: el
+                    // proyecto renderiza en espacio LINEAL — un velo blanco de
+                    // alfa 0.05 sobre el negro sale a ~25% de brillo percibido,
+                    // LA LOSA GRIS de Cesar. No hay numero chico que lo salve:
+                    // el relleno MUERE y los objetos quedan invisibles, solo
+                    // como estado del beat (los marcos punteados de
+                    // DibujarMarcosDeSlots son el marcador entero).
+                    ApagarSilueta(_silSlotA);
+                    ApagarSilueta(_silSlotB);
                     _tutorial.Mostrar("la mudanza recoloca el taller",
                         new TutorialContextual.Paso { Etiqueta = "V", Presionada = () => Mudanza.ModoActivo });
                     _acomodoFase = 1;
@@ -2432,8 +2473,6 @@ namespace Alkahest.Game
 
                 case 1:
                 {
-                    LatirSilueta(_silSlotA, _slotAOcupado ? 0f : 0.11f);
-                    LatirSilueta(_silSlotB, _slotBOcupado ? 0f : 0.11f);
                     if (!_fichaLlevalosMostrada)
                     {
                         if (Mudanza.ModoActivo && _tutorial.Visible) _tutorial.Confirmar(0);
@@ -3118,6 +3157,11 @@ namespace Alkahest.Game
             // Cesar jugó el REORDEN y "no vio el barrido": lo que la sim
             // recogía era indistinguible de nada (regla 43) — ahora el ORDEN
             // se VE pasar, aunque no hubiera una sola celda que recoger.
+            // (R100) LOS MARCOS DE LOS SLOTS del Acomodo: el cuerpo del
+            // marcador es un trazo punteado quieto sobre la huella real —
+            // el velo blanco de la silueta quedó de fondo (ver TickAcomodo).
+            if (!DayCycle.InputLocked) DibujarMarcosDeSlots();
+
             if (_motas.Count > 0 && !DayCycle.InputLocked) DibujarMotas(); // (R87) la materia recogida VIAJA a los reservorios.
             if ((_beat == Beat.Reorden || (_beat == Beat.Adios && _maestroPresencia > 0.05f)) && !DayCycle.InputLocked)
                 DibujarHaloMaestro();         // (R90) el Maestro se hincha tragando; (R94) también mientras traga su propio muro en el adiós.
