@@ -1492,14 +1492,33 @@ namespace Alkahest.Game
         /// </summary>
         public static void MarcarRectMundo(float wx0, float wy0, float wx1, float wy1, Color color, float alfa)
         {
-            if (alfa <= 0.01f) return;
-            var cam = Camera.main;
-            if (cam == null) return;
             _poliMundo.Clear();
             _poliMundo.Add(new Vector2(wx0, wy0));
             _poliMundo.Add(new Vector2(wx0, wy1));
             _poliMundo.Add(new Vector2(wx1, wy1));
             _poliMundo.Add(new Vector2(wx1, wy0));
+            MarcarPoliListo(color, alfa);
+        }
+
+        /// <summary>
+        /// (R101, Cesar: "las siluetas no tienen la misma dimensión ni forma
+        /// de los contornos") El marco punteado quieto acepta el POLÍGONO
+        /// entero — el director marca cada slot con la L exacta del
+        /// contenedor en su pose final (tubo espejado y todo), el mismo
+        /// dialecto rectilíneo horario de IMovibleSilueta. Llamar desde OnGUI.
+        /// </summary>
+        public static void MarcarPoligonoMundo(List<Vector2> puntosMundo, Color color, float alfa)
+        {
+            _poliMundo.Clear();
+            for (int i = 0; i < puntosMundo.Count; i++) _poliMundo.Add(puntosMundo[i]);
+            MarcarPoliListo(color, alfa);
+        }
+
+        private static void MarcarPoliListo(Color color, float alfa)
+        {
+            if (alfa <= 0.01f || _poliMundo.Count < 4) return;
+            var cam = Camera.main;
+            if (cam == null) return;
             float pxPorMundo = Screen.height / (2f * cam.orthographicSize);
             InflarPoligono(_poliMundo, UiStyles.S(2f) / Mathf.Max(1e-3f, pxPorMundo));
             if (!ProyectarPoliAPantalla(cam, UiStyles.S(24f))) return;

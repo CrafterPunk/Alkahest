@@ -428,17 +428,21 @@ namespace Alkahest.Game
         public void InitSilo(AlkahestSim sim) => InitSilo(sim, 0);
 
         /// <summary>(R84) Variante con carga explícita para el renacer del REORDEN. (R86) `conTubo`: con el tubo grueso integrado.</summary>
-        public void InitSilo(AlkahestSim sim, int cargaInicial, bool conTubo = false, bool cargaInstantanea = false)
+        public void InitSilo(AlkahestSim sim, int cargaInicial, bool conTubo = false, bool cargaInstantanea = false, int xRenacer = -1)
         {
             var escena = PrologoEscenografia.Buscar();
             // (R84, Cesar) MISMO TAMAÑO que el tanque (8x13): la distinción
             // vendrá por carteles/decoración, no por silueta. El interior
             // (x386-391) sigue cabiendo EXACTO en el aire medido poza|cráter;
             // los muros pisan los labios (ver FundacionSilo* en el plano).
-            InitInterno(sim, escena, escena != null ? escena.deposito2 : null,
+            // (R101) `xRenacer`: el ORDEN corre el silo a la izquierda (Cesar:
+            // "que no se cruce con los contornos del lugar") — con override,
+            // la autoridad del marcador de escenografía CEDE: el corrimiento
+            // es una decisión del guion del renacer, no del plano del acto 1.
+            InitInterno(sim, escena, xRenacer >= 0 ? null : (escena != null ? escena.deposito2 : null),
                 Lodo, Barbotina, cargaInicial: cargaInicial, esSilo: true,
                 anchoHuella: 8, altoHuella: 13,
-                fallbackX0: SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0,
+                fallbackX0: xRenacer >= 0 ? xRenacer : SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0,
                 conTubo: conTubo, cargaInstantanea: cargaInstantanea);
         }
 

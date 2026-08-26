@@ -2972,6 +2972,8 @@ namespace Alkahest.Sim
         // idéntico al tanque del agua.
         // (R87) Handles de obra de las repisas de la cascada: el REORDEN las
         // retira (barrido) y degenera estos rects. -1 = plano sin construir.
+        /// <summary>(R101) La obra del hogar vacío del jugador — el ORDEN la degenera junto con sus mejillas (ver el registro en el plano del fogón).</summary>
+        public static int FundacionFogonObra = -1;
         public static int ObraRepisaA = -1, ObraRepisaB = -1;
         // (R89, Cesar: "el depósito de barro queda volando por donde se
         // filtra el agua y pisando donde se acumula el barro") EL SILO POR
@@ -2980,6 +2982,13 @@ namespace Alkahest.Sim
         // su tubo (377-379) también en firme. Los muros ya no pisan labios:
         // la nota histórica del hueco de 6 (R84) muere con el ensanche.
         public const int FundacionSiloX0 = 369, FundacionSiloX1 = 376;
+        // (R101, Cesar: "el contenedor de arcilla debe caer más a la
+        // izquierda") SOLO el RENACER del ORDEN usa este corrimiento (-5):
+        // el silo del primer acto sigue clavado al plano (sus muros pisan
+        // los labios medidos de la poza). Con x0=364 el tubo derecho remata
+        // en 375 y el marco del slot A (que baja hasta 376 con su tubo
+        // espejado) queda a una celda de aire — sin cruce.
+        public const int FundacionSiloRenacerX0 = 364;
         public const int FundacionSiloY0 = 140, FundacionSiloY1 = 152;
         // (R86, regla 15) LA ESTANTERÍA CENTRAL (R85: FundacionEstanteria*/
         // FundacionBahia* — montantes x386-401, bahías apiladas y146/y167)
@@ -3097,7 +3106,14 @@ namespace Alkahest.Sim
             // el sitio donde el jugador enciende SU fuego (beat 4).
             DrawSolidRect(grid, FundacionFogonX0 - 2, FundacionY0, 2, 3, MaterialId.Stone);
             DrawSolidRect(grid, FundacionFogonX1 + 1, FundacionY0, 2, 3, MaterialId.Stone);
-            RegistrarObra(FundacionFogonX0 - 2, FundacionY0, FundacionFogonX1 + 2, FundacionY0 + 2);
+            // (R101, Cesar: "cositos que sobresalen del suelo que no puede
+            // quitar el cincel... resto de algo que ya no usamos") El handle
+            // se GUARDA: el fuego propio del jugador nunca llegó al guion
+            // final del prólogo (la veta de turba se retiró en R79) y el
+            // hogar vacío quedaba de estorbo anticincel entre los dos
+            // reservorios del mundo ordenado — el ORDEN ahora barre las
+            // mejillas y degenera esta obra (FundacionDirector.RetirarFogon).
+            FundacionFogonObra = RegistrarObra(FundacionFogonX0 - 2, FundacionY0, FundacionFogonX1 + 2, FundacionY0 + 2);
 
             // (RONDA 61) EL ASOMO DE LA VETA: un bolsón de turba dentro del
             // muro izquierdo, con 3 celdas perforando la cara interior (mismo

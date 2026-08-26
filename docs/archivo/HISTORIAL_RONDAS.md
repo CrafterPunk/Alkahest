@@ -5686,3 +5686,49 @@ ca_playtest84.cmd barre la ronda.
   espejar; espejo en sitio: tubo derecha→izquierda logrado; marcos punteados
   limpios con divisor doble al centro y CERO losa; 0 errores de consola.
 · ca_playtest100.cmd barre la ronda.
+
+## Ronda 101 — LOS MARCOS VERDADEROS, EL CHECK Y LA LIMPIEZA DEL ORDEN
+
+· Cesar mandó captura con cuatro detalles del Acomodo: (1) "las siluetas no
+  tienen la misma dimensión ni forma de los contornos de los contenedores";
+  (1b) "un ligero relleno blanco latiendo... y un sonido gratificante de check
+  al colocar... del mismo tono de la indicación WASD"; (2) "el contenedor de
+  arcilla debe caer más a la izquierda, que no se cruce con los contornos";
+  (3) "quedan cositos que sobresalen del suelo que no puede quitar el cincel
+  entre los dos contenedores... resto de algo que ya no usamos".
+· (1) LOS MARCOS SON LA L VERDADERA: cada slot libre dibuja la MISMA silueta
+  del contenedor en su POSE FINAL — rect visual completo (10 de vuelo a vuelo,
+  domo incluido) + saliente del tubo ESPEJADO como quedará al encajar (A tubo
+  izquierda, B derecha: dos sujetalibros). Mudanza presta MarcarPoligonoMundo
+  (el trazo quieto ahora acepta el polígono entero, mismo dialecto rectilíneo
+  de IMovibleSilueta). Los cuerpos se cruzan 2 columnas al centro — como se
+  cruzarán los sprites reales: verdad, no error.
+· (1b) EL RELLENO LATIENTE va en IMGUI — el espacio GAMMA, donde un alfa chico
+  ES chico (la lección de la losa lineal R100): tono FichaFondo del tutorial
+  WASD (0.93/0.93/0.90), late 0.050±0.028 a 2.4 rad/s, y se PARTE en el eje
+  387 para que el cruce de cuerpos no sume doble brillo. Y EL CHECK: BlipSlot
+  ahora suena a TutorialConfirma (EL MISMO timbre de las fichas WASD — el
+  orden de menú al que pertenece el marcador) + clank corto a pitch 1.15:
+  el check y el peso, juntos.
+· (2) EL SILO RENACE CORRIDO: FundacionSiloRenacerX0=364 (−5) SOLO para el
+  ORDEN (InitSilo con xRenacer, que además hace ceder la autoridad del
+  marcador de escenografía); el silo del acto 1 sigue clavado al plano de la
+  poza. Con x0=364 el tubo remata en 375 y el marco A (que baja hasta 376)
+  queda a una celda de aire. Suelo verificado con sonda antes de elegir el
+  número (y139 sólido, aire limpio hasta 358).
+· (3) EL ORDEN BARRE EL HOGAR VACÍO: los cositos eran LAS MEJILLAS DEL FOGÓN
+  del jugador (x396-397 y x405-406, piedra 2×3 con obra anticincel) — el
+  fuego propio nunca llegó al guion final del prólogo (la turba se retiró en
+  R79). RetirarFogon() borra las mejillas (el suelo y139 no se toca) y
+  degenera FundacionFogonObra (handle nuevo, guardado al registrar); corre en
+  el renacer del ORDEN real Y en el checkpoint. El acto 1 conserva su fogón
+  (regla 15: la tarea del fuego primitivo queda retirada del prólogo, no del
+  juego).
+· QUINTO RESET del sandbox al abrir la ronda — recuperación limpia de GitHub
+  (Cesar ya había pushado la R100); esta vez CERO pérdida.
+· VERIFICADO EN VIVO (sondas + captura de escritorio): mejillas restantes 0 y
+  obra del fogón muerta, SiloDeLodo.x0=364 con el depósito intacto en 412,
+  marcos en L con sus escalones de tubo en los flancos y relleno suave sin
+  losa, 0 errores de consola. El check sonoro se estrena con Cesar (audio no
+  capturable).
+· ca_playtest101.cmd barre la ronda.

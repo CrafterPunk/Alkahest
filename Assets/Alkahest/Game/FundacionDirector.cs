@@ -314,8 +314,10 @@ namespace Alkahest.Game
                     _deposito.Init(_sim, 20, conTubo: true, cargaInstantanea: true);
                     _deposito.Aparecer();
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, 16, conTubo: true, cargaInstantanea: true);
+                    _silo.InitSilo(_sim, 16, conTubo: true, cargaInstantanea: true,
+                        xRenacer: SimLevelBuilder.FundacionSiloRenacerX0); // (R101) el checkpoint calca el corrimiento del ORDEN real.
                     _silo.Aparecer();
+                    RetirarFogon(); // (R101) también en el atajo: mundo ordenado = sin hogar vacío.
                     // La luz del amanecer, directa.
                     _radioObjetivo = UiStyles.S(_g.radioAmanecer);
                     _radio = _radioObjetivo;
@@ -1307,8 +1309,10 @@ namespace Alkahest.Game
                     _deposito.Init(_sim, cargaAgua, conTubo: true, cargaInstantanea: true);
                     _deposito.Aparecer();
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, cargaLodo, conTubo: true, cargaInstantanea: true);
+                    _silo.InitSilo(_sim, cargaLodo, conTubo: true, cargaInstantanea: true,
+                        xRenacer: SimLevelBuilder.FundacionSiloRenacerX0); // (R101) corrido a la izquierda: que no pise el marco del slot A.
                     _silo.Aparecer();
+                    RetirarFogon(); // (R101) el ORDEN barre el hogar vacío: sus mejillas eran resto anticincel entre los reservorios.
                     Debug.Log("[TenThousandYears] RENACER: ambos a ~1/5 (agua=" + cargaAgua + ", lodo=" + cargaLodo + "); el refill los COMPLETARÁ cada vez más lento (todo toma tiempo).");
                     _reordenPaso = 4; _tPaso = 0f;
                     break;
@@ -2073,21 +2077,78 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (R100) El marco punteado de cada slot LIBRE del Acomodo: la huella
-        /// real (8 celdas, adyacentes sin solape) a la altura visual del
-        /// tanque, en blanco papel cálido y trazo QUIETO — el mismo delineante
-        /// del censo de la mudanza, pero el destino no desfila: espera. La
-        /// respiración va en el velo de fondo (LatirSilueta), no aquí.
+        /// (R100 → R101, Cesar: "las siluetas no tienen la misma dimensión ni
+        /// forma de los contornos de los contenedores") El marcador de cada
+        /// slot LIBRE es ahora LA MISMA L del contorno del contenedor en su
+        /// POSE FINAL: rect visual completo (10 celdas de vuelo a vuelo, domo
+        /// incluido) + el saliente del tubo, ESPEJADO como quedará al
+        /// encajar los dos (A tubo a la izquierda, B a la derecha — dos
+        /// sujetalibros). El trazo sigue QUIETO (el destino espera, no
+        /// desfila) en papel cálido. Los cuerpos se cruzan 2 columnas al
+        /// centro — como se cruzarán los sprites reales: verdad, no error.
+        /// (R101.b) Y por dentro, UN RELLENO LATIENTE en el tono de las
+        /// fichas del tutorial WASD (mismo orden de menú), dibujado en IMGUI
+        /// — el espacio GAMMA, donde un alfa chico ES chico (la lección de la
+        /// losa gris del velo R100, que vivía en el mundo lineal). El relleno
+        /// se parte en el eje compartido (387) para que el cruce no sume
+        /// doble brillo.
         /// </summary>
+        private static readonly List<Vector2> _poliSlot = new List<Vector2>(8);
+
         private void DibujarMarcosDeSlots()
         {
             if (_silSlotA == null && _silSlotB == null) return; // solo viven durante el Acomodo con slots libres.
             float c = SimRenderer.CellWorldSize;
             var papel = new Color(0.95f, 0.93f, 0.86f);
+            var ficha = new Color(0.93f, 0.93f, 0.90f); // TutorialContextual.FichaFondo literal: el tono del orden WASD.
+            float lat = 0.050f + 0.028f * Mathf.Sin(Time.time * 2.4f); // late suave; IMGUI=gamma: esto SÍ es sutil.
+            // La geometría del contenedor, calcada de IMovibleSilueta:
+            // span visual 10, alto 19, tapón del tubo en +16, saliente 2.
+            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES.
+            int eje = SlotBX0;                              // 387: la costura entre huellas.
+            float piso = SlotY0 * c, tapon = (SlotY0 + 16) * c, domo = (SlotY0 + 19) * c;
+
             if (_silSlotA != null && !_slotAOcupado)
-                Mudanza.MarcarRectMundo(SlotAX0 * c, SlotY0 * c, (SlotAX0 + 8) * c, (SlotY0 + 19) * c, papel, 0.60f);
+            {
+                // Relleno (cuerpo hasta la costura + tubo), luego la L.
+                RellenarMundo((aA) * c, piso, eje * c, domo, ficha, lat);
+                RellenarMundo((aA - 2) * c, piso, aA * c, tapon, ficha, lat);
+                _poliSlot.Clear();
+                _poliSlot.Add(new Vector2((aA - 2) * c, piso));
+                _poliSlot.Add(new Vector2((aA - 2) * c, tapon));
+                _poliSlot.Add(new Vector2(aA * c, tapon));
+                _poliSlot.Add(new Vector2(aA * c, domo));
+                _poliSlot.Add(new Vector2((aA + 10) * c, domo));
+                _poliSlot.Add(new Vector2((aA + 10) * c, piso));
+                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
+            }
             if (_silSlotB != null && !_slotBOcupado)
-                Mudanza.MarcarRectMundo(SlotBX0 * c, SlotY0 * c, (SlotBX0 + 8) * c, (SlotY0 + 19) * c, papel, 0.60f);
+            {
+                RellenarMundo(eje * c, piso, (aB + 10) * c, domo, ficha, lat);
+                RellenarMundo((aB + 10) * c, piso, (aB + 12) * c, tapon, ficha, lat);
+                _poliSlot.Clear();
+                _poliSlot.Add(new Vector2(aB * c, piso));
+                _poliSlot.Add(new Vector2(aB * c, domo));
+                _poliSlot.Add(new Vector2((aB + 10) * c, domo));
+                _poliSlot.Add(new Vector2((aB + 10) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 12) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 12) * c, piso));
+                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
+            }
+        }
+
+        /// <summary>(R101) Un rect de mundo relleno en IMGUI (gamma): las dos esquinas a pantalla y listo.</summary>
+        private void RellenarMundo(float wx0, float wy0, float wx1, float wy1, Color col, float alfa)
+        {
+            var cam = Camera.main;
+            if (cam == null || alfa <= 0.004f) return;
+            Vector3 pa = cam.WorldToScreenPoint(new Vector3(wx0, wy0, 0f));
+            Vector3 pb = cam.WorldToScreenPoint(new Vector3(wx1, wy1, 0f));
+            if (pa.z < 0f || pb.z < 0f) return;
+            float x0 = Mathf.Min(pa.x, pb.x), x1 = Mathf.Max(pa.x, pb.x);
+            float y0 = Mathf.Min(Screen.height - pa.y, Screen.height - pb.y);
+            float y1 = Mathf.Max(Screen.height - pa.y, Screen.height - pb.y);
+            UiStyles.Rellenar(new Rect(x0, y0, x1 - x0, y1 - y0), new Color(col.r, col.g, col.b, alfa));
         }
 
         /// <summary>(R100) Deja una silueta como puro estado: sprite invisible, el GameObject sigue marcando "este slot existe y esta libre".</summary>
@@ -2515,7 +2576,41 @@ namespace Alkahest.Game
 
         private void BlipSlot()
         {
-            if (_audio != null) { _audio.pitch = 1.25f; _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.35f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
+            // (R101, Cesar: "un sonido gratificante de check... algo así
+            // [como la indicación WASD]") El MISMO timbre de las fichas del
+            // tutorial (TutorialConfirma — el orden de menú al que pertenece
+            // este marcador) + un clank corto: el check y el peso, juntos.
+            if (_audio == null) return;
+            _audio.pitch = 1.15f;
+            _audio.PlayOneShot(Audio.SintetizadorSfx.TutorialConfirma, 0.60f * Audio.DirectorDeAudio.VolumenEfectos);
+            _audio.PlayOneShot(Audio.SintetizadorSfx.Clank, 0.22f * Audio.DirectorDeAudio.VolumenEfectos);
+            _audio.pitch = 1f;
+        }
+
+        /// <summary>
+        /// (R101, Cesar: "quedan cositos que sobresalen del suelo que no
+        /// puede quitar el cincel... resto de algo que ya no usamos") EL
+        /// ORDEN BARRE EL HOGAR VACÍO: el fuego propio del jugador nunca
+        /// llegó al guion final del prólogo (la veta de turba se retiró en
+        /// R79) y sus dos mejillas de piedra quedaban de estorbo ANTICINCEL
+        /// entre los reservorios del mundo ordenado. Se borran las mejillas
+        /// (el suelo de y139 no se toca) y se degenera su obra — el sitio
+        /// queda libre de verdad, cincel incluido. El acto 1 conserva su
+        /// fogón intacto: esto solo corre con el ORDEN (regla 15: el fuego
+        /// primitivo como TAREA queda retirado del prólogo, no del juego).
+        /// </summary>
+        private void RetirarFogon()
+        {
+            if (_sim == null) return;
+            int y0 = SimLevelBuilder.FundacionY0;
+            for (int y = y0; y <= y0 + 2; y++)
+            {
+                for (int x = SimLevelBuilder.FundacionFogonX0 - 2; x <= SimLevelBuilder.FundacionFogonX0 - 1; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+                for (int x = SimLevelBuilder.FundacionFogonX1 + 1; x <= SimLevelBuilder.FundacionFogonX1 + 2; x++)
+                    _sim.Paint(x, y, 0, MaterialId.Empty);
+            }
+            SimLevelBuilder.ActualizarObra(SimLevelBuilder.FundacionFogonObra, 0, 0, -1, -1);
         }
 
         private bool HayReservorioEn(int slotX0)
