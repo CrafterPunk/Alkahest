@@ -5603,3 +5603,41 @@ ca_playtest84.cmd barre la ronda.
   8/8 texturas del puntero sin excepción, imp frontal con plano (captura), retícula
   cedida, 0 errores de consola en todo el ciclo.
 · ca_playtest98.cmd barre la ronda.
+
+## Ronda 99 — LA SILUETA REAL Y LAS HORMIGAS (el contorno con cariño)
+
+· Cesar, del playtest R98: "el contorno de los contenedores no es exacto, no lo
+  cubre con su tubo de refill... un contorno de rallitas, algo de movimiento, se
+  siente tosco y sin gracia. Mira ejemplos de traslados y tráenos buenas
+  prácticas". Investigado: el canon es Photoshop/RimWorld — hormigas marchantes
+  (guiones que DESFILAN a paso constante, jamás pulsando el alfa) para "esto
+  está en proceso", y la silueta de la HUELLA REAL con accesorios incluidos
+  (Factorio enseña la caja completa). Adaptado entero:
+· IMovibleSilueta (interfaz nueva): el aparato no-rectangular dicta su propio
+  perímetro (polígono rectilíneo horario, Y arriba). El depósito entrega su L:
+  cuerpo + saliente del tubo (2 celdas del flanco, tapón en _y1+4), del lado
+  donde el tubo VIVE HOY (Reposicionar lo espeja; el signo de localPosition.x
+  es la verdad). Agarre/silueta/CabeEnAncla siguen midiendo el cuerpo.
+· LA MARCHA: una sola corrida de guiones (S(5)/S(4)) recorre el perímetro
+  entero con fase global Time.time — un periodo por segundo, sentido horario,
+  el paso del delineante paciente. Los guiones CRUZAN las esquinas
+  partiéndose. TRASLACIÓN pura: el veto R81 #13 (alfa que respira) sigue en pie.
+· EL CANDIDATO EN LATÓN: el aparato bajo el cursor al alcance marcha en el
+  latón del puño del puntero (mismo vocabulario: latón = puedes) y sube a 0.85.
+· InflarPoligono: el aire S(2) ahora infla el polígono entero (arista fuera por
+  su normal exterior, vértices recruzados: la vertical fija X, la horizontal Y).
+· DOS BUGS CAZADOS EN LA VERIFICACIÓN EN VIVO (captura de escritorio real,
+  permiso de Cesar — primera vez que el agente VE la IMGUI):
+  (1) EL CENSO MUDO (latente de R98): el stagger tapaba el retraso a 0.28 s con
+  presupuesto total EstadoT*0.22 ≤ 0.22 — todo índice ≥ 7 quedaba en alfa CERO
+  PARA SIEMPRE. Con la estantería registrada (8 baldas + 6 anclajes + 2 pilas
+  ANTES que los tanques) el censo entero desaparecía — la causa raíz del "No vi
+  esto" de Cesar. Techo 0.13 y el índice cuenta VIVOS, no huecos.
+  (2) InflarPoligono mutaba vértices EN SITIO mientras el test de verticalidad
+  leía los ya inflados: polígono corrupto, contorno invisible. Todo se mide
+  sobre el original antes de tocar un vértice.
+· VERIFICADO EN VIVO con capturas de escritorio: ambos tanques con su L exacta
+  (sonda: 6 puntos, (411..423)×(140..159) con hombro en 156), guiones en fase
+  distinta entre capturas (la marcha marcha), manita del puntero visible,
+  0 errores de consola. Los 16 muebles de la estantería también censados.
+· ca_playtest99.cmd barre la ronda.

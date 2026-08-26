@@ -35,7 +35,7 @@ namespace Alkahest.Game
     /// lo muda ENTERO — muros, fondo, contenido, obra, visual y tubo — a otra
     /// ancla. Antes del ORDEN sigue clavado donde el plano lo decreta.
     /// </summary>
-    public sealed class DepositoDeAgua : MonoBehaviour, IMovible, IMovibleAnclaEsquina
+    public sealed class DepositoDeAgua : MonoBehaviour, IMovible, IMovibleAnclaEsquina, IMovibleSilueta
     {
         // ---- Los números del esqueleto ----
         // (R75) Duración de la emergencia y carga inicial viven en el GUION
@@ -214,6 +214,53 @@ namespace Alkahest.Game
         }
 
         void IMovible.Reposicionar(Vector2Int anclaVisual) => Reposicionar(anclaVisual.x + 1, anclaVisual.y); // visual → huella.
+
+        // (R99, Cesar: "no lo cubre con su tubo de refill") LA SILUETA REAL:
+        // el rect visual del cuerpo + el saliente del tubo grueso — una L,
+        // solo cuando el tubo está INSTALADO y del flanco donde vive HOY
+        // (Reposicionar lo espeja; el signo de su localPosition.x es la
+        // verdad). Números medidos de InstalarTubo/Reposicionar: sprite de
+        // 3c centrado a ±(_x1+2.5 − centro) ⇒ sobresale 2 celdas del borde
+        // visual; su tapón remata en _y1+4 (altoCeldas = span+4 desde _y0),
+        // 3 celdas por debajo del domo (_y1+7). Sentido HORARIO, Y arriba —
+        // el contrato exacto de InflarPoligono.
+        bool IMovibleSilueta.PerimetroVisual(List<Vector2> puntos)
+        {
+            if (_fase != Fase.Listo) return false;
+            float c = SimRenderer.CellWorldSize;
+            float izq = (_x0 - 1) * c, der = (_x1 + 2) * c, piso = _y0 * c, domo = (_y1 + 7) * c;
+            bool conSaliente = _tuboInstalado && _tuboGo != null;
+            if (!conSaliente)
+            {
+                puntos.Add(new Vector2(izq, piso));
+                puntos.Add(new Vector2(izq, domo));
+                puntos.Add(new Vector2(der, domo));
+                puntos.Add(new Vector2(der, piso));
+                return true;
+            }
+            float tapon = (_y1 + 4) * c;
+            if (_tuboGo.transform.localPosition.x > 0f) // flanco derecho.
+            {
+                float tuboDer = (_x1 + 4) * c;
+                puntos.Add(new Vector2(izq, piso));
+                puntos.Add(new Vector2(izq, domo));
+                puntos.Add(new Vector2(der, domo));
+                puntos.Add(new Vector2(der, tapon));
+                puntos.Add(new Vector2(tuboDer, tapon));
+                puntos.Add(new Vector2(tuboDer, piso));
+            }
+            else // espejado al flanco izquierdo.
+            {
+                float tuboIzq = (_x0 - 3) * c;
+                puntos.Add(new Vector2(tuboIzq, piso));
+                puntos.Add(new Vector2(tuboIzq, tapon));
+                puntos.Add(new Vector2(izq, tapon));
+                puntos.Add(new Vector2(izq, domo));
+                puntos.Add(new Vector2(der, domo));
+                puntos.Add(new Vector2(der, piso));
+            }
+            return true;
+        }
 
         /// <summary>
         /// (R93) LA MUDANZA ENTERA: captura el contenido del vidrio (en orden

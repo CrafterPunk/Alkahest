@@ -109,6 +109,24 @@ namespace Alkahest.Game
     public interface IMovibleAnclaEsquina : IMovible { }
 
     /// <summary>
+    /// (R99, Cesar: "el contorno de los contenedores no es exacto, no lo
+    /// cubre con su tubo de refill") El aparato que NO es un rectángulo
+    /// puede dictar su propia silueta: un polígono RECTILÍNEO (solo aristas
+    /// horizontales/verticales, como todo lo que talla la sim) en unidades
+    /// de MUNDO, sentido HORARIO con el eje Y hacia arriba. Mudanza lo usa
+    /// únicamente para el trazo del contorno punteado (DibujarContornos) —
+    /// la detección de agarre, la silueta de arrastre y CabeEnAncla siguen
+    /// midiendo con CentroMundo/TamanoMundo, que es honesto: la mano agarra
+    /// el cuerpo, no el tubo. Devolver false = "hoy soy un rectángulo"
+    /// (fallback al rect visual genérico), para que el aparato no tenga que
+    /// duplicar la fórmula del rect cuando su accesorio aún no existe.
+    /// </summary>
+    public interface IMovibleSilueta : IMovible
+    {
+        bool PerimetroVisual(List<Vector2> puntos);
+    }
+
+    /// <summary>
     /// EL MODO MUDANZA (playtest 19, "taller movible"): agarrar un aparato del
     /// banco y recolocarlo donde quiera el jugador. Cesar, la noche antes de
     /// probar esto: *"ya tengo ganas de mover las cosas a mi antojo porque
@@ -941,15 +959,21 @@ namespace Alkahest.Game
         //     habla — latón=puedes, rojo=no llegas, verde/rojo=el veredicto
         //     del sitio (ColorValido/ColorInvalido LITERALES: la mano y la
         //     silueta dicen lo mismo porque SON lo mismo).
-        //   · LOS CONTORNOS PUNTEADOS: cada IMovible en pantalla lleva su
-        //     trazo de delineante (guion S(5), hueco S(4): ~un guion por
-        //     celda sin cuadrar nunca — plano de obra, no rejilla), medido
-        //     sobre el rect VISUAL (CentroMundo ± TamanoMundo/2, la única
-        //     fórmula válida para ancla-esquina Y ancla-boquilla) + S(2) de
-        //     aire. Estáticos (la casa vetó líneas pulsando en permanencia,
-        //     revisión Opus R81 #13); solo LATEN al nacer (stagger 0.035 s,
-        //     cap 0.28) y mueren juntos al salir. En alcance 0.55, fuera
-        //     0.28 — dos escalones, sin degradado: regla, no iluminación.
+        //   · LOS CONTORNOS PUNTEADOS (R99, tras el veredicto "tosco y sin
+        //     gracia"): cada IMovible lleva su trazo de delineante (guion
+        //     S(5), hueco S(4)) sobre su SILUETA REAL — el polígono de
+        //     IMovibleSilueta si el aparato dicta uno (el depósito incluye
+        //     su tubo de refill: forma de L), o el rect visual genérico si
+        //     no. Y el trazo DESFILA: hormigas marchantes de manual
+        //     (Photoshop/RimWorld — la práctica universal para "esto está
+        //     seleccionable/en proceso"), un periodo S(9) por segundo en
+        //     sentido horario, TRASLACIÓN pura — el veto R81 #13 sigue en
+        //     pie: el alfa jamás pulsa, lo que se mueve es la tinta. El
+        //     candidato bajo el cursor cambia su corrida a LATÓN (el mismo
+        //     latón del puño y del relleno "puedes" del puntero: un solo
+        //     vocabulario) y sube a 0.85; el resto en alcance 0.55, lejos
+        //     0.28 — escalones, sin degradado: regla, no iluminación.
+        //     Nacen con stagger (0.035 s, cap 0.28) y mueren juntos.
         //   · Al AGARRAR (_focoT): el contorno del agarrado se disuelve
         //     dentro de su silueta (0.12 s) y el censo del resto retrocede
         //     a 40% — el cuarto entero cuenta el gesto.
@@ -1082,15 +1106,66 @@ namespace Alkahest.Game
             GUI.color = prev;
         }
 
+        // (R99) Búferes del trazo — reusados por frame, cero allocs en OnGUI.
+        private static readonly List<Vector2> _poliMundo = new List<Vector2>(8);
+        private static readonly List<Vector2> _poliPantalla = new List<Vector2>(8);
+        private static readonly List<Vector2> _poliTmp = new List<Vector2>(8);
+
+        /// <summary>
+        /// (R99) Infla un polígono RECTILÍNEO horario (Y hacia arriba) hacia
+        /// afuera: cada arista se desplaza `aire` por su normal exterior (la
+        /// IZQUIERDA del avance, con este winding) y los vértices se
+        /// recruzan — trivial con aristas de ejes: la vertical fija X, la
+        /// horizontal fija Y. El cóncavo del hombro del tubo sale gratis.
+        /// </summary>
+        private static readonly bool[] _aristaVertical = new bool[16];
+
+        private static void InflarPoligono(List<Vector2> p, float aire)
+        {
+            int n = p.Count;
+            if (n > _aristaVertical.Length) return; // jamás en la práctica (L = 6 vértices).
+            _poliTmp.Clear();
+            // 1) TODO se mide sobre el polígono ORIGINAL antes de tocar un solo
+            //    vértice (la primera versión mutaba en sitio y el test de
+            //    verticalidad leía vértices ya inflados: polígono corrupto).
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 a = p[i], b = p[(i + 1) % n];
+                _aristaVertical[i] = Mathf.Abs(b.x - a.x) < 1e-4f; // arista i = p[i]→p[i+1].
+                Vector2 d = b - a;
+                float len = d.magnitude;
+                if (len < 1e-5f) { _poliTmp.Add(a); continue; }
+                d /= len;
+                _poliTmp.Add(a + new Vector2(-d.y, d.x) * aire); // exterior = izquierda del avance (horario, Y arriba).
+            }
+            // 2) vértice i = cruce de la arista prev (desplazada) con la arista i
+            //    (desplazada): la vertical fija X, la horizontal fija Y.
+            for (int i = 0; i < n; i++)
+            {
+                int prev = (i - 1 + n) % n;
+                p[i] = _aristaVertical[prev]
+                    ? new Vector2(_poliTmp[prev].x, _poliTmp[i].y)
+                    : new Vector2(_poliTmp[i].x, _poliTmp[prev].y);
+            }
+        }
+
         private void DibujarContornos()
         {
             var cam = Camera.main;
             if (cam == null) return;
             float grosor = Mathf.Max(1f, Mathf.Round(UiStyles.Escala)); // la expresión EXACTA de la retícula: línea de delineante.
             float guion = UiStyles.S(5f), huecoG = UiStyles.S(4f), aire = UiStyles.S(2f), margen = UiStyles.S(24f);
+            float periodo = guion + huecoG;
+            // (R99) LAS HORMIGAS: la corrida entera desfila UN periodo por
+            // segundo — el paso del delineante paciente, no una alarma. La
+            // fase es global: todos los aparatos marchan al mismo compás.
+            float fase = Mathf.Repeat(Time.time * periodo, periodo);
             var azul = new Color(IconoMudanza.r / 255f, IconoMudanza.g / 255f, IconoMudanza.b / 255f);
             float restoFactor = Mathf.Lerp(1f, 0.40f, _focoT);
+            float pxPorMundo = Screen.height / (2f * cam.orthographicSize);
+            float aireMundo = aire / Mathf.Max(1e-3f, pxPorMundo);
 
+            int vivo = 0; // (R99) el stagger cuenta VISIBLES, no huecos de la lista.
             for (int i = 0; i < _movibles.Count; i++)
             {
                 var m = _movibles[i];
@@ -1098,38 +1173,87 @@ namespace Alkahest.Game
                 if (comoObjeto == null) continue; // la limpieza real vive en BuscarCandidato.
 
                 Vector3 centro = m.CentroMundo;
-                Vector2 tam = m.TamanoMundo;
-                Vector3 pa = cam.WorldToScreenPoint(centro - new Vector3(tam.x * 0.5f, tam.y * 0.5f, 0f));
-                Vector3 pb = cam.WorldToScreenPoint(centro + new Vector3(tam.x * 0.5f, tam.y * 0.5f, 0f));
-                if (pa.z < 0f || pb.z < 0f) continue;
-                float x0 = Mathf.Min(pa.x, pb.x) - aire, x1 = Mathf.Max(pa.x, pb.x) + aire;
-                float y0 = Mathf.Min(Screen.height - pa.y, Screen.height - pb.y) - aire;
-                float y1 = Mathf.Max(Screen.height - pa.y, Screen.height - pb.y) + aire;
-                if (x1 < -margen || x0 > Screen.width + margen || y1 < -margen || y0 > Screen.height + margen) continue;
 
-                float alfa = DentroDeAlcance(centro) ? 0.55f : 0.28f; // dos escalones, sin degradado.
+                // 1) LA SILUETA en mundo: la propia del aparato (con tubo y
+                //    todo) o el rect visual genérico, siempre horaria.
+                _poliMundo.Clear();
+                var conSilueta = m as IMovibleSilueta;
+                if (conSilueta == null || !conSilueta.PerimetroVisual(_poliMundo) || _poliMundo.Count < 4)
+                {
+                    _poliMundo.Clear();
+                    Vector2 tam = m.TamanoMundo;
+                    float hx = tam.x * 0.5f, hy = tam.y * 0.5f;
+                    _poliMundo.Add(new Vector2(centro.x - hx, centro.y - hy));
+                    _poliMundo.Add(new Vector2(centro.x - hx, centro.y + hy));
+                    _poliMundo.Add(new Vector2(centro.x + hx, centro.y + hy));
+                    _poliMundo.Add(new Vector2(centro.x + hx, centro.y - hy));
+                }
+                InflarPoligono(_poliMundo, aireMundo);
+
+                // 2) A pantalla (GUI: Y hacia abajo) + culling por caja.
+                _poliPantalla.Clear();
+                float bx0 = float.MaxValue, bx1 = float.MinValue, by0 = float.MaxValue, by1 = float.MinValue;
+                bool detras = false;
+                for (int k = 0; k < _poliMundo.Count; k++)
+                {
+                    Vector3 sp = cam.WorldToScreenPoint(new Vector3(_poliMundo[k].x, _poliMundo[k].y, 0f));
+                    if (sp.z < 0f) { detras = true; break; }
+                    var q = new Vector2(sp.x, Screen.height - sp.y);
+                    _poliPantalla.Add(q);
+                    bx0 = Mathf.Min(bx0, q.x); bx1 = Mathf.Max(bx1, q.x);
+                    by0 = Mathf.Min(by0, q.y); by1 = Mathf.Max(by1, q.y);
+                }
+                if (detras) continue;
+                if (bx1 < -margen || bx0 > Screen.width + margen || by1 < -margen || by0 > Screen.height + margen) continue;
+
+                // 3) EL ALFA (escalones R98) y EL COLOR: el candidato bajo el
+                //    cursor marcha en LATÓN — la misma promesa que el puntero.
+                bool esCandidatoVivo = _llevando == null && ReferenceEquals(m, _candidato) && _candidatoEnAlcance;
+                float alfa = esCandidatoVivo ? 0.85f : (DentroDeAlcance(centro) ? 0.55f : 0.28f);
                 if (ReferenceEquals(m, _llevando)) alfa *= 1f - _focoT;   // el agarrado se disuelve en su silueta.
                 else alfa *= restoFactor;                                  // el censo retrocede mientras llevas algo.
                 // El stagger de ENTRADA (un plano revelándose); la salida muere junta sobre EstadoT.
+                // (R99, EL BUG DEL CENSO MUDO: el techo del retraso era 0.28 s con un presupuesto
+                // total de EstadoT*0.22 ≤ 0.22 — todo índice ≥ 7 quedaba en alfa 0 PARA SIEMPRE;
+                // con la estantería registrada (16 piezas antes que los tanques) el censo entero
+                // desaparecía. Techo 0.13: el último entra justo cuando EstadoT clava el 1.)
                 float ti = ModoActivo
-                    ? Mathf.Clamp01((EstadoT * 0.22f - Mathf.Min(0.035f * i, 0.28f)) / 0.09f)
+                    ? Mathf.Clamp01((EstadoT * 0.22f - Mathf.Min(0.035f * vivo, 0.13f)) / 0.09f)
                     : EstadoT;
+                vivo++;
                 alfa *= ti;
                 if (alfa <= 0.01f) continue;
-                var c = new Color(azul.r, azul.g, azul.b, alfa);
+                Color baseCol = esCandidatoVivo ? PunteroLaton : azul;
+                var c = new Color(baseCol.r, baseCol.g, baseCol.b, alfa);
 
-                // Cada lado arranca su corrida DESDE LA ESQUINA (las esquinas siempre tienen tinta) y recorta el último guion.
-                for (float x = x0; x < x1; x += guion + huecoG)
+                // 4) LA MARCHA: una sola corrida de guiones recorre el
+                //    perímetro entero con fase compartida — los guiones
+                //    CRUZAN las esquinas partiéndose (mitad en cada arista),
+                //    que es justo lo que vende el desfile.
+                float s = 0f;
+                int nPts = _poliPantalla.Count;
+                for (int k = 0; k < nPts; k++)
                 {
-                    float w = Mathf.Min(guion, x1 - x);
-                    UiStyles.Rellenar(new Rect(x, y0 - grosor * 0.5f, w, grosor), c);
-                    UiStyles.Rellenar(new Rect(x, y1 - grosor * 0.5f, w, grosor), c);
-                }
-                for (float y = y0; y < y1; y += guion + huecoG)
-                {
-                    float hh = Mathf.Min(guion, y1 - y);
-                    UiStyles.Rellenar(new Rect(x0 - grosor * 0.5f, y, grosor, hh), c);
-                    UiStyles.Rellenar(new Rect(x1 - grosor * 0.5f, y, grosor, hh), c);
+                    Vector2 a = _poliPantalla[k], b = _poliPantalla[(k + 1) % nPts];
+                    float len = (b - a).magnitude;
+                    if (len < 0.5f) continue;
+                    Vector2 d = (b - a) / len;
+                    // guiones del patrón global [fase + j*periodo, +guion) que tocan [s, s+len).
+                    float j0 = Mathf.Floor((s - fase - guion) / periodo);
+                    for (float j = j0; ; j++)
+                    {
+                        float g0 = fase + j * periodo;
+                        if (g0 >= s + len) break;
+                        float s0 = Mathf.Max(s, g0), s1 = Mathf.Min(s + len, g0 + guion);
+                        if (s1 <= s0) continue;
+                        Vector2 q = a + d * (s0 - s);
+                        float w = s1 - s0;
+                        if (Mathf.Abs(d.x) > 0.5f)
+                            UiStyles.Rellenar(new Rect(Mathf.Min(q.x, q.x + d.x * w), q.y - grosor * 0.5f, w, grosor), c);
+                        else
+                            UiStyles.Rellenar(new Rect(q.x - grosor * 0.5f, Mathf.Min(q.y, q.y + d.y * w), grosor, w), c);
+                    }
+                    s += len;
                 }
             }
         }
