@@ -2808,10 +2808,17 @@ namespace Alkahest.Game
                     break;
                 }
 
-                case 7: // EL TÍTULO (2.60 s): sobre el negro — 0.90 s de la palabra SOLA — y el amanecer definitivo naciendo DEBAJO de ella.
+                case 7: // EL AMANECER (2.60 s): sobre el negro, el mundo se ensambla alrededor de su fuego.
+                    // (R104, regla 15) EL TÍTULO SE RETIRÓ de este paso: Cesar,
+                    // antes de su primera prueba con usuarios — "elimina el
+                    // título al final de la parte 2, no hemos construido ese
+                    // momento aún, y encima estaba súper grande". El ritmo del
+                    // paso queda INTACTO (negro → subgrave → amanecer): solo
+                    // calla la palabra. DecirTitulo/_vozEsTitulo/
+                    // PrepararEstiloTitulo quedan vivos esperando el momento
+                    // que sí se construya.
                     if (_tPaso - Time.deltaTime <= 0f)
                     {
-                        DecirTitulo("TEN THOUSAND YEARS.", 0.62f, 4.4f); // (R95, Cesar: "el nombre está en inglés SIEMPRE; solo el eslogan se traduce") — el título es el nombre propio del juego, no una frase suya.
                         if (_audio != null) { _audio.pitch = 0.50f; _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 0.70f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
                     }
                     if (_tPaso >= 1.35f)
@@ -2824,7 +2831,7 @@ namespace Alkahest.Game
                     _adiosPaso = 8; _tPaso = 0f;
                     break;
 
-                case 8: // LA IMAGEN COMPLETA (1.70 s): no pasa nada. Tu plinto, sus reservorios, el fuego, el tablón, y el destello frío al oeste — bajo la palabra que empieza a irse.
+                case 8: // LA IMAGEN COMPLETA (1.70 s): no pasa nada. Tu plinto, sus reservorios, el fuego y el tablón — el taller entero, en silencio. (R104: la palabra ya no está.)
                     if (_tPaso < 1.70f) return;
                     _adiosPaso = 9; _tPaso = 0f;
                     break;

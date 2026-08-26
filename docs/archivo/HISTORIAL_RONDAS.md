@@ -5818,3 +5818,16 @@ ca_playtest84.cmd barre la ronda.
   consola. Los marcos nuevos se estrenan con Cesar (misma ruta de dibujo ya
   verificada en R101).
 · ca_playtest103.cmd barre la ronda.
+
+## Ronda 104 — EL TÍTULO CALLA (previa a la primera prueba con usuarios)
+
+· Cesar, antes de su PRIMERA PRUEBA CON USUARIOS: "elimina el título de TEN
+  THOUSAND YEARS al final de la parte 2 del prólogo — no hemos construido ese
+  momento aún, y encima estaba súper grande. Lets go".
+· El paso 7 del Adiós queda como EL AMANECER: el ritmo intacto (negro →
+  subgrave → el mundo ensamblándose alrededor de su fuego), solo calla la
+  palabra. DecirTitulo/_vozEsTitulo/PrepararEstiloTitulo quedan vivos (regla
+  15) esperando el momento del título que sí se construya.
+· Compilado EXIT=0, Refresh con editor detenido, 0 errores. Cambio quirúrgico:
+  un solo archivo, cero ritmos tocados — listo para la prueba.
+· ca_playtest104.cmd barre la ronda.
