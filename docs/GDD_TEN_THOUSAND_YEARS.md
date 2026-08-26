@@ -1,7 +1,7 @@
 # TEN THOUSAND YEARS — GDD v0.2
 
 > **Rebuild human knowledge from mud, fire, and observation.**
-> *Reconstruye el conocimiento humano con barro, fuego y observación.*
+> *Reconstruye el conocimiento humano a partir del barro, el fuego y la observación.*
 
 *(Fable, ronda 59. v0.2 integra TODAS las respuestas de Cesar a la v0.1: el inicio oscuro
 minimalista, el guardado con slots, el buzón de salida simétrico, el stock por tiempo, la

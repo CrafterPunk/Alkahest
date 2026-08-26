@@ -255,6 +255,9 @@ namespace Alkahest.Game
         private SpriteRenderer _bodySr;
         private Sprite _bodySpriteOpen;
         private Sprite _bodySpriteClosed;
+        private Sprite _bodySpriteFrontal; // (R98, placeholder a conciencia) la pose de capataz del modo mudanza: mismo lienzo, ojos al centro.
+        private SpriteRenderer _planoSr;   // (R98) el plano enrollado bajo el brazo — un rect crema, nada más (Cesar: "placeholder que sirva para entender").
+        private Transform _planoTr;
 
         private SpriteRenderer _wingBackSr, _wingFrontSr;
         private Transform _wingBackTr, _wingFrontTr;
@@ -676,7 +679,20 @@ namespace Alkahest.Game
                 _blinkUntil = Time.time + BlinkDuration;
                 ScheduleNextBlink();
             }
-            _bodySr.sprite = Time.time < _blinkUntil ? _bodySpriteClosed : _bodySpriteOpen;
+            // (R98) EL CAPATAZ: en modo mudanza el imp mira A CÁMARA (pose
+            // frontal, sin espejo — el frente no tiene lado) con su plano
+            // bajo el brazo. Alas y cola siguen batiendo: es un imp volador
+            // dirigiendo, no una estatua.
+            bool frontalMudanza = Mudanza.ModoActivo;
+            if (frontalMudanza) _bodySr.flipX = false;
+            _bodySr.sprite = frontalMudanza ? _bodySpriteFrontal
+                : (Time.time < _blinkUntil ? _bodySpriteClosed : _bodySpriteOpen);
+            if (_planoSr != null)
+            {
+                _planoSr.enabled = frontalMudanza;
+                if (frontalMudanza)
+                    _planoTr.localPosition = new Vector3(dirSign * 0.28f, -0.29f, VisualZOffset - 0.02f);
+            }
 
             // --- 5) El frasco que lleva: persigue con inercia leve el mismo
             // punto que usa Flask.cs (CarryAnchor) para su propio indicador de
@@ -759,6 +775,7 @@ namespace Alkahest.Game
 
             _bodySpriteOpen = CrearSprite(GenerateBodyTexture(false), new Vector2(0.5f, 0.5f));
             _bodySpriteClosed = CrearSprite(GenerateBodyTexture(true), new Vector2(0.5f, 0.5f));
+            _bodySpriteFrontal = CrearSprite(GenerateBodyTexture(false, frontal: true), new Vector2(0.5f, 0.5f)); // (R98) ojos juntos y pupilas centradas: a 8 px/celda ya se lee "volteó a cámara".
             _bodySr = CrearCapa(_tiltPivot, "Cuerpo", _bodySpriteOpen, sortingOrder);
 
             var flaskSprite = CrearSprite(GenerateCarriedFlaskTexture(), new Vector2(0.5f, 0.5f));
@@ -768,6 +785,20 @@ namespace Alkahest.Game
             // se le suma el cabeceo del cuerpo.
             _carriedFlaskSr = CrearCapa(transform, "FrascoCargado", flaskSprite, sortingOrder + 2);
             _carriedFlaskTr = _carriedFlaskSr.transform;
+
+            // (R98) EL PLANO ENROLLADO del modo mudanza: un tubo crema 6x9 px
+            // bajo el brazo, ladeado como batuta (-24°). Placeholder a
+            // conciencia — sin remates de latón (mandato de Cesar).
+            var planoGo = new GameObject("PlanoEnMano");
+            planoGo.transform.SetParent(transform, false);
+            _planoTr = planoGo.transform;
+            _planoSr = planoGo.AddComponent<SpriteRenderer>();
+            _planoSr.sprite = MaquinariaSprites.Solido();
+            _planoSr.sortingOrder = sortingOrder + 3;
+            _planoSr.color = new Color(226f / 255f, 214f / 255f, 182f / 255f, 1f);
+            _planoTr.localScale = new Vector3(0.06f, 0.09f, 1f);
+            _planoTr.localRotation = Quaternion.Euler(0f, 0f, -24f);
+            _planoSr.enabled = false;
 
             // (playtest 28) Las cuatro capas del CUERPO que lleva la librea de
             // color del jugador. Se registran DESPUÉS de que el ala trasera
@@ -803,7 +834,7 @@ namespace Alkahest.Game
         /// detalle), collar y gema de latón, dos cuernecillos con punta
         /// pulida, y los ojos (el foco de la lectura del personaje).
         /// </summary>
-        private static Texture2D GenerateBodyTexture(bool eyesClosed)
+        private static Texture2D GenerateBodyTexture(bool eyesClosed, bool frontal = false)
         {
             const int w = BodyTexW, h = BodyTexH;
             var px = new Color32[w * h];
@@ -867,15 +898,17 @@ namespace Alkahest.Game
             // Ojos: grandes, claros, con punto de luz — el foco de la lectura.
             // La pupila mira ligeramente hacia el frente (curiosidad, hacia
             // donde el jugador va a llevar al personaje).
-            const float eyeY = 57f, eyeOffX = 10f, eyeRx = 7.2f, eyeRy = 8.2f;
-            DrawEye(px, w, h, cx - eyeOffX, eyeY, eyeRx, eyeRy, eyesClosed);
-            DrawEye(px, w, h, cx + eyeOffX, eyeY, eyeRx, eyeRy, eyesClosed);
+            const float eyeY = 57f, eyeRx = 7.2f, eyeRy = 8.2f;
+            float eyeOffX = frontal ? 7f : 10f;          // (R98) frontal: ojos más juntos —
+            float pupilBias = frontal ? 0f : 1.6f;       // — y pupilas centradas: te mira a TI.
+            DrawEye(px, w, h, cx - eyeOffX, eyeY, eyeRx, eyeRy, eyesClosed, pupilBias);
+            DrawEye(px, w, h, cx + eyeOffX, eyeY, eyeRx, eyeRy, eyesClosed, pupilBias);
 
             AplicarContorno(px, w, h, ColOutline);
             return CrearTextura(px, w, h, eyesClosed ? "AlkahestApprenticeCuerpoCerrado" : "AlkahestApprenticeCuerpoAbierto");
         }
 
-        private static void DrawEye(Color32[] px, int w, int h, float ex, float ey, float rx, float ry, bool closed)
+        private static void DrawEye(Color32[] px, int w, int h, float ex, float ey, float rx, float ry, bool closed, float pupilBias = 1.6f)
         {
             if (closed)
             {
@@ -894,7 +927,7 @@ namespace Alkahest.Game
             }
 
             FillEllipse(px, w, h, ex, ey, rx, ry, ColEyeWhite);
-            FillEllipse(px, w, h, ex + 1.6f, ey - 0.4f, rx * 0.46f, ry * 0.5f, ColEyePupil);
+            FillEllipse(px, w, h, ex + pupilBias, ey - 0.4f, rx * 0.46f, ry * 0.5f, ColEyePupil);
             FillEllipse(px, w, h, ex + 0.2f, ey + 2.0f, rx * 0.16f, ry * 0.16f, ColEyeHighlight);
         }
 

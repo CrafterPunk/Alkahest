@@ -1,6 +1,6 @@
 # TEN THOUSAND YEARS
 
-> *Reconstruye el conocimiento humano con barro, fuego y observación.*
+> *Reconstruye el conocimiento humano a partir del barro, el fuego y la observación.*
 
 Juego de simulación de materia (falling-sand estilo Noita) + taller de producción + co-op.
 Un imp volador al servicio de un Maestro gigantesco funda un taller desde el barro: aspira y

@@ -2017,6 +2017,9 @@ namespace Alkahest.Game
         private const int SlotY0 = 143;                        // sobre la cara del plinto (top y142).
 
         private int _obraFase;                 // 0=regalo del cincel, 1=plano de la herida, 2=construyendo, 3=perfilando el plinto, 4=respiro.
+        private bool _obraLlamado;             // (R97) el VEN. de la herramienta ya se dijo.
+        /// <summary>(R97) ¿La Obra está esperando a que el jugador se acerque por su cincel? (la lucecita del rumbo se enciende aquí, como en el VEN. original).</summary>
+        private bool ObraEsperandoCercania => _beat == Beat.Obra && _obraFase == 0 && _obraLlamado && _cincelVuelo == null && _tVueloCincel <= 0f;
         private Transform _cincelVuelo;
         private float _tVueloCincel;
         private readonly List<Vector2Int> _obraPlatObjetivo = new List<Vector2Int>();
@@ -2180,9 +2183,22 @@ namespace Alkahest.Game
 
             switch (_obraFase)
             {
-                case 0: // el regalo de la herramienta.
+                case 0: // el regalo de la herramienta — EN LA MANO, no aventada.
+                    // (R97, Cesar: "debe iniciar llamándome como cuando me dio
+                    // mi frasco, y al acercarme recién me da la herramienta —
+                    // si no, parece que me avienta un cuchillo a distancia")
+                    // El MISMO rito del TOMA.: la voz llama, la lucecita marca
+                    // el rumbo, y el vuelo del cincel solo nace con el jugador
+                    // a distancia de charla.
                     if (_tBeat < 0.9f) return;
-                    if (_cincelVuelo == null && _tVueloCincel <= 0f) { LanzarVueloDelCincel(); return; }
+                    if (!_obraLlamado) { _obraLlamado = true; Decir(_g.vozVen); }
+                    if (_cincelVuelo == null && _tVueloCincel <= 0f)
+                    {
+                        if (_tBeat < _g.vozHoldSeg) return;            // la palabra se dice entera (lección del VEN. original).
+                        if (DistAlMaestro() >= _g.distCharla) return;  // la herramienta espera tu mano.
+                        LanzarVueloDelCincel();
+                        return;
+                    }
                     if (_cincelVuelo != null) return;
                     // Aterrizó: la palabra + EL PLANO DE LA HERIDA (1.6 s):
                     // la cámara sube a la grieta — el jugador la VE antes de
@@ -3123,7 +3139,7 @@ namespace Alkahest.Game
             // como que algo está ocurriendo ahí") — sustituye al bias de la
             // viñeta como señal de rumbo. Sobre la capa oscura, así se ve
             // aunque el jugador esté lejos.
-            if (_beat == Beat.Ven && !DayCycle.InputLocked) DibujarLucecitaMaestro();
+            if ((_beat == Beat.Ven || ObraEsperandoCercania) && !DayCycle.InputLocked) DibujarLucecitaMaestro(); // (R97) la lucecita también marca el rumbo del cincel.
             // (R82) La lucecita de la poza se RETIRÓ — ver la nota junto a
             // DibujarLucecitaMaestro (enseñaba una mecánica inexistente).
 

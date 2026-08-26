@@ -224,6 +224,30 @@ namespace Alkahest.Game
         /// <summary>¿Lleva el aprendiz la mudanza en la mano ahora mismo? Mismo patrón que Cincel.ModoActivo: un flag estático de solo lectura hacia fuera que otras clases (Flask) consultan para ceder el turno.</summary>
         public static bool ModoActivo { get; private set; }
 
+        /// <summary>
+        /// (R98, dirección Opus) EL ESTADO COMO FLOAT: 0..1, entrada en
+        /// 0.22 s y salida en 0.14 s (salir siempre más rápido: nunca
+        /// esperas para dejar un modo). Gobierna TODO el vestido del modo —
+        /// la vista de plano (SimRenderer.TinteMudanza), el fundido cruzado
+        /// retícula↔puntero (FlaskHud lo lee), los contornos y la placa.
+        /// MoveTowards y no Lerp: llega a 0 y 1 EXACTOS, así "no dibujar
+        /// nada" es EstadoT &lt;= 0 limpio, sin epsilon.
+        /// </summary>
+        public static float EstadoT { get; private set; }
+        // (R98) El segundo float: el foco del agarre. Al levantar algo, su
+        // contorno se disuelve (0.12 s) y el censo del resto retrocede a 40%;
+        // al soltar, todo vuelve (0.15 s). Evento menor que entrar al modo:
+        // números deliberadamente más cortos.
+        private float _focoT;
+
+        // (R98) El candidato bajo el cursor, calculado UNA vez por frame en
+        // Update (nunca en OnGUI: corre 2+ veces por frame) y consumido por
+        // IntentarAgarrar Y por el puntero — la mano no puede mentir sobre
+        // lo que el clic va a hacer: es el mismo código.
+        private IMovible _candidato;
+        private bool _candidatoEnAlcance;
+        private bool _sitioValidoCache; // validez del sitio mientras se lleva algo (la calcula ActualizarVisuales).
+
         // -----------------------------------------------------------------
         // REGISTRO DE APARATOS MOVIBLES (mismo patrón que Game/MachineFocus.cs,
         // pero para un propósito distinto: MachineFocus arbitra QUIÉN responde
@@ -461,6 +485,16 @@ namespace Alkahest.Game
         {
             if (_sim == null || _sim.Grid == null) return;
 
+            // (R98) Los relojes del estado corren SIEMPRE (también saliendo
+            // del modo: el fade-out vive aquí), y la vista de plano se
+            // escribe suavizada (smoothstep inline, cero allocs).
+            if (enabled)
+            {
+                EstadoT = Mathf.MoveTowards(EstadoT, ModoActivo ? 1f : 0f, Time.deltaTime / (ModoActivo ? 0.22f : 0.14f));
+                _focoT = Mathf.MoveTowards(_focoT, _llevando != null ? 1f : 0f, Time.deltaTime / (_llevando != null ? 0.12f : 0.15f));
+                SimRenderer.TinteMudanza = EstadoT * EstadoT * (3f - 2f * EstadoT);
+            }
+
             // Mismas guardas que Flask.Update/Cincel.Update, en el mismo
             // orden (regla 12 de CLAUDE.md).
             if (DayCycle.InputLocked) { OcultarVisuales(); return; }
@@ -515,6 +549,12 @@ namespace Alkahest.Game
 
             _hasCursorWorld = TryGetCursorWorld(out _cursorWorld);
             _hasCursorCell = _hasCursorWorld && CeldaDesdeCursorMundo(out _cursorCell);
+
+            // (R98) El censo del candidato para el puntero y el agarre.
+            _candidato = null;
+            _candidatoEnAlcance = false;
+            if (_llevando == null && _hasCursorWorld)
+                _candidato = BuscarCandidato(out _candidatoEnAlcance);
 
             bool clicEsteFrame = mouse != null && mouse.leftButton.wasPressedThisFrame && !ratonCapturado;
             bool cancelarEsteFrame = kb != null && kb.rKey.wasPressedThisFrame;
@@ -575,14 +615,15 @@ namespace Alkahest.Game
         // cursor") y sobre la lista propia de Mudanza, no la de MachineFocus
         // (que es privada e inaccesible desde aquí).
         // ---------------------------------------------------------------------------------
-        private void IntentarAgarrar()
+        /// <summary>
+        /// (R98) EL CENSO DEL CANDIDATO, extraído de IntentarAgarrar: el
+        /// aparato más cercano al cursor dentro de su hitbox, con la misma
+        /// limpieza de destruidos de siempre. Lo consumen el AGARRE y el
+        /// PUNTERO en el mismo frame — una sola pasada, una sola verdad.
+        /// </summary>
+        private IMovible BuscarCandidato(out bool enAlcance)
         {
-            if (!_hasCursorWorld)
-            {
-                if (_flask != null) _flask.Avisar("apunta dentro del taller para agarrar algo");
-                return;
-            }
-
+            enAlcance = false;
             IMovible mejor = null;
             float mejorD2 = float.MaxValue;
             for (int i = _movibles.Count - 1; i >= 0; i--)
@@ -613,6 +654,20 @@ namespace Alkahest.Game
                 mejorD2 = d2;
                 mejor = m;
             }
+            if (mejor != null) enAlcance = DentroDeAlcance(mejor.CentroMundo);
+            return mejor;
+        }
+
+        private void IntentarAgarrar()
+        {
+            if (!_hasCursorWorld)
+            {
+                if (_flask != null) _flask.Avisar("apunta dentro del taller para agarrar algo");
+                return;
+            }
+
+            // (R98) La misma pasada que ya vio el puntero este frame.
+            var mejor = _candidato;
 
             if (mejor == null)
             {
@@ -620,7 +675,7 @@ namespace Alkahest.Game
                 return;
             }
 
-            if (!DentroDeAlcance(mejor.CentroMundo))
+            if (!_candidatoEnAlcance)
             {
                 if (_flask != null) _flask.Avisar("demasiado lejos — acércate");
                 return;
@@ -828,6 +883,7 @@ namespace Alkahest.Game
             bool dentroDelMundo = _hasCursorCell && _llevando.CabeEnAncla(anclaCandidata);
             bool dentroDeAlcance = DentroDeAlcance(_cursorWorld);
             bool valido = dentroDelMundo && dentroDeAlcance;
+            _sitioValidoCache = valido; // (R98) el puntero (mano cerrada verde/roja) habla con ESTA misma verdad.
 
             Vector2 tamano = _llevando.TamanoMundo;
 
@@ -873,24 +929,227 @@ namespace Alkahest.Game
                 && _sim.SampleMaterial(anclaCandidata.x, anclaCandidata.y) != MaterialId.Stone;
         }
 
+        // =================================================================
+        // (R98, dirección Opus completa) EL ESTADO HECHO VISIBLE — cuatro
+        // piezas, un solo color (azul-frío 120/168/196 = LA MUDANZA):
+        //   · EL PUNTERO: retícula IMGUI propia (cero Cursor.SetCursor: el
+        //     juego no usa cursor de hardware en 50 archivos y S() no
+        //     escala uno). Tres formas pixel-art 13x13 con hotspot FIJO en
+        //     (6,6): mano abierta (hay agarrable), mano cerrada (llevando),
+        //     cruceta (mover). El contorno SIEMPRE en el casi-negro del imp
+        //     y el puño SIEMPRE de latón: anclas que no se tiñen; el relleno
+        //     habla — latón=puedes, rojo=no llegas, verde/rojo=el veredicto
+        //     del sitio (ColorValido/ColorInvalido LITERALES: la mano y la
+        //     silueta dicen lo mismo porque SON lo mismo).
+        //   · LOS CONTORNOS PUNTEADOS: cada IMovible en pantalla lleva su
+        //     trazo de delineante (guion S(5), hueco S(4): ~un guion por
+        //     celda sin cuadrar nunca — plano de obra, no rejilla), medido
+        //     sobre el rect VISUAL (CentroMundo ± TamanoMundo/2, la única
+        //     fórmula válida para ancla-esquina Y ancla-boquilla) + S(2) de
+        //     aire. Estáticos (la casa vetó líneas pulsando en permanencia,
+        //     revisión Opus R81 #13); solo LATEN al nacer (stagger 0.035 s,
+        //     cap 0.28) y mueren juntos al salir. En alcance 0.55, fuera
+        //     0.28 — dos escalones, sin degradado: regla, no iluminación.
+        //   · Al AGARRAR (_focoT): el contorno del agarrado se disuelve
+        //     dentro de su silueta (0.12 s) y el censo del resto retrocede
+        //     a 40% — el cuarto entero cuenta el gesto.
+        //   · LA VISTA DE PLANO vive en SimRenderer.TinteMudanza (el
+        //     sustrato se enfría a pizarra; las máquinas quedan a color: el
+        //     plano nace del contraste). La viñeta manda intacta: el tinte
+        //     es sprite (-5), muy por debajo de su IMGUI (50).
+        // =================================================================
+        private static Texture2D[] _punteroTex; // [abierta c/r/p, cerrada c/r/p, cruceta c/r]
+        private static readonly Color PunteroContorno = new Color(0x16 / 255f, 0x10 / 255f, 0x1E / 255f); // ApprenticeController.ColOutline literal.
+        private static readonly Color PunteroLaton = new Color(214f / 255f, 176f / 255f, 96f / 255f);     // ColBrassLight literal.
+
+        private static Texture2D MascaraPuntero(bool[,] celdas)
+        {
+            var tex = new Texture2D(13, 13, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[13 * 13];
+            for (int y = 0; y < 13; y++)
+                for (int x = 0; x < 13; x++)
+                    px[(12 - y) * 13 + x] = celdas[x, y] ? new Color32(255, 255, 255, 255) : new Color32(0, 0, 0, 0); // fila 0 = arriba (convención de diseño) → textura invertida.
+            tex.SetPixels32(px);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        private static bool[,] ContornoDe(bool[,] cuerpo, bool[,] prohibido = null)
+        {
+            var c = new bool[13, 13];
+            for (int y = 0; y < 13; y++)
+                for (int x = 0; x < 13; x++)
+                {
+                    if (cuerpo[x, y]) continue;
+                    if (prohibido != null && prohibido[x, y]) continue;
+                    bool vecino = (x > 0 && cuerpo[x - 1, y]) || (x < 12 && cuerpo[x + 1, y])
+                               || (y > 0 && cuerpo[x, y - 1]) || (y < 12 && cuerpo[x, y + 1]);
+                    if (vecino) c[x, y] = true;
+                }
+            return c;
+        }
+
+        private static void ConstruirPunteros()
+        {
+            _punteroTex = new Texture2D[8];
+
+            // MANO ABIERTA: dedos 3/5/7/9 (los centrales más largos), pulgar, palma, puño de latón.
+            var rel = new bool[13, 13];
+            foreach (var (dx, desde) in new[] { (3, 2), (5, 1), (7, 1), (9, 2) })
+                for (int y = desde; y <= 5; y++) rel[dx, y] = true;
+            rel[2, 6] = true; rel[1, 7] = true; rel[1, 8] = true; // el pulgar.
+            for (int x = 3; x <= 9; x++) for (int y = 5; y <= 9; y++) rel[x, y] = true;
+            for (int x = 4; x <= 8; x++) rel[x, 10] = true; // redondeo.
+            var puno = new bool[13, 13];
+            for (int x = 4; x <= 8; x++) puno[x, 11] = true;
+            for (int x = 5; x <= 7; x++) puno[x, 12] = true;
+            var cuerpo = new bool[13, 13];
+            for (int x = 0; x < 13; x++) for (int y = 0; y < 13; y++) cuerpo[x, y] = rel[x, y] || puno[x, y];
+            _punteroTex[0] = MascaraPuntero(ContornoDe(cuerpo));
+            _punteroTex[1] = MascaraPuntero(rel);
+            _punteroTex[2] = MascaraPuntero(puno);
+
+            // MANO CERRADA: mismo sobre-silueta y mismo puño — solo cambia el agarre.
+            rel = new bool[13, 13];
+            for (int x = 3; x <= 9; x++) for (int y = 4; y <= 10; y++) rel[x, y] = true;
+            for (int x = 3; x <= 4; x++) for (int y = 6; y <= 8; y++) rel[x, y] = true; // pulgar cruzado.
+            cuerpo = new bool[13, 13];
+            for (int x = 0; x < 13; x++) for (int y = 0; y < 13; y++) cuerpo[x, y] = rel[x, y] || puno[x, y];
+            var contC = ContornoDe(cuerpo);
+            foreach (var yn in new[] { 5, 7, 9 }) // los tres pliegues de nudillo: lo que la hace "cerrada" a 26 px.
+                for (int x = 4; x <= 8; x++) { contC[x, yn] = true; rel[x, yn] = false; }
+            _punteroTex[3] = MascaraPuntero(contC);
+            _punteroTex[4] = MascaraPuntero(rel);
+            _punteroTex[5] = MascaraPuntero(puno);
+
+            // CRUCETA: 4 puntas de flecha, hueco central con punto exacto.
+            rel = new bool[13, 13];
+            for (int y = 1; y <= 11; y++) rel[6, y] = true;
+            for (int x = 1; x <= 11; x++) rel[x, 6] = true;
+            rel[6, 0] = true; for (int x = 5; x <= 7; x++) rel[x, 1] = true; for (int x = 4; x <= 8; x++) rel[x, 2] = true;
+            rel[6, 12] = true; for (int x = 5; x <= 7; x++) rel[x, 11] = true; for (int x = 4; x <= 8; x++) rel[x, 10] = true;
+            rel[0, 6] = true; for (int y = 5; y <= 7; y++) rel[1, y] = true; for (int y = 4; y <= 8; y++) rel[2, y] = true;
+            rel[12, 6] = true; for (int y = 5; y <= 7; y++) rel[11, y] = true; for (int y = 4; y <= 8; y++) rel[10, y] = true;
+            var hueco = new bool[13, 13];
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    if (dx != 0 || dy != 0) { rel[6 + dx, 6 + dy] = false; hueco[6 + dx, 6 + dy] = true; } // 8 vecinos fuera; (6,6) queda: punto exacto + cruz.
+            _punteroTex[6] = MascaraPuntero(ContornoDe(rel, hueco));
+            _punteroTex[7] = MascaraPuntero(rel);
+        }
+
+        private void DibujarPuntero()
+        {
+            var mouse = Mouse.current;
+            if (mouse == null) return;
+            if (_punteroTex == null) ConstruirPunteros();
+            Vector2 mp = mouse.position.ReadValue();
+            var gui = new Vector2(mp.x, Screen.height - mp.y);
+
+            int baseIdx; Color relleno; float alfa;
+            if (_llevando != null)
+            {
+                baseIdx = 3;
+                relleno = _sitioValidoCache ? (Color)ColorValido : (Color)ColorInvalido;
+                alfa = 1.00f;
+            }
+            else if (_candidato != null)
+            {
+                baseIdx = 0;
+                relleno = _candidatoEnAlcance ? PunteroLaton : (Color)ColorInvalido;
+                alfa = 0.95f;
+            }
+            else
+            {
+                baseIdx = 6;
+                relleno = new Color(IconoMudanza.r / 255f, IconoMudanza.g / 255f, IconoMudanza.b / 255f);
+                alfa = 0.85f;
+            }
+            alfa *= EstadoT;
+
+            int zoom = Mathf.Max(2, Mathf.RoundToInt(UiStyles.Escala * 2f)); // entero SIEMPRE: pixel-art nítido con Point.
+            var r = new Rect(gui.x - 6 * zoom, gui.y - 6 * zoom, 13 * zoom, 13 * zoom); // hotspot (6,6) en las TRES: el puntero jamás salta al cambiar de forma.
+            var prev = GUI.color;
+            GUI.color = new Color(PunteroContorno.r, PunteroContorno.g, PunteroContorno.b, alfa);
+            GUI.DrawTexture(r, _punteroTex[baseIdx]);
+            GUI.color = new Color(relleno.r, relleno.g, relleno.b, alfa);
+            GUI.DrawTexture(r, _punteroTex[baseIdx + 1]);
+            if (baseIdx < 6)
+            {
+                GUI.color = new Color(PunteroLaton.r, PunteroLaton.g, PunteroLaton.b, alfa);
+                GUI.DrawTexture(r, _punteroTex[baseIdx + 2]);
+            }
+            GUI.color = prev;
+        }
+
+        private void DibujarContornos()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            float grosor = Mathf.Max(1f, Mathf.Round(UiStyles.Escala)); // la expresión EXACTA de la retícula: línea de delineante.
+            float guion = UiStyles.S(5f), huecoG = UiStyles.S(4f), aire = UiStyles.S(2f), margen = UiStyles.S(24f);
+            var azul = new Color(IconoMudanza.r / 255f, IconoMudanza.g / 255f, IconoMudanza.b / 255f);
+            float restoFactor = Mathf.Lerp(1f, 0.40f, _focoT);
+
+            for (int i = 0; i < _movibles.Count; i++)
+            {
+                var m = _movibles[i];
+                var comoObjeto = m as UnityEngine.Object;
+                if (comoObjeto == null) continue; // la limpieza real vive en BuscarCandidato.
+
+                Vector3 centro = m.CentroMundo;
+                Vector2 tam = m.TamanoMundo;
+                Vector3 pa = cam.WorldToScreenPoint(centro - new Vector3(tam.x * 0.5f, tam.y * 0.5f, 0f));
+                Vector3 pb = cam.WorldToScreenPoint(centro + new Vector3(tam.x * 0.5f, tam.y * 0.5f, 0f));
+                if (pa.z < 0f || pb.z < 0f) continue;
+                float x0 = Mathf.Min(pa.x, pb.x) - aire, x1 = Mathf.Max(pa.x, pb.x) + aire;
+                float y0 = Mathf.Min(Screen.height - pa.y, Screen.height - pb.y) - aire;
+                float y1 = Mathf.Max(Screen.height - pa.y, Screen.height - pb.y) + aire;
+                if (x1 < -margen || x0 > Screen.width + margen || y1 < -margen || y0 > Screen.height + margen) continue;
+
+                float alfa = DentroDeAlcance(centro) ? 0.55f : 0.28f; // dos escalones, sin degradado.
+                if (ReferenceEquals(m, _llevando)) alfa *= 1f - _focoT;   // el agarrado se disuelve en su silueta.
+                else alfa *= restoFactor;                                  // el censo retrocede mientras llevas algo.
+                // El stagger de ENTRADA (un plano revelándose); la salida muere junta sobre EstadoT.
+                float ti = ModoActivo
+                    ? Mathf.Clamp01((EstadoT * 0.22f - Mathf.Min(0.035f * i, 0.28f)) / 0.09f)
+                    : EstadoT;
+                alfa *= ti;
+                if (alfa <= 0.01f) continue;
+                var c = new Color(azul.r, azul.g, azul.b, alfa);
+
+                // Cada lado arranca su corrida DESDE LA ESQUINA (las esquinas siempre tienen tinta) y recorta el último guion.
+                for (float x = x0; x < x1; x += guion + huecoG)
+                {
+                    float w = Mathf.Min(guion, x1 - x);
+                    UiStyles.Rellenar(new Rect(x, y0 - grosor * 0.5f, w, grosor), c);
+                    UiStyles.Rellenar(new Rect(x, y1 - grosor * 0.5f, w, grosor), c);
+                }
+                for (float y = y0; y < y1; y += guion + huecoG)
+                {
+                    float hh = Mathf.Min(guion, y1 - y);
+                    UiStyles.Rellenar(new Rect(x0 - grosor * 0.5f, y, grosor, hh), c);
+                    UiStyles.Rellenar(new Rect(x1 - grosor * 0.5f, y, grosor, hh), c);
+                }
+            }
+        }
+
         private void OnGUI()
         {
             if (_sim == null || DayCycle.InputLocked) return;
-            if (!ModoActivo) return;
+            if (EstadoT <= 0f) return; // (R98) MoveTowards llega a 0 exacto: sin epsilon.
 
             UiStyles.Preparar();
 
-            // (R93, Cesar: "no es una herramienta — es un ESTADO que debe
-            // resaltar que estás ahí hasta que vuelves a presionar la V,
-            // tiene que quedar muy claro") LA PLACA DE ESTADO: mientras la
-            // mudanza está en la mano, el estado se DECLARA sobre la cabeza
-            // del aprendiz, latiendo despacio — el diamante azul-latón era
-            // demasiado tímido para un modo que cambia el significado de
-            // todos los clics. El texto cambia con la fase del gesto, así la
-            // placa además enseña el siguiente paso.
+            // (R98) El censo de lo movible — debajo de todo lo demás del modo.
+            DibujarContornos();
+
+            // (R93) LA PLACA DE ESTADO sobre la cabeza, latiendo — el único
+            // latido permanente del modo (los contornos son arquitectura:
+            // quietos). Su alfa viaja con EstadoT.
             if (enabled && _apprentice != null)
             {
-                float pulso = 0.68f + 0.20f * Mathf.Sin(Time.time * 3.1f);
+                float pulso = (0.68f + 0.20f * Mathf.Sin(Time.time * 3.1f)) * EstadoT;
                 var cabeza = _apprentice.transform.position + new Vector3(0f, 0.72f, 0f);
                 UiStyles.PlacaMundo(cabeza,
                     _llevando == null ? "MUDANZA — clic agarra · V sale" : "MUDANZA — clic suelta · R cancela",
@@ -898,9 +1157,15 @@ namespace Alkahest.Game
                     UiStyles.S(10f));
             }
 
-            if (_llevando == null || !_hasCursorWorld || !_sinCubeta) return;
-            UiStyles.PlacaMundo(_cursorWorld, "sin cubeta aquí — tendrás que construirla",
-                UiStyles.Aviso, UiStyles.S(30f));
+            if (_llevando != null && _hasCursorWorld && _sinCubeta)
+                UiStyles.PlacaMundo(_cursorWorld, "sin cubeta aquí — tendrás que construirla",
+                    UiStyles.Aviso, UiStyles.S(30f));
+
+            // (R98) EL PUNTERO — lo último: encima de todo lo del modo. La
+            // retícula del frasco se apaga debajo con (1 - EstadoT) en
+            // FlaskHud: fundido cruzado, nunca dos punteros. Sobre una
+            // redoma vuelve la retícula normal (ahí el clic es otro verbo).
+            if (!StorageRack.RatonSobreRedoma()) DibujarPuntero();
         }
     }
 }

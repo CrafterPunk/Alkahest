@@ -5542,3 +5542,64 @@ ca_playtest84.cmd barre la ronda.
   aprendes es verdad". Fuera del arco, con nombre: era industrial, seda/púrpura/
   óptica/imprenta, remodelación (multiplicador, no contenido), lo alquímico sorteado.
 · ca_playtest96.cmd barre la ronda.
+
+## Ronda 97 — LA ENTREGA EN LA MANO (+ las respuestas de la sección 2)
+
+· Cesar, del playtest de la sección 2: "debe iniciar llamándome como cuando me dio mi
+  frasco; si no, parece que me avienta un cuchillo a distancia". HECHO: la Obra abre
+  con el rito del TOMA. — la voz dice VEN. (entera, lección del beat original), la
+  LUCECITA del Maestro marca el rumbo (DibujarLucecitaMaestro también en la espera de
+  la Obra), y el vuelo del cincel solo nace con DistAlMaestro < distCharla.
+· Los otros 4 puntos, respondidos sin tocar código (pedido explícito):
+  2 (cincel: ¿limitar a construir y desbloquear después?) — de acuerdo con matiz: el
+  prólogo ENSEÑA solo construir (ya es así); TALLAR se desbloquea en Semilla Cero con
+  la primera veta ("el cincel también quita" cuando hay algo que quitar que importe);
+  PISO con el primer encargo de construcción. Los CANDADOS reales se instalan al final
+  (regla vigente de Cesar: necesita las herramientas completas para editar el mapa).
+  3 (el hueco y las dos luces) — explicado: es EL UMBRAL del mandato "el ORDEN
+  agranda el espacio" + la promesa del mañana (luz fría = la primera no-fuego).
+  4 (mudanza: pjota a cámara con plano + puntero) — propuestas anotadas (frontal con
+  plano, puntero mano abierta/cerrada, contornos punteados en todo IMovible, saturación
+  bajada tipo plano de obra); Cesar elige.
+  5 (institucionalizar retoques a mano) — paso a paso del flujo real documentado en el
+  resumen: pintar EN PLAY (paleta F3 o cincel) → NO salir de Play → avisar la zona →
+  el agente censa por sondas y lo escribe en SimLevelBuilder (regla 24) → deploy →
+  permanente. El menú 6 hornea ARTE (PNG+prefab+guion), no terreno.
+· ca_playtest97.cmd barre la ronda.
+
+## Ronda 98 — LA MUDANZA CON CARIÑO DE OPUS (el punto 4, completo)
+
+· Cesar aprobó el punto 4 entero: "me encantó. no le pongas mucho cariño al personaje
+  porque es un placeholder... sí ponle mucho cariño de opus al resto". Dirección de
+  escena Opus (leyó el estado VIVO del disco) implementada al número:
+· EL RELOJ DEL MODO (Mudanza.EstadoT, público): entrada 0.22s / salida 0.14s con
+  MoveTowards (llega a 0/1 EXACTOS, sin epsilon); _focoT (0.12/0.15) para el agarre.
+  Todo IMGUI/tintes escala por EstadoT: el modo entra y sale RESPIRANDO, nunca de golpe.
+· LA VISTA DE PLANO (SimRenderer.TinteMudanza + TintePlano 0.630/0.640/0.700):
+  el quad del mundo (solo el quad: máquinas a color, viñeta intacta) se enfría a
+  pizarra con smoothstep del EstadoT — el taller se vuelve el plano de sí mismo.
+· EL PUNTERO QUE PROMETE (IMGUI, 8 texturas 13x13 dibujadas a mano en código, zoom
+  entero, hotspot fijo (6,6)): mano ABIERTA sobre candidato (latón al alcance, rojo
+  fuera), mano CERRADA llevando (verde/rojo según si el sitio vale), CRUCETA azul en
+  el vacío. Contorno tinta (0x16,0x10,0x1E) y puño latón SIEMPRE; el clic se anuncia
+  antes de hacerse.
+· LOS CONTORNOS PUNTEADOS: cada IMovible se enmarca en su rect VISUAL + aire S(2),
+  guion S(5)/hueco S(4), azul del icono, 0.55 al alcance / 0.28 lejos, entrada en
+  cascada (stagger 35ms por aparato), el agarrado se apaga con _focoT y el resto
+  baja a 0.40. ESTÁTICOS (sin latido, veto R81 #13). Esquinas siempre con tinta.
+· EL CAPATAZ (placeholder a conciencia): _bodySpriteFrontal (ojos al centro, pupilas
+  sin sesgo) + PlanoEnMano (rect crema 226/214/182 a -24°, bajo el brazo). El imp te
+  MIRA mientras planificas; alas y cola siguen batiendo.
+· La retícula del FlaskHud CEDE con fundido cruzado (1-EstadoT) salvo sobre la redoma;
+  el Globo de Avisar queda FUERA del guard (canal vivo).
+· TERCER RESET DEL SANDBOX en la ventana: el repo volvió a R85 pero los 4 archivos
+  R98 sobrevivieron como working tree. Recuperación: reset a origin/main (R95) +
+  FundacionDirector R97 e HISTORIAL rescatados DEL DISCO DE CESAR (la regla nueva de
+  deployar docs con el código pagó su primera deuda). compile_fiel EXIT=0.
+· El eslogan pendiente de la tarea nocturna (el reset se la llevó): README y GDD
+  ahora dicen "a partir del barro, el fuego y la observación".
+· VERIFICADO EN VIVO (botón 2 → Obra → ModoActivo por reflexión): EstadoT 0→1→0
+  limpio, TinteMudanza=1 con quad EXACTO en TintePlano y retorno EXACTO a TinteGlobal,
+  8/8 texturas del puntero sin excepción, imp frontal con plano (captura), retícula
+  cedida, 0 errores de consola en todo el ciclo.
+· ca_playtest98.cmd barre la ronda.

@@ -463,15 +463,30 @@ namespace Alkahest.Game
             else if (mouse.rightButton.isPressed) color = UiStyles.Oro;
             else color = new Color(0.92f, 0.90f, 0.86f, 0.85f);
 
-            float grosor = Mathf.Max(1f, Mathf.Round(UiStyles.Escala));
-            float hueco = UiStyles.S(5f);
-            float largo = UiStyles.S(9f);
+            // (R98, dirección Opus) LA RETÍCULA CEDE ANTE EL PUNTERO DE LA
+            // MUDANZA con fundido cruzado (ella baja con 1-EstadoT mientras
+            // la mano/cruceta sube con EstadoT en Mudanza.OnGUI): nunca dos
+            // punteros, nunca un parpadeo. Sobre una redoma del estante la
+            // retícula VUELVE (ahí el clic es guardar/recuperar, no un gesto
+            // de mudanza — la misma excepción que Mudanza ya calcula). El
+            // Globo de feedback queda FUERA del guard a propósito: la
+            // mudanza entera habla por Flask.Avisar y ese canal desemboca
+            // aquí — apagarlo mataría "agarrado", "demasiado lejos", "no
+            // cabe ahí".
+            float cede = Mudanza.ModoActivo && !StorageRack.RatonSobreRedoma() ? Mudanza.EstadoT : 0f;
+            if (cede < 1f)
+            {
+                color.a *= 1f - cede;
+                float grosor = Mathf.Max(1f, Mathf.Round(UiStyles.Escala));
+                float hueco = UiStyles.S(5f);
+                float largo = UiStyles.S(9f);
 
-            UiStyles.Rellenar(new Rect(gui.x - hueco - largo, gui.y - grosor * 0.5f, largo, grosor), color);
-            UiStyles.Rellenar(new Rect(gui.x + hueco, gui.y - grosor * 0.5f, largo, grosor), color);
-            UiStyles.Rellenar(new Rect(gui.x - grosor * 0.5f, gui.y - hueco - largo, grosor, largo), color);
-            UiStyles.Rellenar(new Rect(gui.x - grosor * 0.5f, gui.y + hueco, grosor, largo), color);
-            UiStyles.Rellenar(new Rect(gui.x - grosor, gui.y - grosor, grosor * 2f, grosor * 2f), color);
+                UiStyles.Rellenar(new Rect(gui.x - hueco - largo, gui.y - grosor * 0.5f, largo, grosor), color);
+                UiStyles.Rellenar(new Rect(gui.x + hueco, gui.y - grosor * 0.5f, largo, grosor), color);
+                UiStyles.Rellenar(new Rect(gui.x - grosor * 0.5f, gui.y - hueco - largo, grosor, largo), color);
+                UiStyles.Rellenar(new Rect(gui.x - grosor * 0.5f, gui.y + hueco, grosor, largo), color);
+                UiStyles.Rellenar(new Rect(gui.x - grosor, gui.y - grosor, grosor * 2f, grosor * 2f), color);
+            }
 
             if (Time.time < _flask.FeedbackUntil && !string.IsNullOrEmpty(_flask.Feedback))
             {

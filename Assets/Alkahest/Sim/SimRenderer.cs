@@ -270,6 +270,24 @@ namespace Alkahest.Sim
         private uint[] _chunkLastRenderTick;
         private bool[] _chunkEverRendered;
         private Transform _quad;
+        private SpriteRenderer _quadSr; // (R98, direccion Opus) guardado para el tinte de la VISTA DE PLANO.
+
+        // =================================================================
+        // (R98, modo mudanza — dirección Opus) LA VISTA DE PLANO: mientras
+        // la mudanza está activa, el QUAD de la sim (solo el sustrato: la
+        // roca y la materia, sortingOrder -5) se enfría hacia TintePlano —
+        // el multiply no puede desaturar, pero SÍ comprime el eje
+        // cálido-frío (dispersión entre canales 0.155 → 0.070) y baja la
+        // luminancia -23%: con la piedra ocupando ~70% del cuadro, se lee
+        // pizarra. Las máquinas, halos y el aprendiz (órdenes 14..60) quedan
+        // A TODO COLOR: el "plano" nace del contraste, no de un lavado. La
+        // viñeta IMGUI (encima de todo) conserva su autoridad gratis.
+        // TinteGlobal ya lo invitaba: "si algún día hace falta un
+        // amanecer/anochecer, este es el único punto que hay que animar".
+        // =================================================================
+        public static float TinteMudanza; // 0..1, lo escribe Game/Mudanza con su EstadoT suavizado.
+        private static readonly Color TintePlano = new Color(0.630f, 0.640f, 0.700f, 1f); // el sesgo cálido de TinteGlobal, invertido exacto.
+        private float _tinteAplicado = -1f;
         // =============================================================
         // (RONDA 66-68) EL LABIO FRONTAL: APAGADO (regla 15 de CLAUDE.md).
         // Vivió UNA ronda: una segunda textura que oscurecía el anillo de
@@ -620,6 +638,14 @@ namespace Alkahest.Sim
         /// </summary>
         private void Update()
         {
+            // (R98) LA VISTA DE PLANO: solo asigna cuando el valor cambia —
+            // un mundo quieto fuera de la mudanza cuesta exactamente cero.
+            if (_quadSr != null && !Mathf.Approximately(_tinteAplicado, TinteMudanza))
+            {
+                _quadSr.color = Color.Lerp(TinteGlobal, TintePlano, TinteMudanza);
+                _tinteAplicado = TinteMudanza;
+            }
+
             if (_texture == null) return; // Init() todavía no ha corrido.
             if (_mainCam == null) _mainCam = Camera.main;
             if (_mainCam == null) return;
@@ -646,6 +672,7 @@ namespace Alkahest.Sim
                 Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
             sr.sortingOrder = -5;
             sr.color = TinteGlobal; // (playtest 31) ver TinteGlobal: la cueva se oscurece AQUÍ, no celda a celda.
+            _quadSr = sr; // (R98) la vista de plano anima este color en Update (solo cuando cambia).
 
             _quad = go.transform;
             _quad.SetParent(transform, false);
