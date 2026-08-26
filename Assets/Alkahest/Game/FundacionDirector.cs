@@ -378,7 +378,12 @@ namespace Alkahest.Game
             // momento se comía el derrumbe completo.
             if (DayCycle.InputLocked)
             {
-                _posAnterior = _aprendiz.position;
+                // (R103) RED DE SEGURIDAD del decreto (pariente de la regla 59):
+            // si el beat ya no es el Acomodo (restart incluido — el decreto es
+            // estático y sobrevive al RestartRun), se levanta aquí, cada frame.
+            if (_beat != Beat.Acomodo && Mudanza.HayDecreto) Mudanza.LevantarDecreto();
+
+            _posAnterior = _aprendiz.position;
                 if (_cascadaFuente != null) _cascadaFuente.volume = 0f; // (R77) el menú de pausa congela el mundo; su rumor también.
                 return;
             }
@@ -424,9 +429,15 @@ namespace Alkahest.Game
                 case Beat.Reorden: TickReorden(); break;
                 case Beat.Obra: TickObra(); break;       // (R93) ALZA.: la plataforma y el techo, con el cincel regalado.
                 case Beat.Acomodo: TickAcomodo(); break; // (R93) ACOMODA.: la mudanza de los reservorios al centro nuevo.
+                                                         // (R103) el decreto de sitio vive SOLO aquí — ver la red de seguridad bajo el switch.
                 case Beat.Adios: TickAdios(); break;     // (R93) el ORDEN repetido, el vano, el TÍTULO (en inglés siempre, R95), y el Maestro deja de mirar.
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
             }
+
+            // (R103) RED DE SEGURIDAD del decreto (pariente de la regla 59):
+            // si el beat ya no es el Acomodo (restart incluido — el decreto es
+            // estático y sobrevive al RestartRun), se levanta aquí, cada frame.
+            if (_beat != Beat.Acomodo && Mudanza.HayDecreto) Mudanza.LevantarDecreto();
 
             _posAnterior = _aprendiz.position;
             // (R88, dirección Opus) Durante la cinemática del ORDEN el radio
@@ -2013,8 +2024,15 @@ namespace Alkahest.Game
         // no cubre el requisito, y el escalonado se lee como obra.
         //   y140: 377..396 (20) · y141: 378..395 (18) · y142: 379..394 (16)
         private const int PlintoY0 = 140;
-        private static readonly int[] PlintoX0 = { 377, 378, 379 }; // por hilada (y = PlintoY0 + i).
-        private static readonly int[] PlintoX1 = { 396, 395, 394 };
+        // (R103, Cesar: "siguen bien pegadito al reservorio de arcilla y no
+        // equidistante a ambos") EL PLINTO SE CENTRA entre los dos renacidos:
+        // silo (tubo hasta 375) y depósito (visual desde 411). Con +6, el par
+        // de marcos con sus tubos (381-405) respira 6 celdas de aire POR CADA
+        // LADO — equidistante de verdad. La grieta del techo (388-392) queda
+        // sobre el tercio izquierdo del plinto nuevo: sigue leyéndose arriba
+        // de la obra.
+        private static readonly int[] PlintoX0 = { 383, 384, 385 }; // por hilada (y = PlintoY0 + i).
+        private static readonly int[] PlintoX1 = { 402, 401, 400 };
         private const int ObraTechoX0 = 388, ObraTechoX1 = 392; // la grieta del derrumbe (DerrumbeX±2) en la bóveda.
         private const int ObraTechoY0 = 201, ObraTechoY1 = 202;
         // (R93: 379/387, muro a muro — los 16 justos de la hilada alta.
@@ -2025,7 +2043,7 @@ namespace Alkahest.Game
         // 387-397) COLINDAN exactamente en 387 — cero invasión — y el par
         // queda centrado en el plinto (386.5). Cada huella cuelga 1 celda
         // sobre el escalón medio del zigurat (7/8 de apoyo: pasa el 70%).
-        private const int SlotAX0 = 378, SlotBX0 = 388;
+        private const int SlotAX0 = 384, SlotBX0 = 394; // (R103) +6 con el plinto: huellas 384-391 / 394-401, costura visual en 393.
         private const int SlotY0 = 143;                        // sobre la cara del plinto (top y142).
 
         private int _obraFase;                 // 0=regalo del cincel, 1=plano de la herida, 2=construyendo, 3=perfilando el plinto, 4=respiro.
@@ -2060,6 +2078,7 @@ namespace Alkahest.Game
         private int _frenteMuroCol, _frenteArcoCol;
         private bool _recodoAbierto;
         private bool _fichaColocaMostrada, _fichaLlevalosMostrada;
+        private bool _fichaEspejoMostrada; // (R103) la ficha de la L, mostrada al primer agarre del Acomodo.
         private int _acomodoFase;              // 0=palabra+fichas, 1=mudando, 2=respiro.
         private bool _slotAOcupado, _slotBOcupado;
         private int _adiosPaso;
@@ -2084,19 +2103,20 @@ namespace Alkahest.Game
         }
 
         /// <summary>
-        /// (R100 → R101 → R102) El marcador de cada slot LIBRE. Historia
-        /// corta de tres veredictos: la huella a secas "no tiene la forma
-        /// del contorno" (R101) → la L exacta con tubo "se invade con la
-        /// otra" (R102) → EL CUERPO del contenedor (rect visual 10x19, domo
-        /// incluido, sin tubo), con los slots separados a 10: los marcos
-        /// COLINDAN exacto, el par centra el plinto, y el tubo lo decreta el
-        /// imán al encajar. El trazo sigue QUIETO (el destino espera, no
-        /// desfila) en papel cálido, y por dentro UN RELLENO LATIENTE al
-        /// tono de las fichas del tutorial WASD (mismo orden de menú), en
-        /// IMGUI — el espacio GAMMA, donde un alfa chico ES chico (la
-        /// lección de la losa gris del velo R100, que vivía en el mundo
-        /// lineal).
+        /// (R100 → R103) El marcador de cada slot LIBRE, en su forma final
+        /// tras cuatro veredictos: LA L ENTERA del contenedor (cuerpo 10x19
+        /// con domo + saliente del tubo hacia AFUERA: A izquierda, B derecha)
+        /// con los slots a 10 — cuerpos que colindan en una arista, tubos que
+        /// jamás se tocan, el par centrado entre los dos renacidos. El trazo
+        /// QUIETO en papel cálido (el destino espera, no desfila) y por
+        /// dentro UN RELLENO LATIENTE al tono de las fichas del tutorial
+        /// WASD, en IMGUI — el espacio GAMMA, donde un alfa chico ES chico
+        /// (la lección de la losa gris del velo R100, que vivía en el mundo
+        /// lineal). El decreto de sitio (Mudanza) hace al marco EXIGENTE:
+        /// solo se suelta ahí, y solo con ese espejo.
         /// </summary>
+        private static readonly List<Vector2> _poliSlot = new List<Vector2>(8); // búfer del marco en L, reusado.
+
         private void DibujarMarcosDeSlots()
         {
             if (_silSlotA == null && _silSlotB == null) return; // solo viven durante el Acomodo con slots libres.
@@ -2104,25 +2124,43 @@ namespace Alkahest.Game
             var papel = new Color(0.95f, 0.93f, 0.86f);
             var ficha = new Color(0.93f, 0.93f, 0.90f); // TutorialContextual.FichaFondo literal: el tono del orden WASD.
             float lat = 0.050f + 0.028f * Mathf.Sin(Time.time * 2.4f); // late suave; IMGUI=gamma: esto SÍ es sutil.
-            // (R101: la L con tubo; R102, Cesar: "se invaden, deberían a lo
-            // mucho colindar") Los marcos son ahora EL CUERPO del contenedor
-            // (rect visual 10x19, domo incluido, SIN el saliente del tubo):
-            // con los slots a 10, colindan EXACTO en 387 — cero invasión — y
-            // el par queda centrado en el plinto, con aire hacia el silo.
-            // El tubo no se dibuja en el marco: su flanco lo decreta el imán
-            // al encajar (IntentarEncajar) y se ve en el contenedor real.
-            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES (377 / 387).
-            float piso = SlotY0 * c, domo = (SlotY0 + 19) * c;
+            // (R103, el tercer veredicto de Cesar sobre estos marcos: "que la
+            // huella de pista sea igual a la de los contenedores, no los
+            // vuelvas a entrelazar por amor a dios") LA L ENTERA, SIN
+            // ENTRELAZADO: con los slots a 10, los CUERPOS (10 de ancho)
+            // colindan exacto en la costura (393) y los TUBOS apuntan hacia
+            // afuera (A izquierda, B derecha — los sujetalibros): las dos
+            // siluetas se tocan en una arista y no comparten NI una celda.
+            // El decreto de sitio exige además soltar CON ese espejo: el
+            // marco es la forma exacta de lo que va a aterrizar.
+            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES (383 / 393).
+            float piso = SlotY0 * c, tapon = (SlotY0 + 16) * c, domo = (SlotY0 + 19) * c;
 
             if (_silSlotA != null && !_slotAOcupado)
             {
-                RellenarMundo(aA * c, piso, (aA + 10) * c, domo, ficha, lat);
-                Mudanza.MarcarRectMundo(aA * c, piso, (aA + 10) * c, domo, papel, 0.60f);
+                RellenarMundo(aA * c, piso, (aA + 10) * c, domo, ficha, lat);             // cuerpo.
+                RellenarMundo((aA - 2) * c, piso, aA * c, tapon, ficha, lat);             // tubo (izquierda).
+                _poliSlot.Clear();
+                _poliSlot.Add(new Vector2((aA - 2) * c, piso));
+                _poliSlot.Add(new Vector2((aA - 2) * c, tapon));
+                _poliSlot.Add(new Vector2(aA * c, tapon));
+                _poliSlot.Add(new Vector2(aA * c, domo));
+                _poliSlot.Add(new Vector2((aA + 10) * c, domo));
+                _poliSlot.Add(new Vector2((aA + 10) * c, piso));
+                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
             }
             if (_silSlotB != null && !_slotBOcupado)
             {
-                RellenarMundo(aB * c, piso, (aB + 10) * c, domo, ficha, lat);
-                Mudanza.MarcarRectMundo(aB * c, piso, (aB + 10) * c, domo, papel, 0.60f);
+                RellenarMundo(aB * c, piso, (aB + 10) * c, domo, ficha, lat);             // cuerpo.
+                RellenarMundo((aB + 10) * c, piso, (aB + 12) * c, tapon, ficha, lat);     // tubo (derecha).
+                _poliSlot.Clear();
+                _poliSlot.Add(new Vector2(aB * c, piso));
+                _poliSlot.Add(new Vector2(aB * c, domo));
+                _poliSlot.Add(new Vector2((aB + 10) * c, domo));
+                _poliSlot.Add(new Vector2((aB + 10) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 12) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 12) * c, piso));
+                Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
             }
         }
 
@@ -2403,7 +2441,7 @@ namespace Alkahest.Game
             if (tPrev < 0.30f && _perfiladoT >= 0.30f)
             {
                 if (_techoSellado && !_bienDicho) { _bienDicho = true; DecirConTono(_g.vozBien, 0.88f, 1.6f); }
-                _focoDeLuz = new Vector3(377f * celda, 143.5f * celda, 0f);
+                _focoDeLuz = new Vector3(PlintoX0[0] * celda, 143.5f * celda, 0f); // (R103) el borde real del plinto, no un literal.
                 _radioForzado = UiStyles.S(200f);
             }
             if (_perfiladoT >= 0.55f && _perfiladoCol < 20)
@@ -2411,7 +2449,7 @@ namespace Alkahest.Game
                 int colsDebidas = Mathf.Min(20, Mathf.FloorToInt((_perfiladoT - 0.55f) * 25f) + 1);
                 while (_perfiladoCol < colsDebidas)
                 {
-                    int x = 377 + _perfiladoCol;
+                    int x = PlintoX0[0] + _perfiladoCol; // (R103) barre desde el borde real.
                     int yTope = -1;
                     for (int i = 0; i < 3; i++)
                     {
@@ -2429,7 +2467,7 @@ namespace Alkahest.Game
                         _audio.pitch = 1f;
                     }
                     _perfiladoCol++;
-                    _focoDeLuz = new Vector3((377 + _perfiladoCol) * celda, 143.5f * celda, 0f);
+                    _focoDeLuz = new Vector3((PlintoX0[0] + _perfiladoCol) * celda, 143.5f * celda, 0f);
                 }
             }
             if (tPrev < 1.35f && _perfiladoT >= 1.35f)
@@ -2523,6 +2561,14 @@ namespace Alkahest.Game
 
                 case 1:
                 {
+                    // (R103) EL DECRETO DE SITIO, refrescado por tick: soltar
+                    // solo vale en los marcos libres, CON el espejo del marco
+                    // (A tubo izquierda, B derecha). La sombra roja + el aviso
+                    // "L lo espeja" son la lección en el momento exacto.
+                    Mudanza.LevantarDecreto();
+                    if (!_slotAOcupado) Mudanza.DecretarSitio(new Vector2Int(SlotAX0 - 1, SlotY0), espejado: true);
+                    if (!_slotBOcupado) Mudanza.DecretarSitio(new Vector2Int(SlotBX0 - 1, SlotY0), espejado: false);
+
                     if (!_fichaLlevalosMostrada)
                     {
                         if (Mudanza.ModoActivo && _tutorial.Visible) _tutorial.Confirmar(0);
@@ -2531,6 +2577,20 @@ namespace Alkahest.Game
                             _fichaLlevalosMostrada = true;
                             _tutorial.Mostrar("llévalos a la plataforma",
                                 new TutorialContextual.Paso { Etiqueta = "CLIC IZQ", Presionada = () => Mouse.current != null && Mouse.current.leftButton.isPressed });
+                        }
+                    }
+                    // (R103, Cesar: "es un gran momento para enseñarlo") LA
+                    // FICHA DE LA L, estilo WASD con su sonido: aparece en
+                    // cuanto llevas un reservorio en la mano — justo cuando
+                    // el flanco empieza a importar.
+                    else if (!_fichaEspejoMostrada && Mudanza.LlevandoAparato)
+                    {
+                        if (_tutorial.Visible) _tutorial.Confirmar(0); // el CLIC IZQ ya ocurrió: lo llevas.
+                        if (!_tutorial.Visible)
+                        {
+                            _fichaEspejoMostrada = true;
+                            _tutorial.Mostrar("el tubo elige flanco",
+                                new TutorialContextual.Paso { Etiqueta = "L", Presionada = () => Keyboard.current != null && Keyboard.current.lKey.isPressed });
                         }
                     }
                     // El IMÁN de los slots: un reservorio soltado a ±2 celdas
@@ -2544,7 +2604,8 @@ namespace Alkahest.Game
                     _slotAOcupado = aEn; _slotBOcupado = bEn;
                     if (aEn && bEn)
                     {
-                        if (_fichaLlevalosMostrada && _tutorial.Visible) _tutorial.Confirmar(0);
+                        Mudanza.LevantarDecreto(); // (R103) el Acomodo terminó: la mudanza vuelve a ser libre.
+                        if (_tutorial.Visible) _tutorial.Confirmar(0); // la ficha que quede en pie (llévalos o la L) cierra con su sonido.
                         if (_silSlotA != null) { Destroy(_silSlotA); _silSlotA = null; }
                         if (_silSlotB != null) { Destroy(_silSlotB); _silSlotB = null; }
                         Debug.Log("[TenThousandYears] ACOMODO completo: los dos reservorios en la plataforma.");
@@ -2616,12 +2677,10 @@ namespace Alkahest.Game
                 if (r.X0 == slot && r.Y0 == SlotY0) return;         // ya encajado.
                 if (Mathf.Abs(r.X0 - slot) > 2) continue;            // lejos de este slot.
                 if (HayReservorioEn(slot)) continue;                 // ocupado por el otro.
-                // (R102) EL IMÁN DECRETA LA POSE: con las huellas a 10, el
-                // hueco central (2 celdas) no le alcanza a ningún tubo — el
-                // slot A vive espejado a la izquierda y el B a la derecha
-                // (los sujetalibros). El jugador puede re-espejar con L
-                // después; el aire seguirá mandando.
-                ((IMovibleEspejable)r).EspejoPendiente = slot == SlotAX0;
+                // (R102 → R103) El imán ya NO decreta la pose: el decreto de
+                // sitio exige el espejo correcto ANTES de soltar (la lección
+                // de la L), así que lo que llega aquí ya viene bien volteado —
+                // el imán solo perdona el pulso de posición.
                 r.Reposicionar(slot, SlotY0);
                 return;
             }
@@ -2648,7 +2707,7 @@ namespace Alkahest.Game
             TickFrentesDelVano();
             if (_adiosPaso >= 6) _maestroHalo = Mathf.MoveTowards(_maestroHalo, 0f, 0.25f * Time.deltaTime);
 
-            Vector3 plinto = new Vector3(387f * celda, 146f * celda, 0f);
+            Vector3 plinto = new Vector3((PlintoX0[0] + PlintoX1[0] + 1) * 0.5f * celda, 146f * celda, 0f); // (R103) el centro REAL del plinto, siga donde siga.
             Vector3 brasas = new Vector3(430.5f * celda, 143f * celda, 0f);
 
             switch (_adiosPaso)

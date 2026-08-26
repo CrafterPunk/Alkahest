@@ -5771,3 +5771,50 @@ ca_playtest84.cmd barre la ronda.
   (captura RT del par sujetalibros con sus tubos a los flancos y 2 de aire
   entre huellas); REPARA en voz y placa; 0 errores de consola.
 · ca_playtest102.cmd barre la ronda.
+
+## Ronda 103 — EL DECRETO DEL ACOMODO: sitio exacto, forma exacta, la L enseñada
+
+· Cesar, cuarto veredicto sobre los marcos: "no tienen la forma de los
+  recipientes, se volvieron a achicar... asegúrate de que la huella de pista
+  sea igual a la de los contenedores, NO los vuelvas a entrelazar por amor a
+  dios... siguen bien pegadito al de arcilla y no equidistante a ambos...
+  lo ideal es que las sombras solo admitan colocarse en lugar exacto y con
+  la forma exacta — así enseñamos la L, con la indicación WASD y el sonido:
+  es un gran momento para enseñarlo".
+· EL PLINTO SE CENTRA (+6: PlintoX0 {383,384,385}, X1 {402,401,400}; slots
+  384/394): el par de marcos con sus tubos (381-405) respira SEIS celdas de
+  aire por cada lado — silo (tubo hasta 375) y depósito (visual desde 411) —
+  equidistante de verdad. Los focos cinemáticos que citaban el plinto por
+  literal (perfilado 377, cierre del adiós 387) ahora leen PlintoX0/X1: la
+  cámara sigue a la piedra, no a un número muerto (regla 47).
+· LOS MARCOS SON LA L ENTERA, SIN ENTRELAZADO: cuerpo 10x19 con domo +
+  saliente del tubo hacia AFUERA (A izquierda, B derecha — los sujetalibros).
+  Con los slots a 10, los cuerpos colindan en UNA arista (la costura 393) y
+  las siluetas no comparten ni una celda. Relleno latiente por pieza (cuerpo
+  + tubo), fills adyacentes sin doble brillo.
+· EL DECRETO DE SITIO (Mudanza, API nueva): mientras el director lo dicte,
+  soltar solo vale en las anclas decretadas (±2/±1, el pulso del imán) y CON
+  el espejo del marco. Tres veredictos: vale / lejos ("aquí no — su marco lo
+  espera en la plataforma") / flanco equivocado ("el tubo va al otro flanco —
+  L lo espeja": LA LECCIÓN en el momento exacto). La sombra se pinta roja
+  fuera del decreto — la mano cerrada del puntero dice lo mismo gratis. El
+  director lo refresca por tick del Acomodo (solo slots libres) y una RED DE
+  SEGURIDAD lo levanta en cualquier otro beat (pariente de la regla 59: el
+  decreto es estático y sobrevive al RestartRun). El imán ya no decreta pose:
+  lo que llega ya viene bien volteado por el jugador.
+· LA FICHA DE LA L, estilo WASD con su sonido (TutorialContextual): la cadena
+  del Acomodo ahora es V ("la mudanza recoloca el taller") → CLIC IZQ
+  ("llévalos a la plataforma", confirmada al primer agarre) → L ("el tubo
+  elige flanco", confirmada al presionarla con su TutorialConfirma). Como el
+  depósito y el silo renacen con el tubo a la derecha y el slot A exige
+  izquierda, al menos UNA colocación pide la L: la enseñanza es inevitable.
+· Mudanza.LlevandoAparato (estático) para que el tutorial sepa CUÁNDO enseñar.
+· Cesar subió el playtest 101 y arrastró la R102 (un solo commit, GitHub
+  manda): sandbox sincronizado por reset a origin, sin pérdida.
+· VERIFICADO EN VIVO con sondas: decreto = [(383,143)izq, (393,143)der];
+  veredictos A/tubo-derecha=2 (la lección), B/tubo-derecha=0, lejos=1,
+  A/tubo-izquierda=0 (también con tolerancia +2/+1); red de seguridad: al
+  salir del Acomodo, HayDecreto=False al frame siguiente; 0 errores de
+  consola. Los marcos nuevos se estrenan con Cesar (misma ruta de dibujo ya
+  verificada en R101).
+· ca_playtest103.cmd barre la ronda.

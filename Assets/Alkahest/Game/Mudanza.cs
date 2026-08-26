@@ -298,6 +298,49 @@ namespace Alkahest.Game
         private bool _candidatoEnAlcance;
         private bool _sitioValidoCache; // validez del sitio mientras se lleva algo (la calcula ActualizarVisuales).
 
+        // =================================================================
+        // (R103, Cesar: "lo ideal es que las sombras solo admitan que se
+        // coloquen en lugar exacto y con la forma exacta — así tenemos la
+        // oportunidad de enseñar a usar la L") EL DECRETO DE SITIO: un
+        // director de escena puede decretar que, mientras dure, soltar solo
+        // vale en ciertas anclas (±2 de tolerancia, el pulso del imán) y con
+        // cierto ESPEJO. La sombra se pinta roja fuera del decreto, y el
+        // aviso dice exactamente qué falta — si es el flanco, la respuesta
+        // es la L: el momento de enseñanza. El decreto es global y quien lo
+        // dicta es responsable de levantarlo (FundacionDirector lo refresca
+        // por tick del Acomodo y lo suelta en cualquier otro beat).
+        // =================================================================
+        private static readonly List<Vector2Int> _sitiosDecreto = new List<Vector2Int>(2); // anclas VISUALES.
+        private static readonly List<bool> _espejosDecreto = new List<bool>(2);
+
+        public static bool HayDecreto => _sitiosDecreto.Count > 0;
+
+        /// <summary>(R103) ¿Este avatar lleva un aparato agarrado ahora? Lo lee el tutorial del director para saber CUÁNDO enseñar la L.</summary>
+        public static bool LlevandoAparato { get; private set; }
+
+        public static void LevantarDecreto() { _sitiosDecreto.Clear(); _espejosDecreto.Clear(); }
+
+        public static void DecretarSitio(Vector2Int anclaVisual, bool espejado)
+        {
+            _sitiosDecreto.Add(anclaVisual);
+            _espejosDecreto.Add(espejado);
+        }
+
+        /// <summary>0 = vale (o no hay decreto); 1 = lejos de todo sitio decretado; 2 = sitio bien pero el ESPEJO no calza (la lección de la L).</summary>
+        private int VeredictoDecreto(Vector2Int anclaCandidata)
+        {
+            if (!HayDecreto || _llevando == null) return 0;
+            bool cercaDeAlguno = false;
+            for (int i = 0; i < _sitiosDecreto.Count; i++)
+            {
+                if (Mathf.Abs(anclaCandidata.x - _sitiosDecreto[i].x) > 2) continue;
+                if (Mathf.Abs(anclaCandidata.y - _sitiosDecreto[i].y) > 1) continue;
+                cercaDeAlguno = true;
+                if (_espejoLlevando == _espejosDecreto[i]) return 0;
+            }
+            return cercaDeAlguno ? 2 : 1;
+        }
+
         // -----------------------------------------------------------------
         // REGISTRO DE APARATOS MOVIBLES (mismo patrón que Game/MachineFocus.cs,
         // pero para un propósito distinto: MachineFocus arbitra QUIÉN responde
@@ -548,6 +591,7 @@ namespace Alkahest.Game
             // escribe suavizada (smoothstep inline, cero allocs).
             if (enabled)
             {
+                LlevandoAparato = _llevando != null; // (R103) espejo del estado para el tutorial del director (1 frame de rezago: irrelevante).
                 EstadoT = Mathf.MoveTowards(EstadoT, ModoActivo ? 1f : 0f, Time.deltaTime / (ModoActivo ? 0.22f : 0.14f));
                 _focoT = Mathf.MoveTowards(_focoT, _llevando != null ? 1f : 0f, Time.deltaTime / (_llevando != null ? 0.12f : 0.15f));
                 SimRenderer.TinteMudanza = EstadoT * EstadoT * (3f - 2f * EstadoT);
@@ -872,6 +916,21 @@ namespace Alkahest.Game
                 return;
             }
 
+            // (R103) EL DECRETO manda antes que el deseo: fuera de un sitio
+            // decretado no se suelta, y con el flanco equivocado el aviso ES
+            // la lección — el jugador aprende la L porque la necesita.
+            int decreto = VeredictoDecreto(anclaCandidata);
+            if (decreto == 1)
+            {
+                if (_flask != null) _flask.Avisar("aquí no — su marco lo espera en la plataforma");
+                return;
+            }
+            if (decreto == 2)
+            {
+                if (_flask != null) _flask.Avisar("el tubo va al otro flanco — L lo espeja");
+                return;
+            }
+
             // (R100) El deseo de flanco viaja con el soltar: Reposicionar lo
             // honra si hay aire (y si no, el tubo se queda donde pueda).
             var espejable = _llevando as IMovibleEspejable;
@@ -953,6 +1012,7 @@ namespace Alkahest.Game
         {
             if (!ModoActivo) return;
             ModoActivo = false;
+            LlevandoAparato = false;
             var instancia = FindAnyObjectByType<Mudanza>();
             if (instancia != null)
             {
@@ -1103,7 +1163,8 @@ namespace Alkahest.Game
             // visual — antes la sombra se pintaba verde sobre el aire y el
             // soltar la desmentía con un aviso. Verde = se puede soltar AQUÍ,
             // con las tres verdades juntas (mundo + alcance + suelo).
-            bool valido = dentroDelMundo && dentroDeAlcance && (!_hasCursorCell || ApoyoFirme(_llevando, anclaCandidata));
+            bool valido = dentroDelMundo && dentroDeAlcance
+                && (!_hasCursorCell || (ApoyoFirme(_llevando, anclaCandidata) && VeredictoDecreto(anclaCandidata) == 0)); // (R103) el decreto también pinta la sombra.
             _sitioValidoCache = valido; // (R98) el puntero (mano cerrada verde/roja) habla con ESTA misma verdad.
 
             Vector2 tamano = _llevando.TamanoMundo;
