@@ -118,6 +118,35 @@ Donde la alquimia se vuelve química y el juego honra su premisa completa.
 
 ---
 
+## 2.5 LA CADENA DEL FUEGO (R105 — temperaturas, estructuras y fidelidad)
+
+La humanidad subió la temperatura CONSTRUYENDO ESTRUCTURAS; cada una desbloqueó
+materiales que la anterior no podía tocar. El juego calca la cadena peldaño a
+peldaño. La escala interna (raw 0–255; el motor lee °C = raw×2 − 120, o sea
+−120…390 °C) es una COMPRESIÓN de la real: la magia comprime tiempo y
+temperatura, jamás inventa materia — **la correspondencia es por peldaño, no por
+número**. Versión visual (con las estructuras dibujadas): el artifact "Las Cinco
+Eras" (misma URL de siempre).
+
+| # | Estructura | Época | °C reales | Desbloquea (fidelidad) | En el juego | Estado |
+|---|---|---|---|---|---|---|
+| 1 | LA FOGATA (fuego abierto) | ~400.000 años | 400–700 (picos ~900) | adobe 85%, pigmentos, brea | brasas ≈100 · turba raw 124 | HECHO — Prólogo+Era I |
+| 2 | EL HOYO DE COCCIÓN | figurillas ~26.000 a.C.; vasijas ~14.000 a.C. | 600–900 | cerámica 90%, bizcocho 90% | ceniza raw 136 | HECHO — Era I |
+| 3 | EL HORNO DE TIRO + LA CALERA | Mesopotamia/Egipto ~4.000 a.C. | 900–1.100 | cal 88%, esmaltado 85%, mortero/hormigón 88%, vidrio de botella, gres 55% (confiesa) | carbón raw 158–190; arcilla: adobe 180 · calcinado 188 · CERÁMICA 205 (techo declarado) | HECHO — Era I |
+| 4 | EL CRISOL Y LOS FUELLES | Balcanes/Timna ~5.000 a.C. | 1.100–1.200 (el cobre funde a 1.085) | cobre, oro nativo, vidrio pleno (plan ≥85) | peldaño nuevo POR DISEÑAR; el FUELLE como máquina | PLAN — Era II |
+| 5 | EL HORNO DE LUPIA (bloomery) | Anatolia ~1.200 a.C. | 1.200–1.300 (el hierro funde a 1.538: se reduce SIN fundir) | bronce, hierro, cera perdida (plan ≥85) | carbón a tope + fuelle | PLAN — Era IV |
+| 6 | EL HORNO DRAGÓN | China s. II a.C.→ | 1.250–1.400 | PORCELANA (plan ≥85); el gres se redime | la redención del 55% | PLAN — Era V |
+| 7 | EL ALTO HORNO / CRISOL DE ACERO | China ~s. V a.C.; Europa s. XIII; wootz ~300 a.C. | 1.400–1.600 | hierro colado, ACERO (asoma) | el borde del arco: asoma, no se domina | PLAN — Era V (frontera) |
+
+Notas de honestidad: (a) los valores raw de la Era I son del código vivo
+(Universe.cs: bandas de extracción {106,124,136,148,158}, combustibles 165–190,
+umbrales de arcilla 180/188/205); (b) los peldaños II–V son promesa de diseño —
+sus números exactos se cablean cuando cada era entra a desarrollo; (c) las
+temperaturas históricas son rangos de consenso arqueológico, suficientes para el
+imaginario colectivo, no para un paper; (d) el pacto de fidelidad (≥85 nombre
+real / 60–85 confiesa / <60 prohibido) gobierna cada celda de la columna
+"Desbloquea".
+
 ## 3. EL PRINCIPIO RECTOR DEL RITMO (por qué "lento" es correcto)
 
 Cada material nuevo debe pasar por RECORDACIÓN (su nombre real se fija jugando),

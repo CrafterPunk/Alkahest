@@ -5831,3 +5831,65 @@ ca_playtest84.cmd barre la ronda.
 · Compilado EXIT=0, Refresh con editor detenido, 0 errores. Cambio quirúrgico:
   un solo archivo, cero ritmos tocados — listo para la prueba.
 · ca_playtest104.cmd barre la ronda.
+
+## Ronda 105 — LA CADENA DEL FUEGO (el roadmap se vuelve infografía)
+
+· Cesar: "extiende el archivo, la web de las cinco eras: quiero la cadena del
+  fuego — qué temperaturas me permiten hacer qué materiales en qué etapa; cuando
+  la fogata no alcance, los nombres y las imágenes chiquitas de las estructuras
+  más representativas de la humanidad; el imaginario colectivo y el porcentaje
+  de fidelidad. Nosotros ya tenemos algo definido".
+· LO DEFINIDO, leído del código (regla 24): °C = raw×2 − 120 (CellGrid);
+  bandas de extracción {106,124,136,148,158}; combustibles 165–190; umbrales de
+  arcilla 180/188/205. La correspondencia juego↔historia es POR PELDAÑO, no por
+  número: la magia comprime tiempo Y temperatura.
+· LA CADENA (7 peldaños): fogata (400–700°C, adobe/pigmentos) → hoyo de cocción
+  (600–900, la primera cerámica ~26.000 a.C.) → horno de tiro + calera
+  (900–1.100, cal/esmaltes/vidrio: EL TECHO DE LA ERA I) → crisol y fuelles
+  (1.100–1.200, el cobre funde a 1.085: Era II) → horno de lupia (1.200–1.300,
+  hierro SIN fundir: Era IV) → horno dragón (1.250–1.400, porcelana y la
+  redención del gres: Era V) → alto horno (1.400–1.600, acero que asoma: la
+  frontera donde el arco termina).
+· EL ARTIFACT "Las Cinco Eras" reconstruido y extendido AL MISMO URL (Cesar
+  aprobó sobrescribir): tipografías DEL JUEGO (Cinzel+Alegreya), doble escala
+  humanidad↔raw con rampa de incandescencia real, 7 estructuras dibujadas en
+  pixel-SVG propio (la CSP prohíbe imágenes externas: se dibujaron a mano),
+  chips de era con paleta validada por daltonismo en claro Y oscuro (5 pasadas
+  del validador), pacto de fidelidad como leyenda, y todo el contenido v1
+  (mapa, detalle por era, ritmo, fronteras, precio, riesgos) conservado.
+  Render verificado en ambos temas con Chromium headless.
+· docs/ROADMAP.md gana el §2.5 con la tabla textual completa + notas de
+  honestidad (qué es código vivo, qué es promesa, qué es consenso arqueológico).
+· ca_playtest105.cmd barre la ronda (solo docs).
+
+## Ronda 106 — LOS MATERIALES DE LA DEMO (el artifact hermano + las misiones)
+
+· Cesar: "uno nuevo, distinto, en el mismo estilo artístico: todos los
+  materiales de la demo con sus nombres, las minihistorias, cómo se ve el
+  cuadrito con puntitos, cómo evoluciono de uno a otro; y debajo la propuesta
+  de misiones — entretenidas, identificables, contextualizadas, ojalá nombres
+  comunes, buscados con astucia. El playtest 106 debe contener este avance y
+  el de las cinco eras".
+· ARTIFACT NUEVO «Los Materiales de la Demo»
+  (https://claude.ai/code/artifact/9b1ecbca-52de-4373-80f1-c28dc2772a9b),
+  mismo lenguaje visual que Las Cinco Eras (Cinzel+Alegreya, ceniza/brasa/
+  pátina): ~30 fichas en 5 familias (kit del despertar → +turba → +arena →
+  +caliza → +sal) con la MINIHISTORIA VERBATIM de Universe.cs, el swatch de
+  16×16 generado en canvas con EL COLOR Y EL JITTER REALES del código
+  (Encargo Q: tabla _coloresRealesPorBaseEstado + _jitterPorEstado — "lo que
+  ves aquí es lo que verás ahí"), clase ORO/PLATA/JERGA, y la cadena de
+  evolución de cada familia como tira de nodos→verbos.
+· LAS 10 MISIONES propuestas, todas en ORO con ancla en el imaginario: EL
+  CÁNTARO (el horno ES la misión — la decisión abierta del techo 205), LA
+  PARED QUE FALTA (adobe+mortero al boquete del derrumbe), CARBÓN PARA EL
+  INVIERNO, VIDRIO PARA LA REDOMA (la misión ES el desatasco del deadlock del
+  Trueque), ENCALA LA CASA (la exotérmica que se siente), LA MANO EN LA PARED
+  (Altamira, pilar observación), QUE NO GOTEE (templado vs recocido sin
+  decirlo), PIEDRA LÍQUIDA (hormigón: puente a la remodelación), EL SALARIO
+  (la sal como economía), LA COLADA (la lejía que siembra el jabón de la V).
+· docs/DEMO_MATERIALES_Y_MISIONES.md: el gemelo textual (curva, tabla de
+  misiones, estado honesto de qué está cableado y qué es propuesta).
+· Render verificado con Chromium headless (fichas, swatches con grano real,
+  cadenas y misiones); paleta heredada de la R105 (ya validada en ambos temas).
+· ca_playtest106.cmd barre la ronda — y con ella viaja también la R105 (la
+  cadena del fuego), que seguía sin subir: el pedido explícito de Cesar.
