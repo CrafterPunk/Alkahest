@@ -93,6 +93,15 @@ namespace Alkahest.Game
         public static bool HudPermitido;
 
         /// <summary>
+        /// (R95, botón "2" del menú) ARRANQUE EN CHECKPOINT: el director
+        /// salta al estado post-ORDEN — mundo perfilado, fuentes muertas,
+        /// pozos sellados, frasco en mano, reservorios renacidos con tubo y
+        /// refill — y entra directo al beat Obra. SOLO testing: el flag se
+        /// consume en Init (una run) y muere con el prólogo sellado.
+        /// </summary>
+        public static bool ArranqueEnObra;
+
+        /// <summary>
         /// (RONDA 73) Antes del TOMA. no llevas frasco: Game/Flask.cs se guarda
         /// con esta bandera (ni haz, ni aspirar, ni HUD de mano) y
         /// ApprenticeController esconde el tarro decorativo. Solo la sube el
@@ -250,6 +259,87 @@ namespace Alkahest.Game
 
             _radioObjetivo = UiStyles.S(_g.radioDespertar);
             _radio = _radioObjetivo;
+
+            // (R95) El checkpoint del botón "2": se consume aquí (estático →
+            // instancia) para que la próxima run normal no lo herede.
+            if (ArranqueEnObra)
+            {
+                ArranqueEnObra = false;
+                _saltoPaso = 0;
+            }
+        }
+
+        // (R95) El salto al mundo ordenado: -1 = inactivo; 0 = cirugía del
+        // mundo; 1 = esperando el asentado; 2 = esperando los tubos.
+        private int _saltoPaso = -1;
+
+        /// <summary>
+        /// (R95) LA CIRUGÍA DEL CHECKPOINT: reproduce el ESTADO final del
+        /// ORDEN sin su cinemática — las mismas rutinas del anillo
+        /// (LimpiarColumna + PerfilarColumna columna a columna, el sello del
+        /// manantial, las obras de las repisas degeneradas), el frasco ya
+        /// entregado, y los reservorios renacidos con tubo + refill. Las
+        /// motas que la cirugía generaría se descartan (no hay público para
+        /// un espectáculo instantáneo).
+        /// </summary>
+        private void TickSaltoInicial()
+        {
+            switch (_saltoPaso)
+            {
+                case 0:
+                {
+                    // El frasco y el HUD, como si el TOMA. ya hubiera pasado.
+                    _frascoEntregado = true;
+                    FrascoBloqueado = false;
+                    HudPermitido = true;
+                    DayCycle.DespertarHudFundacion();
+                    // Las fuentes, muertas; el mundo, perfilado.
+                    _fuentesApagadas = true;
+                    _lodoActivo = false;
+                    for (int x = SimLevelBuilder.FundacionX0 - 2; x <= SimLevelBuilder.FundacionX1 + 2; x++)
+                    {
+                        LimpiarColumna(x);
+                        PerfilarColumna(x);
+                    }
+                    _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY, 0, MaterialId.Stone);
+                    _sim.PaintStable(SimLevelBuilder.FundacionManantialX - 1, SimLevelBuilder.FundacionManantialY + 1, 0, MaterialId.Stone);
+                    SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaA, 0, 0, -1, -1);
+                    SimLevelBuilder.ActualizarObra(SimLevelBuilder.ObraRepisaB, 0, 0, -1, -1);
+                    _motas.Clear(); // la cirugía no da espectáculo.
+                    _maestroHalo = 0f;
+                    // Los recipientes del primer acto (Ocultos) mueren; nacen los renacidos.
+                    if (_deposito != null) Destroy(_deposito.gameObject);
+                    if (_silo != null) Destroy(_silo.gameObject);
+                    _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
+                    _deposito.Init(_sim, 20, conTubo: true, cargaInstantanea: true);
+                    _deposito.Aparecer();
+                    _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
+                    _silo.InitSilo(_sim, 16, conTubo: true, cargaInstantanea: true);
+                    _silo.Aparecer();
+                    // La luz del amanecer, directa.
+                    _radioObjetivo = UiStyles.S(_g.radioAmanecer);
+                    _radio = _radioObjetivo;
+                    _focoBias = 1f;
+                    Debug.Log("[TenThousandYears] CHECKPOINT (botón 2): mundo ordenado reconstruido; esperando el asentado de los reservorios.");
+                    _saltoPaso = 1;
+                    break;
+                }
+                case 1:
+                    if (_deposito == null || !_deposito.Asentado || _silo == null || !_silo.Asentado) return;
+                    _deposito.InstalarTubo();
+                    _silo.InstalarTubo();
+                    _saltoPaso = 2;
+                    break;
+                case 2:
+                    if (_deposito == null || !_deposito.TuboInstalado || _silo == null || !_silo.TuboInstalado) return;
+                    _deposito.ActivarRefill();
+                    _silo.ActivarRefill();
+                    _saltoPaso = -1;
+                    _obraFase = 0;
+                    CambiarBeat(Beat.Obra);
+                    Debug.Log("[TenThousandYears] CHECKPOINT listo: refill activo, beat=Obra. A testear.");
+                    break;
+            }
         }
 
         private void Awake() { _instancia = this; }
@@ -310,6 +400,10 @@ namespace Alkahest.Game
             if (_beat != Beat.Reorden && _beat != Beat.Adios && _maestroHalo > 0f) _maestroHalo = Mathf.MoveTowards(_maestroHalo, 0f, Time.deltaTime); // el halo no sobrevive a la cinemática (el Adiós lo administra solo, R94).
             if (_aroActivo) _aroVida += Time.deltaTime; // (R81) el latido del aro se calma con la edad (revisión Opus #13).
 
+            // (R95) El checkpoint del botón "2" corre ANTES que los beats:
+            // mientras está activo, el guion normal espera.
+            if (_saltoPaso >= 0) { TickSaltoInicial(); _posAnterior = _aprendiz.position; return; }
+
             _tBeat += Time.deltaTime;
             switch (_beat)
             {
@@ -328,7 +422,7 @@ namespace Alkahest.Game
                 case Beat.Reorden: TickReorden(); break;
                 case Beat.Obra: TickObra(); break;       // (R93) ALZA.: la plataforma y el techo, con el cincel regalado.
                 case Beat.Acomodo: TickAcomodo(); break; // (R93) ACOMODA.: la mudanza de los reservorios al centro nuevo.
-                case Beat.Adios: TickAdios(); break;     // (R93) el ORDEN repetido, el vano, DIEZ MIL AÑOS., y el Maestro deja de mirar.
+                case Beat.Adios: TickAdios(); break;     // (R93) el ORDEN repetido, el vano, el TÍTULO (en inglés siempre, R95), y el Maestro deja de mirar.
                 case Beat.Fin: break; // greybox libre: el prólogo dijo lo suyo.
             }
 
@@ -398,7 +492,7 @@ namespace Alkahest.Game
         /// <summary>
         /// (R94, dirección Opus: "el título compite consigo mismo — llega
         /// sobre una imagen gastada, sin silencio previo, con la tipografía
-        /// de las órdenes") LA ÚNICA NO-ORDEN del Maestro: DIEZ MIL AÑOS. se
+        /// de las órdenes") LA ÚNICA NO-ORDEN del Maestro: el TÍTULO (TEN THOUSAND YEARS. — en inglés siempre, R95) se
         /// dice con doble capa sonora (la voz en su nota más baja + el sub) y
         /// DibujarVoz le da tratamiento PROPIO — más grande, centrada
         /// exacta, sin deriva (las órdenes flotan; el título está TALLADO),
@@ -1900,7 +1994,7 @@ namespace Alkahest.Game
         //   ADIOS   — el Maestro repite ORDEN. (el poder es un verbo suyo,
         //             no un evento único): la luz se cierra sobre TU obra,
         //             abre EL VANO en el muro oeste (el espacio crece), se
-        //             revela el mapa entero, dice DIEZ MIL AÑOS. — y su
+        //             revela el mapa entero, dice el TÍTULO — y su
         //             figura etérea se DESVANECE hacia el tablón del Trueque:
         //             no te abandona, deja de prestarte atención ("ya te
         //             enseñó, ya estás listo") y su atención queda viva en el
@@ -2513,7 +2607,7 @@ namespace Alkahest.Game
                 case 7: // EL TÍTULO (2.60 s): sobre el negro — 0.90 s de la palabra SOLA — y el amanecer definitivo naciendo DEBAJO de ella.
                     if (_tPaso - Time.deltaTime <= 0f)
                     {
-                        DecirTitulo("DIEZ MIL AÑOS.", 0.62f, 4.4f);
+                        DecirTitulo("TEN THOUSAND YEARS.", 0.62f, 4.4f); // (R95, Cesar: "el nombre está en inglés SIEMPRE; solo el eslogan se traduce") — el título es el nombre propio del juego, no una frase suya.
                         if (_audio != null) { _audio.pitch = 0.50f; _audio.PlayOneShot(Audio.SintetizadorSfx.SubGrave, 0.70f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
                     }
                     if (_tPaso >= 1.35f)

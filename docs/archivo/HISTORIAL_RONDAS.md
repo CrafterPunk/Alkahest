@@ -5466,3 +5466,79 @@ ca_playtest84.cmd barre la ronda.
   consola 0 errores 0 warnings ✓. Los 11 pasos y el título son IMGUI: se estrenan en el
   playtest de Cesar.
 · ca_playtest94.cmd barre la ronda.
+
+## Ronda 95 — EL NOMBRE EN INGLÉS, EL BOTÓN "2" Y EL CENSO DE ALCANCE
+
+· (Otro reset del sandbox — 2º del día; GitHub tenía la R94 porque Cesar corrió el
+  barredor: recuperación limpia con reset --hard. Las DLLs sobrevivieron.)
+· 1) REGLA DE MARCA: el nombre es TEN THOUSAND YEARS SIEMPRE, en todo idioma; solo el
+  eslogan se localiza. El título del Adiós ahora se dice en inglés (DecirTitulo) y el
+  doc de familias lo declara.
+· 2) EL BOTÓN "2" (provisional): a la derecha del botón PRÓLOGO, misma fila, cero
+  cambios de estructura — arranca DESDE el final del primer ORDEN. FundacionDirector.
+  ArranqueEnObra (estático, se consume en Init) → TickSaltoInicial: la CIRUGÍA del
+  checkpoint reusa las rutinas del anillo (LimpiarColumna + PerfilarColumna en todas
+  las columnas, sello del manantial, obras de repisas degeneradas, motas descartadas),
+  frasco/HUD como si el TOMA. hubiera pasado, fuentes muertas, reservorios renacidos
+  (20/16) con tubo + refill, luz de amanecer, y beat=Obra directo. VERIFICADO EN VIVO:
+  beat=Obra obraFase=2, tanques Listos con tubo y refill (41/39 subiendo), poza 0
+  no-piedra. Muere cuando el prólogo quede sellado.
+· 3) EL CENSO DE ALCANCE (doc de familias §7, la pregunta "¿a cuántos llego?"):
+  HALLAZGO #1 — el kit de hoy (agua+arcilla+brasas) alcanza SEIS materiales y CERO
+  transformaciones térmicas (brasas 100 < umbrales 180/188/205): la promesa del fuego
+  está mecánicamente incumplida; la veta de turba se retiró en R79 y nunca volvió.
+  HALLAZGO #2 — el Trueque es INCOMPRABLE (todo precia en vidrio de botella, que
+  exige lo que solo el propio Trueque vende: deadlock circular). Curva contada:
+  6 → ~15 (+turba) → ~19 (+arena) → ~26 (+caliza) → ~30 (+sal) de 55 nombres; oro/
+  plata/jerga ≈ 18/10/25 — los encargos se formulan en ORO, la jerga es profundidad.
+  Propuesta de entrada en 3 canales (geología: vetas expuestas por el vano; economía:
+  Trueque repreciado por dominio; evento: el mundo entrega). Decisiones de Cesar
+  pendientes: vetas en el vano, repreciado, y el techo de la cerámica (205 > carbón
+  185: ¿coque, horno concentrador, o bajar el techo?).
+· ca_playtest95.cmd barre la ronda.
+
+## Ronda 95b — LA AUDITORÍA HISTÓRICA Y LA DECISIÓN DE LAS MÁQUINAS
+
+· Decisión de Cesar: EL PRÓLOGO SE SELLA como está — la entrada de materiales es de
+  SEMILLA CERO en funcionamiento. Su pregunta: de los descubrimientos REALES de la era
+  (hasta el cerámico), ¿cuántos cubre el entregable, cuáles importantes quedan fuera
+  (con calificación) y qué solución Pareto nos acerca a la realidad?
+· Respuesta mecánica primero: los nuevos materiales son POLVOS y la máquina de refill
+  YA EXISTE (DepositoDeAgua paramétrica) — entran como SILOS COMPRADOS en el tablón,
+  uno por vez (nada suelto el día 1; el orden de compra es la progresión). "Una misma
+  máquina que resuelva": exactamente.
+· La auditoría (doc de familias §8): canon de ~20 descubrimientos con importancia;
+  cubrimos 9 plenos + 3 proxy + cobre en plan = ~60% del peso histórico. EL PATRÓN:
+  casi todo el arco MINERAL/PIROTÉCNICO (77/80 puntos), casi nada del ORGÁNICO
+  (fibra/madera/cuero/fermento/cera). El entregable es honesto como "LA ERA DEL FUEGO
+  Y EL MINERAL"; la brecha #1 es LA CUERDA (string revolution, imp. 10).
+· EL PARETO: (1) PIGMENTOS = GRATIS (negro=carbón, ocre=arcilla, blanco=cal; solo
+  piden el verbo pintar — y encienden el pilar OBSERVACIÓN al pie de la letra);
+  (2) LA FIBRA como material de VOCABULARIO (no base 6: las bases están horneadas en
+  la seed) — una adición cubre cuerda+cestería+tejido y estrena el eje TENSIÓN;
+  (3) fauna y fermento NO son omisión sino CRONOLOGÍA: eras II-III del roadmap
+  esbozado (§8.4). Decisiones pendientes de Cesar: pigmentos, fibra, repreciado del
+  Trueque a silos.
+· ca_playtest95b.cmd barre los docs (95 la llevaba el código; si ya corrió, este
+  recoge la auditoría).
+
+## Ronda 96 — EL ROADMAP DE LAS CINCO ERAS (documento para externos)
+
+· Pedido de Cesar: un documento llamado ROADMAP, gráfico, "para un externo y para mí":
+  cuántos materiales tendría el juego que cumple el 95% de la promesa, oro/plata por
+  era, orden de desarrollo, qué agrega cada sección, qué silo de autorefill necesita
+  cada una, duración por cantidad de personas, y valor de venta si se ejecuta bien.
+· ENTREGADO: docs/ROADMAP.md (la verdad, en el repo) + página visual compartible (los
+  estratos de las cinco eras). El mapa: I EL FUEGO Y EL MINERAL (~30 jugables, cierre
+  ~1 mes, 3-5 h) → II EL HILO Y EL METAL (fibra + cobre, ~42, 2-3 meses) → III EL
+  GRANO Y LA BESTIA (bio-tiempo, ~57, 3-4 meses) → IV EL BRONCE Y LA RUEDA (~67,
+  2-3 meses; el fuelle tumba el techo térmico) → V LA QUÍMICA PACIENTE (~79, 3-4
+  meses; jabón/pólvora/porcelana). Totales: ~79 materiales jugables (35 de oro),
+  12-15 meses, 25-34 h co-op (1-4, óptimo 2-3), promesa al ~95% del canon
+  preindustrial al cerrar la V. Silos por era: (I) turba/arena/caliza/sal comprables,
+  (II) fibra + mena por veta, (III) grano, (IV) estaño, (V) azufre y salitre.
+  Precio propuesto: demo gratis → EA $14.99 (I-II) → $19.99 (IV) → $19.99-24.99 (1.0),
+  contra comparables Noita/Potion Craft/Core Keeper; el diferenciador: "todo lo que
+  aprendes es verdad". Fuera del arco, con nombre: era industrial, seda/púrpura/
+  óptica/imprenta, remodelación (multiplicador, no contenido), lo alquímico sorteado.
+· ca_playtest96.cmd barre la ronda.

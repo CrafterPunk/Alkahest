@@ -1014,12 +1014,27 @@ namespace Alkahest.Game
             // título" (ManejarEscape + DrawPause, ya vigente en los tres
             // modos: la fundación spawnea DayCycle desde el fix 62b).
             // =============================================================
+            // (R95, pedido de Cesar) EL "2" PROVISIONAL: un botoncito a la
+            // derecha del prólogo — misma fila, cero cambios de estructura —
+            // que arranca DESDE el final del primer ORDEN (los dos
+            // reservorios renacidos con refill), para testear la sección
+            // nueva sin rejugar los 2 primeros minutos. Provisional a
+            // conciencia: muere cuando el prólogo quede sellado.
+            GUILayout.BeginHorizontal();
             if (GUILayout.Button("PRÓLOGO — la fundación", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))
             {
                 AlkahestGameBootstrap.ModoFundacion = true;
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun((int)Universe.SemillaCero);
             }
+            if (GUILayout.Button("2", UiStyles.Boton, GUILayout.Width(UiStyles.S(38f)), GUILayout.Height(UiStyles.S(38f))))
+            {
+                AlkahestGameBootstrap.ModoFundacion = true;
+                AlkahestGameBootstrap.ModoSemillaCero = false;
+                FundacionDirector.ArranqueEnObra = true; // el director salta al mundo ordenado en su primer frame.
+                RestartRun((int)Universe.SemillaCero);
+            }
+            GUILayout.EndHorizontal();
 
             GUILayout.Space(UiStyles.S(10f));
             if (GUILayout.Button("MODO NORMAL — SEMILLA CERO", UiStyles.Boton, GUILayout.Height(UiStyles.S(38f))))

@@ -6,8 +6,9 @@ y cuándo hay que agregar a fuerzas un recurso mágico para que no sea una omisi
 criticable? ¿Cuáles serían las familias de cosas que se van a poder formar durante todo
 el juego y durante la build (10-20 min jugables como curva de evolución)?"
 
-Eslogan oficial (fijado por Cesar, 25-ago): **"Rebuild human knowledge from mud, fire,
-and observation." / "Reconstruye el conocimiento humano a partir del barro, el fuego y
+Eslogan oficial (fijado por Cesar, 25-ago): **TEN THOUSAND YEARS — el nombre SIEMPRE en inglés (regla de marca de Cesar, R95);
+solo el eslogan se localiza: "Rebuild human knowledge from mud, fire, and
+observation." / "Reconstruye el conocimiento humano a partir del barro, el fuego y
 la observación."** — los tres pilares del eslogan son las tres columnas de este
 documento: el barro (la materia), el fuego (el proceso), la observación (el
 conocimiento).
@@ -133,3 +134,170 @@ anteriores.
    que pedí" — recurso barato). Si hace falta destruir excedentes, será un aparato
    IMovible con proceso real (¿fosa de quema? ¿vertedero?) — "si es que es necesario":
    pensarlo, no construirlo aún.
+
+---
+
+## 7. EL CENSO DE ALCANCE (R95 — la pregunta de Cesar: "¿a cuántos llego?")
+
+Auditado contra el código real: la tabla de identidad (55 entradas con nombre real:
+5 bases × 8 estados − 1 sin entrada + 6 cruces + 10 clásicos), el catálogo del
+Trueque, la escalera de fuego de la seed (logs verificados: brasas≈100 → turba 124 →
+ceniza 136 → carbón 158-185; tope real de combustible ≈190) y los umbrales de la
+arcilla (adobe 180 · calcinado 188 · cerámica 205 — "LA CERÁMICA ES EL TECHO").
+
+### 7.1 EL KIT DE HOY (post-prólogo, tal como queda la demo)
+
+Agua ∞ (tanque) + arcilla ∞ (silo) + las brasas eternas del Maestro (banda ≈100) +
+el cincel (roca). NADA MÁS: la veta de turba fue RETIRADA del plano en la R79
+("volverá con el beat del fogón" — nunca volvió) y el mundo ordenado no tiene otra
+fuente.
+
+**Materiales alcanzables HOY: 6.** Agua, arcilla, barbotina (arcilla+agua), vapor,
+humo, roca. Y CERO transformaciones térmicas: las brasas (100) no alcanzan NINGÚN
+umbral de la arcilla (180/188/205). *La promesa del eslogan — barro + fuego +
+observación — hoy está mecánicamente incumplida: el fuego primitivo no transforma
+nada.* La primera llave es EL COMBUSTIBLE.
+
+**HALLAZGO CRÍTICO #2 — EL TRUEQUE ES INCOMPRABLE:** el catálogo entero precia en
+VIDRIO DE BOTELLA (turba 6, arena 4, arcilla 4, caliza 8), y el vidrio de botella
+exige arena + ceniza… que solo existen comprándolas. Deadlock circular completo: la
+economía de la demo no tiene primera compra posible. HAY QUE REPRECIAR (ver 7.4).
+
+### 7.2 CADA ADICIÓN, CONTADA
+
+- **+TURBA** (la llave del fuego): turba, ceniza (residuo), carbón vegetal
+  (calcinada), briqueta*, carbón coquizado*, brea/ámbar/brea dócil (fundido),
+  licor pardo (disuelta), lejía (ceniza+agua) → **+8-9**, y sobre la arcilla
+  DESBLOQUEA la escalera térmica: con carbón (185) caen adobe*(180)… y el calcinado
+  (188) y la cerámica (205) quedan POR ENCIMA del carbón — el techo pide coque,
+  horno concentrador o decisión de diseño. (* = pide PRENSA, que la demo no tiene.)
+- **+ARENA DE SÍLICE**: arena, vidrio de botella (con ceniza, banda 145 ✔ con
+  carbón), esmaltado (bizcocho+arena), arenisca*, vidrio puro/recocido (fusión 220:
+  fuera de alcance) → **+3-4 jugables**.
+- **+CALIZA**: caliza molida, cal viva (calcinación), cal apagada (+agua,
+  exotérmica ✔), agua de cal, mortero (+arena ✔), clínker (+arcilla, pleno ✔),
+  hormigón (+arena ✔) → **+7: la familia más generosa por unidad añadida.**
+- **+SAL**: sal de roca, salmuera, sal recristalizada/tostada/de estampido,
+  halita*, bloque salino* → **+4-6**, la más pobre en cadenas (es condimento del
+  conocimiento, no motor).
+
+Curva acumulada de la demo: 6 → ~15 (turba) → ~19 (arena) → ~26 (caliza) → ~30
+(sal). **Con las 4 adiciones y sin prensa, la demo alcanza ~30 de los 55 nombres.**
+
+### 7.3 EL APALANCAMIENTO REAL (¿cuántos nombres CONOCE la gente?)
+
+- **ORO (~18) — todos los conocen; el apalancamiento real**: agua, fuego, humo,
+  ceniza, hielo, vapor, arcilla, adobe, cerámica, ladrillo, carbón (vegetal), turba,
+  vidrio, sal, cal, mortero, hormigón, brea. La demo debe pisar AQUÍ.
+- **PLATA (~10) — les suena, no lo dominan; refuerza sin cargar**: cal viva/apagada,
+  salmuera, clínker, lejía, arenisca, gres, coque, briqueta, caliza.
+- **JERGA (resto, ~25) — fantasía-en-la-práctica CON ventaja**: barbotina, bizcocho,
+  chamota, engobe, caliche, halita, vitrocerámica, licor pardo, ámbar de brea, flor
+  de sal, decrepitación… Para la mayoría son palabras NUEVAS — funcionan como
+  nombres fantasía, pero googleables y con reseña que confiesa: no apalancan el
+  conocimiento previo, apalancan la CURIOSIDAD ("existía de verdad"). Son
+  profundidad, no puerta de entrada.
+
+Regla de diseño derivada: cada ENCARGO de la demo se formula con palabras de ORO
+("haz cerámica", "trae carbón", "funde vidrio"); la JERGA aparece solo como
+descubrimiento intermedio con ficha.
+
+### 7.4 CÓMO ENTRAN LOS MATERIALES (propuesta, 3 canales que la ficción ya tiene)
+
+1. **POR GEOLOGÍA — las vetas que el ORDEN expone.** La idea original de Cesar
+   ("aparecen las vetas y las recolecto con el cincel") + el vano nuevo: el
+   RETROCESO del muro y el recodo dejan CARAS NUEVAS de roca — ahí se pintan las
+   vetas (turba primero, embutida en la cara del arco; arena de sílice más adentro
+   del recodo). El umbral no solo promete espacio: ENTREGA materia. El cincel ya
+   sabe cosecharlas. Coste: pintar celdas + 1 ficha. ES LA PRIMERA QUE HARÍA.
+2. **POR ECONOMÍA — el Trueque repreciado en la escalera real**: primera página en
+   lo que arcilla+carbón permiten (p. ej. ARENA cuesta N carbón; CALIZA cuesta M
+   cerámica — página cerrada hasta dominar el horno; SAL cuesta vidrio). Cada
+   material nuevo se compra con el DOMINIO del anterior: el catálogo se vuelve el
+   mapa de progresión. (Y arregla el deadlock del 7.1.)
+3. **POR EVENTO — el mundo entrega, el Maestro no** (la doctrina del derrumbe):
+   goteras/derrumbes dirigidos para sorpresas puntuales post-prólogo.
+
+Orden propuesto para la demo: veta de turba en el vano (cierra la promesa del
+fuego) → Trueque repreciado (arena/caliza/sal por dominio) → eventos como sal.
+
+---
+
+## 8. LA AUDITORÍA HISTÓRICA (R95b — "¿cuántos descubrimientos reales cubrimos?")
+
+Decisión de Cesar que enmarca todo: EL PRÓLOGO SE SELLA COMO ESTÁ (sin materiales
+nuevos); la entrada de materiales es asunto de SEMILLA CERO en funcionamiento. Y la
+entrada propuesta: LAS MÁQUINAS — DepositoDeAgua ya es paramétrica (tanque=agua,
+silo=arcilla); los nuevos son POLVOS y entran como silos COMPRADOS en el tablón, uno
+por vez (nada suelto en el suelo el día 1; el orden de compra es la progresión).
+
+### 8.1 El canon de la era (hasta EL CERÁMICO): los ~20 descubrimientos de materiales
+que un jugador culto podría esperar, con importancia histórica (1-10) y nuestro estado.
+
+| # | Descubrimiento | Imp. | Estado en el entregable |
+|---|---|---|---|
+| 1 | Fuego controlado | 10 | ✓ núcleo (brasas, escalera de combustibles) |
+| 2 | Piedra trabajada | 10 | ✓ (roca madre + cincel) |
+| 3 | CUERDA / FIBRA ("string revolution") | 10 | ✗ — LA BRECHA MAYOR |
+| 4 | Cerámica | 10 | ✓ columna vertebral (y techo declarado) |
+| 5 | Madera trabajada | 9 | ~ parcial: solo su cara combustible (turba→carbón); como estructura, ausente |
+| 6 | Adobe / ladrillo crudo | 9 | ✓ |
+| 7 | Cestería / tejido | 8 | ✗ (misma base que #3) |
+| 8 | Cal / enlucidos (Çatalhöyük) | 8 | ✓ familia entera (viva/apagada/mortero) |
+| 9 | Sal | 8 | ✓ |
+| 10 | Carbón vegetal | 8 | ✓ (vía turba, atajo confesado) |
+| 11 | Fermentación (pan/cerveza/vino) | 8 | ✗ — era posterior del roadmap |
+| 12 | Vidrio / fayenza | 8 | ✓ (vidrio de botella, la lección del fundente) |
+| 13 | Pigmentos / ocre | 7 | ✗ — pero ver 8.3: es GRATIS |
+| 14 | Cuero / pieles | 7 | ✗ (pide fauna; el licor pardo ya lo confiesa) |
+| 15 | Cobre nativo / primeros metales | 7 | ✓ PLAN (F7 declarada, post-build: la frontera de la era) |
+| 16 | Brea / betún | 6 | ✓ (brea de turba) |
+| 17 | Yeso | 5 | ~ proxy de la cal (confesable en reseña) |
+| 18 | Obsidiana | 5 | ~ reseña dentro del vidrio ("la naturaleza lo hizo primero") |
+| 19 | Cera de abeja | 5 | ✗ (fauna; clave FUTURA: cera perdida = metalurgia) |
+| 20 | Hueso / asta | 5 | ✗ (fauna) |
+
+**La cuenta**: 9 cubiertos plenos + 3 parciales/proxy + 1 planificado (cobre) de 20.
+**Ponderado por importancia: cubrimos ~60% del peso histórico de la era.** Y el
+patrón de lo que falta no es azar: cubrimos casi TODO el arco MINERAL/PIROTÉCNICO
+(piedra-barro-cal-sal-vidrio-carbón: 77 puntos de 80 posibles) y casi NADA del arco
+ORGÁNICO (fibra-madera-cuero-fermento-cera: la mitad blanda de la cultura material,
+la que no fosiliza pero dominaba la vida diaria).
+
+### 8.2 Traducción honesta
+
+El entregable actual es "LA ERA DEL FUEGO Y EL MINERAL" — y como tal es
+históricamente EXCELENTE. No es "todo el neolítico": le falta el hilo. Con esa
+etiqueta, el jugador culto no encuentra omisiones criticables; sin ella, "¿y la
+cuerda?" es la primera pregunta de cualquier arqueólogo aficionado.
+
+### 8.3 EL PARETO (qué comprar con el mínimo costo)
+
+1. **GRATIS — LOS PIGMENTOS (cierra #13, +7):** no piden base nueva NI material
+   nuevo: el negro ES carbón molido, el rojo/ocre ES arcilla ferrosa, el blanco ES
+   cal. Piden un USO (verbo pintar/marcar sobre piedra) — y encienden el tercer
+   pilar del eslogan al pie de la letra: OBSERVACIÓN = registrar. La primera
+   pintura del jugador sobre su propia pared es, además, EL guiño a los 10.000
+   años (Altamira → tu taller). Candidata a mejor relación costo/peso del juego.
+2. **LA COMPRA GRANDE — LA FIBRA (cierra #3+#7, +18):** UNA sola adición cubre
+   cuerda, cestería y tejido — y añade el eje mecánico que ninguna base tiene
+   (nuestras 5 son MASA que cae; la fibra es TENSIÓN que ata). Recomendación de
+   ingeniería: NO como base 6 (las bases están horneadas en la seed: BasesCount,
+   tablas, sorteos — ronda estructural cara) sino como material de VOCABULARIO
+   (la clase de Sand/hielo/brea: id propio, nombre fijo, sin 8 estados). Su
+   fuente: la veta vegetal ya existe — "junco/lino de la veta" es coherente.
+   Además paga futuro: mecha (vela, con cera), calafate (con brea), quincha/tapial
+   (con arcilla: wattle-and-daub real), papel (era posterior).
+3. **NO COMPRAR AÚN — la fauna y el fermento (#11,14,19,20):** piden sistemas
+   (seres, tiempo biológico), no materiales. Son ERAS del roadmap de los 10.000
+   años (fermentación ~ era 2; cuero/cera con la fauna; la cera perdida llega
+   JUSTO cuando el cobre la necesite — F7). Dejarlos fuera del primer entregable
+   no es omisión: es cronología.
+
+### 8.4 El roadmap de eras (esbozo para los 10.000 años)
+
+I. FUEGO Y MINERAL (el entregable: 5 bases + cruces, techo cerámico) → II. EL HILO
+Y EL METAL (fibra + cobre F7 + cera perdida) → III. EL GRANO Y EL FERMENTO
+(bio-tiempo: levadura, pan, cerveza, cuero) → IV. BRONCE/HIERRO + textil avanzado →
+V. papel, vidrio soplado, hormigón romano → … La lejía ya deja plantada la semilla
+de la química de álcalis para las eras tardías (jabón pide grasa: fauna de III).
