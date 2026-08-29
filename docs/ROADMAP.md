@@ -24,6 +24,16 @@ sabrías por dónde empezar.
 
 ---
 
+## 0.5 EL MUNDO (decreto R107)
+
+Post-apocalipsis de **ruinas amables**: la civilización anterior dejó máquinas
+rotas que se desentierran y REPARAN — por eso el jugador «tiene» depósitos de
+vidrio el día uno sin poder fabricar vidrio. Regla de hierro R60: lo heredado
+se repara, jamás se desguaza (las ruinas dan recipientes y herramientas, nunca
+materiales a granel). La seed es tu NODO habilitador (qué recursos tenía cerca
+tu protocivilización); lo que falta se pide por el tablón y llega en caravana.
+Personaje: el muñeco de remiendos (docs/DIRECCION_DE_ARTE.md).
+
 ## 1. EL MAPA DE LAS CINCO ERAS (resumen ejecutivo)
 
 | Era | Nombre | Materiales nuevos (acum.) | De ellos ORO* | Silos/refill nuevos | Dev estimado | Juego estimado (acum.) |

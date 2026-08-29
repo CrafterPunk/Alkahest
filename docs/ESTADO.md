@@ -3,6 +3,32 @@
 *(Se actualiza cada ronda. Historia completa: `archivo/HISTORIAL_RONDAS.md`. Visión: el GDD.)*
 *Última actualización: ronda 77 — LAS HERRAMIENTAS DE CESAR (overlay del cincel, mapa de zonas, cascada sonora, juego libre por conducta). Antes: R76 blindó el ciclo de sesión multi (12 fixes + verificación en vivo del ciclo host→caída→recarga→re-host) y R75 la escenificación.*
 
+## DECISIONES CERRADAS (R107 — el diseño mayor está sellado)
+
+Con el decreto del mundo (GDD §0) el proyecto no tiene decisiones grandes de
+diseño pendientes. Cerradas y firmes: mundo de RUINAS AMABLES + regla de hierro
+R60 (lo heredado se repara, jamás se desguaza) · el MUÑECO DE REMIENDOS como
+avatar (levita; variantes por acento; intro del cubo caído) · dirección visual
+2D artesanal con acabado ABIERTO (pixel = una salida posible) · pipeline: 3D
+como herramienta de producción → render orto HD → tratamiento → sprites (ver
+docs/DIRECCION_DE_ARTE.md) · demo Era I con DOS máquinas nuevas (hoyo de
+cocción y horno) + 4 pieles de silo + regla de concentración del encierro
+(cerámica SIN licencia: el horno cierra el gap 185→205) · prensa FUERA de la
+demo · nodos habilitadores por seed + caravanas del tablón · cadena de frío:
+solo ficha, no sistema. Lo único abierto por naturaleza: números de balance y
+la 4ª variante de color.
+
+## RETIRADO DEL TRACK (ya no existe como pendiente — solo como historia)
+
+La tolva (R93) · la estantería/baldas en la fundación (R102) · la luz fría del
+vano (R102: «haremos otra cosa ahí» = la puerta de las caravanas) · el hogar
+vacío del jugador (R101) · la veta de turba del plano (R79; la turba vuelve
+como SILO comprable) · el título en el Adiós (R104: el momento del título se
+construirá aparte) · el clima por zona (R31) · el imp como personaje (ahora
+oficialmente placeholder en retirada) · «pixel art» como acabado asumido (el
+acabado está abierto). Los porqués viven en el código (regla 15) y en el
+HISTORIAL.
+
 ## Dónde estamos
 
 - **PRÓLOGO (la fundación)**: REHECHO en la ronda 73 sobre la espec de Cesar — presentar EL

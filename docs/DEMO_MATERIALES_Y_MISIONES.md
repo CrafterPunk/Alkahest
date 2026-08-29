@@ -50,3 +50,19 @@ Cableado hoy: los ~30 nombres con reseña, colores y jitter (Encargo Q), la
 escalera térmica, los cruces. Propuesta: las 10 misiones, los 4 silos
 comprables, el repreciado del Trueque, el horno de la cerámica, los pigmentos
 y el verbo PINTAR. La prensa: fuera de la demo por decisión.
+
+## 4. LAS DOS MÁQUINAS DE LA DEMO (R107 — cerrado)
+
+1. **EL HOYO DE COCCIÓN** (peldaño 2 de la Cadena): el cincel ya cava; falta el
+   rito (cargar combustible, tapar, esperar) y su bono de encierro. Alcanza el
+   rango del adobe/bizcocho.
+2. **EL HORNO** (tipo horno de pan, peldaño 3): LA máquina de la demo y la
+   misión de El Cántaro. Cierra el gap carbón(185)→cerámica(205) SIN licencia,
+   vía la regla nueva de CONCENTRACIÓN: el encierro con tiro sube la
+   temperatura del mismo combustible — exactamente lo que descubrió
+   Mesopotamia.
+
+Ambas son RUINAS HEREDADAS que se reparan (regla R60), no se construyen de
+cero. La prensa queda fuera de la demo; el crisol no se rediseña; los 4 silos
+comprables usan la paramétrica existente (4 pieles). La cerámica NO lleva
+licencia de fidelidad: se gana con arquitectura.

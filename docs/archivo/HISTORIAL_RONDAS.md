@@ -5893,3 +5893,28 @@ ca_playtest84.cmd barre la ronda.
   cadenas y misiones); paleta heredada de la R105 (ya validada en ambos temas).
 · ca_playtest106.cmd barre la ronda — y con ella viaja también la R105 (la
   cadena del fuego), que seguía sin subir: el pedido explícito de Cesar.
+
+## Ronda 107 — EL DECRETO DEL MUNDO (los textos se ponen firmes)
+
+· Sábado de consolidación, mandato de Cesar: "asegurarnos que estas nuevas
+  ideas de diseño están firmes en todas partes, y que las abandonadas salgan
+  del registro para eliminar peso". Sin código: solo la verdad por escrito.
+· GDD gana el §0 EL DECRETO DEL MUNDO (SELLADO): ruinas amables, máquinas
+  heredadas que se REPARAN (resuelve la incoherencia del vidrio), regla de
+  hierro R60 ("lo heredado se repara, jamás se desguaza" — ahora regla
+  numerada en CLAUDE.md), "no empezamos de cero: la materia quedó, el
+  conocimiento se perdió", el muñeco de remiendos como avatar canónico
+  (levita; intro LEVÁNTATE.; variantes por máscara), nodos habilitadores por
+  seed + caravanas del tablón por el vano, dirección visual 2D artesanal con
+  acabado ABIERTO.
+· docs/DIRECCION_DE_ARTE.md NUEVO: el documento madre de la capa visual —
+  identidad, personaje, pipeline 3D-como-herramienta (cabeza rígida, máscara
+  de acento, 6 animaciones, 3 perillas de convivencia, riesgo del tratamiento
+  nombrado) y el reparto Cesar/agente.
+· ESTADO.md: bloque DECISIONES CERRADAS ("el diseño mayor está sellado") +
+  RETIRADO DEL TRACK (tolva, estantería en fundación, luz del vano, hogar
+  vacío, veta de turba del plano, título del Adiós, clima por zona, el imp
+  como definitivo, el pixel como supuesto). README y ROADMAP §0.5 alineados;
+  DEMO_MATERIALES gana el §4 con las DOS máquinas (hoyo + horno) y la
+  cerámica sin licencia. CLAUDE.md: foco nuevo (la capa visual).
+· ca_playtest107.cmd barre la ronda (solo docs).

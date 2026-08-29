@@ -10,6 +10,38 @@ y sigue marcando SELLADO/ABIERTO. Para releer completo, tachar y devolver.)*
 
 ---
 
+## 0. EL DECRETO DEL MUNDO (R107 — SELLADO)
+
+**El mundo es post-apocalíptico de RUINAS AMABLES** (tono interno: musgo sobre
+máquinas, sin combate, sin zombis — Nausicaä, no Mad Max). Existió una
+civilización; cayó; quedaron sus restos. Esto se cuenta SIN diálogos: lo dicen
+el personaje, las máquinas y el mundo.
+
+- **Las máquinas son restos heredados.** No te las regalan: las desentierras y
+  las REPARAS (el verbo del juego). El vidrio de los depósitos ya existía — eso
+  resuelve la vieja incoherencia de "¿de dónde salió este vidrio?".
+- **REGLA DE HIERRO (R60): lo heredado se repara, jamás se desguaza.** Las
+  ruinas dan RECIPIENTES y HERRAMIENTAS, nunca materiales a granel. El día que
+  se pueda raspar vidrio o acero de un escombro, la economía y la tesis mueren.
+- **No empezamos de cero:** la materia quedó; lo que se perdió fue el
+  CONOCIMIENTO — que es exactamente lo que el eslogan promete reconstruir.
+- **EL PERSONAJE es el muñeco de remiendos** (avatar canónico; el imp queda
+  como placeholder en retirada). Cuerpo heredado: cada material que lo compone
+  es un remiendo de un aprendiz anterior a lo largo de los diez mil años; el
+  brote de la cabeza es el ciclo presente. LEVITA, no camina (el títere
+  sostenido por la chispa del Maestro). Variantes de color por jugador vía
+  parches de acento (máscara teñible; falta definir la 4ª). INTRO: el cubo
+  caído → «LEVÁNTATE.» → los ojos se encienden → el brote crece.
+- **NODOS HABILITADORES:** cada protocivilización existió por los recursos que
+  tenía CERCA (cobre en superficie, arcilla, obsidiana…). En el juego: la seed
+  ES tu nodo; lo que tu nodo no tiene se PIDE por el tablón y SE ESPERA
+  (caravanas — cajones con marcas de origen, iconografía sin textos largos).
+  El vano del oeste es la puerta de ese mundo exterior.
+- **DIRECCIÓN VISUAL:** ilustración 2D artesanal de formas simples y robustas
+  conviviendo con la sim celular. El acabado final está ABIERTO (pixel es UNA
+  salida posible, no el supuesto). Detalle completo y pipeline:
+  `docs/DIRECCION_DE_ARTE.md`.
+
 ## 1. FICHA
 
 | Campo | Valor |

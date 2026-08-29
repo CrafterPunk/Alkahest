@@ -135,6 +135,10 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
   disco no los tenga — cambiar el default de un campo ya cargado NO llega al juego hasta
   reimportar o RENOMBRAR el campo (refillTope se clavó en 36 así). El renombre es la cura
   universal de las tres vías.
+- **R60** *(R107, la regla de hierro del mundo)* LO HEREDADO SE REPARA, JAMÁS SE DESGUAZA:
+  las ruinas dan recipientes y herramientas, nunca materiales a granel — si un escombro
+  puede rasparse para obtener vidrio/metal, la economía y la tesis mueren juntas. Toda
+  mecánica nueva de ruinas se audita contra esta línea ANTES de escribirse.
 - **R59** *(ronda 69g)* Los flags estáticos de modo (`ModoFundacion`/`ModoSemillaCero`) se
   resetean en TODOS los caminos multi (host, snapshot del invitado, despawn): un flag pegado
   construye el universo equivocado sin un solo error. La consola imprime la "línea de la
@@ -142,6 +146,8 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
 
 ## Estado en una línea
 
-EL FOCO: terminar el PRÓLOGO (fundación greybox, `FundacionDirector`). Después: la ronda
-estructural de renombre/poda y la ESCENIFICACIÓN para trabajar con el hermano de Cesar (dev
-Unity) desde el editor. Planes paso a paso y backlog completo: `docs/ESTADO.md`.
+EL FOCO: la CAPA VISUAL del mundo de ruinas amables (GDD §0: decreto R107) — personaje
+muñeco de remiendos vía pipeline 3D→sprites (docs/DIRECCION_DE_ARTE.md), cámara más
+cerca, y cerrar la demo Era I (2 máquinas: hoyo y horno). El diseño mayor está SELLADO;
+retiradas en ESTADO.md. Después: renombre/poda y la escenificación para el hermano de
+Cesar. Backlog completo: `docs/ESTADO.md`.
