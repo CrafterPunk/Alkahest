@@ -6116,3 +6116,18 @@ ca_playtest84.cmd barre la ronda.
   suelo bajo los pies, sondeo de 8 celdas, encoge y desvanece con la altura:
   el truco de los levitadores — ata al muñeco al terreno sin física nueva).
   Lo caro (rim light, oclusión, normales) espera al pipeline 3D.
+
+## Ronda 114 — TRES GOTAS FINAS (los últimos retoques del prólogo)
+
+· Cambios mínimos de Cesar tras el playtest 113, los tres del oficio fino:
+· DOS CHORRITOS DE ARCILLA (era "un chorrito del techo... tardo mucho en
+  llenar el nuevo reservorio"): la gotera del derrumbe gotea ahora por DOS
+  grietas (±3 del eje, bamboleo en espejo) — doble caudal hacia el
+  montículo; tope e histéresis intactos, solo se espera la mitad.
+· EL TOMA. DEL BEAT 3 SE RETIRÓ (R15): "en realidad no agarro nada, y opaca
+  el VEN — pasa muy cerca". El vuelo del frasco cuenta la entrega solo. La
+  palabra sobrevive donde SÍ es regalo: la primera gota del reorden.
+· GOTAS DE AGUA SEPARADAS ("el de arcilla está perfecto; el de agua,
+  intercalado o más interespaciado"): el refill del agua gotea a zancada 2
+  (inlet, -2, +2, -4) — cuatro gotas sueltas como lluvia de tubo, no un
+  bloque. La arcilla conserva su fila compacta por veredicto expreso.

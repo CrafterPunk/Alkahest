@@ -634,7 +634,11 @@ namespace Alkahest.Game
             if (DistAlMaestro() < _g.distCharla)
             {
                 CambiarBeat(Beat.Toma);
-                Decir(_g.vozToma);
+                // (R114, R15) La voz TOMA. de este beat se RETIRÓ (Cesar: "en
+                // realidad no agarro nada, y opaca el VEN — pasa muy cerca").
+                // El vuelo del frasco ya cuenta la entrega solo; la palabra
+                // TOMA. sobrevive donde SÍ es regalo: la primera gota del
+                // reorden (paso 5), lejos de cualquier otra voz.
                 _radioObjetivo = UiStyles.S(_g.radioToma);
                 _focoBias = 0.85f;
                 LanzarVueloDelFrasco();
@@ -1921,8 +1925,17 @@ namespace Alkahest.Game
             if (_lodoPausado) { if (monticulo <= _g.lodoMonticuloResume) _lodoPausado = false; else return; }
             else if (monticulo >= _g.lodoMonticuloTope) { _lodoPausado = true; return; }
 
+            // (R114, Cesar: "en vez de un chorrito del techo al menos 2,
+            // porque si no tardo mucho en llenar el nuevo reservorio") DOS
+            // CHORRITOS separados (±3 del eje, cada uno con su bamboleo en
+            // espejo): doble caudal y la lectura de "gotea por varias
+            // grietas". El tope y la histéresis del montículo no cambian —
+            // solo se llega antes al tope tras cada aspirada.
             _lodoIdx++;
-            _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX + (_lodoIdx % 3) - 1,
+            int bamboleo = (_lodoIdx % 3) - 1;
+            _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX - 3 + bamboleo,
+                SimLevelBuilder.FundacionY1, 0, Lodo);
+            _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX + 3 - bamboleo,
                 SimLevelBuilder.FundacionY1, 0, Lodo);
         }
         private bool _lodoPausado;

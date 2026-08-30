@@ -619,9 +619,16 @@ namespace Alkahest.Game
             int porGota = Mathf.Max(1, Mathf.CeilToInt(tope / 72f));
             int inlet = (_x0 + _x1) / 2;
             int puestas = 0;
+            // (R114, Cesar: "el de arcilla está perfecto; el de agua,
+            // gotas separadas en vez de una fila — intercalado o un poquito
+            // más interespaciado") El agua gotea a ZANCADA 2 (inlet, -2, +2,
+            // -4…): cuatro gotas sueltas que caen como lluvia de tubo, no un
+            // bloque. La arcilla conserva la fila compacta: el barro cae
+            // pegado, y a Cesar así le gusta.
+            int paso = _matDueno == MaterialId.Water ? 2 : 1;
             for (int i = 0; i < porGota; i++)
             {
-                int x = inlet + ((i % 2 == 0) ? i / 2 : -(i / 2 + 1)); // inlet, -1, +1, -2…
+                int x = inlet + paso * ((i % 2 == 0) ? i / 2 : -(i / 2 + 1)); // inlet, -p, +p, -2p…
                 if (x <= _x0 || x >= _x1) continue;
                 if (_sim.Grid.GetMat(x, _y1) == MaterialId.Empty)
                 {
