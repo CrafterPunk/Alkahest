@@ -2662,6 +2662,13 @@ namespace Alkahest.Game
                     if (aEn && bEn)
                     {
                         Mudanza.LevantarDecreto(); // (R103) el Acomodo terminó: la mudanza vuelve a ser libre.
+                        // (R116, Cesar: "la gente no vuelve a dar la V para
+                        // cerrarla... y ven la siguiente animación con el
+                        // filtro morado") EL TRABAJO CERRÓ EL MODO: colocar el
+                        // segundo reservorio ES el final de la mudanza — el
+                        // director la cierra por la puerta oficial (R37,
+                        // ForzarSalida) y el Adiós se ve a color de verdad.
+                        if (Mudanza.ModoActivo) Mudanza.ForzarSalida();
                         if (_tutorial.Visible) _tutorial.Confirmar(0); // la ficha que quede en pie (llévalos o la L) cierra con su sonido.
                         if (_silSlotA != null) { Destroy(_silSlotA); _silSlotA = null; }
                         if (_silSlotB != null) { Destroy(_silSlotB); _silSlotB = null; }

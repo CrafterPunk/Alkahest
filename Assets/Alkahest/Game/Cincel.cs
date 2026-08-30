@@ -230,7 +230,7 @@ namespace Alkahest.Game
                 {
                     ModoActivo = true;
                     _rellenaPiso = false;
-                    if (_flask != null) _flask.Avisar("cincel: PIEDRA — clic izq. talla · clic der. construye · C otra vez: piso");
+                    if (_flask != null) _flask.Avisar("cincel: PIEDRA — clic izq. construye · clic der. talla · C otra vez: piso");
                 }
                 else if (!_rellenaPiso)
                 {
@@ -255,8 +255,8 @@ namespace Alkahest.Game
                 if (_flask != null)
                 {
                     _flask.Avisar(_rellenaPiso
-                        ? "cincel: clic der. coloca PISO ESTRUCTURAL (reemplaza roca)"
-                        : "cincel: clic der. rellena piedra");
+                        ? "cincel: clic izq. coloca PISO ESTRUCTURAL (reemplaza roca)"
+                        : "cincel: clic izq. rellena piedra");
                 }
             }
 
@@ -267,8 +267,12 @@ namespace Alkahest.Game
             // podría tallar piedra justo debajo del mueble sin querer).
             bool ratonCapturado = StorageRack.RatonSobreRedoma();
 
-            bool wantCarve = mouse != null && mouse.leftButton.isPressed && !ratonCapturado;
-            bool wantFill = mouse != null && mouse.rightButton.isPressed && !ratonCapturado;
+            // (R116, Cesar: "cuando presiono clic izquierdo agrego material y
+            // con el derecho lo quito — para mis testers es más natural así")
+            // BOTONES INVERTIDOS respecto al original: izq. CONSTRUYE,
+            // der. TALLA. Los avisos de texto acompañan el cambio.
+            bool wantCarve = mouse != null && mouse.rightButton.isPressed && !ratonCapturado;
+            bool wantFill = mouse != null && mouse.leftButton.isPressed && !ratonCapturado;
 
             _hasCursorWorld = TryGetCursorWorld(out _cursorWorld);
             _hasCursor = _hasCursorWorld && CeldaDesdeCursorMundo(out _cursorCell);
@@ -361,7 +365,7 @@ namespace Alkahest.Game
         }
 
         // ---------------------------------------------------------------------------------
-        // TALLAR (clic izq. mantenido en modo cincel): quita piedra, celda a celda.
+        // TALLAR (clic DER. mantenido desde la R116): quita piedra, celda a celda.
         // ---------------------------------------------------------------------------------
         private void TallarTick(Vector2Int cursor)
         {
@@ -452,7 +456,7 @@ namespace Alkahest.Game
         }
 
         // ---------------------------------------------------------------------------------
-        // RELLENAR (clic der. mantenido en modo cincel): pone piedra, solo sobre vacío.
+        // RELLENAR (clic IZQ. mantenido desde la R116): pone piedra, solo sobre vacío.
         // ---------------------------------------------------------------------------------
         private void RellenarTick(Vector2Int cursor)
         {

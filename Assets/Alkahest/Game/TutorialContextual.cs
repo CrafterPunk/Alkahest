@@ -176,8 +176,12 @@ namespace Alkahest.Game
             _ficha.normal.textColor = FichaTexto;
             _leyendaStyle = new GUIStyle(UiStyles.Cuerpo)
             {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = Mathf.RoundToInt(h * 0.019f),
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                // (R116, Cesar: "las letras blancas tienen que ser más grandes
+                // y legibles... que se mueva con él pero con algún borde") Un
+                // tercio más grandes; la placa oscura va en OnGUI.
+                fontSize = Mathf.RoundToInt(h * 0.026f),
             };
             _leyendaStyle.normal.textColor = LeyendaColor;
         }
@@ -252,8 +256,16 @@ namespace Alkahest.Game
 
             if (leyendaW > 0f)
             {
+                // (R116) LA PLACA DE LA LEYENDA: el texto blanco flotaba
+                // desnudo y se perdía según el fondo. Ahora viaja con el
+                // muñeco sobre su propia placa casi negra (la opción limpia:
+                // legible en CUALQUIER parte sin regalarle a la UI una zona
+                // fija de pantalla).
+                var rl = new Rect(x + gap, y, leyendaW, fichaH);
+                GUI.color = new Color(0.04f, 0.04f, 0.05f, 0.78f * _alfa);
+                GUI.DrawTexture(new Rect(rl.x - UiStyles.S(4f), rl.y, rl.width + UiStyles.S(8f), rl.height), blanco);
                 GUI.color = new Color(1f, 1f, 1f, _alfa);
-                GUI.Label(new Rect(x + gap, y, leyendaW, fichaH), _leyenda, _leyendaStyle);
+                GUI.Label(rl, _leyenda, _leyendaStyle);
             }
 
             GUI.color = prev;

@@ -6154,3 +6154,30 @@ ca_playtest84.cmd barre la ronda.
   boca: 5→10): el barro cae donde vivía el agua — cada material muestra su
   conducta — y la reparación se ve importante. El goteo del techo también
   perdió el metrónomo.
+
+## Ronda 116 — OCHO AFINACIONES (el prólogo a punto de caramelo)
+
+· Ocho veredictos del playtest 115, todos quirúrgicos:
+· 1) EL FRASCO YA NO ASPIRA ARQUITECTURA: el PisoEstructural (cejas de las
+  repisas, pisos, techos) entra a la lista de "jamás al frasco" junto a la
+  piedra — en EsAspirable Y en el filtro del TickSuck (misma verdad doble).
+· 2) LA CARGA INICIAL SE VE: con el vidrio de 12 de ancho, la carga vieja
+  del guion ni pintaba una fila. Mínimo estructural: DOS filas completas
+  del interior (el silo sigue naciendo vacío — pasa 0 explícito).
+· 3) LEYENDAS LEGIBLES EN CUALQUIER PARTE: un tercio más grandes, en
+  negrita, y viajando con el muñeco sobre su propia placa casi negra (la
+  opción limpia: sin regalarle a la UI una zona fija de pantalla).
+· 4) EL CINCEL SE INVIERTE (testers de Cesar: "es más natural así"): clic
+  IZQ construye, clic DER talla. Avisos de texto actualizados.
+· 5) EL MATRAZ A ESCALA: CarryAnchor de la estampa = LA MANO REAL (0.42,
+  -0.16) — el mismo punto que persigue el tarro visual (adiós al "círculo
+  creciendo fuera de una botella chiquita") — y el tarro crece x1.9. El
+  mapita (plano) crece a juego (0.11x0.16).
+· 6) SOMBRA +20%: alfa 1.0 pegado al suelo, 1.45 de escala. "Con eso ya
+  queda."
+· 7) LA LLUVIA DEL REFILL: el agua elige columnas AL AZAR por todo el ancho
+  del vidrio (rng 431, ??= R74) — cada pulso distinto, goteo de lluvia. La
+  arcilla conserva su fila compacta (veredicto R114).
+· 8) LA MUDANZA SE CIERRA SOLA: colocar el segundo reservorio ES el final —
+  el director llama a Mudanza.ForzarSalida() (la puerta oficial, R37) y el
+  Adiós se ve a color, sin el filtro morado que nadie sabía apagar.

@@ -277,7 +277,9 @@ namespace Alkahest.Game
         private System.Random _rng;
 
         /// <summary>Punto ~0.5 unidades por delante/abajo del aprendiz, donde el frasco muestra su contenido. SIN CAMBIOS: Flask.cs depende de este cálculo exacto para su indicador.</summary>
-        public Vector3 CarryAnchor => transform.position + new Vector3(_facingRight ? 0.28f : -0.28f, -0.35f, 0f);
+        public Vector3 CarryAnchor => transform.position + (_usingCustomSprite
+            ? new Vector3(_facingRight ? 0.42f : -0.42f, -0.16f, 0f)   // (R116) la MANO del muñeco de 12 celdas: el mismo punto que persigue el tarro visual — el círculo de contenido y la botella vuelven a ser UNA cosa.
+            : new Vector3(_facingRight ? 0.28f : -0.28f, -0.35f, 0f)); // el imp procedimental de siempre.
 
         // (RONDA 69c, el juice del frasco) EL TARRO RESPIRA: Flask empuja
         // aquí su muelle de "pop" (ver Flask.ActualizarJuice) y HandleVisual
@@ -653,14 +655,19 @@ namespace Alkahest.Game
                 {
                     _planoSr.enabled = frontalC;
                     if (frontalC)
-                        _planoTr.localPosition = new Vector3(dirSignC * 0.32f, -0.12f, VisualZOffset - 0.02f);
+                        _planoTr.localPosition = new Vector3(dirSignC * 0.40f, -0.10f, VisualZOffset - 0.02f);
+                        _planoTr.localScale = new Vector3(0.11f, 0.16f, 1f); // (R116) el mapita crece con el muñeco (antes 0.06x0.09, talla del imp).
                 }
                 TickSombraDeContacto();
                 if (_carriedFlaskTr != null)
                 {
-                    Vector3 flaskTargetC = new Vector3(dirSignC * 0.36f, -0.18f, VisualZOffset - 0.01f);
+                    // (R116, Cesar: "recalcula la botellita... quedó
+                    // descuadrado") El tarro persigue LA MISMA mano que
+                    // CarryAnchor (0.42, -0.16) y crece x1.9: a escala del
+                    // muñeco, no del imp. El muelle de pop multiplica encima.
+                    Vector3 flaskTargetC = new Vector3(dirSignC * 0.42f, -0.16f, VisualZOffset - 0.01f);
                     _carriedFlaskTr.localPosition = Vector3.SmoothDamp(_carriedFlaskTr.localPosition, flaskTargetC, ref _carriedFlaskVel, CarriedFlaskLag);
-                    _carriedFlaskTr.localScale = Vector3.one * (1f + _pulsoFrasco);
+                    _carriedFlaskTr.localScale = Vector3.one * 1.9f * (1f + _pulsoFrasco);
                     _carriedFlaskTr.localRotation = Quaternion.Euler(0f, 0f, _inclinacionFrasco);
                     _carriedFlaskSr.enabled = !FundacionDirector.FrascoBloqueado;
                     _carriedFlaskSr.flipX = !_facingRight;
@@ -897,8 +904,11 @@ namespace Alkahest.Game
             // (R115, Cesar: "muy tímida, no se nota") Presencia real: más
             // grande y bastante más opaca — sobre piedra oscura, 0.55 de alfa
             // se comía la gamma. Sigue desvaneciéndose al volar alto.
-            _sombraTr.localScale = Vector3.one * Mathf.Lerp(1.35f, 0.75f, t);
-            var col = _sombraSr.color; col.a = Mathf.Lerp(0.85f, 0.25f, t);
+            // (R116: "acentúa la sombra todavía un 20% más y con eso ya
+            // queda") 0.85 -> 1.0 de alfa pegado al suelo (el tope físico) y
+            // un pelín más de cuerpo lejos.
+            _sombraTr.localScale = Vector3.one * Mathf.Lerp(1.45f, 0.80f, t);
+            var col = _sombraSr.color; col.a = Mathf.Lerp(1.0f, 0.30f, t);
             _sombraSr.color = col;
         }
 

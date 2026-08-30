@@ -511,7 +511,11 @@ namespace Alkahest.Game
         /// <summary>¿Es este material aspirable? Centraliza el MISMO filtro que ya aplicaba TickSuck (piedra nunca — es la arquitectura del taller; fuego nunca — quemaría el frasco) para que el bloqueo y el aspirado real jamás discrepen.</summary>
         private bool EsAspirable(byte matId)
         {
-            if (matId == MaterialId.Empty || matId == MaterialId.Stone) return false;
+            // (R116, Cesar: "pude recoger piso estructural de la cascada...
+            // parece que se puede con todo el material techo/piso") El PISO
+            // ESTRUCTURAL es arquitectura, como la piedra: jamás entra al
+            // frasco.
+            if (matId == MaterialId.Empty || matId == MaterialId.Stone || matId == MaterialId.PisoEstructural) return false;
             if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire) return false;
             return true;
         }
@@ -579,7 +583,7 @@ namespace Alkahest.Game
                         //    los encargos del Maestro piden entregar (cristal,
                         //    "algo helado"). Con el filtro antiguo por arquetipo
                         //    esos encargos eran literalmente imposibles.
-                        if (matId == MaterialId.Stone) continue;
+                        if (matId == MaterialId.Stone || matId == MaterialId.PisoEstructural) continue; // (R116) arquitectura, no botín.
                         if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire)
                         {
                             SetFeedback("¡el fuego te quemaría el frasco!");

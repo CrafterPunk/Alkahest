@@ -96,6 +96,7 @@ namespace Alkahest.Game
         // no hay gotera que atrapar, y el mueble no pagaba su silueta.
         private bool _conTubo;
         private bool _refillActivo;
+        private System.Random _rngGotas; // (R116) lluvia del refill de agua; ??= por hot-reload (R74).
         private float _refillTimer;
         // (R88, dirección Opus) La INSTALACIÓN del tubo como acto: la
         // columna de cobre empuja desde el subsuelo (easing con overshoot) y
@@ -625,10 +626,17 @@ namespace Alkahest.Game
             // -4…): cuatro gotas sueltas que caen como lluvia de tubo, no un
             // bloque. La arcilla conserva la fila compacta: el barro cae
             // pegado, y a Cesar así le gusta.
-            int paso = _matDueno == MaterialId.Water ? 2 : 1;
+            // (R116, Cesar: "caen 4 gotas en un patrón perfecto...
+            // idealmente se distribuyen como goteo de lluvia sin un patrón
+            // exacto") El AGUA elige columnas AL AZAR por todo el ancho del
+            // vidrio — lluvia de verdad, cada pulso distinto. La arcilla
+            // conserva su fila compacta centrada (veredicto R114).
+            _rngGotas ??= new System.Random(431);
             for (int i = 0; i < porGota; i++)
             {
-                int x = inlet + paso * ((i % 2 == 0) ? i / 2 : -(i / 2 + 1)); // inlet, -p, +p, -2p…
+                int x = _matDueno == MaterialId.Water
+                    ? _x0 + 1 + _rngGotas.Next(_x1 - _x0 - 1)
+                    : inlet + ((i % 2 == 0) ? i / 2 : -(i / 2 + 1));
                 if (x <= _x0 || x >= _x1) continue;
                 if (_sim.Grid.GetMat(x, _y1) == MaterialId.Empty)
                 {
@@ -964,7 +972,13 @@ namespace Alkahest.Game
             // (R83) La meta de la carga es por-recipiente: el silo nace VACÍO
             // (_cargaInicial=0 → pasa a Listo al primer tick), el tanque usa
             // la del guion.
-            int meta = _cargaInicial >= 0 ? _cargaInicial : _g.depositoCargaInicial;
+            // (R116, Cesar: "las gotitas no alcanzan a subir hasta una línea
+            // o dos visibles") Con el vidrio de 12 de ancho, la carga vieja
+            // del guion ni pintaba una fila. Mínimo estructural: DOS FILAS
+            // completas del interior — la idea de "este es el de agua" se lee
+            // desde lejos. (El silo pasa 0 explícito y sigue naciendo vacío.)
+            int meta = _cargaInicial >= 0 ? _cargaInicial
+                : Mathf.Max(_g.depositoCargaInicial, (_x1 - _x0 - 1) * 2);
 
             _rellenoTimer -= dt;
             if (_rellenoTimer > 0f) return;
