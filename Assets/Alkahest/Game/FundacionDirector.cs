@@ -882,9 +882,14 @@ namespace Alkahest.Game
                 _burstTimer -= Time.deltaTime;
                 if (_burstTimer <= 0f)
                 {
-                    _burstTimer = 0.045f;
-                    int jitter = (_burstRestante % 3) - 1;
-                    _sim.PaintStable(gx + jitter, SimLevelBuilder.FundacionY1, 0, Lodo);
+                    // (R115, Cesar: "siguen una secuencia perfecta formando
+                    // una figura geométrica... tiene que ser disparejo y no a
+                    // ritmo constante") El %3 dibujaba un peine: ahora columna
+                    // Y cadencia salen del azar (ruido cosmético, jamás la
+                    // sim — patrón R74 para el hot-reload).
+                    _lodoRng ??= new System.Random(913);
+                    _burstTimer = 0.045f * (0.35f + 1.5f * (float)_lodoRng.NextDouble());
+                    _sim.PaintStable(gx + _lodoRng.Next(-2, 3), SimLevelBuilder.FundacionY1, 0, Lodo);
                     _burstRestante--;
                 }
             }
@@ -1367,7 +1372,12 @@ namespace Alkahest.Game
                     if (!_tomaDicha && _tPaso >= _tClank + 0.90f)
                     {
                         _tomaDicha = true;
-                        DecirConTono(_g.vozToma, 0.90f, _g.vozHoldSeg); // el verbo del frasco: un regalo, no un decreto.
+                        // (R115, R15) El TOMA. del reorden también se RETIRÓ —
+                        // Cesar: "el toma no desapareció" (el del beat 3 cayó
+                        // en la R114; este era el último). El gesto habla
+                        // solo: el clank, la primera gota, el amanecer. La
+                        // palabra queda en el guion por si otra escena la
+                        // merece algún día.
                     }
                     if (!_gotaActivada && _tPaso >= _tClank + 1.25f)
                     {
@@ -1925,20 +1935,23 @@ namespace Alkahest.Game
             if (_lodoPausado) { if (monticulo <= _g.lodoMonticuloResume) _lodoPausado = false; else return; }
             else if (monticulo >= _g.lodoMonticuloTope) { _lodoPausado = true; return; }
 
-            // (R114, Cesar: "en vez de un chorrito del techo al menos 2,
-            // porque si no tardo mucho en llenar el nuevo reservorio") DOS
-            // CHORRITOS separados (±3 del eje, cada uno con su bamboleo en
-            // espejo): doble caudal y la lectura de "gotea por varias
-            // grietas". El tope y la histéresis del montículo no cambian —
-            // solo se llega antes al tope tras cada aspirada.
-            _lodoIdx++;
-            int bamboleo = (_lodoIdx % 3) - 1;
-            _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX - 3 + bamboleo,
-                SimLevelBuilder.FundacionY1, 0, Lodo);
-            _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX + 3 - bamboleo,
-                SimLevelBuilder.FundacionY1, 0, Lodo);
+            // (R114) DOS CHORRITOS; (R115, Cesar: "disparejo y no a ritmo
+            // constante para dar el efecto") cada grieta gotea POR SU CUENTA:
+            // columna al azar alrededor de su boca, a veces calla (25%), y la
+            // cadencia respira (0.5x-1.8x del seep). El derrumbe no lleva
+            // metrónomo. Caudal promedio ≈ R114 (2 bocas x 75%): el tiempo de
+            // llenado no empeora.
+            _lodoRng ??= new System.Random(913);
+            _lodoTimer = _g.lodoSeepSeg * (0.5f + 1.3f * (float)_lodoRng.NextDouble());
+            if (_lodoRng.NextDouble() > 0.25)
+                _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX - 3 + _lodoRng.Next(-2, 3),
+                    SimLevelBuilder.FundacionY1, 0, Lodo);
+            if (_lodoRng.NextDouble() > 0.25)
+                _sim.PaintStable(SimLevelBuilder.FundacionDerrumbeX + 3 + _lodoRng.Next(-2, 3),
+                    SimLevelBuilder.FundacionY1, 0, Lodo);
         }
         private bool _lodoPausado;
+        private System.Random _lodoRng; // (R115) ruido cosmético del lodo (burst, gotera, goteo del techo); ??= por el hot-reload (R74).
 
         private int ContarLodoEnCrater()
         {
@@ -2045,12 +2058,12 @@ namespace Alkahest.Game
         // equidistante a ambos") EL PLINTO SE CENTRA entre los dos renacidos:
         // (R110) silo renacido (visual hasta 369) y depósito (visual desde 411). El par
         // de marcos con sus tubos (381-405) respira 6 celdas de aire POR CADA
-        // LADO — equidistante de verdad. La grieta del techo (388-392) queda
+        // LADO — equidistante de verdad. La grieta del techo (hoy sobre la vieja cascada, R115) queda
         // sobre el tercio izquierdo del plinto nuevo: sigue leyéndose arriba
         // de la obra.
         private static readonly int[] PlintoX0 = { 374, 375, 376 }; // (R110) por hilada (y = PlintoY0 + i) — ensanchado para dos cuerpos de 16.
         private static readonly int[] PlintoX1 = { 406, 405, 404 }; // (R110)
-        private const int ObraTechoX0 = 388, ObraTechoX1 = 392; // la grieta del derrumbe (DerrumbeX±2) en la bóveda.
+        private const int ObraTechoX0 = 326, ObraTechoX1 = 335; // (R115, Cesar) el boquete del REPARA se muda sobre la VIEJA CASCADA (lejos del plinto: el barro que gotea ya no ensucia el piso que estás poniendo, y cae donde vivía el agua — cada material muestra su conducta) y crece al DOBLE (5→10 de boca: que se aprecie la importancia de la reparación). La grieta original del derrumbe (388-392) la sella el ORDEN — ver el arranque de la fase 2 de la obra.
         private const int ObraTechoY0 = 201, ObraTechoY1 = 202;
         // (R93: 379/387, muro a muro — los 16 justos de la hilada alta.
         // R102, Cesar: "ambos contornos se invaden, deberían a lo mucho
@@ -2335,7 +2348,11 @@ namespace Alkahest.Game
                     // la cámara sube a la grieta — el jugador la VE antes de
                     // que se la pidan (Opus: nunca estuvo en pantalla).
                     DecirConTono("REPARA.", 0.95f, 2.4f); // (R102, Cesar: "Alza no se entiende") El verbo de la Obra entera: el derrumbe se repara — plataforma y techo.
-                    SimRenderer.FocoCinematico = new Vector3(390f * celda, 196f * celda, 0f);
+                    // (R115, regla 47) El plano de la herida apuntaba al
+                    // literal 390 — la grieta VIEJA, que ahora el ORDEN
+                    // sella. La cámara mira el CENTRO REAL del boquete nuevo,
+                    // esté donde esté.
+                    SimRenderer.FocoCinematico = new Vector3((ObraTechoX0 + ObraTechoX1 + 1) * 0.5f * celda, 196f * celda, 0f);
                     _radioForzado = UiStyles.S(340f);
                     if (_audio != null) { _audio.pitch = 1.10f; _audio.PlayOneShot(Audio.SintetizadorSfx.Derrumbe, 0.30f * Audio.DirectorDeAudio.VolumenEfectos); _audio.pitch = 1f; }
                     _obraFase = 1;
@@ -2357,6 +2374,26 @@ namespace Alkahest.Game
                             if (grid0.GetMat(x, y) != MaterialId.Stone && grid0.GetMat(x, y) != MaterialId.PisoEstructural)
                                 _obraPlatObjetivo.Add(new Vector2Int(x, y));
                         _silPlinto[i] = CrearSilueta("SiluetaPlinto" + i, PlintoX0[i], y, PlintoX1[i], y);
+                    }
+                    // (R115) LA HERIDA CAMBIA DE LUGAR: los albañiles del
+                    // ORDEN sellaron la grieta del derrumbe (que goteaba
+                    // justo sobre el plinto), pero la bóveda cedió sobre la
+                    // vieja cascada — el boquete nuevo, al doble de boca, es
+                    // el que el jugador repara.
+                    {
+                        int gxViejo = SimLevelBuilder.FundacionDerrumbeX;
+                        uint tick0 = _sim.Stepper != null ? _sim.Stepper.Tick : 0u;
+                        for (int dx = -2; dx <= 2; dx++)
+                            grid0.SetCell(gxViejo + dx, SimLevelBuilder.FundacionY1 + 1, MaterialId.Stone);
+                        for (int dx = -1; dx <= 1; dx++)
+                            grid0.SetCell(gxViejo + dx, SimLevelBuilder.FundacionY1 + 2, MaterialId.Stone);
+                        for (int x = ObraTechoX0; x <= ObraTechoX1; x++)
+                            grid0.SetCell(x, ObraTechoY0, MaterialId.Empty);
+                        for (int x = ObraTechoX0 + 1; x <= ObraTechoX1 - 1; x++)
+                            grid0.SetCell(x, ObraTechoY1, MaterialId.Empty);
+                        grid0.WakeChunk(gxViejo, SimLevelBuilder.FundacionY1, tick0);
+                        grid0.WakeChunk(ObraTechoX0, ObraTechoY0, tick0);
+                        grid0.WakeChunk(ObraTechoX1, ObraTechoY0, tick0);
                     }
                     for (int x = ObraTechoX0; x <= ObraTechoX1; x++)
                         for (int y = ObraTechoY0; y <= ObraTechoY1; y++)
@@ -2438,8 +2475,11 @@ namespace Alkahest.Game
             if (_techoSellado || _obraFase < 2) return;
             _goteoTechoT -= Time.deltaTime;
             if (_goteoTechoT > 0f) return;
-            _goteoTechoT = 0.75f;
-            int x = ObraTechoX0 + (_goteoIdx++ * 3) % (ObraTechoX1 - ObraTechoX0 + 1);
+            // (R115) También aquí muere el metrónomo: columna al azar dentro
+            // del boquete y cadencia que respira (0.45-1.15 s).
+            _lodoRng ??= new System.Random(913);
+            _goteoTechoT = 0.45f + 0.70f * (float)_lodoRng.NextDouble();
+            int x = ObraTechoX0 + _lodoRng.Next(0, ObraTechoX1 - ObraTechoX0 + 1);
             if (_sim.Grid.GetMat(x, 200) == MaterialId.Empty)
             {
                 _sim.PaintStable(x, 200, 0, Lodo);

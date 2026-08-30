@@ -894,8 +894,11 @@ namespace Alkahest.Game
             float t = Mathf.Clamp01(dist / (8f * c));
             _sombraSr.enabled = true;
             _sombraTr.position = new Vector3(transform.position.x, (suelo + 1) * c + 0.02f, 0f);
-            _sombraTr.localScale = Vector3.one * Mathf.Lerp(1f, 0.55f, t);
-            var col = _sombraSr.color; col.a = Mathf.Lerp(0.55f, 0.15f, t);
+            // (R115, Cesar: "muy tímida, no se nota") Presencia real: más
+            // grande y bastante más opaca — sobre piedra oscura, 0.55 de alfa
+            // se comía la gamma. Sigue desvaneciéndose al volar alto.
+            _sombraTr.localScale = Vector3.one * Mathf.Lerp(1.35f, 0.75f, t);
+            var col = _sombraSr.color; col.a = Mathf.Lerp(0.85f, 0.25f, t);
             _sombraSr.color = col;
         }
 

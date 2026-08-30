@@ -6131,3 +6131,26 @@ ca_playtest84.cmd barre la ronda.
   intercalado o más interespaciado"): el refill del agua gotea a zancada 2
   (inlet, -2, +2, -4) — cuatro gotas sueltas como lluvia de tubo, no un
   bloque. La arcilla conserva su fila compacta por veredicto expreso.
+
+## Ronda 115 — MUERE EL METRÓNOMO (y la herida cambia de lugar)
+
+· Cuatro veredictos del playtest 114:
+· EL TOMA. DESAPARECE DEL TODO: el de la R114 era el del beat 3; quedaba el
+  del reorden (la primera gota) y era el que Cesar seguía viendo. Fuera
+  también (R15) — el clank, la gota y el amanecer hablan solos.
+· LA SOMBRA CON PRESENCIA: 0.55 de alfa sobre piedra oscura se comía la
+  gamma. Ahora 0.85→0.25 y escala 1.35→0.75 con la altura.
+· MUERE EL METRÓNOMO DEL LODO (Cesar: "secuencia perfecta formando una
+  figura geométrica... tiene que ser disparejo"): el reventón del derrumbe
+  usaba %3 (un peine) y la gotera R114 bamboleaba en espejo (simetría).
+  Ahora TODO el lodo cosmético sale de un System.Random (semilla 913, ??=
+  por hot-reload R74, jamás la sim): columnas al azar, cadencias que
+  respiran (0.35x-1.85x), y cada grieta calla un 25% de las veces. Caudal
+  promedio conservado: el llenado no empeora.
+· LA HERIDA CAMBIA DE LUGAR (sección 2): el boquete del REPARA era la
+  grieta del derrumbe reutilizada (388-392) — goteaba barro JUSTO sobre el
+  plinto donde pones el piso. Ahora los albañiles del ORDEN sellan esa
+  grieta y la bóveda cede sobre LA VIEJA CASCADA (326-335, el DOBLE de
+  boca: 5→10): el barro cae donde vivía el agua — cada material muestra su
+  conducta — y la reparación se ve importante. El goteo del techo también
+  perdió el metrónomo.
