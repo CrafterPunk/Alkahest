@@ -5918,3 +5918,39 @@ ca_playtest84.cmd barre la ronda.
   DEMO_MATERIALES gana el §4 con las DOS máquinas (hoyo + horno) y la
   cerámica sin licencia. CLAUDE.md: foco nuevo (la capa visual).
 · ca_playtest107.cmd barre la ronda (solo docs).
+
+## Ronda 108 — EL MUÑECO ENTRA AL TALLER (talla y cámara selladas)
+
+· Cesar entregó el PNG del muñeco de remiendos (cubo de tablones con parches
+  de metal, musgo, brote, ojos-lámpara, túnica de arpillera) y pidió medir
+  talla y distancia de cámara con referencias de mercado, no a gusto propio.
+· Investigación previa: la vara es el % de altura de pantalla. Noita 5-6%,
+  Terraria 4% (pero la comunidad juega a 150-200% de zoom), Dome Keeper 5-6%,
+  Celeste/Animal Well ~9%, Hollow Knight ~10%, Eastward/Moonlighter 10-13%.
+  Regla emergente: bajo ~6% el cariño es silueta+movimiento; la cara existe
+  desde ~8%; los ojos expresivos viven de 10% para arriba.
+· CORRECCIÓN medida en vivo: el juego ya muestra 90 celdas por defecto desde
+  el playtest 21 (CuartoIntimoZoomFactor 0.625), no 144 — el instinto de
+  cámara íntima ya estaba tomado hace meses. El aprendiz viejo: 9 celdas=10%.
+· BANCO DE TALLAS (alkahest_arte/componer_tallas.py en el sandbox): el
+  muñeco recortado con rembg (isnet), compuesto a 10/12/14 celdas sobre
+  capturas reales del RT a 80/96/120/144 celdas visibles. Veredicto: T=14
+  compite con las ruinas (le llega al hombro al depósito — prohibido), T=10
+  no cambia el peso, T=12 a 80-96 celdas es el punto (12.5-15%, liga
+  Eastward): ojos y brote legibles, el maestro más alto, los tanques doblan.
+· SELLADO (Cesar: "acepto todas tus recomendaciones"): talla 12 celdas,
+  defecto se queda en 90, la rueda gana ZOOM IN hasta 80 celdas
+  (ZoomRuedaMinCerca=8/9). Colisión INTACTA: solo crece el cuerpo visual.
+· Implementación: el PNG vive en Resources/Personaje/MunhecoRemiendos.png
+  (1200 px de alto a 1000 px/unidad = 1.2u = 12 celdas exactas; mips +
+  bilinear para encoger sin chisporroteo). ApprenticeController asciende la
+  ruta customSprite a ESTAMPA de primera clase: Resources.Load si el
+  inspector no manda otra cosa, bob + bandeo (tilt) + espejo por dirección +
+  frasco cargado + plano de mudanza (CrearFrascoYPlano compartido con el rig
+  procedimental, que queda como retén honesto). Sin parpadeo: los ojos del
+  muñeco son lámparas. En mudanza no se espeja (el arte ya es 3/4 frontal).
+· El imp procedimental NO se borra: es el fallback si falta el asset, y sus
+  texturas siguen siendo la referencia de "cero assets" del M5.
+· Pendiente que el pipeline 3D reemplace la estampa con animaciones reales
+  (DIRECCION_DE_ARTE.md); las 4 capturas del banco viajan en el chat de la
+  ronda y las composiciones son reconstruibles (script + PNG + checkpoint).

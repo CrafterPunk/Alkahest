@@ -58,13 +58,33 @@ cadencia a pasos (render 12–15 fps, no interpolación sedosa).
 (filtro/script); pincel a mano solo en stills de marketing. Si no se puede
 automatizar: 6–8 frames por animación, máximo.
 
+## 3.5 TALLA Y CÁMARA (SELLADAS EN R108, con banco de tallas)
+
+- **Talla del personaje: 12 celdas de alto** (1.2 unidades; el PNG canónico
+  vive en Resources/Personaje/MunhecoRemiendos.png a 1000 px/unidad). A la
+  vista por defecto ocupa ~13% de pantalla — liga Eastward/Hollow Knight.
+  Referencias medidas: Noita 5-6%, Terraria 4% (comunidad juega a 150-200%),
+  Dome Keeper 5-6%, Celeste/Animal Well ~9%, Hollow Knight ~10%,
+  Eastward/Moonlighter 10-13%. Regla: bajo ~6% el cariño es silueta y
+  movimiento; los ojos expresivos viven de 10% para arriba — y el alma de
+  este muñeco son sus ojos-lámpara.
+- **Cámara: el defecto se queda en 90 celdas visibles** (cuarto íntimo del
+  playtest 21). La rueda ACERCA hasta 80 celdas (ZoomRuedaMinCerca 8/9) y
+  aleja hasta 198; Tab sigue siendo el plano entero. El plano amplio (120+)
+  quedó descartado como vista de juego: es un buzón ahogado en roca.
+- **Jerarquía sagrada**: las ruinas heredadas TORREAN — el depósito (19
+  celdas) casi te dobla, el maestro te saca cabeza. T=14 quedó prohibida por
+  competir con las máquinas.
+- **La colisión no cambió** con la talla visual (9→12): si el roce con
+  pasajes lo pide, se revisa DESPUÉS y a propósito, nunca de contrabando.
+
 ## 4. EL REPARTO
 
 - **Cesar:** modelo único (imagen→3D o a mano) · rig · 6 animaciones ·
   decisión estética del tratamiento al ver pruebas · el PNG de prueba de
   cámara.
-- **Agente:** pruebas de cámara/zoom + composite del arte P1 sobre escena
-  real · el MANUALITO de entrega (lienzo, fps, nombres, pivote, máscara,
+- **Agente:** ~~pruebas de cámara/zoom + composite sobre escena real~~
+  (HECHAS en R108: talla 12 y encuadres sellados, ver §3.5) · el MANUALITO de entrega (lienzo, fps, nombres, pivote, máscara,
   escena de render con luces fijas) · el horno de render en Unity
   (FBX→secuencias→sheets, repetible) · importador sin halos · el
   ApprenticeController nuevo · utilería/glow/teñido · script del tratamiento

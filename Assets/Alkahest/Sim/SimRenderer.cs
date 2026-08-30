@@ -142,6 +142,7 @@ namespace Alkahest.Sim
         /// cada celda diminuta, el problema original de esta ronda).
         /// </summary>
         private const float WideViewMultiplier = 2.2f;
+        private const float ZoomRuedaMinCerca = 8f / 9f; // (R108) 80 celdas de alto: el máximo acercamiento de la rueda.
 
         // -----------------------------------------------------------------
         // ZOOM CON LA RUEDA (playtest 29, pedido de Cesar: "zoom out con el
@@ -525,8 +526,12 @@ namespace Alkahest.Sim
                 float muescas = Mathf.Abs(crudo) >= 100f ? crudo / 120f : crudo;
                 if (muescas != 0f)
                 {
+                    // (R108) La rueda ahora también ACERCA: piso 8/9 = 80
+                    // celdas visibles (el cuarto íntimo son 90). Sellado con
+                    // el banco de tallas del muñeco: el zoom in es el dial de
+                    // intimidad del taller; el plano amplio ya lo da Tab.
                     _zoomRueda = Mathf.Clamp(_zoomRueda - muescas * ZoomRuedaPaso * WideViewMultiplier,
-                        1f, WideViewMultiplier);
+                        ZoomRuedaMinCerca, WideViewMultiplier);
                 }
             }
 

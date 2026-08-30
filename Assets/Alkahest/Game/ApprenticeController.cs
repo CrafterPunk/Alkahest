@@ -627,11 +627,38 @@ namespace Alkahest.Game
         {
             if (_usingCustomSprite)
             {
-                if (_bodySr != null) _bodySr.flipX = !_facingRight;
+                // (R108) LA ESTAMPA DEL MUÑECO DE REMIENDOS: una sola imagen,
+                // pero viva — bob, bandeo al acelerar, espejo al mirar, y sus
+                // dos herramientas (frasco y plano) en la mano. Sin parpadeo:
+                // los ojos del muñeco son lámparas, no párpados.
+                float dirSignC = _facingRight ? 1f : -1f;
+                float bobC = Mathf.Sin(Time.time * BobFrequency) * BobAmplitude;
                 if (_visualTransform != null)
-                {
-                    float bobC = Mathf.Sin(Time.time * BobFrequency) * BobAmplitude;
                     _visualTransform.localPosition = new Vector3(0f, bobC, VisualZOffset);
+
+                float targetTiltC = Mathf.Clamp(-_velocity.x * TiltDegPerSpeed, -TiltMaxDeg, TiltMaxDeg);
+                _tiltDeg = Mathf.Lerp(_tiltDeg, targetTiltC, 1f - Mathf.Exp(-TiltSmooth * Time.deltaTime));
+                if (_tiltPivot != null) _tiltPivot.localRotation = Quaternion.Euler(0f, 0f, _tiltDeg);
+
+                // En mudanza el capataz mira a cámara: el arte YA es un 3/4
+                // frontal, así que basta con no espejarlo.
+                bool frontalC = Mudanza.ModoActivo;
+                if (_bodySr != null) _bodySr.flipX = !frontalC && !_facingRight;
+
+                if (_planoSr != null)
+                {
+                    _planoSr.enabled = frontalC;
+                    if (frontalC)
+                        _planoTr.localPosition = new Vector3(dirSignC * 0.32f, -0.12f, VisualZOffset - 0.02f);
+                }
+                if (_carriedFlaskTr != null)
+                {
+                    Vector3 flaskTargetC = new Vector3(dirSignC * 0.36f, -0.18f, VisualZOffset - 0.01f);
+                    _carriedFlaskTr.localPosition = Vector3.SmoothDamp(_carriedFlaskTr.localPosition, flaskTargetC, ref _carriedFlaskVel, CarriedFlaskLag);
+                    _carriedFlaskTr.localScale = Vector3.one * (1f + _pulsoFrasco);
+                    _carriedFlaskTr.localRotation = Quaternion.Euler(0f, 0f, _inclinacionFrasco);
+                    _carriedFlaskSr.enabled = !FundacionDirector.FrascoBloqueado;
+                    _carriedFlaskSr.flipX = !_facingRight;
                 }
                 return;
             }
@@ -728,13 +755,25 @@ namespace Alkahest.Game
             visualGo.transform.SetParent(transform, false);
             _visualTransform = visualGo.transform;
 
-            if (customSprite != null)
+            // (R108) EL MUÑECO DE REMIENDOS: si el arte real vive en Resources
+            // (o hay un sprite manual en el inspector, que sigue mandando), el
+            // aprendiz se viste con la estampa a TALLA 12 CELDAS (el PNG se
+            // importa a 1000 px/unidad con 1200 px de alto — ver su .meta).
+            // El rig procedimental del imp queda como retén honesto para
+            // cuando falte el asset. La colisión NO se toca (decreto R108):
+            // solo crece el cuerpo visual.
+            var estampa = customSprite != null
+                ? customSprite
+                : Resources.Load<Sprite>("Personaje/MunhecoRemiendos");
+            if (estampa != null)
             {
                 _usingCustomSprite = true;
-                _bodySr = visualGo.AddComponent<SpriteRenderer>();
-                _bodySr.sprite = customSprite;
-                _bodySr.sortingOrder = sortingOrder;
+                var tiltEstampaGo = new GameObject("Tilt");
+                tiltEstampaGo.transform.SetParent(visualGo.transform, false);
+                _tiltPivot = tiltEstampaGo.transform;
+                _bodySr = CrearCapa(_tiltPivot, "Cuerpo", estampa, sortingOrder);
                 RegistrarCapasConTinte(_bodySr);
+                CrearFrascoYPlano();
                 return;
             }
 
@@ -778,17 +817,33 @@ namespace Alkahest.Game
             _bodySpriteFrontal = CrearSprite(GenerateBodyTexture(false, frontal: true), new Vector2(0.5f, 0.5f)); // (R98) ojos juntos y pupilas centradas: a 8 px/celda ya se lee "volteó a cámara".
             _bodySr = CrearCapa(_tiltPivot, "Cuerpo", _bodySpriteOpen, sortingOrder);
 
+            CrearFrascoYPlano();
+
+            // (playtest 28) Las cuatro capas del CUERPO que lleva la librea de
+            // color del jugador. Se registran DESPUÉS de que el ala trasera
+            // reciba su color apagado, para que ese matiz sea parte del "color
+            // de fábrica" sobre el que multiplica el tinte.
+            RegistrarCapasConTinte(_bodySr, _wingFrontSr, _wingBackSr, _tailSr);
+
+            _rng = new System.Random();
+            ScheduleNextBlink();
+        }
+
+        /// <summary>
+        /// (R108) Las dos herramientas de mano, comunes al imp procedimental y
+        /// a la estampa del muñeco. El tarro cargado cuelga del aprendiz
+        /// DIRECTAMENTE (no del nodo "Visual" con bobbing/inclinación): así su
+        /// propia inercia (SmoothDamp) es la única fuente de su movimiento
+        /// relativo, y no se le suma el cabeceo del cuerpo. El plano enrollado
+        /// (R98) sigue siendo un tubo crema placeholder a conciencia — sin
+        /// remates de latón (mandato de Cesar).
+        /// </summary>
+        private void CrearFrascoYPlano()
+        {
             var flaskSprite = CrearSprite(GenerateCarriedFlaskTexture(), new Vector2(0.5f, 0.5f));
-            // El tarro cargado cuelga del aprendiz DIRECTAMENTE (no del nodo
-            // "Visual" con bobbing/inclinación): así su propia inercia
-            // (SmoothDamp) es la única fuente de su movimiento relativo, y no
-            // se le suma el cabeceo del cuerpo.
             _carriedFlaskSr = CrearCapa(transform, "FrascoCargado", flaskSprite, sortingOrder + 2);
             _carriedFlaskTr = _carriedFlaskSr.transform;
 
-            // (R98) EL PLANO ENROLLADO del modo mudanza: un tubo crema 6x9 px
-            // bajo el brazo, ladeado como batuta (-24°). Placeholder a
-            // conciencia — sin remates de latón (mandato de Cesar).
             var planoGo = new GameObject("PlanoEnMano");
             planoGo.transform.SetParent(transform, false);
             _planoTr = planoGo.transform;
@@ -799,15 +854,6 @@ namespace Alkahest.Game
             _planoTr.localScale = new Vector3(0.06f, 0.09f, 1f);
             _planoTr.localRotation = Quaternion.Euler(0f, 0f, -24f);
             _planoSr.enabled = false;
-
-            // (playtest 28) Las cuatro capas del CUERPO que lleva la librea de
-            // color del jugador. Se registran DESPUÉS de que el ala trasera
-            // reciba su color apagado, para que ese matiz sea parte del "color
-            // de fábrica" sobre el que multiplica el tinte.
-            RegistrarCapasConTinte(_bodySr, _wingFrontSr, _wingBackSr, _tailSr);
-
-            _rng = new System.Random();
-            ScheduleNextBlink();
         }
 
         private static Sprite CrearSprite(Texture2D tex, Vector2 pivot01) =>

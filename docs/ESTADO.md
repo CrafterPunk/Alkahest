@@ -3,7 +3,13 @@
 *(Se actualiza cada ronda. Historia completa: `archivo/HISTORIAL_RONDAS.md`. Visión: el GDD.)*
 *Última actualización: ronda 77 — LAS HERRAMIENTAS DE CESAR (overlay del cincel, mapa de zonas, cascada sonora, juego libre por conducta). Antes: R76 blindó el ciclo de sesión multi (12 fixes + verificación en vivo del ciclo host→caída→recarga→re-host) y R75 la escenificación.*
 
-## DECISIONES CERRADAS (R107 — el diseño mayor está sellado)
+## DECISIONES CERRADAS (R107-R108 — el diseño mayor está sellado)
+
+R108 selló además TALLA Y CÁMARA con banco de tallas sobre capturas reales:
+muñeco de 12 celdas (~13% de pantalla), defecto en 90 celdas visibles, rueda
+con zoom in hasta 80, colisión intacta. La estampa del muñeco YA vuela en el
+taller (Resources/Personaje); el pipeline 3D la reemplazará con animaciones.
+
 
 Con el decreto del mundo (GDD §0) el proyecto no tiene decisiones grandes de
 diseño pendientes. Cerradas y firmes: mundo de RUINAS AMABLES + regla de hierro
