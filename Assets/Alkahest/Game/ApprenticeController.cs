@@ -547,7 +547,11 @@ namespace Alkahest.Game
                     // bloquean la ROCA MADRE y el PISO ESTRUCTURAL de verdad.
                     // No hizo falta tocar capas ni sorting: la colisión es la
                     // grilla, así que la excepción vive aquí, en la lectura.
-                    if (SimLevelBuilder.EsObraDelTaller(x, y)) continue;
+                    // (R113, Cesar: "tienen que tener colision, actualmente
+                    // lo atravieso") EXCEPCION DE LA EXCEPCION: las repisas de
+                    // la cascada son cornisas de a pie y SI sostienen; las
+                    // maquinas siguen francas (mandato r70 intacto).
+                    if (SimLevelBuilder.EsObraDelTaller(x, y) && !SimLevelBuilder.EsRepisaDeCascada(x, y)) continue;
 
                     return true;
                 }
@@ -651,6 +655,7 @@ namespace Alkahest.Game
                     if (frontalC)
                         _planoTr.localPosition = new Vector3(dirSignC * 0.32f, -0.12f, VisualZOffset - 0.02f);
                 }
+                TickSombraDeContacto();
                 if (_carriedFlaskTr != null)
                 {
                     Vector3 flaskTargetC = new Vector3(dirSignC * 0.36f, -0.18f, VisualZOffset - 0.01f);
@@ -772,7 +777,14 @@ namespace Alkahest.Game
                 tiltEstampaGo.transform.SetParent(visualGo.transform, false);
                 _tiltPivot = tiltEstampaGo.transform;
                 _bodySr = CrearCapa(_tiltPivot, "Cuerpo", estampa, sortingOrder);
+                // (R113, integracion barata que ya vale la pena) BAÑO TONAL:
+                // la ilustracion viene a plena luz de estudio y el taller es
+                // una cueva — un multiplicador calido-oscuro sutil la sienta
+                // en la escena sin tocar el arte. Es color de fabrica: el
+                // tinte de jugador multiplica ENCIMA (patron del ala trasera).
+                _bodySr.color = new Color(0.94f, 0.90f, 0.86f, 1f);
                 RegistrarCapasConTinte(_bodySr);
+                CrearSombraDeContacto();
                 CrearFrascoYPlano();
                 return;
             }
@@ -827,6 +839,64 @@ namespace Alkahest.Game
 
             _rng = new System.Random();
             ScheduleNextBlink();
+        }
+
+        // (R113) LA SOMBRA DE CONTACTO: la segunda integracion barata. Una
+        // elipse suave en el PRIMER suelo bajo los pies (sondeo de la grilla,
+        // max 8 celdas), que se encoge y desvanece con la altura de vuelo —
+        // el truco de los levitadores de siempre: ata al personaje al terreno
+        // sin fisica nueva. Se retirara cuando el pipeline 3D traiga sombra
+        // propia, si la trae.
+        private SpriteRenderer _sombraSr;
+        private Transform _sombraTr;
+
+        private void CrearSombraDeContacto()
+        {
+            var tex = new Texture2D(48, 16, TextureFormat.RGBA32, false);
+            var px = new Color32[48 * 16];
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 48; x++)
+                {
+                    float dx = (x - 23.5f) / 23.5f, dy = (y - 7.5f) / 7.5f;
+                    float d = dx * dx + dy * dy;
+                    byte a = (byte)(d >= 1f ? 0 : Mathf.RoundToInt(200f * (1f - d) * (1f - d)));
+                    px[y * 48 + x] = new Color32(0, 0, 0, a);
+                }
+            tex.SetPixels32(px); tex.filterMode = FilterMode.Bilinear; tex.Apply();
+            var sp = Sprite.Create(tex, new Rect(0, 0, 48, 16), new Vector2(0.5f, 0.5f), 60f);
+            var go = new GameObject("SombraDeContacto");
+            go.transform.SetParent(transform, false);
+            _sombraTr = go.transform;
+            _sombraSr = go.AddComponent<SpriteRenderer>();
+            _sombraSr.sprite = sp;
+            _sombraSr.sortingOrder = sortingOrder - 4;
+            _sombraSr.enabled = false;
+        }
+
+        private void TickSombraDeContacto()
+        {
+            if (_sombraSr == null) return;
+            if (_simColision == null) _simColision = FindAnyObjectByType<AlkahestSim>();
+            if (_simColision == null) { _sombraSr.enabled = false; return; }
+            float c = SimRenderer.CellWorldSize;
+            int cx = Mathf.FloorToInt(transform.position.x / c);
+            int piesY = Mathf.FloorToInt((transform.position.y - MedioAltoAbajo) / c);
+            int suelo = -1;
+            for (int d = 0; d <= 8; d++)
+            {
+                int y = piesY - d;
+                if (!CellGrid.InBounds(cx, y)) break;
+                int m = _simColision.SampleMaterial(cx, y);
+                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) { suelo = y; break; }
+            }
+            if (suelo < 0) { _sombraSr.enabled = false; return; }
+            float dist = (transform.position.y - MedioAltoAbajo) - (suelo + 1) * c;
+            float t = Mathf.Clamp01(dist / (8f * c));
+            _sombraSr.enabled = true;
+            _sombraTr.position = new Vector3(transform.position.x, (suelo + 1) * c + 0.02f, 0f);
+            _sombraTr.localScale = Vector3.one * Mathf.Lerp(1f, 0.55f, t);
+            var col = _sombraSr.color; col.a = Mathf.Lerp(0.55f, 0.15f, t);
+            _sombraSr.color = col;
         }
 
         /// <summary>

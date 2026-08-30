@@ -6083,3 +6083,36 @@ ca_playtest84.cmd barre la ronda.
   213.3 MB, 31.5 s — Builds/TenThousandYearsDemo/TenThousandYears.exe con
   TODO lo de las rondas 108-112 dentro (muñeco, cámara, escala, rueda,
   velocidad, colider, refill).
+
+## Ronda 113 — LA CASCADA A ESCALA (y el muñeco toca su mundo)
+
+· Cuatro veredictos de Cesar tras jugar la build + su pregunta de integración.
+· METAS ESTRUCTURALES (el remedio de la gota gorda, aplicado a la exigencia):
+  el LLÉNALO. pedía 48/24 celdas — el 67%/33% del vidrio VIEJO; con 276 de
+  capacidad "con echarle un poquito ya se salta". Ahora MetaLlenado(rec) =
+  60% de Capacidad() leída (166 hoy) y los campos del guion quedan retirados
+  (R15). Sin riesgo de atasco: la gotera del montículo repone hasta 70 por
+  ciclo — son viajes, no un muro.
+· EL IRIS DEL REORDEN ABRAZA A AMBOS (Cesar: "solo tengo luz sobre uno... el
+  otro me lo encuentro por sorpresa"): con el ensanche los tanques renacen a
+  76 celdas de punta a punta y el círculo de S(520) dejaba uno a oscuras.
+  S(700): la instalación de los DOS tubos se ve entera.
+· LA CASCADA A ESCALA (Cesar: "se siente como algo muy diminuto"):
+  - Pozo y cuenco al DOBLE de hondo (FundacionPozoHondo 5→10, factura
+    compartida) y el cuenco de entregas de 7→11 de boca (item 4).
+  - Chorro ≥4 celdas por pulso con la grieta crecida a 3 de boca.
+  - Repisas con GROSOR 3 (creciendo hacia abajo: la línea de flujo no se
+    mueve) y DOS TONOS (cuerpo de roca + ceja de piso estructural): cornisa
+    labrada, no relleno. El labio crece con ellas.
+  - Y CON COLISIÓN: el "lo atravieso" venía de la ronda 70 (obra = paso
+    franco, pensado para las máquinas, que arrastró a las repisas).
+    EsRepisaDeCascada() es la excepción de la excepción: las cornisas
+    sostienen, las máquinas siguen francas. Tras el ORDEN el director las
+    barre y la pregunta muere sola.
+· INTEGRACIÓN QUE YA VALE LA PENA (la pregunta de Cesar, respondida con dos
+  técnicas baratas): BAÑO TONAL (multiplicador 0.94/0.90/0.86 como color de
+  fábrica — la ilustración de estudio se sienta en la cueva; el tinte de
+  jugador multiplica encima) y SOMBRA DE CONTACTO (elipse suave en el primer
+  suelo bajo los pies, sondeo de 8 celdas, encoge y desvanece con la altura:
+  el truco de los levitadores — ata al muñeco al terreno sin física nueva).
+  Lo caro (rim light, oclusión, normales) espera al pipeline 3D.

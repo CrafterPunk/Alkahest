@@ -970,7 +970,7 @@ namespace Alkahest.Game
         private void TickLlenarDeposito()
         {
             if (_tBeat < _g.vozHoldSeg) return; // el LLÉNALO. se dice entero.
-            if (_deposito.AguaDentro() >= _g.llenarDepositoMeta)
+            if (_deposito.AguaDentro() >= MetaLlenado(_deposito)) // (R113) 60% del vidrio REAL, no el 48 fosil del guion.
             {
                 // (R83, capítulo 2) El agua ya no cierra el arco: convoca al
                 // SILO. El amanecer y el Trueque esperan al final del lodo.
@@ -1022,7 +1022,7 @@ namespace Alkahest.Game
         private void TickLlenarDeposito2()
         {
             if (_tBeat < _g.vozHoldSeg) return;
-            if (_silo != null && _silo.DelDueno() >= _g.llenarDeposito2Meta)
+            if (_silo != null && _silo.DelDueno() >= MetaLlenado(_silo)) // (R113)
             {
                 Decir(_g.vozBien);
                 CambiarBeat(Beat.Reorden);
@@ -1296,7 +1296,7 @@ namespace Alkahest.Game
                         SimRenderer.FocoCinematico = new Vector3(
                             (SimLevelBuilder.FundacionSiloX0 + SimLevelBuilder.FundacionDepositoX1 + 1) * 0.5f * celda,
                             (SimLevelBuilder.FundacionY0 + 9) * celda, 0f);
-                        _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(520f), (tiIris / 0.55f) * (tiIris / 0.55f));
+                        _radioForzado = Mathf.Lerp(UiStyles.S(2400f), UiStyles.S(700f), (tiIris / 0.55f) * (tiIris / 0.55f)); // (R113, Cesar: "solo tengo luz sobre uno") 520 -> 700: con el ensanche los tanques renacen a 76 celdas de punta a punta y el iris viejo dejaba uno a oscuras — ahora el circulo abraza a AMBOS y la instalacion de los dos tubos se ve entera.
                         return;
                     }
                     if (tiIris < 0.75f)
@@ -1800,7 +1800,11 @@ namespace Alkahest.Game
             _manantialTimer -= Time.deltaTime;
             if (_manantialTimer > 0f) return;
             _manantialTimer = _g.manantialSeg;
-            for (int i = 0; i < _g.manantialCeldas; i++)
+            // (R113, Cesar: "el chorrito mas abundante") El pulso emite al
+            // menos 4 celdas (la grieta crecio a 3 de boca para recibirlas):
+            // a la escala nueva del mundo, el hilito viejo leia como gotera.
+            int celdasPulso = Mathf.Max(_g.manantialCeldas, 4);
+            for (int i = 0; i < celdasPulso; i++)
                 _sim.PaintStable(SimLevelBuilder.FundacionManantialX,
                     SimLevelBuilder.FundacionManantialY + i, 0, MaterialId.Water);
         }
@@ -3378,11 +3382,11 @@ namespace Alkahest.Game
             // queda — gateado por guion (placaAvisaEstorbo) por si Cesar
             // decide apagarlo también en esta forma mínima.
             if (_beat == Beat.LlenarDeposito && !DayCycle.InputLocked)
-                DibujarPlacaRecipiente(_deposito, _g.llenarDepositoMeta, "sobra lo que NO es agua — aspíralo");
+                DibujarPlacaRecipiente(_deposito, MetaLlenado(_deposito), "sobra lo que NO es agua — aspíralo");
 
             // (R83) La placa del SILO durante su LLÉNALO. de barro.
             if (_beat == Beat.LlenarDeposito2 && !DayCycle.InputLocked)
-                DibujarPlacaRecipiente(_silo, _g.llenarDeposito2Meta, "sobra lo que NO es lodo — aspíralo");
+                DibujarPlacaRecipiente(_silo, MetaLlenado(_silo), "sobra lo que NO es lodo — aspíralo");
 
             // (R94) Las luces persistentes del mundo terminado — el mañana
             // frío del vano y el ámbar del tablón — SOBRE la viñeta, como
@@ -3453,6 +3457,18 @@ namespace Alkahest.Game
         /// hueco libre + lo del dueño no alcanza la meta). Compartida por el
         /// tanque y el silo — un solo lenguaje para toda la familia.
         /// </summary>
+        /// <summary>
+        /// (R113, Cesar: "deberia pedirme que al menos lo lleve al 60%")
+        /// La meta del LLENALO. es ESTRUCTURAL: 60% de Capacidad() leida del
+        /// vidrio real — el mismo remedio de la gota gorda (R112) aplicado a
+        /// la exigencia. Los llenarDeposito*Meta del guion (48/24 = 67%/33%
+        /// del vidrio VIEJO de 72) quedan retirados con nota R15. El lodo no
+        /// puede atascarse: la gotera del monticulo repone hasta 70 por ciclo
+        /// (lodoMonticuloTope), asi que 166 celdas son viajes, no un muro.
+        /// </summary>
+        private static int MetaLlenado(DepositoDeAgua rec) =>
+            rec != null ? Mathf.Max(1, Mathf.RoundToInt(rec.Capacidad() * 0.6f)) : 1;
+
         private void DibujarPlacaRecipiente(DepositoDeAgua rec, int meta, string lineaEstorbo)
         {
             if (rec == null) return;

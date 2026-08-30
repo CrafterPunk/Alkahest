@@ -49,6 +49,10 @@ namespace Alkahest.Game
         public int entregaAguaMeta = 20;
         public int lodoProbarMeta = 8;
         public int entregaLodoMeta = 16;
+        // (R113, R15) RETIRADO: la meta del LLENALO. es 60% de Capacidad()
+        // leida del vidrio real (FundacionDirector.MetaLlenado) — este 48 era
+        // el 67% del vidrio viejo de 72 y quedo fosil con la R110. El campo
+        // sobrevive solo por el asset serializado.
         public int llenarDepositoMeta = 48;
         [Tooltip("Desplazamiento real (unidades de mundo) por dirección para confirmar cada tecla del WASD.")]
         public float moverMetaMundo = 0.5f;
@@ -148,6 +152,7 @@ namespace Alkahest.Game
 
         [Header("El capítulo 2 (R83): el silo del lodo")]
         [Tooltip("Meta de lodo (lodo + barbotina) del LLÉNALO. del silo. Interior del silo = 78 celdas (gemelo del tanque desde R84).")]
+        // (R113, R15) RETIRADO — ver llenarDepositoMeta.
         public int llenarDeposito2Meta = 24;
         [Tooltip("Tope de espera de una emergencia antes de seguir el arco aunque el jugador no se aparte (revisión Opus A9).")]
         public float emergerTopeSeg = 12f;

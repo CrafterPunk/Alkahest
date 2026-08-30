@@ -2951,11 +2951,29 @@ namespace Alkahest.Sim
         // líquidos"). Un cuenco de piedra tallado junto a la mesa: el jugador
         // VIERTE ahí lo pedido — la entrega usa el verbo del juego, no un
         // menú. El conteo y el "el Maestro lo toma" (drenado) son runtime.
-        public const int FundacionCuencoX0 = 457, FundacionCuencoX1 = 463; // (R110: +6 con la mesa) // (R74) corrido con la mesa.
+        public const int FundacionCuencoX0 = 456, FundacionCuencoX1 = 466; // (R113, Cesar: "el deposito donde entrego quedo muy reducido") 7 -> 11 de boca, y el doble de hondo via FundacionPozoHondo. // (R74) corrido con la mesa.
         // (RONDA 74) Los pozos preconstruidos (poza y cuenco) se tallan MÁS
         // HONDOS — "para que se vea mejor cómo se acomodan las cosas": la
         // materia entregada apila a la vista dentro del tallado.
-        public const int FundacionPozoHondo = 5;
+        /// <summary>
+        /// (R113, Cesar: "tienen que tener colision, actualmente lo
+        /// atravieso") Las repisas de la cascada y su labio SI sostienen al
+        /// muñeco — son cornisas de a pie, no maquinaria. La exencion de la
+        /// ronda 70 (obra = paso franco) sigue intacta para las MAQUINAS;
+        /// CajaChoca consulta esto para excluir SOLO las repisas de la
+        /// exencion. Tras el ORDEN las barre el director y la pregunta muere
+        /// sola (celdas vacias no chocan).
+        /// </summary>
+        public static bool EsRepisaDeCascada(int x, int y)
+        {
+            if (x >= FundacionRepisaAX0 && x <= FundacionRepisaAX1 &&
+                y >= FundacionRepisaAY - 1 && y <= FundacionRepisaAY + 1) return true;
+            if (x >= FundacionRepisaBX0 - 1 && x <= FundacionRepisaBX1 &&
+                y >= FundacionRepisaBY - 1 && y <= FundacionRepisaBY + 3) return true;
+            return false;
+        }
+
+        public const int FundacionPozoHondo = 10; // (R113, Cesar: "el pozo donde desaparece puede ser el doble de profundo") 5 -> 10; el cuenco del Maestro hereda la hondura (comparten factura).
         // (RONDA 73) EL DEPÓSITO DE AGUA (la recompensa): sitio donde emerge
         // el tanque de vidrio y cobre al completar agua+lodo. Sustituye
         // conceptualmente al grifo antiguo como fuente básica de agua.
@@ -3070,25 +3088,35 @@ namespace Alkahest.Sim
             // 1) La grieta del manantial: perfora la cara del muro izquierdo.
             grid.SetCell(FundacionManantialX - 1, FundacionManantialY, MaterialId.Empty);
             grid.SetCell(FundacionManantialX - 1, FundacionManantialY + 1, MaterialId.Empty);
+            grid.SetCell(FundacionManantialX - 1, FundacionManantialY + 2, MaterialId.Empty); // (R113) la grieta crece a 3: el chorro abundante necesita boca.
             // 2) Repisa ALTA (2 de grosor), pegada al muro: el arroyo corre
             // por ella y vuelca por su extremo — la primera caída franca.
-            DrawSolidRect(grid, FundacionRepisaAX0, FundacionRepisaAY,
+            // (R113, Cesar: "las repisas con grosor y texturas con mas
+            // caracter") GROSOR 3 creciendo HACIA ABAJO (la linea de flujo del
+            // agua no se mueve) y DOS TONOS: cuerpo de roca + ceja superior de
+            // piso estructural — la repisa se lee como cornisa labrada, no
+            // como dos filas de relleno.
+            DrawSolidRect(grid, FundacionRepisaAX0, FundacionRepisaAY - 1,
                 FundacionRepisaAX1 - FundacionRepisaAX0 + 1, 2, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionRepisaAX0, FundacionRepisaAY + 1,
+                FundacionRepisaAX1 - FundacionRepisaAX0 + 1, 1, MaterialId.PisoEstructural);
             // 3) Repisa BAJA (2 de grosor) con un labio alto en su extremo
             // izquierdo (columna x345, 4 de alto): el agua que recibe solo
             // puede correr hacia la DERECHA, hasta volcar en la poza por
             // x374 — la caída final de ~26 celdas es la cascada grande.
-            DrawSolidRect(grid, FundacionRepisaBX0, FundacionRepisaBY,
+            DrawSolidRect(grid, FundacionRepisaBX0, FundacionRepisaBY - 1,
                 FundacionRepisaBX1 - FundacionRepisaBX0 + 1, 2, MaterialId.Stone);
-            DrawSolidRect(grid, FundacionRepisaBX0 - 1, FundacionRepisaBY, 1, 4, MaterialId.Stone);
+            DrawSolidRect(grid, FundacionRepisaBX0, FundacionRepisaBY + 1,
+                FundacionRepisaBX1 - FundacionRepisaBX0 + 1, 1, MaterialId.PisoEstructural);
+            DrawSolidRect(grid, FundacionRepisaBX0 - 1, FundacionRepisaBY - 1, 1, 5, MaterialId.Stone); // el labio crece con el grosor.
             // (revisión Opus 73 #14) Las repisas y el labio son OBRA: el
             // cincel del prólogo no puede matar la cascada en silencio (regla
             // 38 — y el imp tampoco choca con ellas por dentro del chorro).
             // (R87, Cesar) Los HANDLES se guardan: el ORDEN retira las
             // repisas con la cascada ("deberían desaparecer las plataformas
             // donde caía el agua") — el director las barre y degenera su obra.
-            ObraRepisaA = RegistrarObra(FundacionRepisaAX0, FundacionRepisaAY, FundacionRepisaAX1, FundacionRepisaAY + 1);
-            ObraRepisaB = RegistrarObra(FundacionRepisaBX0 - 1, FundacionRepisaBY, FundacionRepisaBX1, FundacionRepisaBY + 3);
+            ObraRepisaA = RegistrarObra(FundacionRepisaAX0, FundacionRepisaAY - 1, FundacionRepisaAX1, FundacionRepisaAY + 1); // (R113) handle al grosor nuevo.
+            ObraRepisaB = RegistrarObra(FundacionRepisaBX0 - 1, FundacionRepisaBY - 1, FundacionRepisaBX1, FundacionRepisaBY + 3); // (R113)
 
             // (RONDA 73) EL CUENCO DEL MAESTRO: el receptor de entregas
             // placeholder, tallado junto a la mesa (misma factura que la
