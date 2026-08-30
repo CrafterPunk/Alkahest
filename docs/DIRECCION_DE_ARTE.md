@@ -68,10 +68,18 @@ automatizar: 6–8 frames por animación, máximo.
   Eastward/Moonlighter 10-13%. Regla: bajo ~6% el cariño es silueta y
   movimiento; los ojos expresivos viven de 10% para arriba — y el alma de
   este muñeco son sus ojos-lámpara.
-- **Cámara: el defecto se queda en 90 celdas visibles** (cuarto íntimo del
-  playtest 21). La rueda ACERCA hasta 80 celdas (ZoomRuedaMinCerca 8/9) y
-  aleja hasta 198; Tab sigue siendo el plano entero. El plano amplio (120+)
-  quedó descartado como vista de juego: es un buzón ahogado en roca.
+- **Cámara: el defecto es 80 celdas visibles** (R109 — Cesar jugó la R108
+  pegado al tope de la rueda: "ahí apenas alcancé a sentir que yo era el
+  personaje"; lo que se juega siempre debe ser el defecto). La rueda guarda
+  reserva de intimidad hasta 72 y aleja hasta las MISMAS 198 de siempre
+  (WideViewMultiplier 2.475); Tab sigue siendo el plano entero. El plano
+  amplio (120+) quedó descartado como vista de juego: es un buzón en roca.
+- **La escala relativa se corrige en CELDAS, jamás con zoom** (lección
+  R109): el zoom agranda TODO por igual (partículas incluidas) y no puede
+  cambiar la proporción personaje/mueble. Si el mundo se siente de juguete,
+  crecen los muebles (o encoge el personaje) — nunca se compensa con
+  cámara. Pendiente de veredicto: reservorios a x1.35 (~26 celdas) o x1.6
+  (~30), maquetas de la R109.
 - **Jerarquía sagrada**: las ruinas heredadas TORREAN — el depósito (19
   celdas) casi te dobla, el maestro te saca cabeza. T=14 quedó prohibida por
   competir con las máquinas.

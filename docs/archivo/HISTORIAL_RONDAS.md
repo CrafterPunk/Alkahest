@@ -5954,3 +5954,30 @@ ca_playtest84.cmd barre la ronda.
 · Pendiente que el pipeline 3D reemplace la estampa con animaciones reales
   (DIRECCION_DE_ARTE.md); las 4 capturas del banco viajan en el chat de la
   ronda y las composiciones son reconstruibles (script + PNG + checkpoint).
+
+## Ronda 109 — EL DEFECTO ES LA INTIMIDAD (y la lección de la escala)
+
+· Cesar probó al muñeco y jugó TODO el rato pegado al tope de la rueda (80
+  celdas): "ahí apenas alcancé a sentir que yo era el personaje". Ley vieja
+  del oficio: lo que el jugador elige siempre debe ser el defecto.
+· CuartoIntimoZoomFactor 5/8→5/9 (defecto 90→80 celdas). La rueda guarda
+  reserva de intimidad hasta 72 (piso 0.9). WideViewMultiplier 2.2→2.475:
+  Tab y el tope de alejar dan las MISMAS 198 celdas de siempre — el gesto
+  del plano no cambia ni un pelo.
+· Su segundo hallazgo es el importante: a esta cercanía el MUNDO se siente
+  de juguete ("yo soy muy grande en comparación con el resto"). Respuesta
+  técnica dejada por escrito en DIRECCION_DE_ARTE: el zoom agranda todo por
+  igual y NO puede cambiar la proporción personaje/mueble — encoger al
+  personaje + zoom más agresivo es EXACTAMENTE la misma imagen con
+  partículas más gordas. La proporción solo se corrige en celdas: crecen
+  los muebles. Las partículas ya se sienten bien (dixit Cesar), así que no
+  se toca ni zoom ni talla: crecen los reservorios.
+· Maquetas entregadas sobre la captura real del muñeco vivo: reservorios a
+  x1.35 (19→~26 celdas) y x1.60 (19→~30). Pendiente el veredicto de Cesar
+  para la cirugía de verdad (huella en celdas: InitSilo anchoHuella/
+  altoHuella, slots del plinto, L de mudanza, marcos, decreto — todo
+  paramétrico, pero es cirugía, no sprite).
+· Dato honesto para la idea de "espacio real" de Cesar: el depósito HOY
+  guarda 72 celdas y su vidrio muestra ~78 — ya es casi 1:1. El que
+  comprime espacio es el FRASCO (900 en un tarro). Con reservorios x1.35
+  el vidrio mostraría ~140: espacio real con margen de sobra.

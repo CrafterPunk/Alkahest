@@ -141,8 +141,8 @@ namespace Alkahest.Sim
         /// 3x2 sin llegar a encuadrar el mundo entero (que volvería a hacer
         /// cada celda diminuta, el problema original de esta ronda).
         /// </summary>
-        private const float WideViewMultiplier = 2.2f;
-        private const float ZoomRuedaMinCerca = 8f / 9f; // (R108) 80 celdas de alto: el máximo acercamiento de la rueda.
+        private const float WideViewMultiplier = 2.475f; // (R109) La base bajó de 90 a 80 celdas: 2.475 x 80 = las MISMAS 198 celdas de plano que dio siempre Tab (antes 2.2 x 90). El gesto no cambia ni un pelo.
+        private const float ZoomRuedaMinCerca = 0.9f; // (R109) La rueda guarda una reserva de intimidad: 72 celdas (el defecto YA es el acercamiento que Cesar eligió jugando la R108).
 
         // -----------------------------------------------------------------
         // ZOOM CON LA RUEDA (playtest 29, pedido de Cesar: "zoom out con el
@@ -227,7 +227,7 @@ namespace Alkahest.Sim
         /// reparte ahora arriba y abajo (ver el anclaje vertical más abajo) y a
         /// esta distancia la cámara lee como "una cámara excavada en la montaña",
         /// que es justo lo que el pivot quiere.
-        private const float CuartoIntimoZoomFactor = 5f / 8f; // 0.625 -- 90 celdas de alto.
+        private const float CuartoIntimoZoomFactor = 5f / 9f; // (R109) 80 celdas de alto: Cesar jugó la R108 pegado al tope de la rueda ("ahí apenas alcancé a sentir que yo era el personaje") y lo que se juega siempre es el defecto. Antes: 5/8 = 90 celdas (playtest 21).
 
         private Camera _mainCam;
         private ApprenticeController _apprentice;
@@ -526,10 +526,9 @@ namespace Alkahest.Sim
                 float muescas = Mathf.Abs(crudo) >= 100f ? crudo / 120f : crudo;
                 if (muescas != 0f)
                 {
-                    // (R108) La rueda ahora también ACERCA: piso 8/9 = 80
-                    // celdas visibles (el cuarto íntimo son 90). Sellado con
-                    // el banco de tallas del muñeco: el zoom in es el dial de
-                    // intimidad del taller; el plano amplio ya lo da Tab.
+                    // (R108) La rueda ahora también ACERCA. (R109) El defecto
+                    // pasó a 80 celdas (lo que Cesar jugaba de facto); el piso
+                    // 0.9 deja una reserva hasta 72. El plano amplio es de Tab.
                     _zoomRueda = Mathf.Clamp(_zoomRueda - muescas * ZoomRuedaPaso * WideViewMultiplier,
                         ZoomRuedaMinCerca, WideViewMultiplier);
                 }
