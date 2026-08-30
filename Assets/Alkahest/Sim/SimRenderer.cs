@@ -142,7 +142,7 @@ namespace Alkahest.Sim
         /// cada celda diminuta, el problema original de esta ronda).
         /// </summary>
         private const float WideViewMultiplier = 2.475f; // (R109) La base bajó de 90 a 80 celdas: 2.475 x 80 = las MISMAS 198 celdas de plano que dio siempre Tab (antes 2.2 x 90). El gesto no cambia ni un pelo.
-        private const float ZoomRuedaMinCerca = 0.9f; // (R109) La rueda guarda una reserva de intimidad: 72 celdas (el defecto YA es el acercamiento que Cesar eligió jugando la R108).
+        private const float ZoomRuedaMinCerca = 0.8f; // (R111: "un tick más de cercanía por si alguno lo quiere") 64 celdas en el tope; el defecto sigue en 80.
 
         // -----------------------------------------------------------------
         // ZOOM CON LA RUEDA (playtest 29, pedido de Cesar: "zoom out con el
@@ -154,7 +154,7 @@ namespace Alkahest.Sim
         // que todo el camino de render (refresco viewport-aware, rótulos,
         // alcance del frasco) se adapta al orthographicSize cambiante.
         // -----------------------------------------------------------------
-        private const float ZoomRuedaPaso = 0.28f;   // (ajuste playtest 29: "va muy lento") ~2-3 muescas cubren todo el rango.
+        private const float ZoomRuedaPaso = 0.065f;  // (R111, Cesar: "el zoom es muy sensible... incapaz de volver al default") una muesca = ~0.16 de factor: ~9 muescas cubren el alejar, 1-2 el acercar. El 0.28 del playtest 29 saltaba 0.69 por muesca -- imposible aterrizar.
         private float _zoomRueda = 1f;               // 1 = máxima cercanía (la vista de siempre).
 
         /// <summary>Colchón de chunks fuera del rectángulo visible que el barrido de render sigue considerando "cerca de la vista" (ver RenderFrame). En chunks, no celdas: 2 = 32 celdas de margen a cada lado.</summary>
@@ -527,10 +527,15 @@ namespace Alkahest.Sim
                 if (muescas != 0f)
                 {
                     // (R108) La rueda ahora también ACERCA. (R109) El defecto
-                    // pasó a 80 celdas (lo que Cesar jugaba de facto); el piso
-                    // 0.9 deja una reserva hasta 72. El plano amplio es de Tab.
-                    _zoomRueda = Mathf.Clamp(_zoomRueda - muescas * ZoomRuedaPaso * WideViewMultiplier,
+                    // pasó a 80 celdas. (R111) EL RETÉN DEL DEFECTO: si el paso
+                    // CRUZA el 1.0, la rueda se detiene EXACTO en la vista por
+                    // defecto — un clic más y sigue. Volver a casa deja de ser
+                    // puntería: es soltar la rueda donde ella misma frena.
+                    float previo = _zoomRueda;
+                    float nuevo = Mathf.Clamp(previo - muescas * ZoomRuedaPaso * WideViewMultiplier,
                         ZoomRuedaMinCerca, WideViewMultiplier);
+                    if ((previo - 1f) * (nuevo - 1f) < 0f) nuevo = 1f;
+                    _zoomRueda = nuevo;
                 }
             }
 

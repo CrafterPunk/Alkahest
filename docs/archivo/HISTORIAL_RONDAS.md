@@ -5981,3 +5981,58 @@ ca_playtest84.cmd barre la ronda.
   guarda 72 celdas y su vidrio muestra ~78 — ya es casi 1:1. El que
   comprime espacio es el FRASCO (900 en un tarro). Con reservorios x1.35
   el vidrio mostraría ~140: espacio real con margen de sobra.
+
+## Ronda 110 — LAS RUINAS TORREAN (x1.6, y el muñeco pisa y pesa)
+
+· Veredicto de Cesar sobre la maqueta: "tengo que hacer la prueba 1.60 y aún
+  le puede faltar más". Además: -40% de velocidad ("lo siento muy rápido") y
+  el colider honesto ("invade el terreno como un 15% de su dimensión").
+· LOS RESERVORIOS x1.6: huella 8x13 → 14x24 (visual 10x19 → 16x30; capacidad
+  72 → 276 celdas). Todo el aparato de la mudanza (L, decreto, marcos,
+  ApoyoFirme) era paramétrico desde R99-R103 y escaló solo; los literales
+  del plano no, y ahí fue la cirugía:
+  - LA CAVERNA SE ENSANCHA (-20 izquierda / +8 derecha: interior 300-468).
+    Cadena del agua corrida -20 (manantial, repisas, poza, veta); brasas +4
+    y mesa/cuenco +6 para darle aire al tubo del depósito crecido.
+  - Silo asiento 349-362, renacer del ORDEN en 353; depósito 412-425; ambos
+    y140-163. MARCADORES de escenografía movidos y escena guardada (base-
+    centro: depósito 41.9, silo 35.6).
+  - Plinto {374,375,376}/{406,405,404}; slots 375/391 (huellas 375-388 /
+    391-404, costura 390); marcos L con cuerpo 16, tapón +27, domo +30 —
+    espejo exacto de SiluetaRelativa. Derrumbe (390) quedó EXACTO en el
+    centro del plinto nuevo sin moverlo: carambola del ensanche asimétrico.
+  - Cargas del checkpoint 20/16 → 75/60 (misma fracción visible en un vidrio
+    x3.8). La piel horneada del acto 1 se ESTIRA (1.60x1.58) hasta la v2.
+· VELOCIDAD: moveSpeed 6.7 → 4.0 (-40% clavado, pedido textual).
+· COLIDER (regla 39: medido, no prosa — alfa>32 sobre el PNG): cubo 0.677u
+  de ancho, tapa +0.437, pies -0.598. Caja 0.64 ancho, +0.48/-0.64 con el
+  bob: los pies ya tocan suelo (antes se hundían 2.2 celdas — el 15% que
+  Cesar midió a ojo, que era 18% real). Solo el BROTE asoma (punta blanda,
+  heredero de las antenas). Chaflán 2→3, proporcional a la caja.
+· COSTE ASUMIDO (para reportar a Cesar): con caja de 6.4 x 11.2 celdas, NINGÚN
+  túnel de una pasada de cincel (5 de luz) deja pasar al muñeco — antes los
+  pozos verticales sí daban. Hace falta doble pasada en ambos sentidos. Es
+  coherente (un cuerpo de 12 celdas no cabe por un tubo de 5) pero cambia
+  el excavado; si duele en juego, se revisa A PROPÓSITO.
+
+## Ronda 111 — LA RUEDA APRENDE A VOLVER A CASA (y el mundo pide crecer)
+
+· Veredicto de Cesar sobre la escala x1.6: "está al límite, hasta quisiera
+  que fuera más grande... es lo más chico que puede ser y sentirse bien".
+  Acordado: se prueba ASÍ y la sensación de mundo grande vendrá de CONTENIDO
+  (densidad, máquinas, ruinas), no de más inflación — el ensanche ya comió
+  la holgura de la caverna y x2 se comería el mundo de 768.
+· LA RUEDA (Cesar: "muy sensible... incapaz de volver a la distancia
+  default"): el diagnóstico era brutal — ZoomRuedaPaso 0.28 x el
+  multiplicador 2.475 = 0.69 de factor POR MUESCA, en un rango total de
+  1.7. Dos muescas cruzaban todo. Paso 0.28 → 0.065 (~9 muescas el alejar,
+  1-2 el acercar) + EL RETÉN DEL DEFECTO: si una muesca cruza el 1.0, la
+  rueda frena EXACTO en la vista por defecto; el siguiente clic continúa.
+  Volver a casa ya no es puntería.
+· Un tick más de cercanía: ZoomRuedaMinCerca 0.9 → 0.8 (64 celdas en el
+  tope de acercar; el defecto sigue en 80).
+· VELOCIDAD: 4.0 "se sintió muy lento" → 4.8 (+20% exacto pedido).
+  Historial del número: 6.7 (origen) → 4.0 (R110) → 4.8 (R111).
+· Reset #8 del sandbox mid-ronda: repo volvió a R85; recuperación estándar
+  (reset a origin/R109 + rescate de la R110 completa desde el disco de
+  Cesar vía stage). El deploy inmediato volvió a pagar: CERO pérdida.

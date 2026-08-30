@@ -172,7 +172,7 @@ namespace Alkahest.Game
         // en todas las builds. (El dato viejo del prefab queda huérfano e
         // ignorado; se afina aquí, no en el inspector -- como todo en este
         // proyecto.)
-        private float moveSpeed = 6.7f;
+        private float moveSpeed = 4.8f; // (R111: el 4.0 "se sintio muy lento" -- +20% exacto sobre la prueba anterior; historial: 6.7 (origen) -> 4.0 (R110) -> 4.8.
         private float acceleration = 96f; // unidades/s^2 -- rampa de ~0.07s, imperceptible (ver bloque de arriba).
 
         [Header("Visual")]
@@ -409,9 +409,9 @@ namespace Alkahest.Game
         // extremos del bob: solo las antenas (1 px, puntas blandas por
         // doctrina) pueden asomar en el pico del bob. El trato del túnel no
         // cambia: la pasada horizontal única ya estaba bloqueada desde 6.0.
-        private const float MedioAnchoColision = 0.21f;  // 4.2 celdas de ancho total (cuerpo: 4.4).
-        private const float MedioAltoArriba = 0.40f;     // coronilla 0.364 + bob 0.04 = 0.404 (las antenas pueden rozar).
-        private const float MedioAltoAbajo = 0.38f;      // barbilla 0.343 + bob 0.04 = 0.383: queda "un milímetro por detrás".
+        private const float MedioAnchoColision = 0.32f;  // (R110, medido sobre MunhecoRemiendos.png con alfa>32: cubo 0.677u de ancho) 6.4 celdas de caja para 6.8 de cubo -- doctrina pt68: el macizo cubierto, los bordes blandos pueden rozar.
+        private const float MedioAltoArriba = 0.48f;     // (R110) tapa del cubo +0.437 + bob 0.04 = 0.477: solo el BROTE (punta blanda, hasta +0.599) asoma en el pico del bob -- el heredero de las antenas del imp.
+        private const float MedioAltoAbajo = 0.64f;      // (R110, Cesar: "invade el terreno como un 15% de su dimension") pies -0.598 + bob 0.04 = 0.638: los pies tocan suelo DE VERDAD, ya no se hunden 2.2 celdas.
         private const float SubPaso = 0.06f;             // < 1 celda por subpaso: sin túneles.
         // (RONDA 70, domingo de ajustes de Cesar) DOS SUAVIZADOS DE LA CAJA:
         //  · CHAFLÁN (ChaflanCeldas): las 4 esquinas de la AABB se recortan
@@ -427,7 +427,7 @@ namespace Alkahest.Game
         //    lateral hay hueco, el imp RESBALA alrededor del borde en vez de
         //    frenar en seco -- la "corner correction" clásica de los
         //    plataformeros, aplicada a un volador.
-        private const int ChaflanCeldas = 2;
+        private const int ChaflanCeldas = 3; // (R110) proporcional a la caja nueva (antes 2 de 4.2 de ancho; ahora 3 de 6.4): las esquinas siguen igual de blandas.
         private static readonly float[] AsistenciaEsquina = { 0.05f, 0.10f, 0.15f };
 
         private AlkahestSim _simColision;

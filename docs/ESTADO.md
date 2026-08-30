@@ -5,10 +5,13 @@
 
 ## DECISIONES CERRADAS (R107-R108 — el diseño mayor está sellado)
 
-R108 selló además TALLA Y CÁMARA con banco de tallas sobre capturas reales:
-muñeco de 12 celdas (~13% de pantalla), defecto en 90 celdas visibles, rueda
-con zoom in hasta 80, colisión intacta. La estampa del muñeco YA vuela en el
-taller (Resources/Personaje); el pipeline 3D la reemplazará con animaciones.
+R108-R110 sellaron además TALLA, CÁMARA Y ESCALA DEL MUNDO: muñeco de 12
+celdas, defecto en 80 celdas visibles (rueda 72-198, Tab plano), velocidad
+4.0, colider medido sobre el PNG (los pies tocan suelo). Los reservorios
+crecieron x1.6 (huella 14x24, capacidad 276) y la caverna del prólogo se
+ensanchó (300-468). La estampa del muñeco YA vuela en el taller; el pipeline
+3D la reemplazará con animaciones. Cesar avisa: a los reservorios "aún le
+puede faltar más" — pendiente su veredicto en juego.
 
 
 Con el decreto del mundo (GDD §0) el proyecto no tiene decisiones grandes de

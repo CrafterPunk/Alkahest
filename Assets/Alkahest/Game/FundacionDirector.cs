@@ -311,10 +311,10 @@ namespace Alkahest.Game
                     if (_deposito != null) Destroy(_deposito.gameObject);
                     if (_silo != null) Destroy(_silo.gameObject);
                     _deposito = new GameObject("DepositoDeAgua").AddComponent<DepositoDeAgua>();
-                    _deposito.Init(_sim, 20, conTubo: true, cargaInstantanea: true);
+                    _deposito.Init(_sim, 75, conTubo: true, cargaInstantanea: true); // (R110) 20->75: misma FRACCION visible de antes en el vidrio x3.8 (72->276 celdas de capacidad).
                     _deposito.Aparecer();
                     _silo = new GameObject("SiloDeLodo").AddComponent<DepositoDeAgua>();
-                    _silo.InitSilo(_sim, 16, conTubo: true, cargaInstantanea: true,
+                    _silo.InitSilo(_sim, 60, conTubo: true, cargaInstantanea: true, // (R110) 16->60: idem.
                         xRenacer: SimLevelBuilder.FundacionSiloRenacerX0); // (R101) el checkpoint calca el corrimiento del ORDEN real.
                     _silo.Aparecer();
                     RetirarFogon(); // (R101) también en el atajo: mundo ordenado = sin hogar vacío.
@@ -2026,13 +2026,13 @@ namespace Alkahest.Game
         private const int PlintoY0 = 140;
         // (R103, Cesar: "siguen bien pegadito al reservorio de arcilla y no
         // equidistante a ambos") EL PLINTO SE CENTRA entre los dos renacidos:
-        // silo (tubo hasta 375) y depósito (visual desde 411). Con +6, el par
+        // (R110) silo renacido (visual hasta 369) y depósito (visual desde 411). El par
         // de marcos con sus tubos (381-405) respira 6 celdas de aire POR CADA
         // LADO — equidistante de verdad. La grieta del techo (388-392) queda
         // sobre el tercio izquierdo del plinto nuevo: sigue leyéndose arriba
         // de la obra.
-        private static readonly int[] PlintoX0 = { 383, 384, 385 }; // por hilada (y = PlintoY0 + i).
-        private static readonly int[] PlintoX1 = { 402, 401, 400 };
+        private static readonly int[] PlintoX0 = { 374, 375, 376 }; // (R110) por hilada (y = PlintoY0 + i) — ensanchado para dos cuerpos de 16.
+        private static readonly int[] PlintoX1 = { 406, 405, 404 }; // (R110)
         private const int ObraTechoX0 = 388, ObraTechoX1 = 392; // la grieta del derrumbe (DerrumbeX±2) en la bóveda.
         private const int ObraTechoY0 = 201, ObraTechoY1 = 202;
         // (R93: 379/387, muro a muro — los 16 justos de la hilada alta.
@@ -2043,7 +2043,7 @@ namespace Alkahest.Game
         // 387-397) COLINDAN exactamente en 387 — cero invasión — y el par
         // queda centrado en el plinto (386.5). Cada huella cuelga 1 celda
         // sobre el escalón medio del zigurat (7/8 de apoyo: pasa el 70%).
-        private const int SlotAX0 = 384, SlotBX0 = 394; // (R103) +6 con el plinto: huellas 384-391 / 394-401, costura visual en 393.
+        private const int SlotAX0 = 375, SlotBX0 = 391; // (R110, huella 14) huellas 375-388 / 391-404, costura visual en 390; anclas 374/390.
         private const int SlotY0 = 143;                        // sobre la cara del plinto (top y142).
 
         private int _obraFase;                 // 0=regalo del cincel, 1=plano de la herida, 2=construyendo, 3=perfilando el plinto, 4=respiro.
@@ -2128,38 +2128,38 @@ namespace Alkahest.Game
             // huella de pista sea igual a la de los contenedores, no los
             // vuelvas a entrelazar por amor a dios") LA L ENTERA, SIN
             // ENTRELAZADO: con los slots a 10, los CUERPOS (10 de ancho)
-            // colindan exacto en la costura (393) y los TUBOS apuntan hacia
+            // colindan exacto en la costura (390) y los TUBOS apuntan hacia
             // afuera (A izquierda, B derecha — los sujetalibros): las dos
             // siluetas se tocan en una arista y no comparten NI una celda.
             // El decreto de sitio exige además soltar CON ese espejo: el
             // marco es la forma exacta de lo que va a aterrizar.
-            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES (383 / 393).
-            float piso = SlotY0 * c, tapon = (SlotY0 + 16) * c, domo = (SlotY0 + 19) * c;
+            int aA = SlotAX0 - 1, aB = SlotBX0 - 1;         // anclas VISUALES (374 / 390).
+            float piso = SlotY0 * c, tapon = (SlotY0 + 27) * c, domo = (SlotY0 + 30) * c; // (R110) altoHuella 24: tapon = alto+3, domo = alto+6 — espejo exacto de SiluetaRelativa.
 
             if (_silSlotA != null && !_slotAOcupado)
             {
-                RellenarMundo(aA * c, piso, (aA + 10) * c, domo, ficha, lat);             // cuerpo.
+                RellenarMundo(aA * c, piso, (aA + 16) * c, domo, ficha, lat);             // cuerpo (R110: 16).
                 RellenarMundo((aA - 2) * c, piso, aA * c, tapon, ficha, lat);             // tubo (izquierda).
                 _poliSlot.Clear();
                 _poliSlot.Add(new Vector2((aA - 2) * c, piso));
                 _poliSlot.Add(new Vector2((aA - 2) * c, tapon));
                 _poliSlot.Add(new Vector2(aA * c, tapon));
                 _poliSlot.Add(new Vector2(aA * c, domo));
-                _poliSlot.Add(new Vector2((aA + 10) * c, domo));
-                _poliSlot.Add(new Vector2((aA + 10) * c, piso));
+                _poliSlot.Add(new Vector2((aA + 16) * c, domo));
+                _poliSlot.Add(new Vector2((aA + 16) * c, piso));
                 Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
             }
             if (_silSlotB != null && !_slotBOcupado)
             {
-                RellenarMundo(aB * c, piso, (aB + 10) * c, domo, ficha, lat);             // cuerpo.
-                RellenarMundo((aB + 10) * c, piso, (aB + 12) * c, tapon, ficha, lat);     // tubo (derecha).
+                RellenarMundo(aB * c, piso, (aB + 16) * c, domo, ficha, lat);             // cuerpo (R110: 16).
+                RellenarMundo((aB + 16) * c, piso, (aB + 18) * c, tapon, ficha, lat);     // tubo (derecha).
                 _poliSlot.Clear();
                 _poliSlot.Add(new Vector2(aB * c, piso));
                 _poliSlot.Add(new Vector2(aB * c, domo));
-                _poliSlot.Add(new Vector2((aB + 10) * c, domo));
-                _poliSlot.Add(new Vector2((aB + 10) * c, tapon));
-                _poliSlot.Add(new Vector2((aB + 12) * c, tapon));
-                _poliSlot.Add(new Vector2((aB + 12) * c, piso));
+                _poliSlot.Add(new Vector2((aB + 16) * c, domo));
+                _poliSlot.Add(new Vector2((aB + 16) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 18) * c, tapon));
+                _poliSlot.Add(new Vector2((aB + 18) * c, piso));
                 Mudanza.MarcarPoligonoMundo(_poliSlot, papel, 0.60f);
             }
         }
@@ -2542,8 +2542,8 @@ namespace Alkahest.Game
                     // MARCO PUNTEADO quieto (Mudanza.MarcarRectMundo, en
                     // DibujarMarcosDeSlots): mismo trazo del delineante del
                     // censo, sin marcha — el destino espera, no desfila.
-                    _silSlotA = CrearSilueta("SiluetaSlotA", SlotAX0, SlotY0, SlotAX0 + 7, SlotY0 + 18);
-                    _silSlotB = CrearSilueta("SiluetaSlotB", SlotBX0, SlotY0, SlotBX0 + 7, SlotY0 + 18);
+                    _silSlotA = CrearSilueta("SiluetaSlotA", SlotAX0, SlotY0, SlotAX0 + 13, SlotY0 + 29); // (R110) huella 14, alto visual 30.
+                    _silSlotB = CrearSilueta("SiluetaSlotB", SlotBX0, SlotY0, SlotBX0 + 13, SlotY0 + 29); // (R110)
                     // (R100, segunda pasada con captura + espectrofotometro: el
                     // proyecto renderiza en espacio LINEAL — un velo blanco de
                     // alfa 0.05 sobre el negro sale a ~25% de brillo percibido,

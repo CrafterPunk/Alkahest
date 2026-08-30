@@ -73,7 +73,7 @@ namespace Alkahest.Game
         private static readonly byte Barbotina = MaterialId.MatDe(1, EstadoMateria.Solucion); // el lodo MOJADO cuenta como lodo (lección del cuenco, revisión Opus 73 #2).
 
         // (R83, FASE A del capítulo 2) EL RECIPIENTE SE PARAMETRIZA: la misma
-        // clase sirve al TANQUE de agua (8x13, prefab de piel, carga inicial
+        // clase sirve al TANQUE de agua (14x24 desde la R110, prefab de piel, carga inicial
         // del guion) y al SILO de lodo (6x9, boca para lo que se AMONTONA,
         // nace VACÍO: el mundo no regala lo que te pide — plan cap2 / Opus
         // A1+C1). El material dueño deja de estar horneado en los conteos.
@@ -405,7 +405,7 @@ namespace Alkahest.Game
             return new Vector3((_x0 + _x1 + 1) * 0.5f * c, (_y0 + (_y1 - _y0 + 1) * 0.5f + 2f) * c, 0f);
         }
 
-        /// <summary>El tanque de agua clásico (marcador `deposito`, huella 8x13, piel de prefab, carga inicial del guion).</summary>
+        /// <summary>El tanque de agua clásico (marcador `deposito`, huella 14x24 desde la R110, piel de prefab, carga inicial del guion).</summary>
         public void Init(AlkahestSim sim) => Init(sim, -1);
 
         /// <summary>(R84) Variante con carga inicial EXPLÍCITA: el renacer del REORDEN arranca con lo que el drenado + el barrido recogieron ("lo que sale primero es lo que tú derramaste"). (R86) `conTubo`: renace con el tubo grueso integrado (referencia de Cesar) — la marca visual del refill infinito.</summary>
@@ -414,7 +414,7 @@ namespace Alkahest.Game
             var escena = PrologoEscenografia.Buscar();
             InitInterno(sim, escena, escena != null ? escena.deposito : null,
                 MaterialId.Water, MaterialId.Empty, cargaInicial: cargaInicial, esSilo: false,
-                anchoHuella: 8, altoHuella: 13,
+                anchoHuella: 14, altoHuella: 24, // (R110) x1.6: el veredicto de Cesar con el munreco dentro ("yo soy un juguetito") — los reservorios pasan a torrear de verdad.
                 fallbackX0: SimLevelBuilder.FundacionDepositoX0, fallbackY0: SimLevelBuilder.FundacionDepositoY0,
                 conTubo: conTubo, cargaInstantanea: cargaInstantanea);
         }
@@ -441,7 +441,7 @@ namespace Alkahest.Game
             // es una decisión del guion del renacer, no del plano del acto 1.
             InitInterno(sim, escena, xRenacer >= 0 ? null : (escena != null ? escena.deposito2 : null),
                 Lodo, Barbotina, cargaInicial: cargaInicial, esSilo: true,
-                anchoHuella: 8, altoHuella: 13,
+                anchoHuella: 14, altoHuella: 24, // (R110) x1.6: el veredicto de Cesar con el munreco dentro ("yo soy un juguetito") — los reservorios pasan a torrear de verdad.
                 fallbackX0: xRenacer >= 0 ? xRenacer : SimLevelBuilder.FundacionSiloX0, fallbackY0: SimLevelBuilder.FundacionSiloY0,
                 conTubo: conTubo, cargaInstantanea: cargaInstantanea);
         }
@@ -516,6 +516,11 @@ namespace Alkahest.Game
                 var piel = Instantiate(escena.depositoVisualPrefab, _cuerpo);
                 piel.name = "PielPrefab";
                 piel.transform.localPosition = Vector3.zero;
+                // (R110) La piel horneada se pinto para 10x19 celdas; el tanque
+                // ahora mide spanVisual x altoVisual. Se ESTIRA a la talla real
+                // (ligeramente anisotropico: 1.60 x 1.58) hasta que Cesar
+                // hornee la v2 — placeholder honesto, no una regresion.
+                piel.transform.localScale = new Vector3(spanVisual / 10f, altoVisual / 19f, 1f);
                 var marcoPrefab = piel.transform.Find("Marco");
                 _marcoSr = marcoPrefab != null ? marcoPrefab.GetComponent<SpriteRenderer>() : null;
                 if (_marcoSr != null) _marcoSr.sortingOrder = Capas.MaquinaFondoInterior + 2; // emerge OCULTO tras la roca (revisión Opus 73 #15).

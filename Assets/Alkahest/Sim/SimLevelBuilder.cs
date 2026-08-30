@@ -2899,15 +2899,15 @@ namespace Alkahest.Sim
         //   spawn 409 · TANQUE 412-419 + tubo 420-422 · brasas 426-434 ·
         //   mesa/cuenco/estante igual. Los claros alrededor del tanque se
         //   DUPLICARON (fogón→tanque 6, tubo→hogar 4; antes 2 y 2).
-        public const int FundacionX0 = 320, FundacionX1 = 460; // interior de la caverna (141 celdas de ancho).
+        public const int FundacionX0 = 300, FundacionX1 = 468; // (R110) interior de la caverna (169 de ancho): ensanche -20/+8 para que el mobiliario x1.6 respire.
         public const int FundacionY0 = 140, FundacionY1 = 200; // suelo interior en Y0, bóveda plana en Y1 (61 de alto).
         // (RONDA 74, pedido de Cesar) EL RINCÓN DEL MAESTRO SE CORRE A LA
         // DERECHA: el fuego quedaba a 2 celdas del sitio del depósito y le
         // hervía el agua a la primera. Brasas 424-428 -> 428-432 y mesa
         // 434-446 -> 436-448: seis celdas de aire + un murete de piedra entre
         // el tanque (muro derecho x421) y el hogar (murete izquierdo x427).
-        public const int FundacionMesaX0 = 436, FundacionMesaX1 = 448, FundacionMesaTopY = 143; // la mesa del Maestro (bloque macizo).
-        public const int FundacionBrasasX0 = 428, FundacionBrasasX1 = 432, FundacionBrasasY = 141; // el hogar: 5 celdas que el director mantiene al rojo.
+        public const int FundacionMesaX0 = 442, FundacionMesaX1 = 454, FundacionMesaTopY = 143; // (R110: +6 con el ensanche derecho) // la mesa del Maestro (bloque macizo).
+        public const int FundacionBrasasX0 = 432, FundacionBrasasX1 = 436, FundacionBrasasY = 141; // (R110: +4, aire al tubo del deposito crecido) // el hogar: 5 celdas que el director mantiene al rojo.
         // (RONDA 64, feedback pt64 de Cesar) LA GOTERA CAE EN LA POZA, no sobre
         // las brasas: la versión anterior (GoteraX=426, encima del hogar) hacía
         // hervir cada gota -- vapor, charcos de agua hirviendo, "eso no es una
@@ -2926,7 +2926,7 @@ namespace Alkahest.Sim
         // (DropArcilla/DropArena/DropY) se retiraron con ella: en el prólogo
         // rehecho el Maestro NO entrega materiales (los encuentra el mundo:
         // cascada, derrumbe) — regla 15, idea retirada documentada.
-        public const int FundacionManantialX = 320, FundacionManantialY = 175; // donde brota el agua (la grieta perfora la cara del muro en x319). (R89: -20 con el ensanche)
+        public const int FundacionManantialX = 300, FundacionManantialY = 175; // (R110: -20 con el ensanche) // donde brota el agua (la grieta perfora la cara del muro en x319). (R89: -20 con el ensanche)
         // (revisión Opus 73 #10: la RANURA a mitad de la repisa alta se
         // retiró — un hueco de 1 celda evacúa ~1 celda/tick, mucho más que
         // cualquier caudal razonable, así que se tragaba el arroyo entero y
@@ -2934,11 +2934,11 @@ namespace Alkahest.Sim
         // comentario, regla 49. El "hueco" que pedía Cesar ES el vano abierto
         // entre el fin de la repisa alta y la baja: tres caídas francas —
         // manantial→A, A→B, B→poza — cada una a la vista.)
-        public const int FundacionRepisaAX0 = 320, FundacionRepisaAX1 = 332;  // repisa alta (y172-173), pegada al muro. (R89: -20)
+        public const int FundacionRepisaAX0 = 300, FundacionRepisaAX1 = 312; // (R110: -20)  // repisa alta (y172-173), pegada al muro. (R89: -20)
         public const int FundacionRepisaAY = 172;
-        public const int FundacionRepisaBX0 = 326, FundacionRepisaBX1 = 353;  // repisa baja (y162-163): recoge la caída y vuelca en la poza. (R89: -20)
+        public const int FundacionRepisaBX0 = 306, FundacionRepisaBX1 = 333; // (R110: -20)  // repisa baja (y162-163): recoge la caída y vuelca en la poza. (R89: -20)
         public const int FundacionRepisaBY = 162;
-        public const int FundacionCharcoX0 = 352, FundacionCharcoX1 = 365; // (R89: -20) LA POZA: cuenco tallado bajo el nivel del suelo. La llena la cascada; su fondo REZUMA (director) para que la corriente jamás se detenga.
+        public const int FundacionCharcoX0 = 332, FundacionCharcoX1 = 345; // (R110: -20) // (R89: -20) LA POZA: cuenco tallado bajo el nivel del suelo. La llena la cascada; su fondo REZUMA (director) para que la corriente jamás se detenga.
         // (RONDA 73) EL DERRUMBE: dónde se abre la grieta del techo por la que
         // entra el LODO (beat 5) y dónde su impacto excava el cráter que lo
         // recoge. No hay nada tallado de antemano — el derrumbe lo excava el
@@ -2951,7 +2951,7 @@ namespace Alkahest.Sim
         // líquidos"). Un cuenco de piedra tallado junto a la mesa: el jugador
         // VIERTE ahí lo pedido — la entrega usa el verbo del juego, no un
         // menú. El conteo y el "el Maestro lo toma" (drenado) son runtime.
-        public const int FundacionCuencoX0 = 451, FundacionCuencoX1 = 457; // (R74) corrido con la mesa.
+        public const int FundacionCuencoX0 = 457, FundacionCuencoX1 = 463; // (R110: +6 con la mesa) // (R74) corrido con la mesa.
         // (RONDA 74) Los pozos preconstruidos (poza y cuenco) se tallan MÁS
         // HONDOS — "para que se vea mejor cómo se acomodan las cosas": la
         // materia entregada apila a la vista dentro del tallado.
@@ -2959,8 +2959,8 @@ namespace Alkahest.Sim
         // (RONDA 73) EL DEPÓSITO DE AGUA (la recompensa): sitio donde emerge
         // el tanque de vidrio y cobre al completar agua+lodo. Sustituye
         // conceptualmente al grifo antiguo como fuente básica de agua.
-        public const int FundacionDepositoX0 = 412, FundacionDepositoX1 = 419; // muros en X0/X1, interior 413-418. (R89: -2 — con el fogón corrido, los claros a ambos lados se DUPLICAN: Cesar pidió el doble de aire respecto a la fogata.)
-        public const int FundacionDepositoY0 = 140, FundacionDepositoY1 = 152; // muros y140..152; boca abierta en y153.
+        public const int FundacionDepositoX0 = 412, FundacionDepositoX1 = 425; // (R110) huella 14 (x1.6): muros en X0/X1, interior 413-424. // muros en X0/X1, interior 413-418. (R89: -2 — con el fogón corrido, los claros a ambos lados se DUPLICAN: Cesar pidió el doble de aire respecto a la fogata.)
+        public const int FundacionDepositoY0 = 140, FundacionDepositoY1 = 163; // (R110) huella alta 24: muros y140..163; boca abierta en y164. // muros y140..152; boca abierta en y153.
         // (R83, capítulo 2 — revisión Opus A1, MEDIDO; R84: MISMO TAMAÑO que
         // el tanque por decisión de Cesar "que uno sea más chiquito se me
         // hace raro") EL SILO DEL LODO: el hueco de AIRE entre la poza
@@ -2981,15 +2981,15 @@ namespace Alkahest.Sim
         // a 3 celdas del labio de la poza (365) y a 6 del cráter (386), con
         // su tubo (377-379) también en firme. Los muros ya no pisan labios:
         // la nota histórica del hueco de 6 (R84) muere con el ensanche.
-        public const int FundacionSiloX0 = 369, FundacionSiloX1 = 376;
+        public const int FundacionSiloX0 = 349, FundacionSiloX1 = 362; // (R110) huella 14, corrido a la izquierda del plinto crecido.
         // (R101, Cesar: "el contenedor de arcilla debe caer más a la
         // izquierda") SOLO el RENACER del ORDEN usa este corrimiento (-5):
         // el silo del primer acto sigue clavado al plano (sus muros pisan
         // los labios medidos de la poza). Con x0=364 el tubo derecho remata
         // en 375 y el marco del slot A (que baja hasta 376 con su tubo
         // espejado) queda a una celda de aire — sin cruce.
-        public const int FundacionSiloRenacerX0 = 364;
-        public const int FundacionSiloY0 = 140, FundacionSiloY1 = 152;
+        public const int FundacionSiloRenacerX0 = 353; // (R110) el ORDEN lo deja a 3 celdas del tubo del marco A (372).
+        public const int FundacionSiloY0 = 140, FundacionSiloY1 = 163; // (R110) huella alta 24.
         // (R86, regla 15) LA ESTANTERÍA CENTRAL (R85: FundacionEstanteria*/
         // FundacionBahia* — montantes x386-401, bahías apiladas y146/y167)
         // SE RETIRÓ ENTERA: Cesar vetó el apilado ("prefiero los dos
@@ -3011,7 +3011,7 @@ namespace Alkahest.Sim
         // cuando el arco crezca:
         public const int FundacionFogonX0 = 398, FundacionFogonX1 = 404;   // (R89: -6) EL HOGAR VACÍO: el sitio del fuego PROPIO del jugador (dos mejillas de piedra, lecho libre).
         public const int FundacionFogonY = 140;                            // lecho del hogar = LA FILA DONDE EL POLVO REPOSA (la primera fila de aire sobre el suelo de piedra en y139) -- verificado en vivo ronda 61: con el lecho en 141 el calor y el conteo vivían una fila POR ENCIMA de la turba asentada.
-        public const int FundacionVetaX = 320;                             // cara interior del muro izquierdo: el ASOMO de la veta de turba (3 celdas visibles; el bolsón se talla con C).
+        public const int FundacionVetaX = 300; // (R110: -20)                             // cara interior del muro izquierdo: el ASOMO de la veta de turba (3 celdas visibles; el bolsón se talla con C).
         public const int FundacionVetaY0 = 154, FundacionVetaY1 = 158;     // franja vertical del bolsón.
         public const int FundacionEstanteX0 = 448, FundacionEstanteX1 = 458; // el sitio del PRIMER ESTANTE (entre la mesa y el muro derecho; lo levanta el Maestro en el beat 6).
         public const int FundacionEstanteBaseY = 142;
