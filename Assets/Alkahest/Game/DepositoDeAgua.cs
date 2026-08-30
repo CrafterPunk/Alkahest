@@ -592,31 +592,49 @@ namespace Alkahest.Game
             _refillTimer -= dt;
             if (_refillTimer > 0f) return;
             int n = DelDueno();
-            if (n >= _g.refillTopeCeldas) { _refillTimer = _g.refillSeg; return; } // el vidrio ENTERO (R91).
+            // (R112) EL TOPE ES EL VIDRIO, LEÍDO, NO CONFIGURADO: el
+            // `refillTopeCeldas` del guion (72) quedó fósil cuando el vidrio
+            // creció a 276 (R110) y el refill se plantaba a un cuarto. El tope
+            // ahora ES Capacidad() — no puede volver a quedarse viejo, y el
+            // campo del guion queda retirado (R15, nota en GuionDelPrologo).
+            int tope = Capacidad();
+            if (n >= tope) { _refillTimer = _g.refillSeg; return; } // el vidrio ENTERO (R91).
             // (R90/R91, Cesar: "caer más lento mientras más se llena… que el
             // total tarde ~3 minutos, pero HASTA EL TOPE") Cadencia
-            // cuadrática 0.8 → ~6.4 s (factor 7: la integral de 14 a 72 da
-            // ~180 s — la cuenta de los 3 minutos, hecha, no estimada).
-            float t = Mathf.Clamp01(n / (float)Mathf.Max(1, _g.refillTopeCeldas));
+            // cuadrática 0.8 → ~6.4 s (factor 7: la integral daba ~180 s
+            // sobre 72 celdas — la cuenta de los 3 minutos, hecha, no
+            // estimada). (R112) La curva NO se toca: mismos eventos, misma
+            // integral — lo que crece es la gota.
+            float t = Mathf.Clamp01(n / (float)Mathf.Max(1, tope));
             _refillTimer = _g.refillSeg * (1f + 7f * t * t);
-            // (R90, Cesar) La gota nace en el TOPE y POR EL CENTRO del vidrio
-            // — cae con física a la vista, por en medio, no pegada a un
-            // flanco. (R91) Cuando ya no hay caída (la fila del tope se
-            // ocupó), las últimas celdas se completan EN SILENCIO: "ya les
-            // quedó claro el refill en la primera parte" — el tope se cumple
-            // aunque la última sección no se visualice.
+            // (R112, Cesar: "no me molesta que se tarde... quizás solo haga
+            // falta mantener el tiempo máximo de refill para terminar de
+            // llenarlo a tope") GOTA GORDA: el vidrio creció x3.8 pero el
+            // tiempo total se queda en los ~3 minutos de la R91 — cada evento
+            // deposita ceil(tope/72) celdas (4 hoy), en una fila corta en el
+            // TOPE centrada en el inlet: cae con física a la vista, como
+            // siempre, solo que más ancha — un chorro de a 4 le queda bien a
+            // un tubo GRUESO. (R91) Lo que la fila del tope ya no admite se
+            // completa EN SILENCIO, rincón a rincón, hasta el vidrio lleno.
+            int porGota = Mathf.Max(1, Mathf.CeilToInt(tope / 72f));
             int inlet = (_x0 + _x1) / 2;
-            if (_sim.Grid.GetMat(inlet, _y1) == MaterialId.Empty)
+            int puestas = 0;
+            for (int i = 0; i < porGota; i++)
             {
-                _sim.PaintStable(inlet, _y1, 0, _matDueno);
-                return;
+                int x = inlet + ((i % 2 == 0) ? i / 2 : -(i / 2 + 1)); // inlet, -1, +1, -2…
+                if (x <= _x0 || x >= _x1) continue;
+                if (_sim.Grid.GetMat(x, _y1) == MaterialId.Empty)
+                {
+                    _sim.PaintStable(x, _y1, 0, _matDueno);
+                    puestas++;
+                }
             }
-            for (int y = _y1; y >= _y0 + 1; y--)
-                for (int x = _x0 + 1; x < _x1; x++)
+            for (int y = _y1; y >= _y0 + 1 && puestas < porGota; y--)
+                for (int x = _x0 + 1; x < _x1 && puestas < porGota; x++)
                     if (_sim.Grid.GetMat(x, y) == MaterialId.Empty)
                     {
-                        _sim.PaintStable(x, y, 0, _matDueno); // la cola silenciosa: rincón a rincón hasta el vidrio lleno.
-                        return;
+                        _sim.PaintStable(x, y, 0, _matDueno); // la cola silenciosa.
+                        puestas++;
                     }
         }
 

@@ -172,6 +172,10 @@ namespace Alkahest.Game
         // ("cuando llegan a la mitad dejan de llenarse" — su reporte era
         // exactamente este fantasma). Nombre nuevo = memoria vieja ignorada.
         [Tooltip("(R91, Cesar: 'hasta el TOPE aunque no se visualice la última sección') Tope del refill = el vidrio ENTERO (72). La gota visible cae por el centro mientras hay caída; el resto se completa EN SILENCIO. Cadencia cuadrática 0.8→~6.4 s: el llenado ronda los 3 minutos.")]
+        // (R112, R15) RETIRADO: el tope del refill ya no se configura — es
+        // Capacidad() leída del vidrio real (el 72 quedó fósil cuando los
+        // reservorios crecieron a 276 en la R110 y el goteo se plantaba a un
+        // cuarto). El campo sobrevive solo para no romper el asset serializado.
         public int refillTopeCeldas = 72;
         [Tooltip("(R88) Duración del ENCAJE del tubo: la columna de cobre empuja desde el subsuelo y asienta con overshoot.")]
         public float tuboInstalarSeg = 0.7f;

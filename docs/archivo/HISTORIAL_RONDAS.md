@@ -6036,3 +6036,50 @@ ca_playtest84.cmd barre la ronda.
 · Reset #8 del sandbox mid-ronda: repo volvió a R85; recuperación estándar
   (reset a origin/R109 + rescate de la R110 completa desde el disco de
   Cesar vía stage). El deploy inmediato volvió a pagar: CERO pérdida.
+
+## Ronda 112 — LA GOTA GORDA (el refill alcanza el vidrio nuevo)
+
+· Cesar: "asegúrate que los contenedores sean capaces de llenarse a tope
+  nuevamente... no me molesta que se tarde... quizás solo haga falta
+  mantener el tiempo máximo de refill para terminar de llenarlo a tope".
+· El bug latente: refillTopeCeldas=72 en el guion (asset serializado, R58)
+  contra un vidrio que desde la R110 admite 276 — el goteo se plantaba al
+  cuarto de tanque. Fix ESTRUCTURAL: el tope ya no se configura, ES
+  Capacidad() leída del vidrio real (no puede volver a quedarse fósil);
+  el campo del guion queda retirado con nota R15.
+· EL TIEMPO SE MANTIENE (el pedido exacto): la curva cuadrática de la R91
+  no se toca (mismos eventos, misma integral de ~3 minutos); lo que crece
+  es LA GOTA — cada evento deposita ceil(tope/72)=4 celdas en una fila
+  corta en el tope del vidrio, centrada en el inlet: cae con física a la
+  vista, más ancha — un chorro de a 4 le queda bien a un tubo GRUESO. La
+  cola silenciosa de la R91 completa lo que la fila ya no admite.
+· Verificado en vivo con sondas: el conteo cruza el tope viejo (72) y
+  sigue hasta el vidrio entero.
+
+### R112b — LA REVISIÓN JUGADA (el agente recorre el prólogo de verdad) + BUILD
+
+· Mandato de Cesar mid-ronda: "revisa todo desde la primera sección del
+  prólogo y realiza ajustes a tu criterio, prepara al final una build".
+· PRIMERA VEZ que el agente JUEGA el prólogo con inyección de input real
+  (Input System QueueStateEvent: teclado WASD sostenido y ratón con puntero
+  en coordenadas de mundo proyectadas): tutorial WASD completado, VEN/TOMA
+  con el vuelo del frasco, succión REAL de la poza (105 celdas de agua),
+  vertido al cuenco, DERRUMBE disparado, entrega de lodo, emergencia de
+  ambos reservorios x1.6, llenados (48 agua / 24 lodo) y REORDEN completo
+  hasta la Obra. Diez beats seguidos SIN una sola rotura de geometría.
+· Verificaciones de la ronda que cayeron solas en el camino: la cadena del
+  agua a -20 con su guía punteada ✔, el reventón del derrumbe clavado en el
+  eje 390 ✔, el cuenco en 459 ✔, los marcadores movidos anclan los tanques
+  en 412/349 ✔, y LA GOTA GORDA EN VIVO: tras el renacer, agua=182 y
+  lodo=185 — ambos MUY por encima del tope fósil (72) y subiendo hacia las
+  276, con el vidrio del silo visiblemente a dos tercios. La R112 quedó
+  probada jugando, no solo con sondas.
+· AJUSTES A CRITERIO: ninguno hizo falta — la parametrización de R99-R110
+  aguantó la revisión entera. (Observación menor anotada: durante el
+  derrumbe el foco cinemático es breve y la cámara vuelve pronto al
+  aprendiz; no es regresión — mismo comportamiento de antes del ensanche.)
+· BUILD DEMO WINDOWS generada por el menú 3 vía agente (la validación de
+  escena previa PRESERVÓ los marcadores movidos): Succeeded, 0 errores,
+  213.3 MB, 31.5 s — Builds/TenThousandYearsDemo/TenThousandYears.exe con
+  TODO lo de las rondas 108-112 dentro (muñeco, cámara, escala, rueda,
+  velocidad, colider, refill).
