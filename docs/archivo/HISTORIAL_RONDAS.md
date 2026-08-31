@@ -6181,3 +6181,58 @@ ca_playtest84.cmd barre la ronda.
 · 8) LA MUDANZA SE CIERRA SOLA: colocar el segundo reservorio ES el final —
   el director llama a Mudanza.ForzarSalida() (la puerta oficial, R37) y el
   Adiós se ve a color, sin el filtro morado que nadie sabía apagar.
+
+## Ronda 117 — INVESTIGACIÓN: ANIMAR AL MUÑECO BARATO (2025–2026)
+
+· Pedido de Cesar antes del flujo previsto: investigación profunda de
+  herramientas/papers/modelos 2025–26 que abaraten la animación 2D del
+  muñeco, con 14 dimensiones por candidato, licencias de código/pesos/
+  outputs SEPARADAS, ranking de 5 pipelines completos contra la referencia
+  (Mixamo + rig proxy + retarget + prerender), una prueba ejecutable antes
+  del modelo 3D, y opinión sobre emotes sociales por acordes.
+· Entregado: docs/INVESTIGACION_ANIMACION_2026.md (17 fichas, 5 pipelines,
+  la prueba de una tarde, apuestas, emotes) + infografía hermana de las
+  Cinco Eras (artifact "Cinco Rutas para Mover al Muñeco") + §2.6 del
+  ROADMAP enlazando ambos.
+· Hallazgos que cambian el plan: Wan-Animate-2 (Apache-2.0, 7 ago. 2026,
+  tres semanas de vida, Lite en tiempo real) permite VALIDAR la animación
+  con el PNG actual en una tarde; UniRig (MIT) reemplaza el rig proxy
+  manual; HY-Motion 1.0 aporta gestos por texto bajo licencia Tencent
+  (excluye UE/UK/Corea, exige declarar IA); Puppeteer (Apache) es la
+  apuesta para gestos actuados sin Mixamo. Trampas de licencia anotadas:
+  Animate-X (pesos sin licencia), MatAnyone (no comercial), Cascadeur
+  gratis (no comercial, sin FBX).
+· Veredicto de director: NO sustituir la referencia sino envolverla —
+  ruta 1 esta semana para decidir, ruta 2 para producir, ruta 3 como red.
+  Emotes: cosmética pura, jamás estado de la sim; "invocar al maestro" solo
+  si el maestro APARECE (no si DA); primer corte 12 + 3 duetos + 1 ritual,
+  después de las dos máquinas.
+· Reset #10 del sandbox a mitad de la ronda (el commit cayó sobre el árbol
+  viejo); rehecho sobre GitHub sin pérdida.
+
+### 117b — EL ARNÉS QUEDA ARMADO (fuera del repo)
+
+· Carpeta `C:\JuegosUnity\UnityAI_Test\Arnes_Animacion\` (LEEME.md dentro):
+  `arnes.cmd`/`arnes.py` lanzan Wan Animate 2 por la API HTTP del ComfyUI
+  local (sube imagen+video, cambia textos/semilla/largo, espera, baja el mp4
+  a `salidas\<tag>\` con `informe.txt` y el prompt usado);
+  `wan_animate_2_api.json` es la plantilla oficial exportada en formato API
+  (51 nodos, subgrafos aplanados) con el muñeco ya descrito en el positivo.
+· Entorno: ComfyUI 0.34.2 portable en D:, torch 2.13+cu130, cinco pesos del
+  template (int8 convrot 15.9 GB, umt5 fp8, clip_vision_h, VAE bf16, LoRA
+  lightx2v 4 pasos). MCP `comfyui` (artokun/comfyui-mcp vía npx) en
+  `claude_desktop_config.json` junto a unity-mcp; conector oficial de Blender
+  5.2 operativo (fue la mano que editó el config, midió RAM y reinició
+  ComfyUI). Node 20.19 basta (avisos EBADENGINE; pide 22).
+· Dos tropiezos con lección: (1) el nodo Load Video traía el nombre por
+  defecto del template (`street_dance_drive.mp4`) → "entrada inválida";
+  siempre elegir el archivo subido en el desplegable. (2) A mitad del
+  muestreo, aimdo (el cargador dinámico de VRAM) murió con `error=1450`
+  (recursos del sistema insuficientes) al streamear los 15.9 GB con ~7 GB de
+  RAM libre → `run_arnes.bat` = arranque normal + `--disable-pinned-memory`.
+· ComfyUI devuelve 403 a navegaciones iniciadas por extensiones
+  (`Sec-Fetch-Site: cross-site`, su anti-CSRF): Claude en Chrome solo puede
+  trabajar en una pestaña de ComfyUI si la URL la teclea Cesar una vez.
+· Primera tanda: `voltereta01` (casifinal.png + voltereta.mp4, seed 777002,
+  81 cuadros 482x854). El veredicto visual (¿aguanta la cabeza-caja, las
+  costuras, la escala de juguete?) es la entrada de la ruta 1 del informe.

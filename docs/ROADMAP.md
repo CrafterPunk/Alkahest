@@ -157,6 +157,21 @@ imaginario colectivo, no para un paper; (d) el pacto de fidelidad (≥85 nombre
 real / 60–85 confiesa / <60 prohibido) gobierna cada celda de la columna
 "Desbloquea".
 
+## 2.6 CÓMO ANIMAR AL MUÑECO BARATO (investigación R117, ago. 2026)
+
+Informe completo: `docs/INVESTIGACION_ANIMACION_2026.md` (14 dimensiones por
+candidato, licencias de código/pesos/outputs separadas, fuentes primarias).
+Infografía hermana de las Cinco Eras: https://claude.ai/code/artifact/4f710738-48b6-4131-b3bd-c29bcd04cdb5
+
+Ranking de pipelines: (1) HÍBRIDA para validar en una tarde — PNG + video
+del celular → Wan2.2-Animate / Wan-Animate-2 (Apache-2.0) → SAM 2 → sheets;
+(2) 3D→retarget→prerender, la referencia mejorada con UniRig (MIT) +
+HY-Motion/Puppeteer, la fábrica de volumen para emotes y skins; (3) 100% 2D
+con Unity 2D Animation + Sprite Library como red de seguridad; (4) AniSora /
+Wan FLF2V para micro-reacciones; (5) mocap casero (Puppeteer / SAM 3D Body).
+Los emotes sociales (acordes, duetos, ritual del maestro) van DESPUÉS de las
+dos máquinas y dependen de la ruta 2.
+
 ## 3. EL PRINCIPIO RECTOR DEL RITMO (por qué "lento" es correcto)
 
 Cada material nuevo debe pasar por RECORDACIÓN (su nombre real se fija jugando),
