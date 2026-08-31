@@ -172,6 +172,11 @@ Wan FLF2V para micro-reacciones; (5) mocap casero (Puppeteer / SAM 3D Body).
 Los emotes sociales (acordes, duetos, ritual del maestro) van DESPUÉS de las
 dos máquinas y dependen de la ruta 2.
 
+**Estado R119:** balance completo de la primera noche de producción y plan por
+camino en `docs/PLAN_ANIMACION_R119.md` (leer ese antes de decidir nada de
+animación); la mecánica de movimiento (¿volar, caminar, ambos?) tiene su propia
+investigación ABIERTA en `docs/DISENO_MOVIMIENTO.md`.
+
 **Estado R118:** la ruta 1 está VALIDADA y ya entra al juego. Arnés fuera del
 repo (`C:\JuegosUnity\UnityAI_Test\Arnes_Animacion\`, LEEME.md): Mixamo →
 Blender (video de pose, 15 s) → Wan Animate 2 local (14–24 min por gesto de

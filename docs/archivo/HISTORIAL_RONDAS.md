@@ -6290,3 +6290,115 @@ ca_playtest84.cmd barre la ronda.
   Standing Idle 03 (juega con la botella entre las manos) — pero el frasco
   del juego es mágico y flota cerca, no va en la mano.
 
+### 118b–e — EL PRIMER PLAYTEST DE LA CAMINATA (cinco vueltas en una noche)
+
+· Cesar jugó y devolvió: "se mueve súper rápido para lo que se ve en sus
+  pasos", "un borde a su alrededor", "parece que levita", "no sé si queremos
+  que camine... que tenga física y camine lento hasta que con espaciador
+  empiece a volar, sin perder lo que ya hay".
+· R118b — DOS MODOS, UNA FÍSICA: a pie (gravedad 22 u/s², A/D a
+  VelocidadPaso 1.1 u/s = la zancada real del ciclo; W o ESPACIO despega)
+  y volando (todo lo de siempre: WASD a 4.8, hover; se aterriza bajando con
+  S hasta tocar suelo, nunca por rozar). Arranca a pie cayendo al primer
+  suelo. `SobreSuelo` sondea 0.08u bajo la caja (los subpasos de 0.06u
+  dejan hueco); el avatar remoto deduce el modo. A pie: sin bob ni bandeo,
+  la hoja corre al ritmo de la zancada (0.5–1.6×). Borde: descontaminación
+  del contorno (color − (1−α)·fondo)/α en la franja + recorte del velo.
+· R118c — "camina un poco por el aire" → `AsentarEnSuelo` (baja en pasos de
+  0.005 hasta tocar) + el visual baja 0.04u a pie (el margen de bob de la
+  caja). "La cabeza se achica al empezar a caminar" → el video TRAE el
+  arranque: Wan empieza siempre en la pose de la referencia y en 1–5 gira
+  al 3/4 de marcha; la hoja lleva `intro` y `TickCaminar` lo toca al
+  empezar y al revés al frenar. Hoja sin compresión (DXT5 ensuciaba el
+  alfa) y erosión de 1 px.
+· R118d — "cuando termina de caminar la cabeza popea... se ve mejor
+  caminando que de frente" → la pose quieta ES el cuadro 0 de la hoja (la
+  estampa re-dibujada por el modelo): quieto↔caminar continuo por
+  construcción; el PNG original queda de retén. Arranque a 7 cuadros al 70%.
+· R118e — "entre las piernas se ve fondo blanco" → los huecos CERRADOS con
+  color de fondo (dist. mediana < 10, área ≥ 20) también se quitan; erosión
+  2 px. "Al parar sigue unos frames" → frenado corto: solo los últimos 4
+  cuadros del arranque a ritmo pleno (~0.25 s). Veredicto: "se ve mejor,
+  micro detalles... está wow".
+· Pendientes con nombre: (1) el cuadro 0 del video tiene un pie a medio
+  paso → REFERENCIA CANÓNICA: sacar del reposo generado el cuadro limpio
+  (`preparar.cmd cuadro`) y regenerar caminar/recoger desde esa pose;
+  (2) RECORDAR: si quedan micro-filos, generar sobre fondo más oscuro (gris
+  0.30 como los videos de pose de Blender) deja el filo del color de la
+  cueva; (3) los pies "poco firmes" son el mundo plano bajo un muñeco con
+  volumen: se resuelve con la capa visual de las rocas, no en el personaje;
+  (4) 16 fps sin interpolar ES la cadencia a pasos de la dirección de arte;
+  bajar a 12 es un número.
+· Lección de herramienta: la inyección de teclado por MCP solo llega al
+  juego si el Editor tiene el foco de Windows (Input System:
+  PointersAndKeyboardsRespectGameViewFocus + ResetAndDisableNonBackground);
+  cuando Cesar escribe en Claude, el foco se va. Para verificar con él
+  presente: que juegue él y la telemetría grabe.
+
+### 118f — REFERENCIA CANÓNICA, REPOSO Y RECOGER (la noche cierra con tres hojas)
+
+· Tiempos reales por tanda con Unity cerrado y 17 GB de RAM libres: 3–5 min
+  (el modelo cabe en RAM y ya no toca disco). Con Blender renderizando o con
+  su escena cargada en la GPU: 10–30 min. `blender_pose.py` queda en la
+  carpeta del arnés; tras renderizar, Blender vacía la escena.
+· `reposo01` (Standing Idle 03, desde el arte): reposo GESTICULANTE (manos
+  jugando), pies plantados, pero el cuadro 0 sale con la mano alzada porque
+  Wan MEZCLA la referencia con la primera pose del video. Lección: el cuadro
+  0 = referencia × pose inicial. Para una pose canónica hace falta un video
+  cuyo primer cuadro sea neutro.
+· `reposo02` (Happy Idle, desde el arte): reposo CALMADO (brazos abajo,
+  respira, la cabeza gira suave), fidelidad de primera generación. Su cuadro
+  0 es la REFERENCIA CANÓNICA v2 (`muneco_canon.png`): pies plantados, brazos
+  abajo, 3/4 del arte. Ciclo 17..63 (47 cuadros, distancia 212: cierra).
+· `caminar02` se generó desde una canónica de SEGUNDA generación (cuadro 22
+  de reposo01) y se notó la deriva: parche cambiado de lado, menos placas,
+  ojos más grandes. `caminar03` desde la canónica v2: fiel y continuo (cuadro
+  0 = canon; ciclo 63..79, distancia 107, la mejor hasta ahora).
+· `recoger01` (Picking Up de frente, azimut 35): al inclinarse la CAJA viene
+  hacia cámara y tapa el cuerpo — ilegible. `recoger02` (azimut 75, casi de
+  perfil, ×1.85 de velocidad para meter los 9.6 s del FBX en 5 s): la caja se
+  inclina al suelo y el cuerpo se agacha; al levantarse queda con las manos
+  juntas (sosteniendo algo). Regla de dirección: gestos que se inclinan hacia
+  cámara van de perfil; los de pie, a 35°.
+· Juego: `HojaDeCuadros` gana `Base` (cuadro canónico), `PingPong`,
+  `CuadroDelCiclo(t)`; el aprendiz carga `reposo` (ciclo a pie, cuadro base
+  volando), `caminar` (arranque 5 + ciclo 17) y `recoger` (una pasada; tecla
+  G a pie y quieto, para verlo; API `ReproducirGesto`). Arnés: `--velocidad`,
+  `--base`, `--pingpong`, `--tolerancia`, `preparar cuadro`.
+· Pendiente de veredicto de Cesar (pidió parar aquí y mirar): calidad de las
+  tres hojas en el juego, si el reposo calmado es EL reposo o si el
+  gesticulante (reposo01) entra como variación, y el gesto de recoger.
+
+## Ronda 119 — EL BALANCE Y LAS DOS PREGUNTAS (documentos de decisión)
+
+· Veredicto de Cesar sobre la R118: "las animaciones son hermosas... a la altura
+  de un juego AAA... parece hecho a posta, algo muy real dentro de un mundo de
+  fantasía; el contraste se ve intencional". Y lo negativo con la misma
+  claridad: ES INCONSISTENTE (popeos, dedos que aparecen, pies que cambian,
+  bordes que quizá pidan mano) y cada tirada es un dibujante nuevo — "lo que
+  iba a ser automatizado se convierte en trabajo manual de visión fina".
+  Satisfecho para demo interna; para demo gratuita pide ~40% menos
+  inconsistencia; duda de que se pueda.
+· Respuesta de dirección en `docs/PLAN_ANIMACION_R119.md`: la reformulación
+  (fábrica de candidatos para una biblioteca FINITA: la inconsistencia es costo
+  de curaduría, no bug de runtime), expectativa honesta por camino (ruta 1:
+  +20-25 de esos 40 con QC automático, cirugía de cuadros, N semillas, fondo
+  oscuro y manoplas al negativo; ruta 4: nicho de micro-loops, no biblioteca;
+  ruta 2/3D: consistencia garantizada + proyección del arte original como
+  textura + TRELLIS.2 como puerta barata; no pagar modelos), y el plan del
+  ATRIL de emotes en dos capas (T = abanico de prueba de toda hoja en
+  Resources/Personaje/Anim, hoy; emotes sociales de verdad tras las dos
+  máquinas). Los clips ganadores de la ruta 1 quedan como ESPECIFICACIÓN de
+  estilo de movimiento (extraíbles a esqueleto 2D para retarget futuro).
+· `docs/DISENO_MOVIMIENTO.md` (decisión ABIERTA): solo-volar vs
+  caminar+volar vs solo-caminar, con referencias (Noita como hermana
+  falling-sand: levitación que se recarga en suelo; Terraria: vuelo con
+  descenso suave; Starbound, Ori, HK, ONI), riesgos por opción, la fricción
+  observada por Cesar (los que vuelan trabajan desde un poco más lejos de lo
+  que necesitan) y la mitigación transversal propuesta: EL ANCLA DE TRABAJO
+  (verter/aspirar amortigua y clava al personaje). Recomendación: instrumentar
+  la B (que contiene a las otras dos) y que la telemetría del playtest elija.
+· Reset #12 del sandbox a mitad de la ronda; recuperado de origin/main +
+  tar del disco de Cesar (protocolo de la regla 6), cero pérdida.
+· Cesar reinició Claude: el MCP de ComfyUI quedó VIVO (comfyui__* en la lista
+  de herramientas; sin usar aún — "primero vamos a mirar bien el panorama").

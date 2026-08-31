@@ -258,9 +258,102 @@ namespace Alkahest.Game
         // vuelve la estampa base. Null si el asset no existe: nada cambia.
         private Sprite _estampaBase;
         private HojaDeCuadros _hojaCaminar;
+        private HojaDeCuadros _hojaReposo;   // (R118f) reposo calmado (Happy Idle), ciclo; solo a pie
+        private HojaDeCuadros _hojaRecoger;  // (R118f) gesto de una sola pasada (Picking Up de perfil); tecla G a pie para verlo
+        private HojaDeCuadros _gestoActivo;
+        private float _cuadroGesto;
+
+        /// <summary>(R118f) Reproduce una hoja UNA vez (agacharse a recoger, etc.). Solo a pie y quieto; ignora si ya hay un gesto en curso.</summary>
+        public void ReproducirGesto(HojaDeCuadros hoja)
+        {
+            if (hoja == null || _gestoActivo != null || !EnSuelo) return;
+            _gestoActivo = hoja; _cuadroGesto = 0f; _faseCaminar = 0; _cuadroCaminar = 0f;
+        }
+
+        /// <summary>true si el gesto puso el sprite este frame (y la caminata/reposo no deben tocarlo).</summary>
+        private bool TickGesto(bool aPie, float velX)
+        {
+            var kb = Keyboard.current;
+            if (_gestoActivo == null && _hojaRecoger != null && aPie && velX < UmbralCaminar && kb != null
+                && kb.gKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && !Mudanza.ModoActivo)
+                ReproducirGesto(_hojaRecoger);
+            if (_gestoActivo == null) return false;
+            if (!aPie) { _gestoActivo = null; return false; } // despegó a mitad: el vuelo manda
+            _cuadroGesto += Time.deltaTime * _gestoActivo.Fps;
+            int i = (int)_cuadroGesto;
+            if (i >= _gestoActivo.Cuadros.Length) { _gestoActivo = null; return false; }
+            if (_bodySr != null) _bodySr.sprite = _gestoActivo.Cuadros[i];
+            return true;
+        }
+        private float _cuadroReposo;
         private float _cuadroCaminar;
-        private const float UmbralCaminar = 0.15f;      // fracción de moveSpeed a partir de la cual "camina"
-        private const float BobAlCaminar = 0.25f;        // el ciclo ya respira solo: el bob sintético baja
+        private int _faseCaminar;   // 0 quieto · 1 arrancando (intro) · 2 ciclo · 3 frenando (intro al revés)
+        private const float RitmoArranque = 0.7f;      // (R118d) arranque al 70% del ritmo del ciclo
+        private const int FrenadoCuadros = 4;           // (R118e) al parar solo se deshacen los últimos 4 cuadros del arranque
+        private const float AjusteVisualAPie = 0.04f; // = el margen de bob que la caja lleva por abajo (MedioAltoAbajo 0.64 vs pies -0.598)
+
+        /// <summary>
+        /// (R118c, Cesar: "la cabeza se achica al empezar a caminar... le
+        /// falta una animación 'empezar a caminar'") La hoja trae un ARRANQUE:
+        /// sus primeros <see cref="HojaDeCuadros.Intro"/> cuadros van de la
+        /// pose de la estampa (cuadro 0 del video = la referencia) al ciclo.
+        /// Se tocan al empezar y AL REVÉS al parar, así el giro de la cabeza
+        /// es un movimiento y no un corte. Sin intro, entra directo al ciclo.
+        /// </summary>
+        private void TickCaminar(bool quiere, float velX)
+        {
+            if (_hojaCaminar == null || _bodySr == null) return;
+            var cu = _hojaCaminar.Cuadros;
+            int intro = _hojaCaminar.Intro, ciclo = _hojaCaminar.CuadrosDelCiclo;
+            float ritmo = Mathf.Clamp(Mathf.Max(velX, VelocidadPaso * 0.5f) / VelocidadPaso, 0.5f, 1.6f);
+            float paso = Time.deltaTime * _hojaCaminar.Fps * ritmo;
+            // (R118d) el arranque y el frenado van más lentos que el ciclo
+            // (Cesar: "le falta un frame o dos de intermedio"): mismo material,
+            // más tiempo en pantalla = transición que se lee.
+            float pasoIntro = Time.deltaTime * _hojaCaminar.Fps * RitmoArranque;
+            if (quiere)
+            {
+                if (_faseCaminar == 0) { _faseCaminar = intro > 0 ? 1 : 2; _cuadroCaminar = 0f; }
+                else if (_faseCaminar == 3) { _faseCaminar = 1; } // se arrepintió a medio frenar: sigue el arranque desde donde iba
+                if (_faseCaminar == 1)
+                {
+                    _cuadroCaminar += pasoIntro;
+                    if (_cuadroCaminar >= intro) { _faseCaminar = 2; _cuadroCaminar -= intro; }
+                    else { _bodySr.sprite = cu[(int)_cuadroCaminar]; return; }
+                }
+                _cuadroCaminar += paso;
+                _bodySr.sprite = cu[intro + ((int)_cuadroCaminar) % Mathf.Max(1, ciclo)];
+            }
+            else
+            {
+                // (R118e, Cesar: "cuando dejo de caminar la animación sigue
+                // unos frames") El frenado es CORTO: solo los últimos
+                // FrenadoCuadros del arranque, al revés y a ritmo pleno
+                // (~0.25 s): lo justo para que la cabeza gire de vuelta, sin
+                // que parezca que sigue caminando.
+                if (_faseCaminar == 2) { _faseCaminar = intro > 0 ? 3 : 0; _cuadroCaminar = Mathf.Min(intro, FrenadoCuadros) - 0.001f; }
+                if (_faseCaminar == 3 || _faseCaminar == 1)
+                {
+                    _faseCaminar = 3;
+                    _cuadroCaminar = Mathf.Min(_cuadroCaminar, FrenadoCuadros - 0.001f);
+                    _cuadroCaminar -= Time.deltaTime * _hojaCaminar.Fps;
+                    if (_cuadroCaminar > 0f) { _bodySr.sprite = cu[Mathf.Min(intro - 1, (int)_cuadroCaminar)]; return; }
+                    _faseCaminar = 0;
+                }
+                _cuadroCaminar = 0f;
+                if (_hojaReposo != null && EnSuelo)
+                {
+                    // (R118f) A pie y quieto: el reposo respira (ida y vuelta,
+                    // nunca corta). Volando o sin hoja: la pose base.
+                    _cuadroReposo += Time.deltaTime * _hojaReposo.Fps;
+                    _bodySr.sprite = _hojaReposo.CuadroDelCiclo(_cuadroReposo);
+                    return;
+                }
+                _cuadroReposo = _hojaReposo != null ? Mathf.Max(0, _hojaReposo.Base - _hojaReposo.Intro) : 0f; // al volver a pie arranca desde la pose base (o el inicio del ciclo si la base es el arranque)
+                if (_estampaBase != null && _bodySr.sprite != _estampaBase) _bodySr.sprite = _estampaBase;
+            }
+        }
+        private const float UmbralCaminar = 0.12f;      // u/s de velocidad horizontal a partir de la cual "camina" (R118b: a pie, en unidades reales)
 
         private SpriteRenderer _bodySr;
         private Sprite _bodySpriteOpen;
@@ -354,17 +447,101 @@ namespace Alkahest.Game
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) input.y -= 1f;
             }
             if (input.sqrMagnitude > 1f) input.Normalize();
-
-            Vector2 target = input * moveSpeed;
-            _velocity = Vector2.MoveTowards(_velocity, target, acceleration * Time.deltaTime);
+            bool quiereDespegar = kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto
+                && (input.y > 0.5f || kb.spaceKey.isPressed);
 
             Vector3 pos = transform.position;
+            _enSuelo = SobreSuelo(pos);
+
+            // (R118b, Cesar: "que tenga física y camine lento hasta que con
+            // espaciador salte y ahí empiece a volar, y no se pierda lo que
+            // ya hay ni la velocidad de vuelo") DOS MODOS, UNA FÍSICA:
+            //  · A PIE: gravedad, y A/D caminan a VelocidadPaso (la zancada
+            //    real del ciclo de la hoja: 4.8 u/s con esos pasos era un
+            //    patinaje). W o ESPACIO = despegar.
+            //  · VOLANDO: exactamente lo de siempre (WASD a moveSpeed, sin
+            //    gravedad, hover). Se ATERRIZA bajando con S hasta tocar
+            //    suelo: nunca por rozar el piso de pasada, así el vuelo bajo
+            //    del prólogo sigue intacto.
+            // Se arranca a pie (cayendo hasta el primer suelo).
+            if (!_volando)
+            {
+                if (quiereDespegar)
+                {
+                    _volando = true;
+                    _velocity.y = Mathf.Max(_velocity.y, ImpulsoDespegue);
+                }
+                else
+                {
+                    _velocity.x = Mathf.MoveTowards(_velocity.x, input.x * VelocidadPaso, acceleration * Time.deltaTime);
+                    if (_enSuelo && _velocity.y <= 0f) _velocity.y = 0f;
+                    else _velocity.y = Mathf.Max(_velocity.y - Gravedad * Time.deltaTime, -CaidaMax);
+                }
+            }
+            if (_volando)
+            {
+                Vector2 target = input * moveSpeed;
+                _velocity = Vector2.MoveTowards(_velocity, target, acceleration * Time.deltaTime);
+                if (_enSuelo && input.y < -0.5f)
+                {
+                    _volando = false;
+                    _velocity.y = 0f;
+                }
+            }
+
             MoverConColision(ref pos, _velocity * Time.deltaTime);
+            if (!_volando && _velocity.y <= 0f) AsentarEnSuelo(ref pos);
             pos.z = 0f;
             transform.position = pos;
 
             if (input.x > 0.01f) _facingRight = true;
             else if (input.x < -0.01f) _facingRight = false;
+        }
+
+        /// <summary>
+        /// (R118c, Cesar: "camina no sobre la bedrock sino un poco por el
+        /// aire") MoverConColision resuelve en subpasos de 0.06u y deja al
+        /// personaje flotando hasta esa medida sobre el piso. A pie se cierra
+        /// el hueco: se baja en pasos finos hasta que la caja toque.
+        /// </summary>
+        private void AsentarEnSuelo(ref Vector3 pos)
+        {
+            if (_simColision == null || CajaChoca(pos.x, pos.y)) return;
+            if (!CajaChoca(pos.x, pos.y - SondaSuelo)) return; // no hay suelo cerca: está cayendo
+            const float fino = 0.005f;
+            for (int i = 0; i < 16; i++)
+            {
+                if (CajaChoca(pos.x, pos.y - fino)) break;
+                pos.y -= fino;
+            }
+        }
+
+        // (R118b) LOS PIES: caminar/volar. La sonda de suelo mira 0.08u bajo la
+        // caja (MoverConColision resuelve en subpasos de 0.06u, así que al
+        // apoyarse puede quedar un hueco de hasta esa medida). Público de
+        // lectura para HandleVisual y para quien quiera saber si está a pie.
+        private bool _volando;
+        private bool _enSuelo;
+        public bool EnSuelo => _enSuelo && !_volando;
+        public bool Volando => _volando;
+        private const float VelocidadPaso = 1.1f;   // u/s a pie: la zancada de la hoja `caminar` (17 cuadros a 16 fps, personaje de 1.2u) da ~1.0-1.2 u por ciclo.
+        private const float Gravedad = 22f;         // u/s^2: cae con peso de muñeco relleno, no de pluma.
+        private const float CaidaMax = 9f;
+        private const float ImpulsoDespegue = 2.6f; // el brinco con que despega antes de que el vuelo tome el mando.
+        private const float SondaSuelo = 0.08f;
+
+        private bool SobreSuelo(Vector3 pos)
+        {
+            if (!ColisionConEstructura) return false;
+            if (_simColision == null)
+            {
+                _simColision = FindAnyObjectByType<AlkahestSim>();
+                if (_simColision == null) return false;
+            }
+            // Si ya está DENTRO de sólido no cuenta como apoyado (la colisión
+            // está suspendida ese frame y saldría nadando, como siempre).
+            if (CajaChoca(pos.x, pos.y)) return false;
+            return CajaChoca(pos.x, pos.y - SondaSuelo);
         }
 
         // =================================================================
@@ -599,6 +776,11 @@ namespace Alkahest.Game
 
             _velocity = Vector2.MoveTowards(_velocity, medida, acceleration * Time.deltaTime);
 
+            // (R118b) el avatar remoto no manda su modo: se deduce -- apoyado
+            // y sin velocidad vertical = a pie (camina); si no, vuela.
+            _enSuelo = SobreSuelo(pos);
+            _volando = !(_enSuelo && Mathf.Abs(_velocity.y) < 0.3f);
+
             if (medida.x > 0.05f) _facingRight = true;
             else if (medida.x < -0.05f) _facingRight = false;
         }
@@ -651,28 +833,22 @@ namespace Alkahest.Game
                 // (R118) ¿camina? Solo con velocidad horizontal real y fuera
                 // del modo capataz (ahí mira a cámara y la hoja es de perfil 3/4).
                 bool frontalC = Mudanza.ModoActivo;
-                float fracVelX = Mathf.Abs(_velocity.x) / Mathf.Max(0.01f, moveSpeed);
-                bool caminaC = _hojaCaminar != null && !frontalC && fracVelX > UmbralCaminar;
-                if (caminaC)
-                {
-                    // El ciclo corre al ritmo del paso: más rápido cuanto más
-                    // corre, con tope para que no parezca dibujo animado.
-                    float ritmo = Mathf.Clamp(fracVelX, 0.6f, 1.15f);
-                    _cuadroCaminar += Time.deltaTime * _hojaCaminar.Fps * ritmo;
-                    int n = _hojaCaminar.Cuadros.Length;
-                    int idx = ((int)_cuadroCaminar) % n;
-                    if (_bodySr != null) _bodySr.sprite = _hojaCaminar.Cuadros[idx];
-                }
-                else
-                {
-                    _cuadroCaminar = 0f;
-                    if (_bodySr != null && _estampaBase != null && _bodySr.sprite != _estampaBase) _bodySr.sprite = _estampaBase;
-                }
-                float bobC = Mathf.Sin(Time.time * BobFrequency) * BobAmplitude * (caminaC ? BobAlCaminar : 1f);
+                // (R118b) A PIE la hoja manda: camina con velocidad horizontal
+                // real (u/s, no fracción del vuelo) y el ciclo corre al ritmo
+                // de la zancada. Volando o quieto, la estampa base.
+                bool aPie = EnSuelo;
+                float velX = Mathf.Abs(_velocity.x);
+                bool quiereCaminar = _hojaCaminar != null && !frontalC && aPie && velX > UmbralCaminar;
+                if (!TickGesto(aPie, velX)) TickCaminar(quiereCaminar, velX);
+                // A pie NO hay bob ni bandeo: los pies están en el suelo (Cesar:
+                // "parece que levita"). El flotar es del vuelo. Y a pie el
+                // visual baja lo que la caja de colisión le reservaba al bob
+                // (R118c: "camina un poco por el aire"): los pies pisan.
+                float bobC = aPie ? -AjusteVisualAPie : Mathf.Sin(Time.time * BobFrequency) * BobAmplitude;
                 if (_visualTransform != null)
                     _visualTransform.localPosition = new Vector3(0f, bobC, VisualZOffset);
 
-                float targetTiltC = Mathf.Clamp(-_velocity.x * TiltDegPerSpeed, -TiltMaxDeg, TiltMaxDeg);
+                float targetTiltC = aPie ? 0f : Mathf.Clamp(-_velocity.x * TiltDegPerSpeed, -TiltMaxDeg, TiltMaxDeg);
                 _tiltDeg = Mathf.Lerp(_tiltDeg, targetTiltC, 1f - Mathf.Exp(-TiltSmooth * Time.deltaTime));
                 if (_tiltPivot != null) _tiltPivot.localRotation = Quaternion.Euler(0f, 0f, _tiltDeg);
 
@@ -823,8 +999,20 @@ namespace Alkahest.Game
                 CrearSombraDeContacto();
                 CrearFrascoYPlano();
                 // (R118) la hoja de caminar, si el arnés ya la dejó en Resources.
-                _estampaBase = estampa;
                 _hojaCaminar = HojaDeCuadros.Cargar("caminar");
+                _hojaReposo = HojaDeCuadros.Cargar("reposo");
+                _hojaRecoger = HojaDeCuadros.Cargar("recoger");
+                // (R118d, Cesar: "cuando termina de caminar la cabeza popea...
+                // se ve mejor caminando que de frente con la cabeza más
+                // grande") LA POSE QUIETA SALE DEL MISMO VIDEO: el cuadro
+                // BASE de la hoja de reposo (o el 0 de caminar) es la estampa
+                // tal como la re-dibujó el modelo (misma talla, misma luz que
+                // los ciclos). (R118f) Todas las hojas se generan desde la
+                // misma REFERENCIA CANÓNICA (muneco_canon.png = ese cuadro),
+                // así reposo↔caminar↔recoger arrancan en la misma pose.
+                // La estampa original queda de retén si no hay hoja.
+                _estampaBase = _hojaReposo != null ? _hojaReposo.CuadroBase : (_hojaCaminar != null ? _hojaCaminar.Cuadros[0] : estampa);
+                if (_bodySr != null) _bodySr.sprite = _estampaBase;
                 return;
             }
 

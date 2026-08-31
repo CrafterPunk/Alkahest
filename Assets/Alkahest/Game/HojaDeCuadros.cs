@@ -29,6 +29,9 @@ namespace Alkahest.Game
             public int cuadros, columnas, filas, ancho, alto;
             public float fps;
             public bool loop;
+            public int intro;
+            public int @base;
+            public bool pingpong;
             public float pivotX, pivotY;
             public int alturaPersonajePx;
         }
@@ -37,10 +40,30 @@ namespace Alkahest.Game
         public readonly Sprite[] Cuadros;
         public readonly float Fps;
         public readonly bool Loop;
+        /// <summary>(R118c) Cuántos cuadros iniciales son el ARRANQUE (de la pose de la estampa al ciclo). El ciclo empieza en Cuadros[Intro]. Al parar se tocan al revés.</summary>
+        public readonly int Intro;
+        /// <summary>(R118f) Índice del cuadro BASE (la pose canónica: pies plantados, brazos abajo). Es lo que se muestra quieto sin hoja de reposo y volando.</summary>
+        public readonly int Base;
+        /// <summary>(R118f) Ida y vuelta en vez de ciclo: para reposos que no son periódicos (nunca hay corte).</summary>
+        public readonly bool PingPong;
+        public int CuadrosDelCiclo => Cuadros.Length - Intro;
+        public Sprite CuadroBase => Cuadros[Base];
 
-        private HojaDeCuadros(string nombre, Sprite[] cuadros, float fps, bool loop)
+        private HojaDeCuadros(string nombre, Sprite[] cuadros, float fps, bool loop, int intro, int baseIdx, bool pingpong)
         {
-            Nombre = nombre; Cuadros = cuadros; Fps = fps; Loop = loop;
+            Nombre = nombre; Cuadros = cuadros; Fps = fps; Loop = loop; Intro = Mathf.Clamp(intro, 0, cuadros.Length - 1);
+            Base = Mathf.Clamp(baseIdx, 0, cuadros.Length - 1); PingPong = pingpong;
+        }
+
+        /// <summary>Cuadro del ciclo para un tiempo t (en cuadros, acumulado): loop o ping-pong según la hoja. Ignora el arranque.</summary>
+        public Sprite CuadroDelCiclo(float t)
+        {
+            int n = Mathf.Max(1, CuadrosDelCiclo);
+            if (!PingPong || n < 3) return Cuadros[Intro + ((int)t) % n];
+            int periodo = 2 * (n - 1);
+            int k = ((int)t) % periodo;
+            if (k >= n) k = periodo - k;
+            return Cuadros[Intro + k];
         }
 
         /// <summary>Carga Resources/Personaje/Anim/&lt;nombre&gt;.png + &lt;nombre&gt;_manifiesto.json. Null si falta algo (y lo dice en consola una vez).</summary>
@@ -87,8 +110,8 @@ namespace Alkahest.Game
                 cuadros[i] = Sprite.Create(tex, rect, pivote, ppu, 0, SpriteMeshType.FullRect);
                 cuadros[i].name = $"{nombre}_{i:00}";
             }
-            Debug.Log($"[TenThousandYears] HojaDeCuadros '{nombre}': {m.cuadros} cuadros {m.ancho}x{m.alto} a {m.fps:0.#} fps, personaje {m.alturaPersonajePx}px → {ppu:0.#} px/u (talla {TallaEstampaU}u).");
-            return new HojaDeCuadros(nombre, cuadros, m.fps > 0f ? m.fps : 16f, m.loop);
+            Debug.Log($"[TenThousandYears] HojaDeCuadros '{nombre}': {m.cuadros} cuadros {m.ancho}x{m.alto} a {m.fps:0.#} fps (arranque {m.intro}), personaje {m.alturaPersonajePx}px → {ppu:0.#} px/u (talla {TallaEstampaU}u).");
+            return new HojaDeCuadros(nombre, cuadros, m.fps > 0f ? m.fps : 16f, m.loop, m.intro, m.@base, m.pingpong);
         }
     }
 }

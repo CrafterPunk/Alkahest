@@ -1,0 +1,19 @@
+{
+  "nombre": "recoger",
+  "cuadros": 81,
+  "columnas": 11,
+  "filas": 8,
+  "base": 0,
+  "pingpong": false,
+  "ancho": 288,
+  "alto": 406,
+  "fps": 16.0,
+  "loop": false,
+  "intro": 0,
+  "pivotX": 0.3396,
+  "pivotY": 0.531,
+  "alturaPersonajePx": 334,
+  "origen": "recoger02_00001_.mp4",
+  "cicloDesde": 0,
+  "cicloHasta": 81
+}
