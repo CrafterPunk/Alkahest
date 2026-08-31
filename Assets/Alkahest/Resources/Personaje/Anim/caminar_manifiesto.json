@@ -1,0 +1,16 @@
+{
+  "nombre": "caminar",
+  "cuadros": 17,
+  "columnas": 6,
+  "filas": 3,
+  "ancho": 212,
+  "alto": 372,
+  "fps": 16.0,
+  "loop": true,
+  "pivotX": 0.4859,
+  "pivotY": 0.5089,
+  "alturaPersonajePx": 358,
+  "origen": "caminar01_00001_.mp4",
+  "cicloDesde": 46,
+  "cicloHasta": 63
+}

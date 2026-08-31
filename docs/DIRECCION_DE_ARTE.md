@@ -37,6 +37,13 @@ mil años; el brote es tu ciclo.
 
 ## 3. EL PIPELINE DE PRODUCCIÓN (hipótesis vigente)
 
+> **R118 — lo que YA funciona, antes del modelo 3D:** estampa PNG + video de
+> pose (Mixamo renderizado en Blender) → Wan Animate 2 local → alfa + hoja de
+> sprites (`postproceso.py`) → `HojaDeCuadros` en Unity. El primer ciclo de
+> caminar entró al juego con este camino. El modelo 3D de abajo sigue siendo
+> el plan para VOLUMEN (emotes, skins, 8 direcciones); esta vía es la que
+> produce los primeros gestos y la vara de calidad contra la que se mide todo.
+
 diseño 2D → **modelo 3D ÚNICO** (herramienta de producción, no arte final) →
 rig/animaciones → cámara ORTOGRÁFICA fija → render PNG transparente en alta →
 tratamiento gráfico final → sprites 2D en Unity.

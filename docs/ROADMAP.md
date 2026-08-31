@@ -172,6 +172,15 @@ Wan FLF2V para micro-reacciones; (5) mocap casero (Puppeteer / SAM 3D Body).
 Los emotes sociales (acordes, duetos, ritual del maestro) van DESPUÉS de las
 dos máquinas y dependen de la ruta 2.
 
+**Estado R118:** la ruta 1 está VALIDADA y ya entra al juego. Arnés fuera del
+repo (`C:\JuegosUnity\UnityAI_Test\Arnes_Animacion\`, LEEME.md): Mixamo →
+Blender (video de pose, 15 s) → Wan Animate 2 local (14–24 min por gesto de
+5 s con el modelo completo int8) → `postproceso.py` (alfa + ciclo + hoja +
+manifiesto) → `HojaDeCuadros` en Unity. Primer gesto en el juego: `caminar`.
+Siguiente: reposo (Standing Idle 03), recoger, levantarse; luego medir el
+GGUF Q5 contra esta vara de calidad; luego Wan 2.2 I2V/FLF2V (por prompt y
+loops B2) con los mismos scripts.
+
 ## 3. EL PRINCIPIO RECTOR DEL RITMO (por qué "lento" es correcto)
 
 Cada material nuevo debe pasar por RECORDACIÓN (su nombre real se fija jugando),

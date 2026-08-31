@@ -6236,3 +6236,57 @@ ca_playtest84.cmd barre la ronda.
 · Primera tanda: `voltereta01` (casifinal.png + voltereta.mp4, seed 777002,
   81 cuadros 482x854). El veredicto visual (¿aguanta la cabeza-caja, las
   costuras, la escala de juguete?) es la entrada de la ruta 1 del informe.
+
+## Ronda 118 — LA ESTAMPA CAMINA (video → sprites → juego, en una noche)
+
+· Veredicto de la ruta 1 (informe R117): el muñeco de remiendos ES ANIMABLE
+  con el PNG actual. `voltereta01/02` (Wan Animate 2, modelo completo int8):
+  la cabeza-caja gira en 3D coherente (tres caras, placas, musgo), costuras y
+  parches se mantienen, la escala de juguete no se pierde, y el modelo
+  INVENTA una espalda plausible (caja trasera, parche en la túnica) en la
+  voltereta completa. Tiempos: 24 min con 3.6 GB de RAM libre, 14 min con
+  10 GB (Unity cerrado). Cesar: "el video está hermoso".
+· Tres defectos del primer intento y sus curas, ya en el arnés: (1) duraba
+  1.3 s porque el template toma los primeros 81 cuadros TAL CUAL y el video
+  iba a 62.5 fps — Wan trabaja a 16 fps → `preparar.py` re-muestrea a 16 fps
+  (81 cuadros = 5 s de gesto) ANTES de subir; (2) el "aura" venía del halo del
+  PNG `casifinal.png` → `muneco_plano.png`: el recorte transparente del repo
+  sobre gris plano con aire arriba/abajo; (3) el personaje se salía por abajo
+  al agacharse porque la referencia iba pegada a los bordes → mismo fix.
+· Pedido de Cesar: SIN PARPADEO (los ojos son lámparas). En la primera tanda
+  el modelo "cerró los ojos" al bajar la cabeza. Al positivo: "two round holes
+  with fixed glowing amber lights inside, like lanterns: no eyelids, never
+  blinking, always lit"; al negativo: blinking, eyelids, closing eyes, human
+  eyes, eyeballs, glowing aura, halo.
+· A3 EN MARCHA (el actor es Mixamo, no Cesar): 5 FBX de Mixamo (Walking in
+  place, Picking Up, Standing Idle 03, Happy Idle, Standing Up) → Blender 5.2
+  por su conector oficial: maniquí Y Bot gris claro sobre fondo gris 0.30,
+  cámara 50 mm a 4 m, personaje girado 35° (3/4 mirando a la derecha, como la
+  estampa), 480x848 a 30 fps, EEVEE 16 muestras, modificador CYCLES para los
+  ciclos — 156 cuadros en 15 s. Cinco `pose_*.mp4` en `entradas\videos\`.
+  Lección de Blender 5.x: `action.fcurves` ya no existe (layers → strips →
+  channelbags → fcurves) y el video se activa con
+  `image_settings.media_type = 'VIDEO'` antes de `file_format = 'FFMPEG'`.
+· `postproceso.py`: mp4 → alfa (gris del borde + SOLO la región exterior
+  conectada al borde, así las placas grises del cubo no se agujerean; borde
+  suave en una franja de 2 px) → búsqueda del ciclo que cierra (periodo
+  esperado 32/30·16 ≈ 17 cuadros) → caja común → hoja PNG + manifiesto JSON
+  (cuadros, columnas, tamaño, fps, pivote = centro del personaje DE PIE en el
+  cuadro 0, alturaPersonajePx). Probado sobre la voltereta: bordes limpios,
+  brote y placas intactos.
+· EN EL JUEGO: `HojaDeCuadros.cs` corta los sprites en runtime con
+  Sprite.Create desde Resources/Personaje/Anim/<nombre>.png +
+  <nombre>_manifiesto.json (sin Sprite Editor, sin Animator, sin .anim); la
+  hoja se escala SOLA a la talla de la estampa (ppu = alturaPersonajePx /
+  1.2 u), con compensación si Unity redujo la textura. ApprenticeController:
+  con velocidad horizontal > 15% de moveSpeed y fuera del modo capataz, la
+  estampa reproduce `caminar` al ritmo del paso (0.6–1.15×, 16 fps) y el bob
+  sintético baja a un cuarto; quieto o subiendo vuelve la estampa base. Sin
+  asset, nada cambia (retén honesto). El .meta de la hoja es el de la estampa
+  con maxTextureSize 8192.
+· Decisión de Cesar: NO probar el GGUF todavía — primero ver qué da el modelo
+  completo con algo útil y dentro del juego; después comparar el cuantizado
+  contra esa vara ("normalmente degradan mucho"). Idea suya para el reposo:
+  Standing Idle 03 (juega con la botella entre las manos) — pero el frasco
+  del juego es mágico y flota cerca, no va en la mano.
+

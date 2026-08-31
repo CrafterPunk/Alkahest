@@ -252,6 +252,16 @@ namespace Alkahest.Game
         private Transform _tiltPivot;
         private bool _usingCustomSprite;
 
+        // (R118) LA ESTAMPA CAMINA: primera hoja de cuadros salida del arnés
+        // (Wan Animate 2 sobre un ciclo Walking de Mixamo, 16 fps). Se
+        // reproduce mientras hay velocidad horizontal; quieto o subiendo,
+        // vuelve la estampa base. Null si el asset no existe: nada cambia.
+        private Sprite _estampaBase;
+        private HojaDeCuadros _hojaCaminar;
+        private float _cuadroCaminar;
+        private const float UmbralCaminar = 0.15f;      // fracción de moveSpeed a partir de la cual "camina"
+        private const float BobAlCaminar = 0.25f;        // el ciclo ya respira solo: el bob sintético baja
+
         private SpriteRenderer _bodySr;
         private Sprite _bodySpriteOpen;
         private Sprite _bodySpriteClosed;
@@ -638,7 +648,27 @@ namespace Alkahest.Game
                 // dos herramientas (frasco y plano) en la mano. Sin parpadeo:
                 // los ojos del muñeco son lámparas, no párpados.
                 float dirSignC = _facingRight ? 1f : -1f;
-                float bobC = Mathf.Sin(Time.time * BobFrequency) * BobAmplitude;
+                // (R118) ¿camina? Solo con velocidad horizontal real y fuera
+                // del modo capataz (ahí mira a cámara y la hoja es de perfil 3/4).
+                bool frontalC = Mudanza.ModoActivo;
+                float fracVelX = Mathf.Abs(_velocity.x) / Mathf.Max(0.01f, moveSpeed);
+                bool caminaC = _hojaCaminar != null && !frontalC && fracVelX > UmbralCaminar;
+                if (caminaC)
+                {
+                    // El ciclo corre al ritmo del paso: más rápido cuanto más
+                    // corre, con tope para que no parezca dibujo animado.
+                    float ritmo = Mathf.Clamp(fracVelX, 0.6f, 1.15f);
+                    _cuadroCaminar += Time.deltaTime * _hojaCaminar.Fps * ritmo;
+                    int n = _hojaCaminar.Cuadros.Length;
+                    int idx = ((int)_cuadroCaminar) % n;
+                    if (_bodySr != null) _bodySr.sprite = _hojaCaminar.Cuadros[idx];
+                }
+                else
+                {
+                    _cuadroCaminar = 0f;
+                    if (_bodySr != null && _estampaBase != null && _bodySr.sprite != _estampaBase) _bodySr.sprite = _estampaBase;
+                }
+                float bobC = Mathf.Sin(Time.time * BobFrequency) * BobAmplitude * (caminaC ? BobAlCaminar : 1f);
                 if (_visualTransform != null)
                     _visualTransform.localPosition = new Vector3(0f, bobC, VisualZOffset);
 
@@ -648,7 +678,6 @@ namespace Alkahest.Game
 
                 // En mudanza el capataz mira a cámara: el arte YA es un 3/4
                 // frontal, así que basta con no espejarlo.
-                bool frontalC = Mudanza.ModoActivo;
                 if (_bodySr != null) _bodySr.flipX = !frontalC && !_facingRight;
 
                 if (_planoSr != null)
@@ -793,6 +822,9 @@ namespace Alkahest.Game
                 RegistrarCapasConTinte(_bodySr);
                 CrearSombraDeContacto();
                 CrearFrascoYPlano();
+                // (R118) la hoja de caminar, si el arnés ya la dejó en Resources.
+                _estampaBase = estampa;
+                _hojaCaminar = HojaDeCuadros.Cargar("caminar");
                 return;
             }
 
