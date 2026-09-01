@@ -1,0 +1,20 @@
+{
+  "nombre": "flotar",
+  "etiqueta": "Flotar",
+  "cuadros": 70,
+  "columnas": 11,
+  "filas": 7,
+  "base": 0,
+  "pingpong": true,
+  "ancho": 227,
+  "alto": 343,
+  "fps": 16.0,
+  "loop": true,
+  "intro": 0,
+  "pivotX": 0.4433,
+  "pivotY": 0.5009,
+  "alturaPersonajePx": 336,
+  "origen": "flotar01_00001_.mp4",
+  "cicloDesde": 0,
+  "cicloHasta": 70
+}

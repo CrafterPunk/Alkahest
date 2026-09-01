@@ -1,19 +1,20 @@
 {
   "nombre": "reposo",
-  "cuadros": 48,
-  "columnas": 8,
+  "etiqueta": "Reposo",
+  "cuadros": 52,
+  "columnas": 9,
   "filas": 6,
   "base": 0,
   "pingpong": false,
   "ancho": 259,
-  "alto": 343,
+  "alto": 342,
   "fps": 16.0,
   "loop": true,
-  "intro": 1,
+  "intro": 5,
   "pivotX": 0.4654,
   "pivotY": 0.4764,
   "alturaPersonajePx": 319,
   "origen": "reposo02_00001_.mp4",
-  "cicloDesde": 17,
-  "cicloHasta": 64
+  "cicloDesde": 5,
+  "cicloHasta": 52
 }

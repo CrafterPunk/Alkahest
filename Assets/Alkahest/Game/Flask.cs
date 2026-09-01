@@ -392,6 +392,13 @@ namespace Alkahest.Game
             if (!aspirandoAhora && _aspirabaPrev) _pulsoVel += SettleAspirar;
             if (vertiendoAhora && !_vertiaPrev) { _motasDesde = Time.time + AnticipacionSeg; _ticksSinMover = 0; }
             if (!vertiendoAhora && _vertiaPrev) _pulsoVel += SettleVerter;
+            // (R120) el ancla de trabajo y la telemetría de movimiento (por flancos).
+            if (_apprentice != null)
+            {
+                _apprentice.AnclaDeTrabajo(aspirandoAhora || vertiendoAhora);
+                if (vertiendoAhora && !_vertiaPrev) TelemetriaMovimiento.Verter(_apprentice.EnSuelo);
+                if (aspirandoAhora && !_aspirabaPrev) TelemetriaMovimiento.Aspirar(_apprentice.EnSuelo);
+            }
             _aspirabaPrev = aspirandoAhora;
             _vertiaPrev = vertiendoAhora;
             _vertiendoVisual = vertiendoAhora;

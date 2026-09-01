@@ -260,14 +260,26 @@ namespace Alkahest.Game
         private HojaDeCuadros _hojaCaminar;
         private HojaDeCuadros _hojaReposo;   // (R118f) reposo calmado (Happy Idle), ciclo; solo a pie
         private HojaDeCuadros _hojaRecoger;  // (R118f) gesto de una sola pasada (Picking Up de perfil); tecla G a pie para verlo
+        private HojaDeCuadros _hojaFlotar;   // (R120) el vuelo: Falling de Mixamo como flotación, ida y vuelta
+        private float _cuadroFlotar;
         private HojaDeCuadros _gestoActivo;
         private float _cuadroGesto;
 
-        /// <summary>(R118f) Reproduce una hoja UNA vez (agacharse a recoger, etc.). Solo a pie y quieto; ignora si ya hay un gesto en curso.</summary>
-        public void ReproducirGesto(HojaDeCuadros hoja)
+        private float _gestoHasta;           // (R120) para hojas en ciclo: hasta cuándo se toca el gesto
+        private AtrilDeEmotes _atril;        // (R120) el quick-chat de gestos por acordes (solo jugador local)
+
+        /// <summary>
+        /// (R118f/R120) Reproduce una hoja: UNA pasada si es de una pasada, o
+        /// durante <paramref name="duracionSeg"/> si es un ciclo (reposo,
+        /// caminar como emote). Solo a pie; false si ya hay un gesto en curso.
+        /// </summary>
+        public bool ReproducirGesto(HojaDeCuadros hoja, float duracionSeg = 0f)
         {
-            if (hoja == null || _gestoActivo != null || !EnSuelo) return;
+            if (hoja == null || _gestoActivo != null || !EnSuelo) return false;
             _gestoActivo = hoja; _cuadroGesto = 0f; _faseCaminar = 0; _cuadroCaminar = 0f;
+            TelemetriaMovimiento.Gesto();
+            _gestoHasta = hoja.Loop ? Time.time + Mathf.Max(duracionSeg, 2f * hoja.CuadrosDelCiclo / Mathf.Max(1f, hoja.Fps)) : 0f;
+            return true;
         }
 
         /// <summary>true si el gesto puso el sprite este frame (y la caminata/reposo no deben tocarlo).</summary>
@@ -278,8 +290,14 @@ namespace Alkahest.Game
                 && kb.gKey.wasPressedThisFrame && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && !Mudanza.ModoActivo)
                 ReproducirGesto(_hojaRecoger);
             if (_gestoActivo == null) return false;
-            if (!aPie) { _gestoActivo = null; return false; } // despegó a mitad: el vuelo manda
+            if (!aPie || velX > UmbralCaminar) { _gestoActivo = null; return false; } // despegó o echó a andar: el movimiento manda
             _cuadroGesto += Time.deltaTime * _gestoActivo.Fps;
+            if (_gestoActivo.Loop)
+            {
+                if (Time.time > _gestoHasta) { _gestoActivo = null; return false; }
+                if (_bodySr != null) _bodySr.sprite = _gestoActivo.CuadroDelCiclo(_cuadroGesto);
+                return true;
+            }
             int i = (int)_cuadroGesto;
             if (i >= _gestoActivo.Cuadros.Length) { _gestoActivo = null; return false; }
             if (_bodySr != null) _bodySr.sprite = _gestoActivo.Cuadros[i];
@@ -289,7 +307,7 @@ namespace Alkahest.Game
         private float _cuadroCaminar;
         private int _faseCaminar;   // 0 quieto · 1 arrancando (intro) · 2 ciclo · 3 frenando (intro al revés)
         private const float RitmoArranque = 0.7f;      // (R118d) arranque al 70% del ritmo del ciclo
-        private const int FrenadoCuadros = 4;           // (R118e) al parar solo se deshacen los últimos 4 cuadros del arranque
+        private const int FrenadoCuadros = 6;           // (R118e/R120) al parar se deshacen los primeros 6 cuadros del arranque (el giro de vuelta a la pose base), a ritmo pleno
         private const float AjusteVisualAPie = 0.04f; // = el margen de bob que la caja lleva por abajo (MedioAltoAbajo 0.64 vs pies -0.598)
 
         /// <summary>
@@ -318,8 +336,16 @@ namespace Alkahest.Game
                 if (_faseCaminar == 1)
                 {
                     _cuadroCaminar += pasoIntro;
-                    if (_cuadroCaminar >= intro) { _faseCaminar = 2; _cuadroCaminar -= intro; }
-                    else { _bodySr.sprite = cu[(int)_cuadroCaminar]; return; }
+                    if (_cuadroCaminar >= intro)
+                    {
+                        // (R120) entra al ciclo SIN sumar otro paso este frame: el
+                        // ciclo es contiguo al arranque (postproceso lo garantiza)
+                        // y el doble avance de aquí era medio "tropezón".
+                        _faseCaminar = 2; _cuadroCaminar -= intro;
+                        _bodySr.sprite = cu[intro + ((int)_cuadroCaminar) % Mathf.Max(1, ciclo)];
+                        return;
+                    }
+                    _bodySr.sprite = cu[(int)_cuadroCaminar]; return;
                 }
                 _cuadroCaminar += paso;
                 _bodySr.sprite = cu[intro + ((int)_cuadroCaminar) % Mathf.Max(1, ciclo)];
@@ -350,6 +376,15 @@ namespace Alkahest.Game
                     return;
                 }
                 _cuadroReposo = _hojaReposo != null ? Mathf.Max(0, _hojaReposo.Base - _hojaReposo.Intro) : 0f; // al volver a pie arranca desde la pose base (o el inicio del ciclo si la base es el arranque)
+                if (_hojaFlotar != null && _volando)
+                {
+                    // (R120) VOLANDO: la hoja de flotar (Falling de Mixamo, piernas
+                    // recogidas, brazos abiertos), ida y vuelta -- idea de Cesar:
+                    // "falling podía ser útil como flotación".
+                    _cuadroFlotar += Time.deltaTime * _hojaFlotar.Fps;
+                    _bodySr.sprite = _hojaFlotar.CuadroDelCiclo(_cuadroFlotar);
+                    return;
+                }
                 if (_estampaBase != null && _bodySr.sprite != _estampaBase) _bodySr.sprite = _estampaBase;
             }
         }
@@ -406,6 +441,11 @@ namespace Alkahest.Game
             BuildVisual();
         }
 
+        private void OnDestroy()
+        {
+            if (ControlDelJugador) TelemetriaMovimiento.Cerrar(); // (R120)
+        }
+
         private void Update()
         {
             HandleMovement();
@@ -452,6 +492,15 @@ namespace Alkahest.Game
 
             Vector3 pos = transform.position;
             _enSuelo = SobreSuelo(pos);
+            // (R120) EL ANCLA DE TRABAJO (DISENO_MOVIMIENTO §0): mientras se
+            // vierte o aspira, el input pesa un tercio y la velocidad se frena
+            // fuerte -- clavado en el aire o en el suelo. Ataca la fricción vista
+            // en playtest ("trabajan desde un poco más lejos de lo que necesitan
+            // y corrigen") sin tocar la mecánica de moverse. Se aplica solo con
+            // apoyo o en vuelo: cayendo, la gravedad manda.
+            if (_anclado) input *= InputAnclado;
+            bool volabaAntes = _volando;
+            TelemetriaMovimiento.Tick(!_volando, Time.deltaTime);
 
             // (R118b, Cesar: "que tenga física y camine lento hasta que con
             // espaciador salte y ahí empiece a volar, y no se pierda lo que
@@ -488,6 +537,11 @@ namespace Alkahest.Game
                     _velocity.y = 0f;
                 }
             }
+
+            if (_anclado && (_volando || _enSuelo))
+                _velocity = Vector2.MoveTowards(_velocity, Vector2.zero, FrenoAncla * Time.deltaTime);
+            if (_volando && !volabaAntes) TelemetriaMovimiento.Despegue();
+            if (!_volando && volabaAntes) TelemetriaMovimiento.Aterrizaje();
 
             MoverConColision(ref pos, _velocity * Time.deltaTime);
             if (!_volando && _velocity.y <= 0f) AsentarEnSuelo(ref pos);
@@ -529,6 +583,12 @@ namespace Alkahest.Game
         private const float CaidaMax = 9f;
         private const float ImpulsoDespegue = 2.6f; // el brinco con que despega antes de que el vuelo tome el mando.
         private const float SondaSuelo = 0.08f;
+        // (R120) ancla de trabajo: la pone Flask cada frame.
+        private bool _anclado;
+        private const float FrenoAncla = 40f;      // u/s²: se clava en ~0.1 s desde velocidad de paso, ~0.12 s desde vuelo pleno
+        private const float InputAnclado = 0.35f;  // se puede corregir despacio sin soltar el botón
+        public bool Anclado => _anclado;
+        public void AnclaDeTrabajo(bool activa) => _anclado = activa;
 
         private bool SobreSuelo(Vector3 pos)
         {
@@ -1002,6 +1062,8 @@ namespace Alkahest.Game
                 _hojaCaminar = HojaDeCuadros.Cargar("caminar");
                 _hojaReposo = HojaDeCuadros.Cargar("reposo");
                 _hojaRecoger = HojaDeCuadros.Cargar("recoger");
+                _hojaFlotar = HojaDeCuadros.Cargar("flotar");
+                _atril = AtrilDeEmotes.Crear(this); // (R120) los acordes 1-4 → 1-4 (él mismo se calla si no es el jugador local)
                 // (R118d, Cesar: "cuando termina de caminar la cabeza popea...
                 // se ve mejor caminando que de frente con la cabeza más
                 // grande") LA POSE QUIETA SALE DEL MISMO VIDEO: el cuadro

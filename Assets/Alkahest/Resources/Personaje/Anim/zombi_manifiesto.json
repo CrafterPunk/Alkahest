@@ -1,0 +1,20 @@
+{
+  "nombre": "zombi",
+  "etiqueta": "Zombi",
+  "cuadros": 76,
+  "columnas": 11,
+  "filas": 7,
+  "base": 0,
+  "pingpong": false,
+  "ancho": 217,
+  "alto": 343,
+  "fps": 16.0,
+  "loop": true,
+  "intro": 7,
+  "pivotX": 0.5179,
+  "pivotY": 0.4904,
+  "alturaPersonajePx": 329,
+  "origen": "zombi01_00001_.mp4",
+  "cicloDesde": 7,
+  "cicloHasta": 76
+}

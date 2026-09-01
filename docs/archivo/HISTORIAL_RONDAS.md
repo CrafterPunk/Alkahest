@@ -6402,3 +6402,52 @@ ca_playtest84.cmd barre la ronda.
   tar del disco de Cesar (protocolo de la regla 6), cero pérdida.
 · Cesar reinició Claude: el MCP de ComfyUI quedó VIVO (comfyui__* en la lista
   de herramientas; sin usar aún — "primero vamos a mirar bien el panorama").
+
+## Ronda 120 — RETOQUES, EL ATRIL POR ACORDES Y EL ANCLA (Cesar salió hora y media)
+
+· Decisión de dirección tomada por Cesar tras la R119: el pipeline generativo
+  queda como prototipador de acting y referencia de estilo; la producción
+  irá a un personaje 3D canónico (image-to-3D + limpieza mínima + rig
+  determinista + render con normales para luz dinámica de la cueva). Mi
+  evaluación: TRELLIS.2 (MIT) primero, Tripo Pro (quads + auto-rig, 19.90/mes)
+  para comparar, Hunyuan3D descartado como base por licencia; la CABEZA NO SE
+  GENERA (es un cubo con el arte proyectado), solo el cuerpo chibi; Mixamo
+  auto-rigger como camino de rig; el títere 2D queda como plan C con
+  disparadores. Mientras tanto, esta ronda cierra lo que ya vive en el juego.
+· "Se traba un poquito a los pocos frames de iniciar": el arranque (0..4)
+  saltaba al ciclo elegido por mejor cierre (63..79) — distancia 1587 contra
+  331 entre cuadros consecutivos. `postproceso.py` ahora exige ciclo CONTIGUO
+  al arranque (busca el mejor cierre empezando en [intro, intro+6] y estira
+  el arranque hasta ahí: caminar = arranque 0..10 + ciclo 11..27, cierre 293)
+  y `TickCaminar` ya no suma un paso doble al cruzar al ciclo. Frenado: los
+  primeros 6 cuadros del arranque al revés (el giro de vuelta a la base).
+· ATRIL DE EMOTES POR ACORDES (`AtrilDeEmotes.cs`), como pidió Cesar: nada
+  radial; dígito 1-4 abre un grupo (lista discreta arriba a la izquierda con
+  una barrita que se agota en 2.6 s), segundo dígito dispara; hasta 16 gestos
+  con dos teclas. Los grupos se arman SOLOS con los manifiestos de
+  Resources/Personaje/Anim (campo `etiqueta` opcional); los ciclos se tocan
+  ~2 vueltas como emote; solo a pie, respeta las guardas de la regla 12.
+· EL ANCLA DE TRABAJO (DISENO_MOVIMIENTO §0): Flask avisa cada frame si se
+  vierte/aspira; el aprendiz frena a 40 u/s² y el input pesa 0.35 -- clavado
+  en el aire o en el suelo mientras trabaja; cayendo no aplica.
+· TELEMETRÍA DE MOVIMIENTO (`TelemetriaMovimiento`): % a pie vs volando,
+  verter/aspirar desde suelo o aire, despegues, aterrizajes, gestos; línea
+  "[Telemetría movimiento]" cada 2 min y al cerrar. Son los tres números que
+  decidirán la mecánica (opción B instrumentada, la que Cesar aprobó).
+· Nuevos FBX de Cesar → videos de pose (Falling 35°, Jumping 35°, Walking Turn
+  180 35°, Zombie Idle 35°, Getting Up 75°) → cinco tandas desde la canónica
+  v2: flotar (Falling ×0.75), saltar, girar (×0.5, se toca a 32 fps), zombi,
+  despertar (Getting Up: el prólogo EMPIEZA despertando). `postproceso.py`
+  recorta la cola estática de los gestos de una pasada y acepta `--etiqueta`.
+· Sandbox: reset #13 (repo a R85 otra vez); origin/main ya tenía la R119, así
+  que recuperar fue un reset --hard. El scratch del arnés sobrevivió.
+· Bug del arnés cazado en la hornada: cinco tandas en cola subían TODAS su
+  video de pose como `pose_16fps.mp4` a ComfyUI/input y la última pisaba a las
+  anteriores — `saltar01` salió con el video de despertar (flotar se salvó por
+  ejecutarse antes de las otras subidas). `arnes.py` ahora sube
+  `pose_<tag>_16fps.mp4`; las cuatro tandas mezcladas fueron a `_to_delete` y
+  se relanzaron. Con tres instancias de Unity abiertas y 0.9 GB de RAM libre,
+  cada tanda tarda ~16 min (contra 3–5 con la RAM libre): la regla "Unity
+  cerrado durante las tandas" queda confirmada con número.
+· Las cuatro capturas `cap118c_*.png` que se colaron en la raíz del repo en el
+  push de la R118 se retiran (a `_to_delete/`).

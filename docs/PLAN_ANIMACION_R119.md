@@ -1,5 +1,12 @@
-# EL PLAN DE ANIMACIÓN — balance de la R118 y qué esperar de cada camino (R119)
+# EL PLAN DE ANIMACIÓN — balance de la R118 y qué esperar de cada camino (R119; decisión R120)
 
+> **DECISIÓN (R120, Cesar):** el generativo queda como prototipador de acting y
+> referencia de estilo; la producción va a UN personaje 3D canónico (image-to-3D
+> del CUERPO + cabeza-cubo con el arte proyectado + rig automático + render con
+> máscaras y normales). Evaluación y candidatos (TRELLIS.2 primero, Tripo Pro para
+> comparar, Hunyuan3D fuera por licencia, Mixamo auto-rigger, títere 2D como plan C)
+> en el HISTORIAL R120. El atril de emotes (§5, capa 1) YA existe: acordes 1-4 + 1-4.
+>
 > Documento de decisión. Compañero de `INVESTIGACION_ANIMACION_2026.md` (las 17 fichas
 > y el ranking teórico) y del ROADMAP §2.6. Aquello era el mapa ANTES de tocar nada;
 > esto es el balance DESPUÉS de la primera noche de producción real, con números

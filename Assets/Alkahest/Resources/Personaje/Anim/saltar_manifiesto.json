@@ -1,0 +1,20 @@
+{
+  "nombre": "saltar",
+  "etiqueta": "Saltar",
+  "cuadros": 41,
+  "columnas": 9,
+  "filas": 5,
+  "base": 0,
+  "pingpong": false,
+  "ancho": 265,
+  "alto": 432,
+  "fps": 16.0,
+  "loop": false,
+  "intro": 0,
+  "pivotX": 0.4018,
+  "pivotY": 0.3931,
+  "alturaPersonajePx": 328,
+  "origen": "saltar01_00003_.mp4",
+  "cicloDesde": 0,
+  "cicloHasta": 41
+}

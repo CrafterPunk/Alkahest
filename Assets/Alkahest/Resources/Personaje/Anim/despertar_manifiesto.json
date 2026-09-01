@@ -1,0 +1,20 @@
+{
+  "nombre": "despertar",
+  "etiqueta": "Despertar (beta)",
+  "cuadros": 33,
+  "columnas": 8,
+  "filas": 5,
+  "base": 0,
+  "pingpong": false,
+  "ancho": 276,
+  "alto": 430,
+  "fps": 16.0,
+  "loop": false,
+  "intro": 0,
+  "pivotX": 0.4935,
+  "pivotY": 0.3556,
+  "alturaPersonajePx": 295,
+  "origen": "despertar01_00001_.mp4",
+  "cicloDesde": 0,
+  "cicloHasta": 33
+}

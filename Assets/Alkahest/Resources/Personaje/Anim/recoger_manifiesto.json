@@ -1,6 +1,7 @@
 {
   "nombre": "recoger",
-  "cuadros": 81,
+  "etiqueta": "Recoger",
+  "cuadros": 78,
   "columnas": 11,
   "filas": 8,
   "base": 0,
@@ -15,5 +16,5 @@
   "alturaPersonajePx": 334,
   "origen": "recoger02_00001_.mp4",
   "cicloDesde": 0,
-  "cicloHasta": 81
+  "cicloHasta": 78
 }

@@ -1,0 +1,20 @@
+{
+  "nombre": "girar",
+  "etiqueta": "Media vuelta (beta)",
+  "cuadros": 30,
+  "columnas": 7,
+  "filas": 5,
+  "base": 0,
+  "pingpong": false,
+  "ancho": 258,
+  "alto": 391,
+  "fps": 32.0,
+  "loop": false,
+  "intro": 0,
+  "pivotX": 0.3898,
+  "pivotY": 0.4701,
+  "alturaPersonajePx": 348,
+  "origen": "girar01_00001_.mp4",
+  "cicloDesde": 0,
+  "cicloHasta": 30
+}

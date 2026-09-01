@@ -1,10 +1,16 @@
-# EL MOVIMIENTO DEL MUÑECO — investigación de diseño (R119, decisión ABIERTA)
+# EL MOVIMIENTO DEL MUÑECO — investigación de diseño (R119; R120: opción B INSTRUMENTADA)
 
 > Pedido de Cesar tras probar la caminata R118: "no es una decisión tomada aún,
 > veo riesgo en las 3 opciones y no sé cuál es más difícil de sortear". Este
 > documento pone las tres sobre la mesa con referencias, riesgos y mitigaciones.
 > La física ya construida (R118b) sirve a CUALQUIERA de las tres: gravedad,
 > paso a pie, despegue, aterrizaje — elegir es cuestión de PODAR, no de rehacer.
+>
+> **R120:** Cesar aprobó el camino del §4: la B se queda como está, con el ANCLA DE
+> TRABAJO implementada (Flask → `ApprenticeController.AnclaDeTrabajo`: freno 40 u/s²
+> e input ×0.35 mientras se vierte/aspira) y la TELEMETRÍA (`TelemetriaMovimiento`:
+> línea "[Telemetría movimiento]" cada 2 min y al cerrar). La decisión final la dan
+> los números del próximo playtest. Además el vuelo ya tiene su hoja (`flotar`).
 
 ## 0. El dato de campo que manda
 
