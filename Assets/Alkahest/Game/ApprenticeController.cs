@@ -508,6 +508,7 @@ namespace Alkahest.Game
             if (Modo == ModoMovimiento.SoloPies) { _volando = false; quiereDespegar = false; }
 
             Vector3 pos = transform.position;
+            if (!_volando && Modo != ModoMovimiento.SoloVuelo) Desenterrar(ref pos); // (R121c) a pie, dentro de sólido = salir por arriba, no hundirse
             _enSuelo = SobreSuelo(pos);
             // (R120) EL ANCLA DE TRABAJO (DISENO_MOVIMIENTO §0): mientras se
             // vierte o aspira, el input pesa un tercio y la velocidad se frena
@@ -701,10 +702,41 @@ namespace Alkahest.Game
                 _simColision = FindAnyObjectByType<AlkahestSim>();
                 if (_simColision == null) return false;
             }
+            // (R121c) el fondo del mundo ES suelo: sin esto, pegado al clamp de
+            // WorldMinY la sonda no encuentra nada debajo y el personaje "cae"
+            // eternamente (vy = -CaidaMax) sin poder saltar.
+            if (pos.y - MedioAltoAbajo <= WorldMinY + 0.02f) return true;
             // Si ya está DENTRO de sólido no cuenta como apoyado (la colisión
             // está suspendida ese frame y saldría nadando, como siempre).
             if (CajaChoca(pos.x, pos.y)) return false;
             return CajaChoca(pos.x, pos.y - SondaSuelo);
+        }
+
+        /// <summary>
+        /// (R121c, playtest de Cesar: talló el piso bajo sus pies en modo C, el
+        /// hueco era más chico que su cuerpo, la caja quedó DENTRO de sólido, la
+        /// colisión se suspendió "para salir nadando" -- y sin vuelo, la
+        /// gravedad lo hundió hasta el fondo del mundo sin poder saltar.)
+        /// A PIE no se nada: se DESENTIERRA. Si la caja arranca dentro de
+        /// sólido, busca hacia arriba (hasta 3u, en pasos de media celda) la
+        /// primera posición libre y se planta ahí; si no hay, prueba los lados.
+        /// El vuelo conserva el comportamiento de siempre (nadar).
+        /// </summary>
+        private bool Desenterrar(ref Vector3 pos)
+        {
+            if (_simColision == null || !CajaChoca(pos.x, pos.y)) return false;
+            // cerca: media celda por paso, arriba y a los lados (hueco chico bajo los pies)
+            for (float d = 0.05f; d <= 3.0f; d += 0.05f)
+            {
+                if (!CajaChoca(pos.x, pos.y + d)) { pos.y += d; _velocity.y = 0f; return true; }
+                if (!CajaChoca(pos.x + d, pos.y)) { pos.x += d; _velocity.y = 0f; return true; }
+                if (!CajaChoca(pos.x - d, pos.y)) { pos.x -= d; _velocity.y = 0f; return true; }
+            }
+            // lejos: toda la columna hacia arriba (hundido en la roca madre del fondo:
+            // el caso de Cesar, que cayó hasta WorldMinY). Solo se paga estando enterrado.
+            for (float d = 3.1f; d <= WorldMaxY - pos.y; d += 0.1f)
+                if (!CajaChoca(pos.x, pos.y + d)) { pos.y += d; _velocity.y = 0f; return true; }
+            return false;
         }
 
         // =================================================================

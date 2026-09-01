@@ -6485,3 +6485,24 @@ ca_playtest84.cmd barre la ronda.
   (gravedad 55% con |vy| < 1.2), coyote 0.12 s, buffer de salto 0.12 s,
   CaidaMax 12, y squash de aterrizaje proporcional a la caída (se aplasta
   hasta 18% y recupera en ~0.12 s, pies fijos). Sin tocar el vuelo (4.8).
+
+## Ronda 122 — EL QUE TALLA BAJO SUS PIES (desenterrar a pie)
+
+· Playtest de Cesar en modo C: talló con el cincel el piso donde irían los
+  contenedores, cayó "del mapa" y no pudo subir. Sonda con Unity abierto:
+  pos y=0.00 (el clamp de WorldMinY), vy=-12 permanente, caja DENTRO de sólido,
+  EnSuelo=false. Mecanismo: el hueco tallado era más chico que el cuerpo; con
+  la caja dentro de sólido la colisión se suspende (diseño de la R66 para
+  "salir nadando" volando) y a pie la gravedad lo hundió hasta el fondo del
+  mundo, donde la sonda de suelo no encuentra nada debajo y el salto nunca se
+  habilita.
+· Dos fixes en `ApprenticeController`: (1) `Desenterrar`: a pie, si la caja
+  arranca dentro de sólido, se busca la primera posición libre hacia arriba
+  (media celda por paso hasta 3u, también a los lados) y después toda la
+  columna hasta WorldMaxY — se planta ahí con vy=0; el vuelo sigue nadando
+  como siempre. (2) `SobreSuelo`: el fondo del mundo cuenta como suelo.
+  Verificado en vivo: enterrado 0.5u → en superficie al frame siguiente;
+  hundido a y=0.2 bajo 14u de roca → en superficie al frame siguiente,
+  EnSuelo=true. Regla de diseño que queda: a pie, tallar bajo tus pies te deja
+  sobre el borde que sobrevive si el hueco no te cabe; si te cabe, caes y
+  subes saltando (2.2u) o tallando escalones. Regla 38 intacta: hay salida.
