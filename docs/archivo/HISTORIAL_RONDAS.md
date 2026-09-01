@@ -6470,3 +6470,18 @@ ca_playtest84.cmd barre la ronda.
   distinto, comparar bloques y sensaciones.
 · Reset #14 del sandbox al empezar; origin/main tenía la R120 (Cesar la
   subió), recuperación limpia.
+
+### 121b — EL PAQUETE DE SENSACIÓN DE PLATAFORMAS (para que la comparación sea justa)
+
+· Cesar: "el último [modo C] se siente muy tosco; referencias tipo Super Mario
+  de SNES o mejores". Investigado (GMTK Platformer Toolkit, el catálogo de
+  davetech de 18 plataformeros, Celeste) y aplicado en `HandleMovement`, a pie
+  en B y C: aceleración 30 u/s² y frenado 45 (tope en ~0.07 s, el pie se
+  planta), control aéreo 75%; paso 1.5 u/s (era 1.1) y Shift corre a 2.6 (la
+  hoja acelera hasta 1.9x); salto de 2.2u (22 celdas, 1.8 alturas del muñeco)
+  con 0.42 s al ápice (Gravedad 25, impulso 10.5), caída 1.7x (los que caen
+  más rápido de lo que suben son el 40% del catálogo, SMW/Celeste entre
+  ellos), corte al soltar al 45% (Celeste; brinco mínimo ~0.5u), ápice suave
+  (gravedad 55% con |vy| < 1.2), coyote 0.12 s, buffer de salto 0.12 s,
+  CaidaMax 12, y squash de aterrizaje proporcional a la caída (se aplasta
+  hasta 18% y recupera en ~0.12 s, pies fijos). Sin tocar el vuelo (4.8).

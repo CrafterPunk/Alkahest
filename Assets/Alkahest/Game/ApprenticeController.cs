@@ -323,7 +323,7 @@ namespace Alkahest.Game
             if (_hojaCaminar == null || _bodySr == null) return;
             var cu = _hojaCaminar.Cuadros;
             int intro = _hojaCaminar.Intro, ciclo = _hojaCaminar.CuadrosDelCiclo;
-            float ritmo = Mathf.Clamp(Mathf.Max(velX, VelocidadPaso * 0.5f) / VelocidadPaso, 0.5f, 1.6f);
+            float ritmo = Mathf.Clamp(Mathf.Max(velX, VelocidadPaso * 0.5f) / VelocidadPaso, 0.5f, 1.9f);
             float paso = Time.deltaTime * _hojaCaminar.Fps * ritmo;
             // (R118d) el arranque y el frenado van más lentos que el ciclo
             // (Cesar: "le falta un frame o dos de intermedio"): mismo material,
@@ -539,23 +539,48 @@ namespace Alkahest.Game
                 }
                 else
                 {
+                    // (R121b, Cesar: "el último se siente muy tosco... referencias
+                    // tipo Super Mario o mejores") EL PAQUETE DE SENSACIÓN DE
+                    // PLATAFORMAS, con los números que la industria dejó
+                    // asentados (GMTK Platformer Toolkit, Celeste, SMW):
+                    //  · suelo: aceleración/frenado en ~0.07 s (ni patín ni robot);
+                    //    en el aire el 75% del control;
+                    //  · salto de 2.2u (1.8 alturas del muñeco, 22 celdas), 0.42 s
+                    //    hasta el ápice; la caída pesa 1.7x (SMW/Celeste caen más
+                    //    rápido de lo que suben: 40% de los plataformeros medidos);
+                    //  · altura variable: soltar el botón subiendo corta la
+                    //    velocidad al 45% (Celeste) -> brinco mínimo ~0.5u;
+                    //  · ápice suave: gravedad al 55% cuando |vy| < 1.2 (el "hang"
+                    //    que da tiempo a decidir dónde caer);
+                    //  · coyote 0.12 s (saltar justo tras pisar el borde) y buffer
+                    //    0.12 s (pulsar justo antes de aterrizar cuenta);
+                    //  · aplastamiento al aterrizar (visual), abajo en HandleVisual.
                     float velPaso = correr ? VelocidadCorrer : VelocidadPaso;
-                    _velocity.x = Mathf.MoveTowards(_velocity.x, input.x * velPaso, acceleration * Time.deltaTime);
-                    // (R121) el salto del modo C (y también sirve a pie en la B si
-                    // algún día se quiere): Espacio en el suelo = impulso; soltar
-                    // pronto = brinco corto (gravedad extra mientras sube sin botón).
+                    float objetivoX = input.x * velPaso;
+                    float acel = _enSuelo ? (Mathf.Abs(objetivoX) > 0.01f ? AceleracionPie : FrenadoPie) : AceleracionPie * ControlAereo;
+                    _velocity.x = Mathf.MoveTowards(_velocity.x, objetivoX, acel * Time.deltaTime);
+
                     bool puedeSaltar = Modo == ModoMovimiento.SoloPies;
-                    if (puedeSaltar && _enSuelo && saltoPulsado)
+                    if (_enSuelo) { _coyoteHasta = Time.time + CoyoteSeg; _saltando = false; }
+                    if (saltoPulsado) _bufferHasta = Time.time + BufferSaltoSeg;
+                    if (puedeSaltar && Time.time <= _bufferHasta && Time.time <= _coyoteHasta && !_saltando)
                     {
                         _velocity.y = ImpulsoSalto;
+                        _saltando = true; _bufferHasta = 0f; _coyoteHasta = 0f;
                         TelemetriaMovimiento.Salto();
                     }
+                    // corte del salto al soltar (una sola vez, solo subiendo por salto)
+                    if (_saltando && _velocity.y > 0f && !saltoSostenido) { _velocity.y *= CorteSalto; _saltando = false; }
+
                     if (_enSuelo && _velocity.y <= 0f) _velocity.y = 0f;
                     else
                     {
-                        float g = (_velocity.y > 0f && !saltoSostenido) ? Gravedad * 2.2f : Gravedad;
+                        float g = Gravedad;
+                        if (_velocity.y < 0f) g *= GravedadCaida;
+                        else if (Mathf.Abs(_velocity.y) < ApiceVy) g *= GravedadApice;
                         _velocity.y = Mathf.Max(_velocity.y - g * Time.deltaTime, -CaidaMax);
                     }
+                    _vyAntesDeMover = _velocity.y;
                 }
             }
             if (_volando)
@@ -574,8 +599,12 @@ namespace Alkahest.Game
             if (_volando && !volabaAntes) TelemetriaMovimiento.Despegue();
             if (!_volando && volabaAntes) TelemetriaMovimiento.Aterrizaje();
 
+            bool enSueloAntes = _enSuelo;
             MoverConColision(ref pos, _velocity * Time.deltaTime);
             if (!_volando && _velocity.y <= 0f) AsentarEnSuelo(ref pos);
+            // (R121b) aplastamiento al aterrizar: proporcional a la velocidad de caída
+            if (!_volando && !enSueloAntes && _vyAntesDeMover < -4f && SobreSuelo(pos))
+                _squash = Mathf.Clamp01((-_vyAntesDeMover - 4f) / 8f) * 0.14f + 0.04f;
             pos.z = 0f;
             transform.position = pos;
 
@@ -638,11 +667,23 @@ namespace Alkahest.Game
             Debug.Log("[TenThousandYears] Modo de movimiento: " + NombreModo(nuevo) + " (F6 rota)");
             if (avisar && _atril != null) _atril.Avisar("movimiento " + NombreModo(nuevo) + "  ·  F6 cambia", 3.5f);
         }
-        private const float VelocidadCorrer = 2.1f;  // (R121) Shift a pie: casi el doble; la hoja corre al ritmo (tope 1.6x)
-        private const float ImpulsoSalto = 8.2f;     // (R121) salto del modo C: ~1.5u de altura con Gravedad 22 (2.2x al soltar = brinco corto ~0.6u)
-        private const float VelocidadPaso = 1.1f;   // u/s a pie: la zancada de la hoja `caminar` (17 cuadros a 16 fps, personaje de 1.2u) da ~1.0-1.2 u por ciclo.
-        private const float Gravedad = 22f;         // u/s^2: cae con peso de muñeco relleno, no de pluma.
-        private const float CaidaMax = 9f;
+        // (R121b) los números del paquete de plataformas (ver el bloque en HandleMovement)
+        private const float VelocidadCorrer = 2.6f;   // Shift a pie (la hoja acelera al ritmo hasta 1.9x)
+        private const float ImpulsoSalto = 10.5f;     // = Gravedad(25) * 0.42 s -> 2.2u de altura máxima
+        private const float VelocidadPaso = 1.5f;     // u/s a pie (era 1.1: se sentía lento; la hoja corre al ritmo)
+        private const float AceleracionPie = 30f;     // u/s²: tope en ~0.05-0.09 s
+        private const float FrenadoPie = 45f;         // frena más rápido de lo que arranca (el pie se planta)
+        private const float ControlAereo = 0.75f;
+        private const float GravedadCaida = 1.7f;
+        private const float GravedadApice = 0.55f;
+        private const float ApiceVy = 1.2f;
+        private const float CorteSalto = 0.45f;
+        private const float CoyoteSeg = 0.12f;
+        private const float BufferSaltoSeg = 0.12f;
+        private float _coyoteHasta, _bufferHasta, _vyAntesDeMover, _squash;
+        private bool _saltando;
+        private const float Gravedad = 25f;         // u/s^2 al subir (R121b: 2.2u en 0.42 s); la caída multiplica 1.7x.
+        private const float CaidaMax = 12f;
         private const float ImpulsoDespegue = 2.6f; // el brinco con que despega antes de que el vuelo tome el mando.
         private const float SondaSuelo = 0.08f;
         // (R120) ancla de trabajo: la pone Flask cada frame.
@@ -968,7 +1009,16 @@ namespace Alkahest.Game
                 // (R118c: "camina un poco por el aire"): los pies pisan.
                 float bobC = aPie ? -AjusteVisualAPie : Mathf.Sin(Time.time * BobFrequency) * BobAmplitude;
                 if (_visualTransform != null)
+                {
                     _visualTransform.localPosition = new Vector3(0f, bobC, VisualZOffset);
+                    // (R121b) squash de aterrizaje: se aplasta y recupera en ~0.12 s;
+                    // un pelín más ancho, un pelín más bajo, pies fijos (el pivote
+                    // está al centro: se compensa bajando la mitad de lo que encoge).
+                    _squash = Mathf.MoveTowards(_squash, 0f, Time.deltaTime * 1.4f);
+                    float sy = 1f - _squash, sx = 1f + _squash * 0.7f;
+                    _visualTransform.localScale = new Vector3(sx, sy, 1f);
+                    if (_squash > 0f) _visualTransform.localPosition += new Vector3(0f, -_squash * 0.6f, 0f);
+                }
 
                 float targetTiltC = aPie ? 0f : Mathf.Clamp(-_velocity.x * TiltDegPerSpeed, -TiltMaxDeg, TiltMaxDeg);
                 _tiltDeg = Mathf.Lerp(_tiltDeg, targetTiltC, 1f - Mathf.Exp(-TiltSmooth * Time.deltaTime));

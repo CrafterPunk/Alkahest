@@ -145,3 +145,13 @@ justifique) y decidir hoy sin los tres números del playtest.
 
 — R119. La física de ambos regímenes vive en `ApprenticeController.HandleMovement`
 (R118b); el ancla de trabajo entraría en `Flask.cs` + una consulta `Anclado` aquí.
+
+## 5. Los números del modo C (R121b) — para comparar con justicia
+
+Paso 1.5 u/s · correr 2.6 · aceleración 30 / frenado 45 (≈0.07 s) · control aéreo 75% ·
+salto 2.2u en 0.42 s (g 25, impulso 10.5) · caída ×1.7 · corte al soltar ×0.45 · ápice g×0.55
+con |vy|<1.2 · coyote 0.12 s · buffer 0.12 s · caída máx 12 · squash de aterrizaje.
+Fuentes: GMTK Platformer Toolkit, catálogo de 18 plataformeros de davetech.co.uk, Celeste.
+Si tras el playtest C gana, lo siguiente sería: salto contra pared NO (no es ese juego),
+escalones de 1-2 celdas que se suben solos (ya existe la asistencia de esquina de 1.5), y
+el cincel como pico con feedback de "aquí puedes tallar para subir".
