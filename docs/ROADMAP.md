@@ -186,6 +186,27 @@ Siguiente: reposo (Standing Idle 03), recoger, levantarse; luego medir el
 GGUF Q5 contra esta vara de calidad; luego Wan 2.2 I2V/FLF2V (por prompt y
 loops B2) con los mismos scripts.
 
+## 2.7 ¿2D A FONDO O 2.5D? (evaluación R123, sep. 2026)
+
+Informe: `docs/EVALUACION_2D_VS_2_5D.md`. Infografía «La Ventana Iluminada»:
+https://claude.ai/code/artifact/1cd1c2ec-5cb4-453b-a2b7-577b67172dbe
+
+Recomendación: **quedarse en 2D y explotarlo (opción A) con la mitad barata
+del falso 2.5D (2D Renderer + Light2D con normales donde hay Fire real, tres
+planos de parallax)**; la C (Z real, máquinas 3D) queda archivada como
+no-camino salvo necesidad demostrada en la Era III. Regla de oro: la cámara es
+ortográfica y lateral, el plano de juego es la grilla, toda profundidad es
+pintura. El **fondo evolutivo por hitos** (la ventana del vano que registra los
+materiales de ORO entregados; regla del espejo retrasado: nunca por delante de
+tu hito) se recomienda DESPUÉS de la ventana con planos y de cerrar los encargos
+de ORO de la Era I. Experimento mínimo de una tarde («la ventana iluminada»)
+descrito en el informe §5; nada de esto se implementa hasta que Cesar lo lea.
+
+**R124 — la prueba de terreno ya existe:** `docs/PRUEBA_PIEL_DE_ROCA.md`
+(piel de marching squares SOLO sobre la roca madre, sim intacta; F7 rota los
+niveles en juego, Ctrl+F7 talla una cueva de muestra). Veredicto de Cesar
+pendiente; es la información nº 1 de la lista del informe §7.
+
 ## 3. EL PRINCIPIO RECTOR DEL RITMO (por qué "lento" es correcto)
 
 Cada material nuevo debe pasar por RECORDACIÓN (su nombre real se fija jugando),

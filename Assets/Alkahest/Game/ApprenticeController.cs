@@ -1210,6 +1210,9 @@ namespace Alkahest.Game
                 _atril = AtrilDeEmotes.Crear(this); // (R120) los acordes 1-4 → 1-4 (él mismo se calla si no es el jugador local)
                 if (Modo == ModoMovimiento.SoloVuelo) _volando = true;
                 if (ControlDelJugador) _atril.Avisar("movimiento " + NombreModo(Modo) + "  ·  F6 cambia", 4f); // (R121) que el tester sepa en qué modo juega
+                // (R124, PRUEBA VISUAL) LA PIEL DE ROCA: contorno orgánico sobre la
+                // roca madre, F7 rota sus niveles. Solo la crea el jugador local y una vez.
+                if (ControlDelJugador) PielDeRoca.Asegurar(_simColision != null ? _simColision : FindAnyObjectByType<AlkahestSim>(), _atril);
                 // (R118d, Cesar: "cuando termina de caminar la cabeza popea...
                 // se ve mejor caminando que de frente con la cabeza más
                 // grande") LA POSE QUIETA SALE DEL MISMO VIDEO: el cuadro

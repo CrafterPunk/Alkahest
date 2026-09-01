@@ -270,6 +270,19 @@ namespace Alkahest.Sim
         // que entra). Ver el chequeo completo en RenderFrame.
         private uint[] _chunkLastRenderTick;
         private bool[] _chunkEverRendered;
+
+        /// <summary>(R124) La piel de roca (Game/PielDeRoca) pide que la sim NO pinte Stone. Cambiarlo obliga a <see cref="MarcarTodoSucio"/>.</summary>
+        public static bool OcultarRoca;
+
+        /// <summary>(R124) Fuerza el repintado de todos los chunks en el próximo RenderFrame (mismo camino que "sucio fuera de cámara").</summary>
+        public void MarcarTodoSucio()
+        {
+            if (_chunkEverRendered == null) return;
+            for (int i = 0; i < _chunkEverRendered.Length; i++) _chunkEverRendered[i] = false;
+        }
+
+        /// <summary>(R124) El tinte que lleva el quad de la sim ahora mismo (TinteGlobal → TintePlano en la mudanza): la piel de roca lo copia para no desentonar.</summary>
+        public Color TinteActual => _quadSr != null ? _quadSr.color : TinteGlobal;
         private Transform _quad;
         private SpriteRenderer _quadSr; // (R98, direccion Opus) guardado para el tinte de la VISTA DE PLANO.
 
@@ -1061,6 +1074,13 @@ namespace Alkahest.Sim
 
             byte matId = _grid.mat[idx];
             if (matId == MaterialId.Empty) return default;
+            // (R124, PRUEBA "piel de roca") Con la piel activa la ROCA MADRE no
+            // se pinta en la textura de la sim: la dibuja Game/PielDeRoca como
+            // malla de contorno orgánico (marching squares) POR DEBAJO (-6).
+            // Téxel a alfa 0 = agujero limpio, no semitransparencia (la regla
+            // 19 del mosaico no aplica). La FÍSICA no cambia: la celda sigue
+            // siendo Stone para el stepper y para la colisión.
+            if (OcultarRoca && matId == MaterialId.Stone) return default;
 
             var def = _universe.Get(matId);
             Color32 baseColor = def.baseColor;

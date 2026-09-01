@@ -6506,3 +6506,71 @@ ca_playtest84.cmd barre la ronda.
   EnSuelo=true. Regla de diseño que queda: a pie, tallar bajo tus pies te deja
   sobre el borde que sobrevive si el hueco no te cabe; si te cabe, caes y
   subes saltando (2.2u) o tallando escalones. Regla 38 intacta: hay salida.
+
+## Ronda 123 — ¿2D A FONDO O 2.5D? (evaluación, sin código)
+
+· Pedido de Cesar: antes de ir por el fondo y los tiles, evaluar en serio si
+  seguir profundizando el 2D o abrir la puerta al 2.5D (A mantener 2D · B falso
+  2.5D agresivo · C 2.5D real), con 14 criterios, tres preguntas clave y una
+  crítica a la idea del fondo como civilización evolutiva por hitos. Sin
+  implementar nada.
+· Entregado `docs/EVALUACION_2D_VS_2_5D.md`: recomendación (A + la mitad
+  barata de B: 2D Renderer + Light2D con causa + normales + tres planos; C
+  archivada), tabla A/B/C (116 / 114 / 65 sobre 140), los síntomas que se
+  sentían son herramientas 2D estándar sin usar (el renderer activo es el
+  Universal 3D — no hay Light2D —, ni SpriteMask ni SortingGroup, un solo plano
+  de parallax al 8 %, sin normales, post en IMGUI), el mayor riesgo (el pivote
+  silencioso B→C), la mayor oportunidad (la luz con CAUSA: Fire real de la
+  sim), experimento de una tarde «la ventana iluminada» con criterios de
+  muerte, lo que NO se decide aún (C, acabado pixel, contenido del fondo,
+  render de 1 téxel/celda) y la información que falta (prueba de Marching
+  Squares de Cesar, capturas, mín-spec, telemetría de movimiento, encargos de
+  ORO, réplicas co-op).
+· Fondo evolutivo: se vuelve DISEÑO si los hitos son los materiales de ORO
+  entregados por el vano (GDD §0 nodos + caravanas) y con la regla del espejo
+  retrasado (nunca por delante de tu hito, para no matar R60 ni el Trueque);
+  homínidos coexistiendo solo como siluetas, jamás en fichas. Notas: narrativa
+  8 · visual 7 · progreso 6 · diferenciación 7 · premios 6 · coste/riesgo 7.
+· Infografía interactiva «La Ventana Iluminada» (capas, cámara, terreno con
+  Marching Squares calculado en vivo, sándwich, ventana con parallax e hitos
+  0–4 día/noche): https://claude.ai/code/artifact/1cd1c2ec-5cb4-453b-a2b7-577b67172dbe · fuente en `docs/ref/infografia_2d_vs_2_5d.html`.
+  Enlace en `ROADMAP.md` §2.7.
+· Coherencia: no toca GDD §0 ni DIRECCION_DE_ARTE; anota que «LEVITA, no
+  camina» sigue sellado y que la investigación F6 A/B/C podría pedir una
+  enmienda explícita, que este documento no hace.
+
+## Ronda 124 — LA PIEL DE ROCA (prueba visual de terreno con marching squares)
+
+· Pedido de Cesar: probar una piel/contorno orgánico tipo Marching Squares
+  SOLO para el sólido estático/destructible, sin tocar la sim ni la materia
+  granular, para ver si el contraste roca lisa / partículas cuadradas funciona
+  o canta. Referencia conceptual: Sebastian Lague (autómata + marching
+  squares + malla de contorno), adaptada a un terreno vivo.
+· `Game/PielDeRoca.cs` (nuevo): mallas por chunk debajo de la sim (−6);
+  campo = solidez media de 4 celdas por esquina, umbral 0.49 (muros de una
+  celda enteros, chaflán/filete de media celda, silueta a ≤½ celda de la
+  colisión), temblor determinista en aristas, guijarros para celdas aisladas.
+  Cuatro capas ordenadas por Z: sombra (canto desplazado + halo proyectado al
+  telón), relleno texturizado con MASA INTERNA por distancia al aire, bandas
+  por orientación (SUELO filo claro / PARED oclusión / TECHO sombra) + línea
+  de tinta (juntas finas contra otros sólidos), decoración procedural
+  (estalactitas con gota, raíces, musgo PÁTINA, grietas). Textura de roca
+  procedural 256² (grano, manchas, estratos suaves, grietas Worley
+  enmascaradas); cero assets. Actualización por hash de chunk + 8 vecinos;
+  medido: 0.035 ms/chunk, 30 ms el mundo, 0.01 ms/frame en reposo, 140 k
+  vértices (celdas macizas fundidas por fila).
+· `SimRenderer`: `OcultarRoca` (Stone a alfa 0 mientras la piel está activa),
+  `MarcarTodoSucio()`, `TinteActual`. `ApprenticeController` crea la piel con
+  el jugador local. F7 rota 5 niveles (0 grilla · 1 contorno · 2 bandas · 3
+  profundidad · 4 decorada; PlayerPrefs, el atril avisa). Ctrl+F7 talla LA
+  CUEVA DE MUESTRA alrededor del jugador (solo anfitrión).
+· Iteración con ojo (capturas en Temp/cap124): v1 estratos fuertes → leía
+  como madera/lodo; v2 placas Worley continuas → adoquín; v3 sin grietas →
+  lodo plano; v4/v5 grietas esporádicas + roca más clara + filo de suelo +
+  canto visible + halo de sombra → se queda. Comparación antes/después en
+  `docs/ref/piel_de_roca_R124.jpg`. Nota completa (qué hice, decisión visual,
+  arte final, limitaciones, riesgos, siguiente paso): `docs/PRUEBA_PIEL_DE_ROCA.md`.
+· Hallazgo lateral: la sim de la escena de laboratorio arranca en pausa
+  (`Paused=true`) hasta que el juego la suelta; la textura de la sim no
+  repinta hasta el primer tick (la piel no depende del tick).
+
