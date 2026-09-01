@@ -6574,3 +6574,33 @@ ca_playtest84.cmd barre la ronda.
   (`Paused=true`) hasta que el juego la suelta; la textura de la sim no
   repinta hasta el primer tick (la piel no depende del tick).
 
+## Ronda 125 — DIRECCIÓN V2: TERRENO, LUZ Y ESPACIO (solo docs)
+
+· Cierre de jornada pedido por Cesar: documentar las decisiones tomadas tras
+  la piel de roca sin implementar nada. Nuevo `docs/DIRECCION_V2_TERRENO_LUZ_ESPACIO.md`
+  con tres etiquetas estrictas: [DECIDIDO] 2D bien explotado como
+  arquitectura, sim/precisión/cámara lateral intocables, presentación final
+  con iluminación 2D y profundidad pintada, 2.5D real archivado, piel de roca
+  como dirección del terreno natural, gramática visual única (7 principios);
+  [HIPÓTESIS] excavar como verbo de espacio (descubrimiento, estabilización,
+  crecimiento del laboratorio, con guardas: jamás rinde material, no compite
+  con verter), prólogo contenido con derrumbe de apertura que revela el vano
+  y el fondo evolutivo, fondo evolutivo en el Nivel 0; [APLAZADO] locomoción
+  (con la lista de lo que debe existir antes de decidir; «LEVITA» del GDD §0
+  intacto), acabado pixel, nivel base de la piel, contenido del fondo,
+  cambio al 2D Renderer, prólogo contenido. §3 fija herramientas,
+  parámetros de partida, límites y criterios de muerte de la iluminación
+  (luz global 0.55–0.70, ≤8 luces con causa, materia con ≤15 % de luz,
+  sombras cortas solo de muñeco y máquinas, bloom umbral alto, ≤1 ms).
+· `EVALUACION_2D_VS_2_5D.md` (R123) queda como archivo histórico sin tocar.
+  Enlaces añadidos en `ROADMAP.md` §2.7 y una nota "ver también" al inicio de
+  `DIRECCION_DE_ARTE.md` (que sigue siendo el normativo de personaje, paleta,
+  talla y cámara).
+· Retoque de la R124 incluido en esta subida: rótulo fijo del nivel de la
+  piel abajo a la derecha, cueva de muestra movida a Ctrl+Shift+F7 (Ctrl+F7
+  encerró a Cesar en un cuadro), repintado inmediato de la sim al alternar
+  (`SimRenderer.RepintarAhora`).
+· Reset #15 del sandbox durante esta ronda (volvió a la R85); recuperado con
+  `origin/main` (Cesar ya había subido la R124) + los dos .cs del retoque
+  desde el disco de Cesar.
+

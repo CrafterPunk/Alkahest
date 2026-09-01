@@ -3,6 +3,11 @@
 *(El documento madre de la capa visual. Nace del decreto del mundo — GDD §0 —
 y de la sesión de dirección con Cesar del 29/08/2026. NORMATIVO.)*
 
+> **Ver también (R125):** `DIRECCION_V2_TERRENO_LUZ_ESPACIO.md` — terreno
+> (piel de roca), iluminación 2D con causa y espacio del taller. Este
+> documento sigue siendo el normativo del personaje, la paleta, la talla y la
+> cámara; la V2 no lo contradice, lo extiende.
+
 ## 1. LA IDENTIDAD
 
 - **El mundo:** ruinas amables. Musgo sobre máquinas, óxido digno, sin combate.

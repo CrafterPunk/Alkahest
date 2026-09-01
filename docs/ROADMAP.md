@@ -207,6 +207,18 @@ descrito en el informe §5; nada de esto se implementa hasta que Cesar lo lea.
 niveles en juego, Ctrl+F7 talla una cueva de muestra). Veredicto de Cesar
 pendiente; es la información nº 1 de la lista del informe §7.
 
+**R125 — DIRECCIÓN V2 (la foto tras la piel de roca):**
+`docs/DIRECCION_V2_TERRENO_LUZ_ESPACIO.md`. Decidido: 2D bien explotado
+como arquitectura (sim, precisión y cámara lateral intocables), presentación
+final CON iluminación 2D y profundidad pintada (parámetros y límites en su
+§3), la piel de roca como dirección del terreno natural, una sola gramática
+visual (natural orgánico · construido recto · materia cuadrada · luz con
+causa · ventana que registra). Hipótesis registradas (no backlog): excavar
+como verbo de espacio, prólogo contenido con derrumbe de apertura, fondo
+evolutivo en el Nivel 0. Aplazado a propósito: la locomoción (F6 sigue
+abierto; «LEVITA» del GDD §0 intacto hasta decidir), el acabado pixel, el
+nivel base de la piel. La evaluación R123 queda como archivo histórico.
+
 ## 3. EL PRINCIPIO RECTOR DEL RITMO (por qué "lento" es correcto)
 
 Cada material nuevo debe pasar por RECORDACIÓN (su nombre real se fija jugando),

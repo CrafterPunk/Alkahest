@@ -157,7 +157,9 @@ namespace Alkahest.Game
             bool tecladoLibre = kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto;
             if (tecladoLibre && kb.f7Key.wasPressedThisFrame)
             {
-                if (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) CavarCuevaDeMuestra();
+                bool ctrl = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed, shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+                if (ctrl && shift) CavarCuevaDeMuestra();      // Ctrl+Shift+F7: la cueva de muestra (a propósito difícil de pulsar sin querer)
+                else if (ctrl) { }                             // Ctrl+F7 solo: nada (antes tallaba; encerró a Cesar en un cuadro)
                 else
                 {
                     Modo = (Nivel)(((int)Modo + 1) % 5);
@@ -287,7 +289,7 @@ namespace Alkahest.Game
             if (SimRenderer.OcultarRoca != activa)
             {
                 SimRenderer.OcultarRoca = activa;
-                if (_sim.Renderer != null) _sim.Renderer.MarcarTodoSucio();
+                if (_sim.Renderer != null) { _sim.Renderer.MarcarTodoSucio(); _sim.Renderer.RepintarAhora(); } // también con la sim en pausa
             }
             _raiz.gameObject.SetActive(true);
             for (int i = 0; i < _chunks.Length; i++)
@@ -298,6 +300,30 @@ namespace Alkahest.Game
                 _sucio[i] = true; // el nivel cambia qué capas se emiten
             }
             if (avisar && _atril != null) _atril.Avisar("piel de roca: " + NombreNivel(Modo) + "  ·  F7 cambia", 3.5f);
+            _etiqueta = "PIEL DE ROCA  " + NombreNivel(Modo) + "   ·   F7 siguiente nivel   ·   Ctrl+Shift+F7 cueva de muestra";
+        }
+
+        // Rótulo fijo arriba a la derecha mientras dure la PRUEBA (Cesar: "no veo la diferencia"):
+        // que siempre se sepa qué nivel está puesto sin depender del aviso de 3 s.
+        private string _etiqueta;
+        private GUIStyle _estiloRotulo;
+        private void OnGUI()
+        {
+            if (string.IsNullOrEmpty(_etiqueta) || DayCycle.InputLocked) return;
+            if (_estiloRotulo == null)
+            {
+                UiStyles.Preparar();
+                _estiloRotulo = new GUIStyle(UiStyles.Cuerpo) { fontSize = UiStyles.F(12), alignment = TextAnchor.MiddleRight };
+                _estiloRotulo.normal.textColor = new Color(0.90f, 0.86f, 0.78f, 1f);
+            }
+            float pad = UiStyles.S(8f), h = UiStyles.S(22f);
+            float w = UiStyles.Ancho(_estiloRotulo, _etiqueta) + pad * 2f;
+            var r = new Rect(Screen.width - w - UiStyles.S(18f), Screen.height - h - UiStyles.S(14f), w, h);
+            var prev = GUI.color;
+            GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.62f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = prev;
+            GUI.Label(new Rect(r.x + pad, r.y, w - pad * 2f, h), _etiqueta, _estiloRotulo);
         }
 
         public static string NombreNivel(Nivel n)

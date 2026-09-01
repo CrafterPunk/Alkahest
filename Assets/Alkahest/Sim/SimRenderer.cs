@@ -765,8 +765,17 @@ namespace Alkahest.Sim
         /// verdad se pintó algo.
         /// </summary>
         private float _lastAspect;
+        private uint _ultimoTick;
+        /// <summary>(R124) Repinta TODA la vista ahora mismo, aunque la sim esté en pausa (la piel de roca lo usa al encenderse/apagarse).</summary>
+        public void RepintarAhora()
+        {
+            if (_texture == null) return;
+            RenderFrame(_ultimoTick, true);
+        }
+
         public void RenderFrame(uint tick, bool forceFull = false)
         {
+            _ultimoTick = tick;
             _frameCounter++;
             bool full = forceFull || (_frameCounter % FullRefreshEveryFrames) == 0;
 
