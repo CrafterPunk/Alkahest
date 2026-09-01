@@ -487,8 +487,25 @@ namespace Alkahest.Game
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) input.y -= 1f;
             }
             if (input.sqrMagnitude > 1f) input.Normalize();
-            bool quiereDespegar = kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto
-                && (input.y > 0.5f || kb.spaceKey.isPressed);
+            bool tecladoLibre = kb != null && !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto;
+            bool quiereDespegar = tecladoLibre && (input.y > 0.5f || kb.spaceKey.isPressed);
+            bool saltoPulsado = tecladoLibre && (kb.spaceKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame);
+            bool saltoSostenido = tecladoLibre && (kb.spaceKey.isPressed || kb.wKey.isPressed || kb.upArrowKey.isPressed);
+            bool correr = tecladoLibre && kb.leftShiftKey.isPressed;
+
+            // (R121, DISENO_MOVIMIENTO §4 -- Cesar: "instrumentar la B para que
+            // los testers nos elijan la respuesta") TRES MODOS EN VIVO, F6 los
+            // rota y el atril avisa cuál está puesto:
+            //   A · solo vuelo   = la B sin pies (siempre volando, WASD libre)
+            //   B · pies y vuelo = lo construido en R118b (W/Espacio despega, S aterriza)
+            //   C · solo pies    = la B sin la V: gravedad, Espacio = SALTO de
+            //       verdad (altura variable: soltar corta el brinco), Shift = correr
+            // Es una PODA de la misma física, no tres físicas: la telemetría separa
+            // los bloques por modo y el modo persiste entre sesiones (PlayerPrefs).
+            if (tecladoLibre && kb.f6Key.wasPressedThisFrame)
+                CambiarModo((ModoMovimiento)(((int)Modo + 1) % 3), true);
+            if (Modo == ModoMovimiento.SoloVuelo) { _volando = true; quiereDespegar = false; }
+            if (Modo == ModoMovimiento.SoloPies) { _volando = false; quiereDespegar = false; }
 
             Vector3 pos = transform.position;
             _enSuelo = SobreSuelo(pos);
@@ -522,16 +539,30 @@ namespace Alkahest.Game
                 }
                 else
                 {
-                    _velocity.x = Mathf.MoveTowards(_velocity.x, input.x * VelocidadPaso, acceleration * Time.deltaTime);
+                    float velPaso = correr ? VelocidadCorrer : VelocidadPaso;
+                    _velocity.x = Mathf.MoveTowards(_velocity.x, input.x * velPaso, acceleration * Time.deltaTime);
+                    // (R121) el salto del modo C (y también sirve a pie en la B si
+                    // algún día se quiere): Espacio en el suelo = impulso; soltar
+                    // pronto = brinco corto (gravedad extra mientras sube sin botón).
+                    bool puedeSaltar = Modo == ModoMovimiento.SoloPies;
+                    if (puedeSaltar && _enSuelo && saltoPulsado)
+                    {
+                        _velocity.y = ImpulsoSalto;
+                        TelemetriaMovimiento.Salto();
+                    }
                     if (_enSuelo && _velocity.y <= 0f) _velocity.y = 0f;
-                    else _velocity.y = Mathf.Max(_velocity.y - Gravedad * Time.deltaTime, -CaidaMax);
+                    else
+                    {
+                        float g = (_velocity.y > 0f && !saltoSostenido) ? Gravedad * 2.2f : Gravedad;
+                        _velocity.y = Mathf.Max(_velocity.y - g * Time.deltaTime, -CaidaMax);
+                    }
                 }
             }
             if (_volando)
             {
                 Vector2 target = input * moveSpeed;
                 _velocity = Vector2.MoveTowards(_velocity, target, acceleration * Time.deltaTime);
-                if (_enSuelo && input.y < -0.5f)
+                if (Modo != ModoMovimiento.SoloVuelo && _enSuelo && input.y < -0.5f)
                 {
                     _volando = false;
                     _velocity.y = 0f;
@@ -578,6 +609,37 @@ namespace Alkahest.Game
         private bool _enSuelo;
         public bool EnSuelo => _enSuelo && !_volando;
         public bool Volando => _volando;
+        // (R121) EL MODO DE MOVIMIENTO DEL PLAYTEST (ver DISENO_MOVIMIENTO §4).
+        public enum ModoMovimiento { PiesYVuelo = 0, SoloVuelo = 1, SoloPies = 2 }
+        private static ModoMovimiento _modo;
+        private static bool _modoCargado; // (R56) nada de PlayerPrefs en inicializadores estáticos: carga perezosa
+        public static ModoMovimiento Modo
+        {
+            get
+            {
+                if (!_modoCargado) { _modo = (ModoMovimiento)Mathf.Clamp(PlayerPrefs.GetInt("ModoMovimiento", 0), 0, 2); _modoCargado = true; }
+                return _modo;
+            }
+        }
+        public static string NombreModo(ModoMovimiento m) => m switch
+        {
+            ModoMovimiento.SoloVuelo => "A · solo vuelo",
+            ModoMovimiento.SoloPies => "C · solo pies (Espacio salta, Shift corre)",
+            _ => "B · pies y vuelo (W/Espacio despega, S aterriza)",
+        };
+        private void CambiarModo(ModoMovimiento nuevo, bool avisar)
+        {
+            if (_modoCargado && nuevo == _modo) return;
+            TelemetriaMovimiento.CerrarBloque(NombreModo(Modo)); // el bloque anterior se imprime aparte
+            _modo = nuevo; _modoCargado = true;
+            PlayerPrefs.SetInt("ModoMovimiento", (int)nuevo); PlayerPrefs.Save();
+            if (nuevo == ModoMovimiento.SoloVuelo) _volando = true;
+            if (nuevo == ModoMovimiento.SoloPies) _volando = false;
+            Debug.Log("[TenThousandYears] Modo de movimiento: " + NombreModo(nuevo) + " (F6 rota)");
+            if (avisar && _atril != null) _atril.Avisar("movimiento " + NombreModo(nuevo) + "  ·  F6 cambia", 3.5f);
+        }
+        private const float VelocidadCorrer = 2.1f;  // (R121) Shift a pie: casi el doble; la hoja corre al ritmo (tope 1.6x)
+        private const float ImpulsoSalto = 8.2f;     // (R121) salto del modo C: ~1.5u de altura con Gravedad 22 (2.2x al soltar = brinco corto ~0.6u)
         private const float VelocidadPaso = 1.1f;   // u/s a pie: la zancada de la hoja `caminar` (17 cuadros a 16 fps, personaje de 1.2u) da ~1.0-1.2 u por ciclo.
         private const float Gravedad = 22f;         // u/s^2: cae con peso de muñeco relleno, no de pluma.
         private const float CaidaMax = 9f;
@@ -1064,6 +1126,8 @@ namespace Alkahest.Game
                 _hojaRecoger = HojaDeCuadros.Cargar("recoger");
                 _hojaFlotar = HojaDeCuadros.Cargar("flotar");
                 _atril = AtrilDeEmotes.Crear(this); // (R120) los acordes 1-4 → 1-4 (él mismo se calla si no es el jugador local)
+                if (Modo == ModoMovimiento.SoloVuelo) _volando = true;
+                if (ControlDelJugador) _atril.Avisar("movimiento " + NombreModo(Modo) + "  ·  F6 cambia", 4f); // (R121) que el tester sepa en qué modo juega
                 // (R118d, Cesar: "cuando termina de caminar la cabeza popea...
                 // se ve mejor caminando que de frente con la cabeza más
                 // grande") LA POSE QUIETA SALE DEL MISMO VIDEO: el cuadro

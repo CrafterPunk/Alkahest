@@ -15,7 +15,7 @@ namespace Alkahest.Game
     {
         private const float CadaSeg = 120f;
         private static float _aPie, _volando, _ultimoInforme;
-        private static int _verterSuelo, _verterAire, _aspirarSuelo, _aspirarAire, _despegues, _aterrizajes, _gestos;
+        private static int _verterSuelo, _verterAire, _aspirarSuelo, _aspirarAire, _despegues, _aterrizajes, _gestos, _saltos;
 
         public static void Tick(bool aPie, float dt)
         {
@@ -32,13 +32,23 @@ namespace Alkahest.Game
         public static void Despegue() => _despegues++;
         public static void Aterrizaje() => _aterrizajes++;
         public static void Gesto() => _gestos++;
+        public static void Salto() => _saltos++;
+
+        /// <summary>(R121) Al cambiar de modo: imprime el bloque del modo que termina y empieza de cero, así cada modo se lee aparte.</summary>
+        public static void CerrarBloque(string nombreModo)
+        {
+            if (_aPie + _volando > 5f) Debug.Log(Informe() + " · BLOQUE " + nombreModo);
+            _aPie = 0f; _volando = 0f; _ultimoInforme = Time.time;
+            _verterSuelo = _verterAire = _aspirarSuelo = _aspirarAire = _despegues = _aterrizajes = _gestos = _saltos = 0;
+        }
 
         public static string Informe()
         {
             float total = Mathf.Max(0.001f, _aPie + _volando);
             return string.Format(
-                "[Telemetría movimiento] a pie {0:0}% ({1:0} s) · volando {2:0}% ({3:0} s) · verter: suelo {4} / aire {5} · aspirar: suelo {6} / aire {7} · despegues {8} · aterrizajes {9} · gestos {10}",
-                100f * _aPie / total, _aPie, 100f * _volando / total, _volando, _verterSuelo, _verterAire, _aspirarSuelo, _aspirarAire, _despegues, _aterrizajes, _gestos);
+                "[Telemetría movimiento] modo {11} · a pie {0:0}% ({1:0} s) · volando {2:0}% ({3:0} s) · verter: suelo {4} / aire {5} · aspirar: suelo {6} / aire {7} · despegues {8} · aterrizajes {9} · saltos {12} · gestos {10}",
+                100f * _aPie / total, _aPie, 100f * _volando / total, _volando, _verterSuelo, _verterAire, _aspirarSuelo, _aspirarAire, _despegues, _aterrizajes, _gestos,
+                ApprenticeController.NombreModo(ApprenticeController.Modo), _saltos);
         }
 
         /// <summary>Al cerrar la sesión (lo llama el aprendiz local en OnDestroy).</summary>

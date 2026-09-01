@@ -11,6 +11,17 @@
 > e input ×0.35 mientras se vierte/aspira) y la TELEMETRÍA (`TelemetriaMovimiento`:
 > línea "[Telemetría movimiento]" cada 2 min y al cerrar). La decisión final la dan
 > los números del próximo playtest. Además el vuelo ya tiene su hoja (`flotar`).
+>
+> **R121 — LAS TRES OPCIONES, JUGABLES CON F6.** Cesar: "no siento que esté
+> implementado y me interesa probarlo". Ahora sí: `ApprenticeController.Modo`
+> rota con **F6** entre **A · solo vuelo** (siempre volando, WASD libre, nunca
+> aterriza), **B · pies y vuelo** (lo de R118b) y **C · solo pies** (gravedad,
+> **Espacio = salto** de altura variable, **Shift = correr**, sin V). Es una poda
+> de la misma física, no tres físicas. El modo persiste (PlayerPrefs), el atril
+> avisa cuál está puesto al entrar y al cambiar, y la telemetría cierra un
+> BLOQUE por modo, así los tres números salen separados por opción. Protocolo
+> de playtest: cada tester juega 10 min en cada modo, en orden distinto; se
+> comparan los bloques y lo que dicen.
 
 ## 0. El dato de campo que manda
 

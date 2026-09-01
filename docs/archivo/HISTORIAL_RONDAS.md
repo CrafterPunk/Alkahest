@@ -6451,3 +6451,22 @@ ca_playtest84.cmd barre la ronda.
   cerrado durante las tandas" queda confirmada con número.
 · Las cuatro capturas `cap118c_*.png` que se colaron en la raíz del repo en el
   push de la R118 se retiran (a `_to_delete/`).
+
+## Ronda 121 — LAS TRES OPCIONES DE MOVIMIENTO, JUGABLES (F6)
+
+· Cesar dio por buena la demo interna de animación ("basta para una demo
+  interna, suficiente para ir ahora por el fondo y los tiles") y pidió lo que
+  la R120 dejó a medias: que las tres opciones del DISENO_MOVIMIENTO §4 se
+  puedan PROBAR, no solo leer.
+· `ApprenticeController.Modo` (PlayerPrefs, carga perezosa por la regla 56):
+  A solo vuelo (siempre `_volando`, nunca aterriza), B pies y vuelo (R118b
+  intacto), C solo pies (gravedad; Espacio/W = SALTO con impulso 8.2 ≈ 1.5u y
+  gravedad 2.2x al soltar = brinco corto; Shift = correr a 2.1 u/s, la hoja
+  acelera al ritmo hasta 1.6x; la V no existe). F6 rota los tres; el atril
+  avisa el modo al entrar y al cambiar. Una sola física podada, no tres.
+· `TelemetriaMovimiento` incluye el modo y los saltos, y al cambiar de modo
+  cierra un BLOQUE (imprime y arranca de cero): los tres números salen
+  separados por opción. Protocolo sugerido: 10 min por modo por tester, orden
+  distinto, comparar bloques y sensaciones.
+· Reset #14 del sandbox al empezar; origin/main tenía la R120 (Cesar la
+  subió), recuperación limpia.

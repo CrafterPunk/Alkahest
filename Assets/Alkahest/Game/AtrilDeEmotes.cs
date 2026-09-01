@@ -160,6 +160,13 @@ namespace Alkahest.Game
             _avisoHasta = Time.unscaledTime + AvisoSeg;
         }
 
+        /// <summary>(R121) Aviso discreto reutilizable por otros sistemas (el modo de movimiento lo usa).</summary>
+        public void Avisar(string texto, float segundos)
+        {
+            _aviso = texto;
+            _avisoHasta = Time.unscaledTime + Mathf.Max(0.5f, segundos);
+        }
+
         private void PrepararEstilos()
         {
             if (_estilo != null) return;
