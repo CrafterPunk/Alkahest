@@ -3139,7 +3139,13 @@ namespace Alkahest.Sim
             Sala(84, 50, 100, 170);     // cueva ↕ pendientes
             Sala(330, 16, 360, 34);     // pendientes ↔ terrario
             Sala(470, 55, 530, 71);     // nave ↔ pozo (bajo la pared de juntas)
-            Sala(585, 68, 610, 84);     // pozo ↔ poza
+            // (R129) El corredor pozo↔poza iba a y68-84 — A NIVEL DEL AGUA
+            // (superficie y81): la poza entera se vaciaba por él hacia el pozo
+            // y acababa en el piso del terrario en ~1 minuto de sim corriendo
+            // (visto en vivo: 1988 celdas de agua en x367-595 y8-24). Se sube
+            // el piso del corredor a y82, una celda sobre la superficie: la
+            // poza queda estanca y el pasaje conserva sus 16 de luz.
+            Sala(585, 82, 610, 98);     // pozo ↔ poza (piso sobre la línea de agua)
             Sala(585, 186, 610, 202);   // pozo ↔ vano
             Sala(654, 110, 670, 150);   // poza ↕ vano
         }

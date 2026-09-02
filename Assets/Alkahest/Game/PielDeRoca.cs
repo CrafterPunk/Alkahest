@@ -67,6 +67,13 @@ namespace Alkahest.Game
         private const float LumMasaInterna = 0.74f;
         private static readonly Color Musgo = new Color(0.12f, 0.56f, 0.43f, 0.85f);  // PÁTINA #1F8F6E
         private static readonly Color Transparente = new Color(0f, 0f, 0f, 0f);
+        // (R129) EL MENISCO: cuánto se aclara el color del líquido en la hebra
+        // de orilla (0 = color del líquido puro, 1 = blanco) y su geometría a
+        // caballo del contorno (fuera + dentro, en fracciones de celda).
+        private const float MeniscoHaciaBlanco = 0.55f;
+        private const float MeniscoAlfa = 0.90f;
+        private const float MeniscoFuera = 0.14f;
+        private const float MeniscoDentro = 0.08f;
 
         private AlkahestSim _sim;
         private CellGrid _grid;
@@ -88,6 +95,14 @@ namespace Alkahest.Game
         private ChunkVisual[] _chunks;
         private uint[] _tickVisto;
         private ulong[] _hash;
+        // (R129) Segundo hash por chunk: SOLO el líquido pegado a roca (la
+        // orilla). Va aparte de _hash a propósito — _hash se recalcula en
+        // cada tick que toca el chunk (paso 2 de Update) y si el líquido
+        // entrara ahí, una poza con corriente reconstruiría la malla cada
+        // tick. La orilla solo se revisa en la ronda LENTA (paso 3): el
+        // menisco puede llegar con ~1 segundo de retraso a una orilla que
+        // cambió, y eso es exactamente lo barato que queremos.
+        private ulong[] _hashOrilla;
         private bool[] _sucio;
         private int _rondaHash;
         private const int ChunksPorFrameHash = 24;   // pasada completa cada ~36 frames
@@ -143,8 +158,9 @@ namespace Alkahest.Game
             _chunks = new ChunkVisual[n];
             _tickVisto = new uint[n];
             _hash = new ulong[n];
+            _hashOrilla = new ulong[n];
             _sucio = new bool[n];
-            for (int i = 0; i < n; i++) { _hash[i] = HashChunk(i); _sucio[i] = true; }
+            for (int i = 0; i < n; i++) { _hash[i] = HashChunk(i); _hashOrilla[i] = HashOrillaChunk(i); _sucio[i] = true; }
             AplicarModo(false);
         }
 
@@ -183,10 +199,12 @@ namespace Alkahest.Game
                 Rehash(ci);
             }
             // 3) Ronda lenta sobre todos (el espejo de un invitado puede escribir mat[] sin tocar los ticks).
+            //    (R129) La orilla SOLO se revisa aquí — nunca en el paso 2 (ver _hashOrilla).
             for (int k = 0; k < ChunksPorFrameHash; k++)
             {
                 _rondaHash = (_rondaHash + 1) % total;
                 Rehash(_rondaHash);
+                RehashOrilla(_rondaHash);
             }
             // 4) Reconstruir hasta N sucios por frame.
             int construidos = 0;
@@ -253,6 +271,20 @@ namespace Alkahest.Game
             ulong h = HashChunk(ci);
             if (h == _hash[ci]) return;
             _hash[ci] = h;
+            MarcarSucioConVecinos(ci);
+        }
+
+        /// <summary>(R129) Igual que Rehash pero sobre el hash de ORILLA (líquido pegado a roca). Solo lo llama la ronda lenta — ver _hashOrilla.</summary>
+        private void RehashOrilla(int ci)
+        {
+            ulong h = HashOrillaChunk(ci);
+            if (h == _hashOrilla[ci]) return;
+            _hashOrilla[ci] = h;
+            MarcarSucioConVecinos(ci);
+        }
+
+        private void MarcarSucioConVecinos(int ci)
+        {
             int cx = ci % CellGrid.ChunksX, cy = ci / CellGrid.ChunksX;
             for (int dy = -1; dy <= 1; dy++)
                 for (int dx = -1; dx <= 1; dx++)
@@ -277,6 +309,40 @@ namespace Alkahest.Game
                     byte m = mat[fila + x];
                     // Solo importan Stone y "otro sólido estático" (junta) — el resto es aire para la piel.
                     ulong v = m == MaterialId.Stone ? 2UL : (m != MaterialId.Empty && _universo.Get(m).archetype == MaterialArchetype.StaticSolid ? 1UL : 0UL);
+                    h = (h ^ v) * 1099511628211UL;
+                }
+            }
+            return h;
+        }
+
+        /// <summary>
+        /// (R129) FNV del líquido PEGADO a roca en el chunk. El líquido que
+        /// fluye lejos de toda orilla no cambia este hash (y por tanto no
+        /// reconstruye malla alguna); el material del líquido SÍ entra al hash
+        /// porque el color del menisco depende de él.
+        /// </summary>
+        private ulong HashOrillaChunk(int ci)
+        {
+            int cx = ci % CellGrid.ChunksX, cy = ci / CellGrid.ChunksX;
+            CellGrid.ChunkBounds(cx, cy, out int x0, out int y0, out int x1, out int y1);
+            ulong h = 1469598103934665603UL;
+            var mat = _grid.mat;
+            for (int y = y0; y < y1; y++)
+            {
+                int fila = y * CellGrid.W;
+                for (int x = x0; x < x1; x++)
+                {
+                    byte m = mat[fila + x];
+                    ulong v = 0UL;
+                    if (m != MaterialId.Empty && _universo.Get(m).archetype == MaterialArchetype.Liquid)
+                    {
+                        bool orilla =
+                            (x > 0 && mat[fila + x - 1] == MaterialId.Stone) ||
+                            (x < CellGrid.W - 1 && mat[fila + x + 1] == MaterialId.Stone) ||
+                            (y > 0 && mat[fila - CellGrid.W + x] == MaterialId.Stone) ||
+                            (y < CellGrid.H - 1 && mat[fila + CellGrid.W + x] == MaterialId.Stone);
+                        if (orilla) v = 1UL + m;
+                    }
                     h = (h ^ v) * 1099511628211UL;
                 }
             }
@@ -570,6 +636,28 @@ namespace Alkahest.Game
                 // Línea de tinta (más fina en juntas con otros sólidos).
                 float fuera = sg.junta ? 0f : TintaFuera, dentro = sg.junta ? AnchoTinta * 0.5f : AnchoTinta;
                 Quad(a + sg.n * fuera, b + sg.n * fuera, b - sg.n * dentro, a - sg.n * dentro, Tinta, Tinta, Tinta, Tinta);
+
+                // (R129) EL MENISCO: si media celda hacia AFUERA del tramo hay
+                // líquido, el agua "moja" el contorno — una hebra clara del
+                // color del líquido, a caballo de la línea de tinta (se dibuja
+                // DESPUÉS para taparla justo en la orilla). Vale para toda
+                // normal: el agua también moja la roca que la toca por abajo.
+                {
+                    Vector2 mo = (sg.a + sg.b) * 0.5f + sg.n * (0.5f * C);
+                    int mox = Mathf.FloorToInt(mo.x / C), moy = Mathf.FloorToInt(mo.y / C);
+                    if (mox >= 0 && moy >= 0 && mox < CellGrid.W && moy < CellGrid.H)
+                    {
+                        byte mFuera = _grid.mat[moy * CellGrid.W + mox];
+                        if (mFuera != MaterialId.Empty && _universo.Get(mFuera).archetype == MaterialArchetype.Liquid)
+                        {
+                            Color32 bc = _universo.Get(mFuera).baseColor;
+                            Color men = Color.Lerp(new Color(bc.r / 255f, bc.g / 255f, bc.b / 255f), Color.white, MeniscoHaciaBlanco);
+                            men.a = MeniscoAlfa;
+                            Quad(a + sg.n * (MeniscoFuera * C), b + sg.n * (MeniscoFuera * C),
+                                 b - sg.n * (MeniscoDentro * C), a - sg.n * (MeniscoDentro * C), men, men, men, men);
+                        }
+                    }
+                }
             }
             Volcar(cv.bandas.sharedMesh);
 

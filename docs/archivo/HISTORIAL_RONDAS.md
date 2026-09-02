@@ -6722,3 +6722,42 @@ ca_playtest84.cmd barre la ronda.
   (Cesar ya había subido la R127) sin pérdidas — la guardia nueva del fetch
   funcionó.
 
+
+## Ronda 129 — EL VELO DE LÍQUIDOS Y EL MENISCO (las dos propuestas aprobadas)
+
+· Los dos pendientes de diseño de la R128, aprobados por Cesar ("los dos
+  cambios que propones aprobados. Vamos a probarlo"):
+  1) VELO DE LÍQUIDOS (SimRenderer): tercera textura, siempre activa, que
+     repinta SOLO los líquidos por delante del aprendiz (orden 52: sobre
+     Personaje=50, bajo ArquitecturaFrente=55 y CarryEnMano=60) con el
+     mismo color que ya calculó ComputeCellColor y alfa 115 (~45%): el
+     muñeco metido en la poza queda TEÑIDO por el agua en vez de flotar
+     nítido delante de ella. A diferencia del labio frontal (tumbado en
+     R67 por blocky) aquí no se inventa ningún borde: es la misma agua de
+     la sim dos veces, el pixel delantero es idéntico al trasero. Se llena
+     en el mismo barrido por chunks y sube a GPU al mismo ritmo; acompaña
+     el tinte del quad (vista de plano de la mudanza incluida).
+  2) EL MENISCO (PielDeRoca): donde el contorno de la piel tiene líquido
+     media celda hacia afuera, una hebra clara del color del líquido
+     (Lerp hacia blanco 0.55, alfa 0.9) a caballo de la línea de tinta
+     (0.14 C fuera / 0.08 C dentro) — el agua "moja" la roca y el
+     serrucho de las pendientes contra líquidos se lee como orilla.
+     Ensucia por un SEGUNDO hash por chunk (_hashOrilla: solo líquido
+     PEGADO a roca, el material entra al hash porque da el color) que se
+     revisa SOLO en la ronda lenta — una poza con corriente no
+     reconstruye malla cada tick; el menisco puede llegar con ~1 s de
+     retraso y ese es exactamente el precio pactado.
+· BONUS descubierto al verificar en vivo: LA POZA SE VACIABA — el corredor
+  pozo↔poza (y68-84) estaba a nivel del agua (superficie y81) y en ~1
+  minuto de sim las 1972 celdas drenaban por el pozo hasta el piso del
+  terrario (por eso nadie lo vio: los playtests anteriores miraban la poza
+  recién construida). Piso del corredor a y82 (una celda sobre la
+  superficie, 16 de luz intactas): verificado estanca tras 45 s de sim.
+· Verificado en vivo con capturas: muñeco pecho adentro VELADO por el agua
+  (cabeza cálida fuera, cuerpo azulado dentro) y menisco claro en la
+  orilla. De paso, el editor volvió a quedar EN PAUSA tras el Play por MCP
+  (la guardia de CLAUDE.md §5 lo cazó: chunks con ever=False delataron el
+  render congelado).
+· Aparte (fuera del repo, en Notas\): la ruta de comunidad reescrita v2
+  con la capa personal de Cesar (anonimato total, dos embudos, la
+  compulsión educadora productizada, contra-anclas del ruido de precio).

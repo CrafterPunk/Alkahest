@@ -319,6 +319,26 @@ namespace Alkahest.Sim
         private static readonly bool LabioFrontalActivo = false; // static readonly (no const): evita el CS0162 de "código inalcanzable" en las ramas guardadas.
         private Texture2D _frontTexture;
         private Color32[] _frontScratch;
+        // =============================================================
+        // (R129) EL VELO DE LÍQUIDOS: tercera textura, siempre activa.
+        // Los LÍQUIDOS se repintan por delante del aprendiz (orden 52:
+        // sobre Personaje=50, bajo ArquitecturaFrente=55 y CarryEnMano=60)
+        // con el MISMO color que ya calculó ComputeCellColor pero alfa
+        // parcial: el muñeco metido en la poza queda TEÑIDO por el agua
+        // en vez de flotar nítido delante de ella (observación de Cesar,
+        // playtest 128: "personaje nítido delante del agua"). A diferencia
+        // del labio frontal (tumbado en R67 por blocky), aquí no se
+        // inventa ningún borde: es la misma agua de la sim, dos veces —
+        // el pixel cuadrado del líquido delante es idéntico al de atrás,
+        // así que no puede "cantar" más que la propia sim. Se rellena en
+        // el mismo barrido por chunks (RenderChunk) y sube a GPU al mismo
+        // ritmo que la textura principal.
+        // =============================================================
+        private Texture2D _veloTexture;
+        private Color32[] _veloScratch;
+        private SpriteRenderer _veloSr;
+        /// <summary>Alfa del líquido delantero. 115/255 ≈ 45%: tiñe sin borrar al personaje. Subirlo esconde al muñeco; bajarlo vuelve al "nítido delante del agua".</summary>
+        private const byte VeloAlfa = 115;
 
         private int _frameCounter;
 
@@ -368,6 +388,14 @@ namespace Alkahest.Sim
                 };
                 _frontScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
             }
+            // (R129) El velo de líquidos: ver el docblock junto a _veloTexture.
+            _veloTexture = new Texture2D(CellGrid.W, CellGrid.H, TextureFormat.RGBA32, false, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                name = "AlkahestVeloLiquidoTexture",
+            };
+            _veloScratch = new Color32[CellGrid.CHUNK * CellGrid.CHUNK];
             _chunkContinuousAnim = new bool[CellGrid.ChunksX * CellGrid.ChunksY];
             _chunkLastRenderTick = new uint[CellGrid.ChunksX * CellGrid.ChunksY];
             // (playtest 15) `_chunkEverRendered` arranca todo en false por
@@ -411,6 +439,8 @@ namespace Alkahest.Sim
                 _frontTexture.SetPixels32(_pixels); // mismo buffer limpio: arranca transparente.
                 _frontTexture.Apply(false);
             }
+            _veloTexture.SetPixels32(_pixels); // mismo buffer limpio: arranca transparente.
+            _veloTexture.Apply(false);
 
             BuildQuad();
 
@@ -665,6 +695,7 @@ namespace Alkahest.Sim
             if (_quadSr != null && !Mathf.Approximately(_tinteAplicado, TinteMudanza))
             {
                 _quadSr.color = Color.Lerp(TinteGlobal, TintePlano, TinteMudanza);
+                if (_veloSr != null) _veloSr.color = _quadSr.color; // (R129) el velo acompaña al sustrato.
                 _tinteAplicado = TinteMudanza;
             }
 
@@ -712,6 +743,19 @@ namespace Alkahest.Sim
                 goFrente.transform.SetParent(transform, false);
                 goFrente.transform.position = Vector3.zero;
             }
+
+            // (R129) El sprite del velo de líquidos — ver el docblock de
+            // _veloTexture. Mismo tinte que el quad principal (lo anima
+            // Update junto a _quadSr: el agua delantera también se enfría
+            // en la vista de plano de la mudanza).
+            var goVelo = new GameObject("AlkahestVeloLiquidoSprite");
+            _veloSr = goVelo.AddComponent<SpriteRenderer>();
+            _veloSr.sprite = Sprite.Create(_veloTexture, new Rect(0, 0, CellGrid.W, CellGrid.H),
+                Vector2.zero, ppu, 0, SpriteMeshType.FullRect);
+            _veloSr.sortingOrder = 52; // entre Personaje (50) y ArquitecturaFrente (55) — literal a propósito: Sim/ no depende de Game/.
+            _veloSr.color = TinteGlobal;
+            goVelo.transform.SetParent(transform, false);
+            goVelo.transform.position = Vector3.zero;
         }
 
         /// <summary>
@@ -863,6 +907,7 @@ namespace Alkahest.Sim
             {
                 _texture.Apply(false);
                 if (_frontTexture != null) _frontTexture.Apply(false); // el labio (si está activo) va al mismo ritmo.
+                _veloTexture.Apply(false); // (R129) el velo de líquidos va al mismo ritmo.
             }
         }
 
@@ -1025,6 +1070,13 @@ namespace Alkahest.Sim
                     _pixels[idx] = c;
                     scratch[scratchI] = c;
                     if (_frontScratch != null) _frontScratch[scratchI] = ComputeFrontRim(x, y, idx);
+                    // (R129) El velo: la MISMA celda ya calculada, delante y
+                    // translúcida — solo si es líquido; todo lo demás, hueco.
+                    byte matVelo = _grid.mat[idx];
+                    _veloScratch[scratchI] = (matVelo != MaterialId.Empty &&
+                        _universe.Get(matVelo).archetype == MaterialArchetype.Liquid)
+                        ? new Color32(c.r, c.g, c.b, VeloAlfa)
+                        : default;
                     scratchI++;
                 }
             }
@@ -1039,6 +1091,7 @@ namespace Alkahest.Sim
 
             _texture.SetPixels32(x0, y0, w, h, scratch);
             if (_frontTexture != null) _frontTexture.SetPixels32(x0, y0, w, h, _frontScratch);
+            _veloTexture.SetPixels32(x0, y0, w, h, _veloScratch);
         }
 
         /// <summary>
