@@ -553,7 +553,7 @@ namespace Alkahest.Game
             // (RONDA 60, FUNDACIÓN) En el inicio oscuro el HUD SIGUE silenciado:
             // lo despierta el director al prestar el frasco (DespertarHudFundacion),
             // no el arranque de jornada. Fuera de ese modo, igual que siempre.
-            HudSilenciado = AlkahestGameBootstrap.ModoFundacion;
+            HudSilenciado = AlkahestGameBootstrap.ModoFundacion || AlkahestGameBootstrap.ModoGaleria; // (R127) la Galería vive con la pantalla limpia.
             // (fix ronda 56, EL BUG DEL COMPUESTO) En SEMILLA CERO el arco de "LO QUE
             // PERSISTE" NO se genera: el director (Game/SemillaCero.cs) dicta sus
             // propios pedidos guiados uno a uno. Antes se generaba igual y quedaba
@@ -563,7 +563,7 @@ namespace Alkahest.Game
             // grupo entero). Mismo criterio que ya usa la rama anfitrión del multi en
             // AlkahestGameBootstrap.TrySpawnRed. (Ronda 60: la FUNDACIÓN tampoco lo
             // genera -- su director encola sus propios pedidos, mismo patrón.)
-            if (_orderSystem != null && !AlkahestGameBootstrap.ModoSemillaCero && !AlkahestGameBootstrap.ModoFundacion)
+            if (_orderSystem != null && !AlkahestGameBootstrap.ModoSemillaCero && !AlkahestGameBootstrap.ModoFundacion && !AlkahestGameBootstrap.ModoGaleria)
                 _orderSystem.GenerateOrdersPersiste();
         }
 
@@ -1025,6 +1025,7 @@ namespace Alkahest.Game
             {
                 AlkahestGameBootstrap.ModoFundacion = true;
                 AlkahestGameBootstrap.ModoSemillaCero = false;
+                AlkahestGameBootstrap.ModoGaleria = false;
                 RestartRun((int)Universe.SemillaCero);
             }
             if (GUILayout.Button("2", UiStyles.Boton, GUILayout.Width(UiStyles.S(38f)), GUILayout.Height(UiStyles.S(38f))))
@@ -1041,6 +1042,19 @@ namespace Alkahest.Game
             {
                 AlkahestGameBootstrap.ModoSemillaCero = true;
                 AlkahestGameBootstrap.ModoFundacion = false;
+                AlkahestGameBootstrap.ModoGaleria = false;
+                RestartRun((int)Universe.SemillaCero);
+            }
+
+            // (R127) EL BANCO DE IMAGEN — pequeño y tenue a propósito: es una
+            // herramienta de desarrollo, no una puerta del juego (el plan de
+            // la Galería decide más adelante si viaja en la build de reparto).
+            GUILayout.Space(UiStyles.S(6f));
+            if (GUILayout.Button("galería de estilo (banco de imagen, dev)", UiStyles.Boton, GUILayout.Height(UiStyles.S(26f))))
+            {
+                AlkahestGameBootstrap.ModoGaleria = true;
+                AlkahestGameBootstrap.ModoFundacion = false;
+                AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun((int)Universe.SemillaCero);
             }
 
@@ -1550,6 +1564,7 @@ namespace Alkahest.Game
                 // arco entero se puede volver a jugar.
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 AlkahestGameBootstrap.ModoFundacion = false; // (ronda 60) mismo criterio: partida nueva = caótico limpio.
+                AlkahestGameBootstrap.ModoGaleria = false; // (R127) regla 59.
                 RestartRun(null);
             }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))

@@ -27,7 +27,10 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
    la R74; el lock huérfano se quita con `mv` a _to_delete/).
 4. Permisos de computer-use caducan solos: re-pedir con `computer_resolve_access` +
    `computer_request_access` (entradas verbatim). Cesar los concede al vuelo.
-5. Probar EN VIVO vía Unity MCP: Refresh → esperar → 0 errores → Play → sondas por RunCommand
+5. Probar EN VIVO vía Unity MCP: Refresh → esperar → 0 errores → Play. OJO (R127): el editor
+   de Cesar tiene AUTO-REFRESH APAGADO — tras cada deploy, `AssetDatabase.Refresh()` +
+   `CompilationPipeline.RequestScriptCompilation()` y VERIFICAR por reflexión que el tipo/símbolo
+   nuevo existe ANTES de Play (si no, se prueba el assembly viejo sin un solo error). → sondas por RunCommand
    (`internal class CommandScript : IRunCommand`, método `Execute(ExecutionResult)`; tipos por
    reflexión `Type.GetType("Alkahest.Game.X, Alkahest.Runtime")`; BindingFlags numéricos
    `(System.Reflection.BindingFlags)(4|8|16|32)` — PROHIBIDO `using System.Reflection`).
@@ -38,8 +41,11 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
    escritorio con permiso). Toda ronda visual se verifica JUGANDO con capturas (regla 52).
 6. Commits frecuentes, mensajes en español. **6b: EL AGENTE NUNCA HACE PUSH** — Cesar corre
    `ca_playtestNN.cmd` (git add -A + commit + push). GitHub es LA VERDAD; el sandbox es
-   VOLÁTIL (5+ reinicios ya; recuperar del disco de Cesar con tar vía device_bash si GitHub está atrás): ante duda, `git fetch` y comparar; el fix 69g casi se pierde por
-   no llegar a un push. Documentar cada ronda en `docs/archivo/HISTORIAL_RONDAS.md` + generar
+   VOLÁTIL (15+ reinicios ya, y puede amanecer en una COPIA VIEJA sin avisar — R127: un deploy
+   desde un sandbox en R85 pisó 6 archivos más nuevos y truncó el HISTORIAL de un commit;
+   recuperar del disco de Cesar con tar vía device_bash si GitHub está atrás): ANTES de
+   cualquier deploy, `git fetch` y comparar el HEAD del sandbox con el del remoto/disco; el
+   fix 69g casi se pierde por no llegar a un push. Documentar cada ronda en `docs/archivo/HISTORIAL_RONDAS.md` + generar
    el cmd nuevo SIEMPRE, sin excepción.
 7. Compilador fiel del sandbox (`/home/claude/compile_fiel.sh` + 155 DLLs en
    `/home/claude/unityrefs`, staged desde `Builds/TenThousandYearsMulti/..._Data/Managed`):

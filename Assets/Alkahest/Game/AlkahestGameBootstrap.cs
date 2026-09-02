@@ -111,6 +111,14 @@ namespace Alkahest.Game
         /// </summary>
         public static bool ModoFundacion;
 
+        /// <summary>
+        /// (RONDA 127) LA GALERÍA DE ESTILO: el banco de imagen fuera del
+        /// juego (docs/PLAN_GALERIA_DE_ESTILO.md). Excluyente con los otros
+        /// dos modos y, como ellos, se resetea en TODOS los caminos (regla
+        /// 59): título, partida nueva y las tres rutas del multi.
+        /// </summary>
+        public static bool ModoGaleria;
+
         private AlkahestSim _sim;
         private bool _spawned;
 
@@ -377,6 +385,7 @@ namespace Alkahest.Game
                 if (ModoFundacion)
                 {
                     ModoFundacion = false;
+                    ModoGaleria = false; // (R127) misma regla 59 que el de arriba.
                     Debug.LogWarning("[TenThousandYears] ModoFundacion venía ENCENDIDO al entrar a la escena MULTI: apagado. El prólogo es un modo de un solo jugador.");
                 }
                 // (R76, nota FRÁGIL de la revisión) Las dos estáticas del
@@ -416,6 +425,7 @@ namespace Alkahest.Game
             Balda.ResetGuardaEstatica(); Anclaje.ResetGuardaEstatica(); Pila.ResetGuardaEstatica(); // (integración pt54) la fuga de paridad solo/multi -- ver esos métodos.
 
             // (RONDA 60) LA FUNDACIÓN: rama mínima y retorno -- ver SpawnFundacion.
+            if (ModoGaleria) { SpawnGaleria(); return; }
             if (ModoFundacion) { SpawnFundacion(); return; }
 
             var apprentice = SpawnApprentice();
@@ -993,6 +1003,40 @@ namespace Alkahest.Game
             var enEscena = FindAnyObjectByType<WorkshopBackdrop>();
             if (enEscena != null) return enEscena;
             return new GameObject("WorkshopBackdrop").AddComponent<WorkshopBackdrop>();
+        }
+
+        // =================================================================
+        // (RONDA 127) LA GALERÍA DE ESTILO — ver docs/PLAN_GALERIA_DE_ESTILO.md.
+        // Rama mínima calcada de la Fundación: backdrop + aprendiz (con su
+        // frasco, su cincel, su piel de roca y su F6/F7) + DayCycle (para que
+        // InputLocked despierte) + el CURADOR. Sin director, sin Trueque, sin
+        // encargos: aquí no se juega, se JUZGA imagen.
+        // =================================================================
+        private void SpawnGaleria()
+        {
+            ObtenerOCrearBackdrop();
+
+            var apprentice = SpawnApprentice();
+            float celda = SimRenderer.CellWorldSize;
+            apprentice.transform.position = new Vector3(
+                (SimLevelBuilder.GaleriaSpawnX + 0.5f) * celda,
+                (SimLevelBuilder.GaleriaSpawnY + 0.5f) * celda, 0f);
+
+            var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
+            var orderSystem = SpawnOrderSystem(knowledge); // DayCycle lo necesita; nadie encola nada.
+            SpawnDayCycle(orderSystem, knowledge, null, null);
+
+            GaleriaCurador.Crear(_sim, apprentice.GetComponent<ApprenticeController>());
+
+            // (R127b) EL INICIO HUMILDE: una sola fogata de bienvenida en la
+            // cueva íntima, y nada más pre-puesto — la Galería se COMPONE con
+            // el curador, no se explora. (La fogata es materia: clic derecho
+            // del curador la quita, como todo.)
+            _sim.PaintStable(110, 170, 2, MaterialId.Brasa);
+            for (int dx = -1; dx <= 1; dx++) _sim.PaintCell(110 + dx, 173, MaterialId.Fire, 220);
+
+            _spawned = true;
+            Debug.Log("[TenThousandYears] GALERÍA DE ESTILO (R127): 9 áreas, curador con G, Ctrl+1..9 teletransporta, F10 ronda de capturas.");
         }
 
         private void SpawnFundacion()

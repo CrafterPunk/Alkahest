@@ -352,7 +352,7 @@ namespace Alkahest.Net
                 // autor sobre una seed aleatoria. El lobby multi no ofrece la
                 // fundación: SIEMPRE false aquí. Ver el bloque espejo en
                 // AlRecibirChunks para el resto de la historia.
-                AlkahestGameBootstrap.ModoFundacion = false;
+                AlkahestGameBootstrap.ModoFundacion = false; AlkahestGameBootstrap.ModoGaleria = false; // (R127) regla 59.
 
                 // (HANDOFF.md, Playtest 48, deuda "SimSync:330 CrearMundoAnfitrion
                 // sin try/catch, candidato #1 del fallo original") CERRADA
@@ -445,7 +445,7 @@ SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
             // red de seguridad para el jugador que NUNCA vuelve a pulsar
             // ningún botón de host/join y solo cierra la sesión.
             AlkahestGameBootstrap.ModoSemillaCero = false;
-            AlkahestGameBootstrap.ModoFundacion = false; // (ronda 69g) la fuga gemela -- ver el bloque junto a CrearMundoEspejo.
+            AlkahestGameBootstrap.ModoFundacion = false; AlkahestGameBootstrap.ModoGaleria = false; // (R127) regla 59. // (ronda 69g) la fuga gemela -- ver el bloque junto a CrearMundoEspejo.
 
             base.OnNetworkDespawn();
         }
@@ -989,7 +989,7 @@ SolicitarSnapshotServerRpc(NetworkManager.LocalClientId);
                 // multi no la ofrece, así que aquí SIEMPRE false. Si algún
                 // día existe fundación co-op, su botón de lobby pondrá el
                 // flag igual que hoy lo hacen los de Semilla Cero.
-                AlkahestGameBootstrap.ModoFundacion = false;
+                AlkahestGameBootstrap.ModoFundacion = false; AlkahestGameBootstrap.ModoGaleria = false; // (R127) regla 59.
 
                 _sim.CrearMundoEspejo(seed);
                 if (_sim.Grid == null) return;

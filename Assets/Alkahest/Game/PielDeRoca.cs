@@ -338,6 +338,25 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// (R127b, GALERÍA Meta 2) Sustituye la textura procedural de la roca
+        /// por una externa EN CALIENTE (el hot-load del probador de arte:
+        /// Galeria/roca_superficie.png + tecla R del curador). No reconstruye
+        /// mallas — solo cambia el MaterialPropertyBlock del relleno, así que
+        /// es instantáneo. Pasar null no hace nada; volver a la procedural =
+        /// reiniciar la Galería.
+        /// </summary>
+        public void CargarTexturaDeRoca(Texture2D nueva)
+        {
+            if (nueva == null || _mpbRoca == null) return;
+            nueva.wrapMode = TextureWrapMode.Repeat;
+            nueva.filterMode = FilterMode.Bilinear;
+            if (_texRoca != null) Destroy(_texRoca);
+            _texRoca = nueva;
+            _mpbRoca.SetTexture("_MainTex", _texRoca);
+            AplicarTinte(); // reaplica los MPB (textura incluida) a todos los renderers.
+        }
+
         private void AplicarTinte()
         {
             if (_propTinte != null)

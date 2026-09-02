@@ -3041,6 +3041,105 @@ namespace Alkahest.Sim
         // quien dependa del sitio lo lee de aquí).
         public const int FundacionSalidaX0 = 434, FundacionSalidaX1 = 435; // (R74) el nicho se mudó con el hogar y la mesa (queda entre el murete derecho x433 y la mesa x436).
 
+        // =================================================================
+        // (RONDA 127) LA GALERÍA DE ESTILO — el banco de imagen fuera del
+        // juego (docs/PLAN_GALERIA_DE_ESTILO.md). Nueve áreas conectadas por
+        // corredores, cada una responde UNA pregunta de estilo. Este plano
+        // jamás se embarca en la demo: lo consume solo AlkahestGameBootstrap
+        // cuando ModoGaleria está puesto (botón del título).
+        // =================================================================
+        public const int GaleriaSpawnX = 70, GaleriaSpawnY = 174;
+
+        /// <summary>Anclas de teletransporte del curador (Ctrl+1..9), en el mismo orden que el esquema.</summary>
+        public static readonly int[] GaleriaAnclaX = { 70, 235, 320, 462, 557, 680, 680, 150, 450 };
+        public static readonly int[] GaleriaAnclaY = { 176, 172, 75, 85, 120, 90, 180, 22, 22 };
+        public static readonly string[] GaleriaAnclaNombre = {
+            "cueva íntima", "patio de fuego", "la nave", "pared de juntas", "el pozo",
+            "poza y humedad", "el vano", "pendientes y silueta", "el terrario" };
+
+        public static void BuildGaleria(CellGrid grid)
+        {
+            ObraDelTaller.Clear();
+            ReservasDelPlano.Clear();
+            FillWorldStone(grid);
+
+            void Sala(int x0, int y0, int x1, int y1) =>
+                DrawSolidRect(grid, x0, y0, x1 - x0 + 1, y1 - y0 + 1, MaterialId.Empty);
+
+            // 1 · CUEVA ÍNTIMA — techo bajo (~22 celdas), la luz de fuego se juzga aquí.
+            Sala(30, 168, 148, 190);
+            // 2 · PATIO DE FUEGO — alto, con murete y hoyo de cocción (los rellena el bootstrap con brasas).
+            Sala(170, 165, 300, 235);
+            DrawSolidRect(grid, 226, 165, 2, 5, MaterialId.Stone);     // murete del hogar
+            DrawSolidRect(grid, 250, 162, 16, 3, MaterialId.Empty);    // el hoyo de cocción (cuenco)
+            // 3 · LA NAVE — bóveda de 105 celdas con pilares y siluetas de escala.
+            Sala(170, 55, 470, 160);
+            for (int y = 55; y <= 160; y++)
+            {
+                int w1 = 3 + ((y / 6) % 2);                            // pilares irregulares
+                DrawSolidRect(grid, 300, y, w1, 1, MaterialId.Stone);
+                DrawSolidRect(grid, 380 + ((y / 9) % 2), y, 3, 1, MaterialId.Stone);
+            }
+            // (R127b, Cesar: "mínimas cosas — es un lugar para COMPONER, no para
+            // explorar") Sin siluetas de escala pre-puestas: las máquinas reales
+            // se colocan con el curador y la escala se juzga con ellas.
+            // 4 · PARED DE JUNTAS — franjas de sólidos fabricados incrustadas en la roca,
+            // con la cara izquierda expuesta al aire de la nave (la costura P2 de un vistazo).
+            byte[] juntas = { MaterialId.PisoEstructural, MaterialId.Mortero, MaterialId.Hormigon,
+                              MaterialId.VidrioVerde, MaterialId.Esmaltado, MaterialId.Clinker };
+            for (int i = 0; i < juntas.Length; i++)
+                DrawSolidRect(grid, 470, 72 + i * 14, 8, 11, juntas[i]);
+            // 5 · EL POZO — vertical de 220 celdas con repisas alternadas.
+            Sala(530, 45, 585, 265);
+            for (int y = 85; y <= 245; y += 40)
+                DrawSolidRect(grid, (y / 40) % 2 == 0 ? 530 : 561, y, 24, 2, MaterialId.Stone);
+            // 6 · POZA Y HUMEDAD — agua grande + bolsa de goteo en el techo.
+            Sala(610, 68, 750, 110);
+            DrawSolidRect(grid, 615, 70, 131, 12, MaterialId.Water);
+            DrawSolidRect(grid, 676, 114, 8, 4, MaterialId.Water);     // la bolsa…
+            grid.SetCell(680, 111, MaterialId.Empty);                  // …y su gotera (drena lenta: goteo real)
+            grid.SetCell(680, 112, MaterialId.Empty);
+            grid.SetCell(680, 113, MaterialId.Empty);
+            // 7 · EL VANO — la boca al exterior (Meta 3: planos de fondo y luz fría).
+            Sala(610, 150, 750, 265);
+            // 8 · PENDIENTES Y SILUETA — el catálogo de casos del terreno.
+            Sala(28, 8, 330, 50);
+            for (int i = 0; i < 12; i++) DrawSolidRect(grid, 60 + i, 8, 1, i + 1, MaterialId.Stone);   // escalera de 1 celda
+            for (int i = 0; i < 8; i++) DrawSolidRect(grid, 100 + i * 2, 8, 2, (8 - i) * 2, MaterialId.Stone); // rampa que baja
+            DrawSolidRect(grid, 140, 30, 30, 1, MaterialId.Stone);     // repisa de UNA celda de grosor
+            grid.SetCell(200, 20, MaterialId.Stone);                   // guijarro aislado
+            DrawSolidRect(grid, 230, 12, 50, 26, MaterialId.Stone);    // el macizo del túnel…
+            DrawSolidRect(grid, 230, 8, 50, 4, MaterialId.Empty);      // …con su túnel bajo (4 de alto)
+            // 9 · EL TERRARIO — cubetas en fila, cada material contra la roca (regla P1).
+            Sala(360, 8, 750, 50);
+            byte[] cubetas = { MaterialId.Water, MaterialId.Sand, MaterialId.Oil, MaterialId.Limo,
+                               MaterialId.Ash, MaterialId.Nutrient, MaterialId.Ice, MaterialId.Slime };
+            int cx = 366;
+            foreach (byte m in cubetas)
+            {
+                DrawSolidRect(grid, cx, 8, 1, 20, MaterialId.Stone);   // pared izquierda
+                DrawSolidRect(grid, cx + 1, 9, 16, 12, m);             // la carga
+                cx += 17;
+                if (cx > 500 && cx < 596) cx = 596;                    // saltar la boca del pozo
+            }
+            DrawSolidRect(grid, cx, 8, 1, 20, MaterialId.Stone);       // pared final; el resto queda de cubetas vacías
+
+            // LA BODEGA — el estante fuera de plano del curador: "quitar" una
+            // máquina la muda aquí (no se destruye: los registros del taller
+            // no tienen camino de baja, y así además se puede recuperar).
+            Sala(30, 262, 300, 284);
+
+            // CORREDORES — para recorrerla JUGANDO (P7).
+            Sala(148, 172, 170, 182);   // cueva ↔ patio (entra al patio por su suelo alto)
+            Sala(250, 155, 258, 170);   // patio ↕ nave
+            Sala(88, 50, 98, 168);      // cueva ↕ pendientes
+            Sala(330, 20, 360, 30);     // pendientes ↔ terrario
+            Sala(470, 56, 530, 64);     // nave ↔ pozo (bajo la pared de juntas)
+            Sala(585, 70, 610, 80);   // pozo ↔ poza
+            Sala(585, 190, 610, 200);   // pozo ↔ vano
+            Sala(660, 110, 670, 150);   // poza ↕ vano
+        }
+
         public static void BuildFundacion(CellGrid grid)
         {
             ObraDelTaller.Clear();

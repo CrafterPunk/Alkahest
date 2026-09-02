@@ -8,7 +8,8 @@
         "Unity.Netcode.Components",
         "Unity.Networking.Transport",
         "FriendsLoop.Runtime",
-        "com.rlabrecque.steamworks.net"
+        "com.rlabrecque.steamworks.net",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

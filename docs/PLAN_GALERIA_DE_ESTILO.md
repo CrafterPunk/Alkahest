@@ -68,6 +68,22 @@ recorrerla JUGANDO (P7: lo que se juzga se juzga a 80 celdas, en movimiento):
 
 ## 4. LAS METAS
 
+> **Estado R127b: METAS 1 y 1b HECHAS + primer peldaño de la 2, verificado
+> en vivo.** Además, por dirección de Cesar, la Galería se decluttereó
+> («componer, no explorar»): solo la fogata humilde pre-puesta; máquinas
+> (crisol, alambique, prensa, banco de chispa) se colocan/quitan desde el
+> catálogo (quitar = a la BODEGA); y el hot-load ya funciona: R recarga
+> `Galeria/roca_superficie.png` sobre la piel entera al instante.
+
+> **Estado R127: META 1 HECHA y verificada en vivo** (9 áreas talladas,
+> curador con G, Ctrl+1..9, F10 = ronda de capturas en `Galeria/capturas/`,
+> botón «galería de estilo» en el título). El curador quedó así, por pedido
+> de Cesar («agregar/quitar/duplicar sin ensuciar pantalla»): CERRADO no se
+> ve nada; abierto, clic coloca, clic derecho quita, C+clic copia un parche
+> de materia (ESTAMPA) y el clic lo duplica, -/+ cambia el radio, y MOVER
+> sigue siendo la mudanza de siempre. Las máquinas reales entran en la Meta
+> 1b (su Init ancla la cota al plano del taller clásico; ver §4).
+
 **META 1 — EL LIENZO (la que yo puedo adelantar ya, sin esperar el arte):**
 modo + plano tallado con las 9 áreas + spawn + catálogo v1 con lo que ya
 existe: fogata (brasas reales), antorcha (Fire estable), montón/chorro de

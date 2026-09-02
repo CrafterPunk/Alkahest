@@ -241,7 +241,8 @@ namespace Alkahest
             // casi vacío) en vez del cuarto íntimo. Mismo criterio que la rama
             // BuildTestLevel de arriba: este es el único sitio del proyecto
             // donde se decide qué plano construir.
-            if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
+            if (AlkahestGameBootstrap.ModoGaleria) SimLevelBuilder.BuildGaleria(_grid); // (R127) el banco de imagen.
+            else if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
             else SimLevelBuilder.BuildCuartoIntimo(_grid);
             // (RONDA 77, EL OVERLAY DEL CINCEL) Los retoques de roca que
             // Cesar guardó desde la paleta dev (F3 → "GUARDAR FORMA COMO
