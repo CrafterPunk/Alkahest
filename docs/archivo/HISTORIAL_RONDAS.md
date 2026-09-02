@@ -6684,3 +6684,41 @@ ca_playtest84.cmd barre la ronda.
   máquinas del grupo MÁQUINAS · Ctrl+1..9 áreas · F7 piel · F10 capturas ·
   R textura.
 
+## Ronda 128 — LA GALERÍA AFINADA CON EL PLAYTEST DE CESAR (verificada en vivo)
+
+· Siete observaciones de Cesar tras una sesión larga en la Galería, todas
+  aplicadas o respondidas:
+  1) Corredores ANCHOS: todo pasaje a 16 celdas de luz (el muñeco mide 12);
+     el túnel bajo de pendientes a 6.
+  2) El PISO sale del ciclo de la C (Cesar: "el segundo cincel incomoda"):
+     C alterna solo frasco ↔ cincel piedra; la X sigue viva como camino
+     explícito (regla 15: aparcado con `CicloIncluyePiso=false`).
+  3) BOTONES DEL CINCEL AL ESTÁNDAR del género (Minecraft/Terraria):
+     clic IZQUIERDO talla, derecho construye; avisos actualizados.
+  4) Fogatas PERSISTENTES: el curador reaviva sus fogatas cada 5 s (la brasa
+     real se consumía a ceniza en un minuto — por eso Cesar solo encontró
+     cenizas); si la quitan a mano (área sin brasa NI ceniza) se olvida.
+  5) Curador: tecla F8 (la G era del termómetro y del gesto — doble
+     activación reportada); con el curador abierto FRASCO Y CINCEL CEDEN los
+     clics (guarda estilo DevPalette en Flask/Cincel — era el choque del
+     C+clic); la ESTAMPA ahora es por radio (-/+) y SOLO materia suelta (ni
+     roca ni fabricados: copiaba "mucho de todo"); ANILLO de radio visible
+     en el cursor (no había evidencia del -/+); la R del hot-load funciona
+     con el curador cerrado y AVISA su resultado 4 s en pantalla.
+  6) Sin muebles fantasma: baldas/anclajes del plano clásico ya no nacen en
+     la Galería (venían de Mudanza.Init con posiciones del cuarto íntimo);
+     al catálogo entran PLACA ÍGNEA, PLACA GÉLIDA, CAÑO DE AGUA (la
+     naciente que faltaba) y BALDA, todos colocados directo al cursor.
+  7) Terrario solo con VOCABULARIO nombrado (fuera el innominado "???";
+     entra la brasa).
+· Verificado en vivo: placa/caño/balda colocados por catálogo; 1 sola balda
+  en escena (la del curador). Diseño pendiente de decisión (propuestas con
+  costo dadas a Cesar): el personaje nítido DELANTE del agua (propuesta:
+  segunda textura solo-líquidos semitransparente delante del muñeco, patrón
+  _frontTexture, ~1 día) y el serrucho de las pendientes contra líquidos
+  (propuesta: banda de orilla/menisco sobre el contorno mojado, ~1 tarde;
+  el escalón interno es la materia siendo materia y se queda).
+· Reset #16 del sandbox al empezar (volvió a R85); recuperado de origin
+  (Cesar ya había subido la R127) sin pérdidas — la guardia nueva del fetch
+  funcionó.
+

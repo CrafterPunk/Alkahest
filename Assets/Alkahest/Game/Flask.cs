@@ -256,6 +256,7 @@ namespace Alkahest.Game
             var kb = Keyboard.current;
             // (fix playtest 2) Con la paleta dev (F3) abierta, el pincel manda: el frasco no actúa.
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisualesDeMundo(); return; }
+            if (GaleriaCurador.Abierto) { OcultarVisualesDeMundo(); return; } // (R128) los clics del curador no aspiran ni vierten.
 
             // (RONDA 73, el prólogo rehecho) ANTES DEL "TOMA." NO LLEVAS
             // FRASCO: en el inicio oscuro de la fundación el frasco aún es del

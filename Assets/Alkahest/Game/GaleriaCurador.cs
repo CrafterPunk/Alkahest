@@ -15,7 +15,7 @@ namespace Alkahest.Game
     /// de oro es que CERRADO NO SE VE NADA: ni icono, ni rótulo.
     ///
     /// Teclas (todas con las guardas de la regla 12):
-    ///   G           abre/cierra el curador (la ventana-catálogo).
+    ///   F8          abre/cierra el curador (G era del termómetro/gesto — R128).
     ///   Ctrl+1..9   teletransporta a las 9 áreas (siempre, aun cerrado).
     ///   F10         LA RONDA DE CAPTURAS: recorre las 9 áreas y guarda un PNG
     ///               por área en Galeria/capturas/&lt;fecha-hora&gt;/ — el
@@ -23,9 +23,9 @@ namespace Alkahest.Game
     /// Con el curador ABIERTO:
     ///   clic izq.       coloca el elemento seleccionado (mantener = pintar).
     ///   clic der.       quita (talla aire con el radio del pincel).
-    ///   C + clic izq.   copia un parche 12x12 de materia bajo el cursor; el
-    ///                   pincel pasa a ESTAMPA y el clic izq. lo estampa
-    ///                   (duplicar composiciones de materia).
+    ///   C + clic izq.   copia la MATERIA bajo el pincel (radio -/+; la roca
+    ///                   madre y los sólidos fabricados no viajan) y el clic
+    ///                   izq. la estampa (duplicar composiciones).
     ///   teclas - y +    radio del pincel (0..6).
     ///
     /// El MOVER no se reinventa: las máquinas se mudan con la MUDANZA de
@@ -37,6 +37,10 @@ namespace Alkahest.Game
     {
         private const int WindowId = 918273; // constante, jamás GetInstanceID (guía del proyecto).
 
+        /// <summary>(R128) Con el curador abierto, frasco y cincel CEDEN los clics (misma familia de guardas que DevPalette.IsOpen — regla 37 de exclusión simétrica).</summary>
+        public static bool Abierto => _instancia != null && _instancia._abierto;
+        private static GaleriaCurador _instancia;
+
         private AlkahestSim _sim;
         private ApprenticeController _aprendiz;
         private bool _abierto;
@@ -47,9 +51,20 @@ namespace Alkahest.Game
         private Rect _ventana = new Rect(12f, 60f, 250f, 100f);
         private GUIStyle _estiloTitulo, _estiloPie, _estiloBoton, _estiloBotonSel;
 
-        // La estampa (duplicar): parche de materia copiado con C+clic.
-        private const int EstampaLado = 12;
-        private byte[] _estampa;
+        // La estampa (duplicar): materia copiada con C+clic. (R128) Ahora es
+        // POR RADIO (el mismo del pincel, -/+) y SOLO materia suelta: la roca
+        // madre y el piso no viajan en la estampa — copiaba "mucho de todo" y
+        // restaba utilidad (feedback de Cesar).
+        private byte[,] _estampa;
+        private float _avisoHasta, _avisoRadioHasta;
+        private Texture2D _texAnillo;
+
+        // (R128) FOGATAS PERSISTENTES: la brasa real se consume a ceniza (por
+        // eso Cesar solo encontró "un puñado de cenizas"). El curador recuerda
+        // dónde puso fogatas y las reaviva cada pocos segundos — salvo que la
+        // hayan QUITADO a mano (área vaciada sin ceniza: se olvida).
+        private readonly List<Vector2Int> _fogatas = new List<Vector2Int>();
+        private float _fogataAcc;
 
         private struct Colocable
         {
@@ -78,6 +93,10 @@ namespace Alkahest.Game
             new Colocable { Grupo = "MÁQUINAS", Nombre = "alambique",       Maquina = "alambique" },
             new Colocable { Grupo = "MÁQUINAS", Nombre = "prensa",          Maquina = "prensa" },
             new Colocable { Grupo = "MÁQUINAS", Nombre = "banco de chispa", Maquina = "chispa" },
+            new Colocable { Grupo = "MÁQUINAS", Nombre = "placa ígnea",     Maquina = "placaIgnea" },
+            new Colocable { Grupo = "MÁQUINAS", Nombre = "placa gélida",    Maquina = "placaGelida" },
+            new Colocable { Grupo = "MÁQUINAS", Nombre = "caño de agua (naciente)", Maquina = "cano" },
+            new Colocable { Grupo = "MÁQUINAS", Nombre = "balda (repisa)",  Maquina = "balda" },
             new Colocable { Grupo = "MÁQUINAS", Nombre = "quitar máquina (a la bodega)", Maquina = "quitar" },
         };
 
@@ -92,6 +111,7 @@ namespace Alkahest.Game
             var c = go.AddComponent<GaleriaCurador>();
             c._sim = sim;
             c._aprendiz = aprendiz;
+            _instancia = c;
             return c;
         }
 
@@ -102,7 +122,9 @@ namespace Alkahest.Game
             bool tecladoLibre = !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && !DayCycle.InputLocked;
             if (!tecladoLibre) return;
 
-            if (kb.gKey.wasPressedThisFrame) _abierto = !_abierto;
+            // (R128) F8, no G: la G ya la usan el termómetro y el gesto de
+            // prueba — Cesar la pulsó y se le abrieron dos cosas a la vez.
+            if (kb.f8Key.wasPressedThisFrame) _abierto = !_abierto;
 
             // Teletransporte por áreas (siempre disponible en la Galería).
             bool ctrl = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
@@ -120,12 +142,17 @@ namespace Alkahest.Game
             }
 
             if (kb.f10Key.wasPressedThisFrame && !_capturando) StartCoroutine(RondaDeCapturas());
+            // (R128) La R funciona con o sin curador (Cesar la probó cerrada y
+            // "no vio el cambio"): en la Galería la R del cincel no aplica, y
+            // ahora el resultado se AVISA en pantalla 4 segundos.
+            if (kb.rKey.wasPressedThisFrame && !Cincel.ModoActivo) { RecargarTexturas(); _avisoHasta = Time.unscaledTime + 4f; }
+
+            RefrescarFogatas();
 
             if (!_abierto) return;
 
-            if (kb.minusKey.wasPressedThisFrame) _radio = Mathf.Max(0, _radio - 1);
-            if (kb.equalsKey.wasPressedThisFrame) _radio = Mathf.Min(6, _radio + 1);
-            if (kb.rKey.wasPressedThisFrame) RecargarTexturas(); // solo con el curador abierto (la R del cincel vive en su propio modo)
+            if (kb.minusKey.wasPressedThisFrame) { _radio = Mathf.Max(0, _radio - 1); _avisoRadioHasta = Time.unscaledTime + 1.2f; }
+            if (kb.equalsKey.wasPressedThisFrame) { _radio = Mathf.Min(6, _radio + 1); _avisoRadioHasta = Time.unscaledTime + 1.2f; }
 
             var mouse = Mouse.current;
             var cam = Camera.main;
@@ -228,6 +255,32 @@ namespace Alkahest.Game
                     m.Init(_sim, _aprendiz != null ? _aprendiz.transform : null, conocimiento, SimLevelBuilder.BancoChispaX);
                     comp = m; break;
                 }
+                // (R128) Los de abajo se COLOCAN DIRECTO en el cursor (su Init
+                // acepta coordenadas): sin ancla clásica, sin foto, sin fantasma.
+                case "placaIgnea":
+                {
+                    var m = go.AddComponent<HeatPlate>();
+                    m.Init(_sim, _aprendiz != null ? _aprendiz.transform : null, cx - 3, cx + 3, cy);
+                    _misMaquinas.Add(m); return;
+                }
+                case "placaGelida":
+                {
+                    var m = go.AddComponent<ChillStone>();
+                    m.Init(_sim, _aprendiz != null ? _aprendiz.transform : null, cx - 3, cx + 3, cy);
+                    _misMaquinas.Add(m); return;
+                }
+                case "cano":
+                {
+                    var m = go.AddComponent<Dispenser>();
+                    m.Init(_sim, _aprendiz != null ? _aprendiz.transform : null, cx, cy, MaterialId.Water);
+                    _misMaquinas.Add(m); return;
+                }
+                case "balda":
+                {
+                    var m = go.AddComponent<Balda>();
+                    m.Init(_sim, cx - 4, cx + 4, cy);
+                    _misMaquinas.Add(m); return;
+                }
             }
             var mov = comp as IMovible;
             if (mov == null) { Destroy(go); return; }
@@ -266,6 +319,7 @@ namespace Alkahest.Game
             {
                 if (c == null) continue;
                 var mv = c as IMovible;
+                if (mv == null) continue; // (R128) algunos colocables no son movibles: se quitan tallándolos o quedan.
                 float d = Vector3.Distance(mv.CentroMundo, punto);
                 if (d < mejorDist) { mejorDist = d; mejor = c; }
             }
@@ -305,29 +359,65 @@ namespace Alkahest.Game
             {
                 for (int dx = -1; dx <= 1; dx++)
                     _sim.PaintCell(cx + dx, cy + _radio + 1, MaterialId.Fire, 220);
+                if (_fogatas.Count < 64) _fogatas.Add(new Vector2Int(cx, cy));
+            }
+        }
+
+        /// <summary>(R128) Reaviva las fogatas colocadas: la brasa se consume sola y sin esto la fogata muere en cenizas en un minuto.</summary>
+        private void RefrescarFogatas()
+        {
+            _fogataAcc += Time.deltaTime;
+            if (_fogataAcc < 5f) return;
+            _fogataAcc = 0f;
+            for (int i = _fogatas.Count - 1; i >= 0; i--)
+            {
+                var f = _fogatas[i];
+                int brasas = 0, cenizas = 0;
+                for (int dy = -2; dy <= 2; dy++)
+                    for (int dx = -2; dx <= 2; dx++)
+                    {
+                        if (!CellGrid.InBounds(f.x + dx, f.y + dy)) continue;
+                        byte m = _sim.Grid.GetMat(f.x + dx, f.y + dy);
+                        if (m == MaterialId.Brasa || m == MaterialId.Fire) brasas++;
+                        else if (m == MaterialId.Ash) cenizas++;
+                    }
+                if (brasas == 0 && cenizas == 0) { _fogatas.RemoveAt(i); continue; } // la quitaron a mano: se respeta.
+                if (brasas < 6)
+                {
+                    _sim.PaintStable(f.x, f.y, 2, MaterialId.Brasa);
+                    for (int dx = -1; dx <= 1; dx++) _sim.PaintCell(f.x + dx, f.y + 3, MaterialId.Fire, 220);
+                }
             }
         }
 
         private void CopiarEstampa(int cx, int cy)
         {
-            _estampa = new byte[EstampaLado * EstampaLado];
-            int medio = EstampaLado / 2;
-            for (int dy = 0; dy < EstampaLado; dy++)
-                for (int dx = 0; dx < EstampaLado; dx++)
+            int lado = _radio * 2 + 1;
+            _estampa = new byte[lado, lado];
+            int copiadas = 0;
+            for (int dy = 0; dy < lado; dy++)
+                for (int dx = 0; dx < lado; dx++)
                 {
-                    int x = cx - medio + dx, y = cy - medio + dy;
-                    _estampa[dy * EstampaLado + dx] = CellGrid.InBounds(x, y) ? _sim.Grid.GetMat(x, y) : MaterialId.Empty;
+                    int x = cx - _radio + dx, y = cy - _radio + dy;
+                    byte m = CellGrid.InBounds(x, y) ? _sim.Grid.GetMat(x, y) : MaterialId.Empty;
+                    // Solo MATERIA SUELTA viaja: ni roca madre ni sólidos fabricados.
+                    if (m == MaterialId.Stone || (m != MaterialId.Empty && _universoEstatico(m))) m = MaterialId.Empty;
+                    _estampa[dy, dx] = m;
+                    if (m != MaterialId.Empty) copiadas++;
                 }
+            if (copiadas == 0) { _estampa = null; return; } // no había materia bajo el pincel: no cambiar de modo.
             _sel = -1; // el pincel pasa a ser la estampa.
         }
 
+        private bool _universoEstatico(byte m) => _sim.Universe.Get(m).archetype == MaterialArchetype.StaticSolid;
+
         private void EstamparEn(int cx, int cy)
         {
-            int medio = EstampaLado / 2;
-            for (int dy = 0; dy < EstampaLado; dy++)
-                for (int dx = 0; dx < EstampaLado; dx++)
+            int lado = _estampa.GetLength(0), medio = lado / 2;
+            for (int dy = 0; dy < lado; dy++)
+                for (int dx = 0; dx < lado; dx++)
                 {
-                    byte m = _estampa[dy * EstampaLado + dx];
+                    byte m = _estampa[dy, dx];
                     if (m == MaterialId.Empty) continue; // la estampa no borra: solo añade lo copiado.
                     _sim.PaintStable(cx - medio + dx, cy - medio + dy, 0, m);
                 }
@@ -383,13 +473,38 @@ namespace Alkahest.Game
         // =================================================================
         private void OnGUI()
         {
-            if (!_abierto || DayCycle.InputLocked) return;
+            if (DayCycle.InputLocked) return;
             PrepararEstilos();
+            // (R128) Aviso del hot-load visible AUNQUE el curador esté cerrado.
+            if (Time.unscaledTime < _avisoHasta && !string.IsNullOrEmpty(_estadoTextura))
+            {
+                float wA = UiStyles.Ancho(_estiloPie, "textura: " + _estadoTextura) + 16f;
+                GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.8f);
+                GUI.DrawTexture(new Rect((Screen.width - wA) * 0.5f, UiStyles.S(48f), wA, UiStyles.S(22f)), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                GUI.Label(new Rect((Screen.width - wA) * 0.5f + 8f, UiStyles.S(48f), wA, UiStyles.S(22f)), "textura: " + _estadoTextura, _estiloPie);
+            }
+            if (!_abierto) return;
+            // (R128) EL ANILLO DEL PINCEL: el radio se VE en el cursor (Cesar
+            // no tuvo evidencia del -/+). Se dibuja en pantalla, no en el mundo.
+            var mouseGui = Mouse.current;
+            var camGui = Camera.main;
+            if (mouseGui != null && camGui != null)
+            {
+                if (_texAnillo == null) _texAnillo = CrearAnillo();
+                float pxPorCelda = Screen.height / (camGui.orthographicSize * 2f) * SimRenderer.CellWorldSize;
+                float diam = Mathf.Max(6f, (_radio * 2 + 1) * pxPorCelda);
+                Vector2 mp = mouseGui.position.ReadValue();
+                float brillo = Time.unscaledTime < _avisoRadioHasta ? 1f : 0.55f;
+                GUI.color = new Color(1f, 0.92f, 0.75f, brillo);
+                GUI.DrawTexture(new Rect(mp.x - diam * 0.5f, Screen.height - mp.y - diam * 0.5f, diam, diam), _texAnillo);
+                GUI.color = Color.white;
+            }
             GUI.depth = 5;
             _ventana = GUILayout.Window(WindowId, _ventana, DibujarVentana, "EL CURADOR", GUI.skin.window);
 
             // Una sola línea de ayuda abajo, y solo con el curador abierto.
-            string pie = "clic: colocar · clic der.: quitar · C+clic: copiar estampa · -/+: radio (" + _radio + ") · Ctrl+1..9: áreas · F10: capturas · G: cerrar";
+            string pie = "clic: colocar · clic der.: quitar · C+clic: copia materia (radio) · -/+: radio (" + _radio + ") · Ctrl+1..9: áreas · R: textura · F10: capturas · F8: cerrar";
             float w = UiStyles.Ancho(_estiloPie, pie) + 16f;
             GUI.Label(new Rect((Screen.width - w) * 0.5f, Screen.height - UiStyles.S(26f), w, UiStyles.S(22f)), pie, _estiloPie);
         }
@@ -417,6 +532,23 @@ namespace Alkahest.Game
             GUILayout.Space(6f);
             if (GUILayout.Button("RONDA DE CAPTURAS (F10)", _estiloBoton) && !_capturando) StartCoroutine(RondaDeCapturas());
             GUI.DragWindow();
+        }
+
+        private static Texture2D CrearAnillo()
+        {
+            const int N = 64;
+            var t = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color32[N * N];
+            float c = (N - 1) * 0.5f;
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - 0.94f) * 14f);
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px); t.Apply(false, true);
+            return t;
         }
 
         private void PrepararEstilos()

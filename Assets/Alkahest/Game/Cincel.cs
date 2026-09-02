@@ -142,6 +142,13 @@ namespace Alkahest.Game
         // picar despacio.
         private const float ReachWorldCincel = 2.2f;
 
+        // (R128, Cesar en la Galería: "el segundo cincel que construye el
+        // techo/pared incomoda; de momento desactivarlo") EL PISO SALE DEL
+        // CICLO DE LA C: C alterna solo frasco ↔ cincel PIEDRA. La X sigue
+        // viva como camino explícito al piso estructural (regla 15: no se
+        // borra, se aparca — static readonly y no const para evitar CS0162).
+        private static readonly bool CicloIncluyePiso = false;
+
         // (RONDA 66) Lo que coloca el clic derecho: piedra (de siempre) o PISO
         // ESTRUCTURAL (tecla X alterna). El piso REEMPLAZA roca madre al
         // colocarse ("tallo el espacio bruto y lo termino con estructura
@@ -199,6 +206,7 @@ namespace Alkahest.Game
             // guarda de Flask.Update).
             if (FundacionDirector.FrascoBloqueado) { OcultarVisuales(); return; }
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisuales(); return; }
+            if (GaleriaCurador.Abierto) { OcultarVisuales(); return; } // (R128) con el curador de la Galería abierto, los clics son SUYOS.
             if (UiStyles.EscribiendoTexto) { OcultarVisuales(); return; }
             if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisuales(); return; } // (integración pt50, regla 12) también la ficha modal del álbum.
 
@@ -230,9 +238,9 @@ namespace Alkahest.Game
                 {
                     ModoActivo = true;
                     _rellenaPiso = false;
-                    if (_flask != null) _flask.Avisar("cincel: PIEDRA — clic izq. construye · clic der. talla · C otra vez: piso");
+                    if (_flask != null) _flask.Avisar("cincel: clic izq. TALLA · clic der. construye piedra · X: piso estructural");
                 }
-                else if (!_rellenaPiso)
+                else if (CicloIncluyePiso && !_rellenaPiso)
                 {
                     _rellenaPiso = true;
                     if (_flask != null) _flask.Avisar("cincel: PISO ESTRUCTURAL — C otra vez: guardar el cincel");
@@ -255,8 +263,8 @@ namespace Alkahest.Game
                 if (_flask != null)
                 {
                     _flask.Avisar(_rellenaPiso
-                        ? "cincel: clic izq. coloca PISO ESTRUCTURAL (reemplaza roca)"
-                        : "cincel: clic izq. rellena piedra");
+                        ? "cincel: clic der. coloca PISO ESTRUCTURAL (reemplaza roca)"
+                        : "cincel: clic der. rellena piedra");
                 }
             }
 
@@ -271,8 +279,12 @@ namespace Alkahest.Game
             // con el derecho lo quito — para mis testers es más natural así")
             // BOTONES INVERTIDOS respecto al original: izq. CONSTRUYE,
             // der. TALLA. Los avisos de texto acompañan el cambio.
-            bool wantCarve = mouse != null && mouse.rightButton.isPressed && !ratonCapturado;
-            bool wantFill = mouse != null && mouse.leftButton.isPressed && !ratonCapturado;
+            // (R128, Cesar: "cavar es más recurrente; el clic derecho es
+            // notablemente más incómodo") BOTONES AL ESTÁNDAR del género
+            // (Minecraft/Terraria): IZQUIERDO TALLA, DERECHO CONSTRUYE.
+            // Deshace el intercambio anterior a propósito y con aviso nuevo.
+            bool wantCarve = mouse != null && mouse.leftButton.isPressed && !ratonCapturado;
+            bool wantFill = mouse != null && mouse.rightButton.isPressed && !ratonCapturado;
 
             _hasCursorWorld = TryGetCursorWorld(out _cursorWorld);
             _hasCursor = _hasCursorWorld && CeldaDesdeCursorMundo(out _cursorCell);

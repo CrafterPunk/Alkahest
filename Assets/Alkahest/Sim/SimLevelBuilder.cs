@@ -3109,11 +3109,13 @@ namespace Alkahest.Sim
             DrawSolidRect(grid, 140, 30, 30, 1, MaterialId.Stone);     // repisa de UNA celda de grosor
             grid.SetCell(200, 20, MaterialId.Stone);                   // guijarro aislado
             DrawSolidRect(grid, 230, 12, 50, 26, MaterialId.Stone);    // el macizo del túnel…
-            DrawSolidRect(grid, 230, 8, 50, 4, MaterialId.Empty);      // …con su túnel bajo (4 de alto)
+            DrawSolidRect(grid, 230, 8, 50, 6, MaterialId.Empty);      // …con su túnel bajo (6 de alto: agacharse visual, pasar real)
             // 9 · EL TERRARIO — cubetas en fila, cada material contra la roca (regla P1).
             Sala(360, 8, 750, 50);
+            // (R128) Solo VOCABULARIO con nombre: lo innominado ("???") no
+            // enseña nada en una carta de ajuste (feedback de Cesar).
             byte[] cubetas = { MaterialId.Water, MaterialId.Sand, MaterialId.Oil, MaterialId.Limo,
-                               MaterialId.Ash, MaterialId.Nutrient, MaterialId.Ice, MaterialId.Slime };
+                               MaterialId.Ash, MaterialId.Nutrient, MaterialId.Ice, MaterialId.Brasa };
             int cx = 366;
             foreach (byte m in cubetas)
             {
@@ -3129,15 +3131,17 @@ namespace Alkahest.Sim
             // no tienen camino de baja, y así además se puede recuperar).
             Sala(30, 262, 300, 284);
 
-            // CORREDORES — para recorrerla JUGANDO (P7).
-            Sala(148, 172, 170, 182);   // cueva ↔ patio (entra al patio por su suelo alto)
-            Sala(250, 155, 258, 170);   // patio ↕ nave
-            Sala(88, 50, 98, 168);      // cueva ↕ pendientes
-            Sala(330, 20, 360, 30);     // pendientes ↔ terrario
-            Sala(470, 56, 530, 64);     // nave ↔ pozo (bajo la pared de juntas)
-            Sala(585, 70, 610, 80);   // pozo ↔ poza
-            Sala(585, 190, 610, 200);   // pozo ↔ vano
-            Sala(660, 110, 670, 150);   // poza ↕ vano
+            // CORREDORES — para recorrerla JUGANDO (P7). (R128, Cesar: "muy
+            // angostos, incómodo o tener que cavar") El muñeco mide 12 celdas:
+            // todo pasaje queda en 16 de luz.
+            Sala(148, 168, 170, 184);   // cueva ↔ patio
+            Sala(246, 152, 262, 170);   // patio ↕ nave
+            Sala(84, 50, 100, 170);     // cueva ↕ pendientes
+            Sala(330, 16, 360, 34);     // pendientes ↔ terrario
+            Sala(470, 55, 530, 71);     // nave ↔ pozo (bajo la pared de juntas)
+            Sala(585, 68, 610, 84);     // pozo ↔ poza
+            Sala(585, 186, 610, 202);   // pozo ↔ vano
+            Sala(654, 110, 670, 150);   // poza ↕ vano
         }
 
         public static void BuildFundacion(CellGrid grid)

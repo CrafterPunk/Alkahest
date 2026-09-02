@@ -479,7 +479,11 @@ namespace Alkahest.Game
             _sim = sim;
             BuildVisuals();
 
-            SpawnBaldasYAnclajesSiCorresponde();
+            // (R128, Cesar: "andamios/anclajes del taller clásico aparecen en
+            // el mapa innecesariamente") En la GALERÍA no nacen los muebles
+            // del plano clásico: sus posiciones son del cuarto íntimo y aquí
+            // flotan en el aire. La balda entra por el catálogo del curador.
+            if (!AlkahestGameBootstrap.ModoGaleria) SpawnBaldasYAnclajesSiCorresponde();
         }
 
         // -----------------------------------------------------------------
