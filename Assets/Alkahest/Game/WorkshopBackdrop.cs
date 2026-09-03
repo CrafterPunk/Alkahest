@@ -269,7 +269,7 @@ namespace Alkahest.Game
             // previa — estamos reconstruyendo porque algo pasó". La fundación
             // pinta su propia ruina y NO monta los herrajes (baldas, cadenas:
             // son el taller vestido, y aquí todavía no hay taller).
-            if (AlkahestGameBootstrap.ModoFundacion || AlkahestGameBootstrap.ModoGaleria) // (R127) la Galería también: ruina limpia, sin herrajes del taller clásico.
+            if (AlkahestGameBootstrap.ModoFundacion || AlkahestGameBootstrap.ModoGaleria || AlkahestGameBootstrap.ModoLaboratorio) // (R127) la Galería también: ruina limpia, sin herrajes del taller clásico.
             {
                 // (R75) Prioridad: 1) un hijo "Fondo_Horneado" ya colocado en
                 // la escena (lo que Cesar ve en el editor ES lo que sale);

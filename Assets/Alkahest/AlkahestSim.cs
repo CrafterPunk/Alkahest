@@ -42,6 +42,25 @@ namespace Alkahest
         private const float FixedDt = 1f / 30f;
         private const int MaxStepsPerFrame = 2;
 
+        // =====================================================================
+        // (R130) EL TIEMPO DEL LABORATORIO. El stepper es tick-indexado (RNG,
+        // fase de difusión, throttles): jamás se toca FixedDt. Acelerar =
+        // más ticks ENTEROS por frame: el acumulador crece a
+        // deltaTime x multiplicador y el bucle corre hasta multiplicador x 2
+        // pasos, con un presupuesto de milisegundos por frame (si se agota, el
+        // tiempo sobrante se DESCARTA -- no se acumula deuda). Las máquinas
+        // con acumulador propio (frasco, placas, crisol) NO escalan: en el
+        // laboratorio el mundo corre más deprisa que las manos del jugador, y
+        // eso es deliberado (es un instrumento de observación).
+        // =====================================================================
+        /// <summary>1, 5, 10, 50 o 100 (cualquier entero >= 1). Solo lo cambia el panel del laboratorio.</summary>
+        public int LabMultiplicador = 1;
+        /// <summary>Milisegundos de simulación por frame a partir de los cuales se corta el bucle (aunque falten pasos).</summary>
+        public float LabPresupuestoMs = 20f;
+        /// <summary>Multiplicador REAL alcanzado (pasos ejecutados / pasos que pedía el reloj), suavizado. 1.0 = al día.</summary>
+        public float LabMultiplicadorReal { get; private set; } = 1f;
+        private readonly System.Diagnostics.Stopwatch _swFrame = new System.Diagnostics.Stopwatch();
+
         private Universe _universe;
         private CellGrid _grid;
         private SimStepper _stepper;
@@ -197,6 +216,10 @@ namespace Alkahest
             }
 
             _universe = Universe.Create(seed);
+            // (R130) El laboratorio de leyes fija la física del agua/vapor por
+            // decreto (no depende del sorteo de la seed): ver
+            // Universe.AplicarOverridesLaboratorio. Nunca junto a Semilla Cero.
+            if (AlkahestGameBootstrap.ModoLaboratorio) Universe.AplicarOverridesLaboratorio(_universe);
             // (playtest 40, SEMILLA CERO, CONTRATO_SEMILLA.md §3) La pasada de
             // overrides de autor corre AQUÍ, justo después de la generación
             // normal, antes de construir plano ni stepper -- así todo lo que
@@ -241,7 +264,8 @@ namespace Alkahest
             // casi vacío) en vez del cuarto íntimo. Mismo criterio que la rama
             // BuildTestLevel de arriba: este es el único sitio del proyecto
             // donde se decide qué plano construir.
-            if (AlkahestGameBootstrap.ModoGaleria) SimLevelBuilder.BuildGaleria(_grid); // (R127) el banco de imagen.
+            if (AlkahestGameBootstrap.ModoLaboratorio) SimLevelBuilder.BuildLaboratorioDeLeyes(_grid); // (R130) el sandbox de investigación.
+            else if (AlkahestGameBootstrap.ModoGaleria) SimLevelBuilder.BuildGaleria(_grid); // (R127) el banco de imagen.
             else if (AlkahestGameBootstrap.ModoFundacion) SimLevelBuilder.BuildFundacion(_grid);
             else SimLevelBuilder.BuildCuartoIntimo(_grid);
             // (RONDA 77, EL OVERLAY DEL CINCEL) Los retoques de roca que
@@ -262,7 +286,7 @@ namespace Alkahest
             // ModoFundacion (ver Net/SimSync.cs, ronda 69g) se habría cazado
             // al primer vistazo con esto en pantalla.
             Debug.Log("[TenThousandYears] Mundo construido: plano=" +
-                (AlkahestGameBootstrap.ModoFundacion ? "FUNDACION" : "CUARTO") +
+                (AlkahestGameBootstrap.ModoLaboratorio ? "LABORATORIO" : AlkahestGameBootstrap.ModoGaleria ? "GALERIA" : AlkahestGameBootstrap.ModoFundacion ? "FUNDACION" : "CUARTO") +
                 " seed=" + seed +
                 " espejo=" + espejo +
                 " semillaCero=" + AlkahestGameBootstrap.ModoSemillaCero +
@@ -312,6 +336,9 @@ namespace Alkahest
             // Es la garantía estructural de que un invitado no puede simular
             // por su cuenta y desincronizarse — no hay nada que ejecutar.
             _stepper = espejo ? null : new SimStepper(_universe, _grid);
+            // (R130) Solo el laboratorio enciende sus pasadas; en cualquier
+            // otro modo el stepper es bit a bit el de siempre.
+            if (_stepper != null) _stepper.LabActivo = AlkahestGameBootstrap.ModoLaboratorio;
 
             if (_renderer == null)
             {
@@ -321,6 +348,7 @@ namespace Alkahest
             }
 
             _renderer.Init(_universe, _grid);
+            SimRenderer.LabTinteActivo = AlkahestGameBootstrap.ModoLaboratorio; // (R130) turbidez/mojado/savia solo en el laboratorio.
 
             Debug.Log($"[Alkahest] Universo creado con seed {seed}{(espejo ? " (ESPEJO: sin stepper, la sim vive en el anfitrión)" : "")}. " +
                       $"Grid {CellGrid.W}x{CellGrid.H}, chunks {CellGrid.ChunksX}x{CellGrid.ChunksY}.");
@@ -339,21 +367,37 @@ namespace Alkahest
 
             if (_stepper == null) return;
 
-            _accumulator += Time.deltaTime;
+            // (R130) Multiplicador del laboratorio: 1 en cualquier otro modo
+            // (LabMultiplicador solo lo escribe LabPanel).
+            int mult = LabMultiplicador < 1 ? 1 : LabMultiplicador;
+            int maxSteps = MaxStepsPerFrame * mult;
+            _accumulator += Time.deltaTime * mult;
+            int pasosQuePedia = (int)(_accumulator / FixedDt);
             int steps = 0;
-            while (_accumulator >= FixedDt && steps < MaxStepsPerFrame)
+            _swFrame.Restart();
+            while (_accumulator >= FixedDt && steps < maxSteps)
             {
+                // El presupuesto solo corta por encima del ritmo normal: a 1x
+                // el comportamiento es exactamente el de siempre.
+                if (steps >= MaxStepsPerFrame && _swFrame.Elapsed.TotalMilliseconds > LabPresupuestoMs) break;
                 _stepper.Step();
                 _accumulator -= FixedDt;
                 steps++;
             }
 
             // Si nos quedamos muy atrás (editor pausado, spike grande...) no
-            // dejamos que el acumulador crezca sin límite.
+            // dejamos que el acumulador crezca sin límite. (R130) Con
+            // multiplicador, el tiempo que no cupo se descarta: sin deuda.
             if (_accumulator > FixedDt * MaxStepsPerFrame)
             {
-                _accumulator = FixedDt * MaxStepsPerFrame;
+                _accumulator = mult > 1 ? 0f : FixedDt * MaxStepsPerFrame;
             }
+            if (mult > 1)
+            {
+                float real = pasosQuePedia > 0 ? (float)steps / pasosQuePedia : 1f;
+                LabMultiplicadorReal = LabMultiplicadorReal * 0.9f + real * mult * 0.1f;
+            }
+            else LabMultiplicadorReal = 1f;
 
             if (steps > 0)
             {
@@ -774,6 +818,25 @@ namespace Alkahest
             if (x <= 0 || x >= CellGrid.W - 1 || y <= 0 || y >= CellGrid.H - 1) return;
             int idx = CellGrid.Idx(x, y);
             _grid.temp[idx] = tempRaw;
+            _grid.WakeChunk(x, y, TickActual);
+        }
+
+        /// <summary>
+        /// (R130) Pinta UNA celda con material, temperatura Y los campos del
+        /// laboratorio (humedad, carga). Lo usa el cincel del laboratorio para
+        /// que la arcilla desprendida sea sedimento igual de húmedo que la
+        /// veta, y el panel para colocar agua turbia. No se reenvía al espejo
+        /// (los campos del laboratorio no viajan por la red: solo-anfitrión).
+        /// </summary>
+        public void PaintLab(int x, int y, byte materialId, byte tempRaw, byte humedad, byte carga)
+        {
+            if (_grid == null) return;
+            if (x <= 0 || x >= CellGrid.W - 1 || y <= 0 || y >= CellGrid.H - 1) return;
+            int idx = CellGrid.Idx(x, y);
+            _grid.SetCell(idx, materialId);
+            _grid.temp[idx] = tempRaw;
+            _grid.humedad[idx] = humedad;
+            _grid.carga[idx] = carga;
             _grid.WakeChunk(x, y, TickActual);
         }
 

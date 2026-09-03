@@ -25,7 +25,7 @@ namespace Alkahest.Sim
     /// a partir de (tick, x, y, sal), nunca UnityEngine.Random ni estado
     /// mutable compartido entre celdas dentro del mismo tick.
     /// </summary>
-    public sealed class SimStepper
+    public sealed partial class SimStepper
     {
         private const int W = CellGrid.W;
         private const int H = CellGrid.H;
@@ -259,28 +259,54 @@ namespace Alkahest.Sim
             _sw.Restart();
             _tick++;
 
-            DiffuseTemperature();
+            // (R130) TIEMPOS POR FASE: un Stopwatch de fase además del total,
+            // para que el banco del laboratorio (LabBench/LabPanel) diga DÓNDE
+            // se va el tick. Coste: cinco lecturas de reloj por tick.
+            _swFase.Restart();
+            // (R130) En el laboratorio la difusión térmica propia (conductividad
+            // y capacidad por clase, convección) sustituye a la de siempre;
+            // fuera del laboratorio esta línea no existe (regla 9 intacta).
+            if (LabActivo && LabParams.TermicaPropia != 0) LabDifusionTermica(); else DiffuseTemperature();
+            MsDifusion = _swFase.Elapsed.TotalMilliseconds;
 
+            _swFase.Restart();
             int activeCells = 0;
             bool forward = (_tick & 1u) == 0u;
 
-            for (int y = 0; y < H; y++)
+            // (R130) SALTO DE FILAS DORMIDAS: una fila de chunks en la que
+            // ninguno está despierto no puede procesar nada (ProcessIfNeeded
+            // devuelve 0 en su primera guarda), así que se salta entera sin
+            // pagar las 768 x 16 llamadas. Semántica idéntica; a 100x de
+            // tiempo con el mundo casi dormido es lo que hace pagable el tick.
+            for (int cy = 0; cy < CellGrid.ChunksY; cy++)
             {
-                int cy = y / CellGrid.CHUNK;
-                if (forward)
+                bool algunoDespierto = false;
+                for (int cx = 0; cx < CellGrid.ChunksX; cx++)
                 {
-                    for (int x = 0; x < W; x++)
-                        activeCells += ProcessIfNeeded(x, y, cy);
+                    if (_grid.IsChunkAwake(cx, cy)) { algunoDespierto = true; break; }
                 }
-                else
+                if (!algunoDespierto) continue;
+
+                int y0 = cy * CellGrid.CHUNK, y1 = Math.Min(y0 + CellGrid.CHUNK, H);
+                for (int y = y0; y < y1; y++)
                 {
-                    for (int x = W - 1; x >= 0; x--)
-                        activeCells += ProcessIfNeeded(x, y, cy);
+                    if (forward)
+                    {
+                        for (int x = 0; x < W; x++)
+                            activeCells += ProcessIfNeeded(x, y, cy);
+                    }
+                    else
+                    {
+                        for (int x = W - 1; x >= 0; x--)
+                            activeCells += ProcessIfNeeded(x, y, cy);
+                    }
                 }
             }
 
             ActiveCells = activeCells;
+            MsBarrido = _swFase.Elapsed.TotalMilliseconds;
 
+            _swFase.Restart();
             int awakeChunks = 0;
             for (int cy = 0; cy < CellGrid.ChunksY; cy++)
             {
@@ -295,8 +321,17 @@ namespace Alkahest.Sim
                 }
             }
             ActiveChunks = awakeChunks;
+            MsChunks = _swFase.Elapsed.TotalMilliseconds;
 
+            _swFase.Restart();
             MorphTick();
+            MsMorph = _swFase.Elapsed.TotalMilliseconds;
+
+            // (R130) LAS PASADAS DEL LABORATORIO (Sim/SimStepper.Laboratorio.cs):
+            // campos lentos sobre TODA la grilla (1/8 por tick, como la
+            // temperatura), presión hidrostática por cuerpos de agua, luz y
+            // cuerpos cohesionados. Fuera del laboratorio: un solo `if`.
+            if (LabActivo) LabPasadas();
 
             _sw.Stop();
             LastStepMs = _sw.Elapsed.TotalMilliseconds;
@@ -348,6 +383,11 @@ namespace Alkahest.Sim
                 case MaterialArchetype.Organic:
                     ProcessOrganic(x, y, idx, def);
                     MaybeReact(_cellFinalX, _cellFinalY, _cellFinalIdx, _cellMoved);
+                    break;
+                case MaterialArchetype.Planta:
+                    // (R130) La planta ni cae ni fluye; vive en la pasada de
+                    // campos. ApplyPhase ya corrió arriba: si está seca y
+                    // caliente, arde como cualquier inflamable.
                     break;
                 case MaterialArchetype.StaticSolid:
                     // (fix playtest) El hielo YA NO inyecta frío a vecinos: creaba una zona fría
@@ -642,7 +682,8 @@ namespace Alkahest.Sim
             // bajaría de su valor inicial (fuego eterno, contradice
             // "consumo progresivo" del contrato).
             else if (def.flammable && def.ignitionTemp != short.MaxValue && t > def.ignitionTemp
-                && (def.combustReserva == 0 || GetCombustReserva(idx, def.archetype) == 0))
+                && (def.combustReserva == 0 || GetCombustReserva(idx, def.archetype) == 0)
+                && !LabCombustibleMojado(idx, def))
             {
                 int x = idx % W, y = idx / W;
                 PushEvent(SimEventType.Ignite, m, x, y);
@@ -697,6 +738,7 @@ namespace Alkahest.Sim
         {
             _grid.SwapCells(idx1, idx2);
             _grid.touchedTick[idx2] = _tick;
+            _grid.reposo[idx2] = 0; // (R130) moverse rompe la quietud (un byte; sin guarda de modo a propósito).
             _grid.WakeChunk(x1, y1, _tick);
             _grid.WakeChunk(x2, y2, _tick);
 
@@ -1089,6 +1131,7 @@ namespace Alkahest.Sim
             if (belowDef.archetype == MaterialArchetype.Empty || belowDef.archetype == MaterialArchetype.Gas)
             {
                 Move(x, y, idx, x, y - 1, belowIdx);
+                if (LabActivo && def.id == MaterialId.Water) LabErosion(_cellFinalX, _cellFinalY, _cellFinalIdx); // (R130) el agua que CAE erosiona.
                 return;
             }
 
@@ -1124,11 +1167,18 @@ namespace Alkahest.Sim
                 bool prefRight = (_grid.aux[idx] & 0x1) != 0;
                 int primaryDir = prefRight ? 1 : -1;
 
-                if (TryFlow(x, y, idx, primaryDir, def.fluidity)) return;
+                if (TryFlow(x, y, idx, primaryDir, def.fluidity))
+                {
+                    if (LabActivo && def.id == MaterialId.Water) LabErosion(_cellFinalX, _cellFinalY, _cellFinalIdx); // (R130) el agua que FLUYE erosiona.
+                    return;
+                }
 
                 // La dirección preferida está bloqueada: prueba la contraria.
                 // TryFlow ya deja grabada la nueva dirección en el aux de la celda movida.
-                TryFlow(x, y, idx, -primaryDir, def.fluidity);
+                if (TryFlow(x, y, idx, -primaryDir, def.fluidity))
+                {
+                    if (LabActivo && def.id == MaterialId.Water) LabErosion(_cellFinalX, _cellFinalY, _cellFinalIdx);
+                }
             }
         }
 
@@ -1653,6 +1703,7 @@ namespace Alkahest.Sim
             if (nm == MaterialId.Fire || nm == MaterialId.Empty) return;
             var ndef = _universe.Get(nm);
             if (!ndef.flammable) return;
+            if (LabCombustibleMojado(nidx, ndef)) return; // (R130) la fibra mojada no prende.
 
             // (contrato 1a) Ya ardiendo (combustión persistente): nada que
             // reencender -- evita el mismo problema de "reencendido a tope

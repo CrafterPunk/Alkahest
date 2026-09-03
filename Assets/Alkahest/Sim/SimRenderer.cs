@@ -15,7 +15,7 @@ namespace Alkahest.Sim
     /// 3x2 pantallas). También posee la cámara: la sigue con zona muerta y
     /// suavizado (ver UpdateCameraFollow).
     /// </summary>
-    public sealed class SimRenderer : MonoBehaviour
+    public sealed partial class SimRenderer : MonoBehaviour
     {
         /// <summary>Tamaño en unidades de mundo de una celda de simulación.</summary>
         public const float CellWorldSize = 0.1f;
@@ -1624,7 +1624,13 @@ namespace Alkahest.Sim
                 }
             }
 
-            return new Color32(r, g, b, baseColor.a);
+            // (R130) TINTE DEL LABORATORIO: turbidez del agua, mojado de los
+            // porosos, savia de la planta, volumen parcial. Un solo branch
+            // fuera del laboratorio (SimRenderer.Laboratorio.cs).
+            byte alfa = baseColor.a;
+            if (LabTinteActivo) LabTinte(matId, idx, ref r, ref g, ref b, ref alfa);
+
+            return new Color32(r, g, b, alfa);
         }
 
         private static byte ClampByte(int v) => (byte)(v < 0 ? 0 : (v > 255 ? 255 : v));

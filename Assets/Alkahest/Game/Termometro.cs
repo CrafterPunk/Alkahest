@@ -189,6 +189,7 @@ namespace Alkahest.Game
             // pantalla completa.
             if (DayCycle.InputLocked) { OcultarModoVisuales(); return; }
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarModoVisuales(); return; }
+            if (LabPanel.BloqueaHerramientas) return; // (R130) el ratón sobre el panel del laboratorio es del panel.
             if (UiStyles.EscribiendoTexto) { OcultarModoVisuales(); return; }
             if (JournalHud.Abierto) { OcultarModoVisuales(); return; }
 

@@ -374,7 +374,7 @@ namespace Alkahest.Sim
     ///    Row`..labio) — el más estrecho de los tres, igual sobra para 3-4
     ///    repeticiones de un rasgo de 5-12 celdas (44/12≈3.7, 44/5≈8.8).
     /// </summary>
-    public static class SimLevelBuilder
+    public static partial class SimLevelBuilder
     {
         // =================================================================
         // NIVEL BASE

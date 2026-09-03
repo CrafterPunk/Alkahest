@@ -150,6 +150,15 @@ visible ya dice Ten Thousand Years (menús "Ten Thousand Years/1..5", builds
   construye el universo equivocado sin un solo error. La consola imprime la "línea de la
   verdad" del mundo construido — compararla entre lados ante cualquier desync.
 
+## El laboratorio de leyes (R130, en curso — Opus 5 implementa)
+
+Segunda galería = sandbox de investigación de la hipótesis "el conocimiento sustituye al
+trabajo manual". TODO vive en `docs/LAB/` (leer `CHECKPOINT.md` primero, luego
+`HANDOFF_OPUS.md`) y en `Laboratorio/` (capturas, presets, benchmarks). Código: partials
+`*.Laboratorio.cs` + `Game/LabPanel.cs` + `Sim/LabParams.cs`, gateado por
+`SimStepper.LabActivo`. Regla operativa nueva: **jamás editar un `.cs` con el editor en Play**
+(el RunCommand recompila y recarga el dominio).
+
 ## Estado en una línea
 
 EL FOCO: la CAPA VISUAL del mundo de ruinas amables (GDD §0: decreto R107) — personaje

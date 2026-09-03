@@ -921,7 +921,7 @@ namespace Alkahest.Game
 
                     if (!CellGrid.InBounds(x, y)) continue;
                     int m = _simColision.SampleMaterial(x, y);
-                    if (m != MaterialId.Stone && m != MaterialId.PisoEstructural) continue;
+                    if (!LabMateriales.EsSolidoDelMundo((byte)m)) continue; // (R130) Stone, Piso y los sólidos del laboratorio (arcilla, terracota, hogar...).
 
                     // (ronda 70, mandato de Cesar: "el personaje NO puede
                     // colisionar con las máquinas -- que la gestión del
@@ -1325,7 +1325,7 @@ namespace Alkahest.Game
                 int y = piesY - d;
                 if (!CellGrid.InBounds(cx, y)) break;
                 int m = _simColision.SampleMaterial(cx, y);
-                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) { suelo = y; break; }
+                if (LabMateriales.EsSolidoDelMundo((byte)m)) { suelo = y; break; }
             }
             if (suelo < 0) { _sombraSr.enabled = false; return; }
             float dist = (transform.position.y - MedioAltoAbajo) - (suelo + 1) * c;

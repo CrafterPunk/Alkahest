@@ -6761,3 +6761,39 @@ ca_playtest84.cmd barre la ronda.
 · Aparte (fuera del repo, en Notas\): la ruta de comunidad reescrita v2
   con la capa personal de Cesar (anonimato total, dos embudos, la
   compulsión educadora productizada, contra-anclas del ruido de precio).
+
+## Ronda 130 — EL LABORATORIO DE LEYES: costuras y handoff (Fable, sesión nocturna 2026-09-03)
+
+· Encargo de Cesar: «encontrar el juego dentro de la simulación» — una SEGUNDA galería
+  (sandbox de investigación, sin narrativa) para probar la hipótesis de que el conocimiento
+  sustituye al trabajo manual (canales, pozas, sedimentación, evaporación, vapor conducido,
+  condensación, filtración, automatización emergente), con panel de parámetros en vivo,
+  presets, tiempo acelerado, stress tests, análisis multiplayer e informe final. A mitad de
+  la noche Cesar cambió la estrategia por presupuesto: Fable = arquitecto, Opus 5 =
+  implementador. Todo lo de esta ronda vive en `docs/LAB/` (CHECKPOINT, DISENO_LABORATORIO,
+  HANDOFF_OPUS, MULTIPLAYER, mapa/ con 9 mapas del motor) y en `Laboratorio/` (capturas,
+  benchmarks, presets).
+· Reconocimiento completo del motor con 9 lectores paralelos (stepper, universo, grid/render,
+  galería, herramientas, piel/red, docs históricos, historial, harness) → `docs/LAB/mapa/`.
+· Costuras (todas con «(R130)» en el código): `ModoLaboratorio` (regla 59 en 6 caminos),
+  botón en el título, `SpawnLaboratorio`, plano `BuildLaboratorioDeLeyes` (partial), 4 campos
+  por celda en CellGrid (humedad/carga/reposo/luz, viajan en SwapCells), 12 materiales nuevos
+  (ids 66-77: Sedimento, Arcilla, Terracota, Grava, Planta —arquetipo nuevo—, Fibra, Hogar,
+  NucleoFrio, Manantial, Sumidero, RocaSuelta, Semilla), `AplicarOverridesLaboratorio`,
+  ganchos en SimStepper (tiempos por fase, salto de filas de chunks dormidas, LabPasadas,
+  erosión, combustible mojado, reposo), tiempo acelerado con presupuesto en AlkahestSim,
+  `PaintLab`, cincel/frasco/colisión con los sólidos del laboratorio, tinte del renderer.
+· `SimStepper.Laboratorio.cs`: pasada de campos sobre TODA la grilla a 1/8 (aire: vapor,
+  condensación, rocío; agua: evaporación, infiltración con colmatación, decantación, depósito;
+  porosos: exudación, percolación, capilaridad, secado, compactación→arcilla, ablandamiento,
+  cocción→terracota, abono; hogar/frío/manantial/sumidero), PRESIÓN hidrostática por cuerpos
+  de agua conectados (verificada con un tubo en U: 237/199 → 219/217, agua conservada), luz por
+  máximo con decaimiento, térmica propia (k/c por clase, convección). `LabParams` con 84
+  parámetros registrados (nombre, unidad, default, rango, ayuda). `LabPanel` (F8) mínimo:
+  tiempo 1×-100×, coste por fase, libro mayor, sliders por grupo con «D» y «?».
+· Medido en el editor de Cesar: 2,34 ms/tick con 87 chunks despiertos (campos 0,15, presión
+  0,09, luz 5,4 ms cada 8 ticks = el cuello), 406 ticks/s headless. Hallazgo del plano: la
+  fisura de arena es polvo y cae a la cámara profunda (el arroyo se cuela por el agujero):
+  Opus lo corrige en H1 con una roca porosa estática.
+· Handoff a Opus 5: 8 hitos con interfaces, criterios de aceptación, benchmarks, riesgos y
+  qué escalar (`docs/LAB/HANDOFF_OPUS.md`). Sin push (cmd 130 para Cesar).

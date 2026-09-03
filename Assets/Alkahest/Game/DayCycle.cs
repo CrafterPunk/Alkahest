@@ -553,7 +553,7 @@ namespace Alkahest.Game
             // (RONDA 60, FUNDACIÓN) En el inicio oscuro el HUD SIGUE silenciado:
             // lo despierta el director al prestar el frasco (DespertarHudFundacion),
             // no el arranque de jornada. Fuera de ese modo, igual que siempre.
-            HudSilenciado = AlkahestGameBootstrap.ModoFundacion || AlkahestGameBootstrap.ModoGaleria; // (R127) la Galería vive con la pantalla limpia.
+            HudSilenciado = AlkahestGameBootstrap.ModoFundacion || AlkahestGameBootstrap.ModoGaleria || AlkahestGameBootstrap.ModoLaboratorio; // (R127) la Galería vive con la pantalla limpia. (R130) El laboratorio también (se despierta al moverse).
             // (fix ronda 56, EL BUG DEL COMPUESTO) En SEMILLA CERO el arco de "LO QUE
             // PERSISTE" NO se genera: el director (Game/SemillaCero.cs) dicta sus
             // propios pedidos guiados uno a uno. Antes se generaba igual y quedaba
@@ -1025,7 +1025,7 @@ namespace Alkahest.Game
             {
                 AlkahestGameBootstrap.ModoFundacion = true;
                 AlkahestGameBootstrap.ModoSemillaCero = false;
-                AlkahestGameBootstrap.ModoGaleria = false;
+                AlkahestGameBootstrap.ModoGaleria = false; AlkahestGameBootstrap.ModoLaboratorio = false;
                 RestartRun((int)Universe.SemillaCero);
             }
             if (GUILayout.Button("2", UiStyles.Boton, GUILayout.Width(UiStyles.S(38f)), GUILayout.Height(UiStyles.S(38f))))
@@ -1042,7 +1042,7 @@ namespace Alkahest.Game
             {
                 AlkahestGameBootstrap.ModoSemillaCero = true;
                 AlkahestGameBootstrap.ModoFundacion = false;
-                AlkahestGameBootstrap.ModoGaleria = false;
+                AlkahestGameBootstrap.ModoGaleria = false; AlkahestGameBootstrap.ModoLaboratorio = false;
                 RestartRun((int)Universe.SemillaCero);
             }
 
@@ -1053,6 +1053,18 @@ namespace Alkahest.Game
             if (GUILayout.Button("galería de estilo (banco de imagen, dev)", UiStyles.Boton, GUILayout.Height(UiStyles.S(26f))))
             {
                 AlkahestGameBootstrap.ModoGaleria = true;
+                AlkahestGameBootstrap.ModoFundacion = false;
+                AlkahestGameBootstrap.ModoSemillaCero = false;
+                AlkahestGameBootstrap.ModoLaboratorio = false;
+                RestartRun((int)Universe.SemillaCero);
+            }
+            // (R130) EL LABORATORIO DE LEYES -- el sandbox de investigación
+            // (docs/LAB/): misma discreción que la galería, misma seed, sin
+            // overrides de autor (Universe.AplicarOverridesLaboratorio manda).
+            if (GUILayout.Button("laboratorio de leyes (sandbox de investigación, dev)", UiStyles.Boton, GUILayout.Height(UiStyles.S(26f))))
+            {
+                AlkahestGameBootstrap.ModoLaboratorio = true;
+                AlkahestGameBootstrap.ModoGaleria = false;
                 AlkahestGameBootstrap.ModoFundacion = false;
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 RestartRun((int)Universe.SemillaCero);
@@ -1564,7 +1576,7 @@ namespace Alkahest.Game
                 // arco entero se puede volver a jugar.
                 AlkahestGameBootstrap.ModoSemillaCero = false;
                 AlkahestGameBootstrap.ModoFundacion = false; // (ronda 60) mismo criterio: partida nueva = caótico limpio.
-                AlkahestGameBootstrap.ModoGaleria = false; // (R127) regla 59.
+                AlkahestGameBootstrap.ModoGaleria = false; AlkahestGameBootstrap.ModoLaboratorio = false; // (R127) regla 59.
                 RestartRun(null);
             }
             if (GUILayout.Button("Salir", UiStyles.Boton, GUILayout.Height(UiStyles.S(32f))))

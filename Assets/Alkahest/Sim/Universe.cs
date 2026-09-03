@@ -106,7 +106,41 @@ namespace Alkahest.Sim
         /// </summary>
         public const byte PisoEstructural = 65;
 
-        public const int Count = 66; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66)
+        // -----------------------------------------------------------------
+        // (R130) EL LABORATORIO DE LEYES -- docs/LAB/DISENO_LABORATORIO.md §3.
+        // Doce materiales de VOCABULARIO (color fijo, jamás en
+        // UnnamedMaterialIds) al FINAL del roster, como Brasa/cruces/Piso:
+        // ningún id existente se mueve. Sus MaterialDef viven en
+        // Sim/Universe.Laboratorio.cs (CrearMaterialesLaboratorio) y su
+        // física en Sim/SimStepper.Laboratorio.cs. Solo el laboratorio los
+        // coloca; en el juego normal existen pero nadie los pinta.
+        // -----------------------------------------------------------------
+        /// <summary>Finos decantados (Powder). Húmedo/seco por humedad; carga = fertilidad; se compacta en Arcilla.</summary>
+        public const byte Sedimento = 66;
+        /// <summary>Sedimento compactado (StaticSolid con cohesión). Tallable (se desprende como Sedimento); empapada se ablanda; seca y caliente -> Terracota.</summary>
+        public const byte Arcilla = 67;
+        /// <summary>Arcilla cocida (StaticSolid dura, impermeable). El cincel la rompe en Grava.</summary>
+        public const byte Terracota = 68;
+        /// <summary>Grueso permeable (Powder, fluidez 0): filtro que casi no se colmata.</summary>
+        public const byte Grava = 69;
+        /// <summary>Vegetación (arquetipo Planta). Brota en sustrato húmedo con luz; muere a Fibra; arde.</summary>
+        public const byte Planta = 70;
+        /// <summary>Planta seca (Powder ligera, combustible persistente -> Brasa -> Ash). Mojada no prende.</summary>
+        public const byte Fibra = 71;
+        /// <summary>Brasa eterna (StaticSolid que jamás cae): fija su temperatura e inyecta calor cada visita.</summary>
+        public const byte Hogar = 72;
+        /// <summary>Sumidero térmico eterno (StaticSolid).</summary>
+        public const byte NucleoFrio = 73;
+        /// <summary>Fuente: emite agua turbia a caudal paramétrico (StaticSolid, no tallable).</summary>
+        public const byte Manantial = 74;
+        /// <summary>Desagüe: destruye el líquido que lo toca (StaticSolid, no tallable).</summary>
+        public const byte Sumidero = 75;
+        /// <summary>Cuerpo cohesionado: cae como bloque conectado y se fractura (hipótesis §8 del diseño; física en LabCuerpos).</summary>
+        public const byte RocaSuelta = 76;
+        /// <summary>Brote plantable (Powder): al asentarse sobre sustrato húmedo germina.</summary>
+        public const byte Semilla = 77;
+
+        public const int Count = 78; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66) + 12 (laboratorio, R130)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -180,7 +214,7 @@ namespace Alkahest.Sim
     /// leyes a través de esta clase, nunca hardcodea densidades/temperaturas
     /// en otro sitio.
     /// </summary>
-    public sealed class Universe
+    public sealed partial class Universe
     {
         public readonly int Seed;
         public readonly MaterialDef[] Materials;
@@ -1059,6 +1093,9 @@ namespace Alkahest.Sim
                 patron = PatronMorfologico.Liso,
                 borde = BordeMorfologico.Neto,
             };
+            // (R130) Los doce materiales del laboratorio de leyes, en su
+            // propio archivo (Universe.Laboratorio.cs) para no engordar este.
+            CrearMaterialesLaboratorio(mats);
 
             // ===================================================================
             // LO QUE PERSISTE (playtest 25, CONTRATO_PERSISTE.md sección 4) — el
@@ -3019,6 +3056,21 @@ namespace Alkahest.Sim
             // inmune al calor (245 raw, por encima de todo combustible real)
             // y resiste la prensa, mismo hueco documentado que Brasa/cruces.
             Rellenar(MaterialId.PisoEstructural, 245, RespuestaPrensa.Resistir);
+            // (R130) Laboratorio de leyes: mismo hueco documentado. Umbrales
+            // altos (no participan del ensayo de persistencia) y prensa
+            // Resistir/Nada según sean sólidos o polvos.
+            Rellenar(MaterialId.Sedimento, 200, RespuestaPrensa.Nada);
+            Rellenar(MaterialId.Arcilla, 220, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Terracota, 250, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Grava, 250, RespuestaPrensa.Nada);
+            Rellenar(MaterialId.Planta, 120, RespuestaPrensa.Nada);
+            Rellenar(MaterialId.Fibra, 120, RespuestaPrensa.Nada);
+            Rellenar(MaterialId.Hogar, 255, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.NucleoFrio, 255, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Manantial, 255, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Sumidero, 255, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.RocaSuelta, 250, RespuestaPrensa.Resistir);
+            Rellenar(MaterialId.Semilla, 120, RespuestaPrensa.Nada);
         }
 
         // ===================================================================

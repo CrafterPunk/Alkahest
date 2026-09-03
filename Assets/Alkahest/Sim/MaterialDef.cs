@@ -15,6 +15,8 @@ namespace Alkahest.Sim
         Gas = 4,
         Fire = 5,
         Organic = 6,
+        /// <summary>(R130, laboratorio de leyes) Vegetación sistémica: no cae, no fluye; crece/muere en la pasada de campos de SimStepper.Laboratorio.cs. ApplyPhase sigue aplicando (arde).</summary>
+        Planta = 7,
     }
 
     /// <summary>

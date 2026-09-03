@@ -257,6 +257,7 @@ namespace Alkahest.Game
             // (fix playtest 2) Con la paleta dev (F3) abierta, el pincel manda: el frasco no actúa.
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisualesDeMundo(); return; }
             if (GaleriaCurador.Abierto) { OcultarVisualesDeMundo(); return; } // (R128) los clics del curador no aspiran ni vierten.
+            if (LabPanel.BloqueaHerramientas) { OcultarVisualesDeMundo(); return; } // (R130) el ratón sobre el panel del laboratorio es del panel.
 
             // (RONDA 73, el prólogo rehecho) ANTES DEL "TOMA." NO LLEVAS
             // FRASCO: en el inicio oscuro de la fundación el frasco aún es del
@@ -524,6 +525,7 @@ namespace Alkahest.Game
             // ESTRUCTURAL es arquitectura, como la piedra: jamás entra al
             // frasco.
             if (matId == MaterialId.Empty || matId == MaterialId.Stone || matId == MaterialId.PisoEstructural) return false;
+            if (LabMateriales.EsSolidoDelMundo(matId)) return false; // (R130) arcilla, terracota, hogar, manantial... son mundo, no botín.
             if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire) return false;
             return true;
         }
@@ -591,7 +593,7 @@ namespace Alkahest.Game
                         //    los encargos del Maestro piden entregar (cristal,
                         //    "algo helado"). Con el filtro antiguo por arquetipo
                         //    esos encargos eran literalmente imposibles.
-                        if (matId == MaterialId.Stone || matId == MaterialId.PisoEstructural) continue; // (R116) arquitectura, no botín.
+                        if (matId == MaterialId.Stone || matId == MaterialId.PisoEstructural || LabMateriales.EsSolidoDelMundo(matId)) continue; // (R116) arquitectura, no botín. (R130) ídem los sólidos del laboratorio.
                         if (_sim.Universe.Get(matId).archetype == MaterialArchetype.Fire)
                         {
                             SetFeedback("¡el fuego te quemaría el frasco!");

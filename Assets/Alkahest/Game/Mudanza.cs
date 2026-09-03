@@ -483,7 +483,7 @@ namespace Alkahest.Game
             // el mapa innecesariamente") En la GALERÍA no nacen los muebles
             // del plano clásico: sus posiciones son del cuarto íntimo y aquí
             // flotan en el aire. La balda entra por el catálogo del curador.
-            if (!AlkahestGameBootstrap.ModoGaleria) SpawnBaldasYAnclajesSiCorresponde();
+            if (!AlkahestGameBootstrap.ModoGaleria && !AlkahestGameBootstrap.ModoLaboratorio) SpawnBaldasYAnclajesSiCorresponde(); // (R130) el laboratorio tampoco.
         }
 
         // -----------------------------------------------------------------

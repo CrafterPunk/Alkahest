@@ -119,6 +119,14 @@ namespace Alkahest.Game
         /// </summary>
         public static bool ModoGaleria;
 
+        /// <summary>
+        /// (R130) EL LABORATORIO DE LEYES: el sandbox de investigación de
+        /// docs/LAB/DISENO_LABORATORIO.md (segunda galería). Excluyente con los
+        /// otros tres y reseteado en TODOS los caminos (regla 59), igual que
+        /// ModoGaleria. Nunca viaja a una sesión multi (solo-anfitrión).
+        /// </summary>
+        public static bool ModoLaboratorio;
+
         private AlkahestSim _sim;
         private bool _spawned;
 
@@ -386,6 +394,7 @@ namespace Alkahest.Game
                 {
                     ModoFundacion = false;
                     ModoGaleria = false; // (R127) misma regla 59 que el de arriba.
+                    ModoLaboratorio = false; // (R130) ídem.
                     Debug.LogWarning("[TenThousandYears] ModoFundacion venía ENCENDIDO al entrar a la escena MULTI: apagado. El prólogo es un modo de un solo jugador.");
                 }
                 // (R76, nota FRÁGIL de la revisión) Las dos estáticas del
@@ -425,6 +434,7 @@ namespace Alkahest.Game
             Balda.ResetGuardaEstatica(); Anclaje.ResetGuardaEstatica(); Pila.ResetGuardaEstatica(); // (integración pt54) la fuga de paridad solo/multi -- ver esos métodos.
 
             // (RONDA 60) LA FUNDACIÓN: rama mínima y retorno -- ver SpawnFundacion.
+            if (ModoLaboratorio) { SpawnLaboratorio(); return; } // (R130)
             if (ModoGaleria) { SpawnGaleria(); return; }
             if (ModoFundacion) { SpawnFundacion(); return; }
 
@@ -1012,6 +1022,33 @@ namespace Alkahest.Game
         // InputLocked despierte) + el CURADOR. Sin director, sin Trueque, sin
         // encargos: aquí no se juega, se JUZGA imagen.
         // =================================================================
+        /// <summary>
+        /// (R130) EL LABORATORIO DE LEYES: mismo esqueleto que SpawnGaleria
+        /// (telón, aprendiz con todas sus herramientas, DayCycle para ESC) más
+        /// el panel del laboratorio (F8). Sin curador, sin fogatas
+        /// re-encendidas: el fuego del laboratorio es un material (Hogar) y
+        /// vive en la simulación. Coordenadas: SimLevelBuilder.Laboratorio.cs.
+        /// </summary>
+        private void SpawnLaboratorio()
+        {
+            ObtenerOCrearBackdrop();
+
+            var apprentice = SpawnApprentice();
+            float celda = SimRenderer.CellWorldSize;
+            apprentice.transform.position = new Vector3(
+                (SimLevelBuilder.LabSpawnX + 0.5f) * celda,
+                (SimLevelBuilder.LabSpawnY + 0.5f) * celda, 0f);
+
+            var knowledge = apprentice.GetComponent<SubstanceKnowledge>();
+            var orderSystem = SpawnOrderSystem(knowledge); // DayCycle lo necesita; nadie encola nada.
+            SpawnDayCycle(orderSystem, knowledge, null, null);
+
+            LabPanel.Crear(_sim, apprentice.GetComponent<ApprenticeController>());
+
+            _spawned = true;
+            Debug.Log("[TenThousandYears] LABORATORIO DE LEYES (R130): panel F8, teletransportes Ctrl+1..6, tiempo 1x-100x. docs/LAB/.");
+        }
+
         private void SpawnGaleria()
         {
             ObtenerOCrearBackdrop();

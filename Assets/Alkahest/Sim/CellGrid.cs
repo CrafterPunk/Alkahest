@@ -169,6 +169,31 @@ namespace Alkahest.Sim
         // acumulador y la traducción a color.
         public readonly byte[] patina;
 
+        // =================================================================
+        // LABORATORIO DE LEYES (R130, docs/LAB/DISENO_LABORATORIO.md §2)
+        // =================================================================
+        // Cuatro campos persistentes por celda para los procesos lentos del
+        // laboratorio. Viven SIEMPRE (221 KB cada uno) pero solo los escribe
+        // SimStepper cuando `SimStepper.LabActivo` (ModoLaboratorio); en el
+        // juego normal quedan a 0 y ningún sistema los lee. NO viajan por la
+        // red (SimSync solo replica mat[], ver docs/LAB/HANDOFF_OPUS.md §D).
+        //
+        // Semántica por material (una sola tabla, dos o tres lecturas cada uno):
+        //   humedad: aire = vapor en el aire · Water = VOLUMEN (255 = celda
+        //            llena) · porosos = agua contenida · roca = rocío · Planta = savia.
+        //   carga:   Water = finos en suspensión (turbidez) · porosos = finos
+        //            atrapados (colmatación) · Sedimento = fertilidad.
+        //   reposo:  visitas de la pasada de campos sin moverse (quietud/edad).
+        //   luz:     luz recibida (posicional: NO viaja en SwapCells).
+        /// <summary>(R130 lab) Vapor en aire / volumen en agua / agua contenida en porosos / rocío en roca / savia en planta.</summary>
+        public readonly byte[] humedad;
+        /// <summary>(R130 lab) Finos en suspensión (agua) / colmatación (porosos) / fertilidad (Sedimento).</summary>
+        public readonly byte[] carga;
+        /// <summary>(R130 lab) Visitas de LabCampos sin moverse: quietud del agua, edad de compactación, temporizador de planta.</summary>
+        public readonly byte[] reposo;
+        /// <summary>(R130 lab) Luz recibida 0..255, recalculada por LabLuz cada 8 ticks. Posicional.</summary>
+        public readonly byte[] luz;
+
         public CellGrid()
         {
             mat = new byte[W * H];
@@ -177,6 +202,10 @@ namespace Alkahest.Sim
             morph = new byte[W * H];
             morphScratch = new byte[W * H];
             patina = new byte[W * H];
+            humedad = new byte[W * H];
+            carga = new byte[W * H];
+            reposo = new byte[W * H];
+            luz = new byte[W * H];
             ambient = new byte[W * H];
             for (int i = 0; i < ambient.Length; i++) ambient[i] = AmbientRaw;
             touchedTick = new uint[W * H];
@@ -217,6 +246,13 @@ namespace Alkahest.Sim
             // Hash barato de (posición, material) — sin divisiones, esto está
             // en el hot path. La regla de la familia hará el resto.
             morph[idx] = (byte)(idx * 37 + materialId * 101 + 13);
+            // (R130 lab) Materia nueva nace con sus campos limpios; el AGUA nace
+            // LLENA (humedad = volumen = 255). Es lo que hace que un frasco
+            // vertido, un manantial o un Transform() produzcan celdas de agua
+            // completas sin que cada llamante tenga que saberlo.
+            humedad[idx] = materialId == MaterialId.Water ? (byte)255 : (byte)0;
+            carga[idx] = 0;
+            reposo[idx] = 0;
         }
 
         public void SetCell(int x, int y, byte materialId, bool resetAux = true)
@@ -234,6 +270,12 @@ namespace Alkahest.Sim
             // líquido que fluye arrastra su dibujo y lo va reacomodando, en vez
             // de dejar el patrón clavado a las coordenadas del mundo.
             (morph[idxA], morph[idxB]) = (morph[idxB], morph[idxA]);
+            // (R130 lab) Los campos del laboratorio viajan con la sustancia
+            // (el agua turbia se lleva su carga; la arena mojada su agua).
+            // `luz` NO: es posicional y la recalcula LabLuz.
+            (humedad[idxA], humedad[idxB]) = (humedad[idxB], humedad[idxA]);
+            (carga[idxA], carga[idxB]) = (carga[idxB], carga[idxA]);
+            (reposo[idxA], reposo[idxB]) = (reposo[idxB], reposo[idxA]);
         }
 
         // ---- Chunks ------------------------------------------------------------------------

@@ -207,6 +207,7 @@ namespace Alkahest.Game
             if (FundacionDirector.FrascoBloqueado) { OcultarVisuales(); return; }
             if (Alkahest.Dev.DevPalette.IsOpen) { OcultarVisuales(); return; }
             if (GaleriaCurador.Abierto) { OcultarVisuales(); return; } // (R128) con el curador de la Galería abierto, los clics son SUYOS.
+            if (LabPanel.BloqueaHerramientas) { OcultarVisuales(); return; } // (R130) ídem el panel del laboratorio (solo con el ratón encima).
             if (UiStyles.EscribiendoTexto) { OcultarVisuales(); return; }
             if (JournalHud.Abierto || AlbumReal.Abierto) { OcultarVisuales(); return; } // (integración pt50, regla 12) también la ficha modal del álbum.
 
@@ -371,7 +372,7 @@ namespace Alkahest.Game
                 int ddx = x - hasta.x, ddy = y - hasta.y;
                 if (ddx * ddx + ddy * ddy <= margen2) break; // ya es la cara del disco: lo que haya aquí es editable, no pared.
                 int m = _sim.SampleMaterial(x, y);
-                if (m == MaterialId.Stone || m == MaterialId.PisoEstructural) n++;
+                if (LabMateriales.EsSolidoDelMundo((byte)m)) n++; // (R130) arcilla/terracota/roca suelta también son pared.
             }
             return n;
         }
@@ -432,7 +433,11 @@ namespace Alkahest.Game
                         // simulación (agua, aceite, cristal, vivium...) --
                         // para eso está el frasco, con su propio filtro.
                         int matAqui = _sim.SampleMaterial(x, y);
-                        if (matAqui != MaterialId.Stone && matAqui != MaterialId.PisoEstructural) continue;
+                        // (R130) En el laboratorio también se desprenden arcilla,
+                        // terracota y roca suelta (LabMateriales.Tallable); el
+                        // producto de la talla lo decide ProductoDeTalla (la
+                        // arcilla da sedimento: tallar barro te da barro).
+                        if (!LabMateriales.Tallable((byte)matAqui)) continue;
 
                         // (playtest 27) LA OBRA DEL TALLER NO CEDE AL CINCEL:
                         // Cesar, probando el 26, se llevó parte de la
@@ -460,7 +465,13 @@ namespace Alkahest.Game
                             continue;
                         }
 
-                        _sim.Paint(x, y, 0, MaterialId.Empty);
+                        byte producto = LabMateriales.ProductoDeTalla((byte)matAqui);
+                        if (producto == MaterialId.Empty) _sim.Paint(x, y, 0, MaterialId.Empty);
+                        else
+                        {
+                            int idxAqui = CellGrid.Idx(x, y);
+                            _sim.PaintLab(x, y, producto, _sim.Grid.temp[idxAqui], _sim.Grid.humedad[idxAqui], 0);
+                        }
                         budget--;
                     }
                 }
