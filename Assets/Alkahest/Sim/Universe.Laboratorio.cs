@@ -179,17 +179,25 @@ namespace Alkahest.Sim
             agua.boilsAt = CellGrid.CToRaw(100);      // 110 raw
             u.Get(MaterialId.Ice).meltsAt = CellGrid.CToRaw(5);
             u.Get(MaterialId.Oil).density = 75;       // flota sobre el agua, siempre.
-            var vapor = u.Get(MaterialId.Steam);
-            vapor.condensesAt = CellGrid.CToRaw(60);  // 90 raw
-            ReaplicarVapor(u);
+            ReaplicarVapor(u); // (R132) el punto de rocío del vapor visible ya es un parámetro.
         }
 
-        /// <summary>Vida del vapor visible desde LabParams (el panel la cambia en vivo).</summary>
+        /// <summary>
+        /// Vida y punto de rocío del vapor VISIBLE desde LabParams (el panel los
+        /// cambia en vivo). (R132) `condensesAt` estaba escrito a mano aquí en 60 °C,
+        /// contra el invariante 5 del handoff ("todo número físico vive en LabParams"),
+        /// y era el número que rompía la cadena del agua: con el aire de la cueva a
+        /// 20 °C, cada celda de vapor se volvía agua en el mismo tick en que salía de
+        /// la zona caliente del hogar. Medido: 229 condensaciones de gas y CERO celdas
+        /// de vapor vivas, ni una sola llegando a la chimenea.
+        /// </summary>
         public static void ReaplicarVapor(Universe u)
         {
             int vida = LabParams.VaporVida;
             if (vida < 1) vida = 1; else if (vida > 255) vida = 255;
-            u.Get(MaterialId.Steam).gasLifetime = (byte)vida;
+            var vapor = u.Get(MaterialId.Steam);
+            vapor.gasLifetime = (byte)vida;
+            vapor.condensesAt = CellGrid.CToRaw(LabParams.VaporCondensaC);
             LabParams.VaporVidaCambiado = false;
         }
     }

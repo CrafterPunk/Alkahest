@@ -49,9 +49,10 @@ namespace Alkahest.Sim
         public static int SatBase = 60;
         public static int SatPorGrado = 4;
         public static int VaporDifusion = 4;
-        public static int VaporAscenso = 6;
+        public static int VaporAscenso = 12;
         public static int CondensaRate = 24;
-        public static int VaporVida = 60;
+        public static int VaporVida = 180;
+        public static int VaporCondensaC = 10;
         public static int Latente = 4;
 
         // ---------------- SEDIMENTO ----------------
@@ -159,12 +160,14 @@ namespace Alkahest.Sim
               "Cuánto más vapor cabe en el aire por cada raw (2 °C) por encima del ambiente, y cuánto menos por debajo. Aire caliente = esponja grande; aire frío = escurre.");
             R("vapor.difusion", "Difusión del vapor", "AGUA", "divisor", 4, 1, 16, () => VaporDifusion, v => VaporDifusion = (int)v,
               "El vapor se reparte entre celdas de aire vecinas: en cada visita se mueve (diferencia / 2·este número). Más bajo = se esparce más rápido.");
-            R("vapor.ascenso", "Ascenso del vapor", "AGUA", "u/visita", 6, 0, 30, () => VaporAscenso, v => VaporAscenso = (int)v,
-              "El vapor pesa menos que el aire: cuántas unidades suben a la celda de encima en cada visita si arriba hay menos. Es lo que acumula humedad bajo los techos.");
+            R("vapor.ascenso", "Ascenso del vapor", "AGUA", "u/visita", 12, 0, 30, () => VaporAscenso, v => VaporAscenso = (int)v,
+              "El vapor pesa menos que el aire: cuántas unidades suben a la celda de encima en cada visita si arriba hay menos. Es lo que acumula humedad bajo los techos. (R132) 6 → 12 tras medir: con 6, la humedad que sale del arroyo se queda en la galería y no llega nunca a la cámara alta.");
             R("vapor.condensaRate", "Ritmo de condensación", "AGUA", "u/visita", 24, 1, 80, () => CondensaRate, v => CondensaRate = (int)v,
               "Cuánto vapor sobrante puede pasar en una visita del aire a la superficie vecina (roca: rocío; poroso: humedad; agua: volumen). Cuando el rocío de una roca llega a 255, GOTEA.");
-            R("vapor.vidaVapor", "Vida del vapor visible", "AGUA", "ticks", 60, 10, 255, () => VaporVida, v => { VaporVida = (int)v; VaporVidaCambiado = true; },
-              "Cuántos ticks vive una celda de VAPOR VISIBLE (el gas blanco) antes de disolverse en humedad del aire. No se pierde agua: pasa al aire. Más vida = columnas de vapor más largas.");
+            R("vapor.vidaVapor", "Vida del vapor visible", "AGUA", "ticks", 180, 10, 255, () => VaporVida, v => { VaporVida = (int)v; VaporVidaCambiado = true; },
+              "Cuántos ticks vive una celda de VAPOR VISIBLE (el gas blanco) antes de disolverse en humedad del aire. No se pierde agua: pasa al aire. Más vida = columnas de vapor más largas. (R132) 60 → 180 tras medir: del hogar a la cámara alta hay ~65 celdas de chimenea y con 60 ticks el vapor moría por el camino.");
+            R("vapor.condensaC", "El vapor visible se vuelve agua a", "AGUA", "°C", 10, -40, 120, () => VaporCondensaC, v => { VaporCondensaC = (int)v; VaporVidaCambiado = true; },
+              "Punto de rocío del VAPOR VISIBLE (el gas blanco): por debajo de esta temperatura, una celda de vapor se vuelve agua de golpe, donde esté. Es el motor del juego base, no la saturación del laboratorio. OJO: si lo pones por encima del ambiente de la cueva (20 °C), el vapor muere a dos celdas del fuego y NO PUEDE VIAJAR — la cadena hervir→subir→condensar arriba se rompe entera. Por debajo del ambiente, el vapor sube como gas, expira convertido en humedad del aire y condensa donde de verdad hace frío.");
             R("termica.latente", "Calor latente", "AGUA", "raw por celda", 4, 0, 16, () => Latente, v => Latente = (int)v,
               "Evaporar enfría lo que se evapora y condensar calienta la superficie: cuántos raw (2 °C) cambia la temperatura por cada celda entera de agua que cambia de estado.");
 

@@ -63,6 +63,11 @@ namespace Alkahest.Sim
         public long LabBalanceU;
         /// <summary>(R131) Agua que el sumidero tragó, en UNIDADES (la de celdas, LabAguaSumida, cuenta celdas a medio llenar como enteras).</summary>
         public long LabAguaSumidaU;
+        /// <summary>(R132, autorizado por Fable en R2) Celdas de VAPOR VISIBLE que se han vuelto agua
+        /// (Steam → Water en ApplyPhase y al expirar en ProcessGas). `LabCondensado` solo cuenta la
+        /// condensación de la pasada de campos (aire → superficie): "condensado = 0" NO significaba
+        /// que no condensara nada, significaba que no lo contábamos por este camino.</summary>
+        public long LabCondensadoGas;
 
         // ---- Sales propias (grep-verificadas: las de SimStepper.cs llegan a 563) --
         private const uint SalLabErosion = 601;
@@ -358,16 +363,23 @@ namespace Alkahest.Sim
                     }
                 }
             }
-            if (vol <= 0) { LabTransformar(i, MaterialId.Empty, 0, 0); return; } // el aire se la llevó entera.
+            // (R132, diagnóstico de Fable) REGLA DE ESTE MÉTODO: `vol` es una variable
+            // LOCAL y `hum[i]` solo se escribe al final, así que TODA salida anticipada
+            // tiene que SINCRONIZAR `hum[i] = vol` antes de transformar. Si no, el auditor
+            // de LabTransformar lee el volumen VIEJO y cuenta como DESTRUIDO lo que en
+            // realidad se TRANSFIRIÓ al aire o al poroso en esta misma visita. Era todo el
+            // residuo de conservación de la R131 (+632 u en 18 000 ticks) y no estaba en el
+            // barrido ordinario como yo suponía. Cinco salidas: estas cuatro y el DEPÓSITO.
+            if (vol <= 0) { hum[i] = 0; LabTransformar(i, MaterialId.Empty, 0, 0); return; } // el aire se la llevó entera.
 
             // 2) Infiltración a porosos vecinos (abajo entero, lados a la mitad),
             //    frenada por la COLMATACIÓN del poroso (finos atrapados).
             vol = LabInfiltrarHacia(i, down, vol, 255);
-            if (vol <= 0) { LabTransformar(i, MaterialId.Empty, 0, 0); return; }
+            if (vol <= 0) { hum[i] = 0; LabTransformar(i, MaterialId.Empty, 0, 0); return; }
             vol = LabInfiltrarHacia(i, i - 1, vol, 128);
-            if (vol <= 0) { LabTransformar(i, MaterialId.Empty, 0, 0); return; }
+            if (vol <= 0) { hum[i] = 0; LabTransformar(i, MaterialId.Empty, 0, 0); return; }
             vol = LabInfiltrarHacia(i, i + 1, vol, 128);
-            if (vol <= 0) { LabTransformar(i, MaterialId.Empty, 0, 0); return; }
+            if (vol <= 0) { hum[i] = 0; LabTransformar(i, MaterialId.Empty, 0, 0); return; }
 
             // 3) Los finos: decantan hacia el agua de abajo (más si el agua está
             //    quieta), DEPOSITAN sobre el fondo si hay bastantes y quietud, y
@@ -396,6 +408,13 @@ namespace Alkahest.Sim
                     // el inventario se desviaba +10 % del libro mayor; con `vol`
                     // el depósito es exactamente la transferencia que dice el
                     // comentario (invariante 3 del HANDOFF: restar donde se suma).
+                    // (R132) La QUINTA salida: sincronizar antes de transformar. El
+                    // depósito ocurre después de evaporar e infiltrar, así que sin esta
+                    // línea el auditor se apuntaba como destruido justo lo que esta visita
+                    // acababa de mudar al aire y al lecho — medido: exactamente
+                    // (evaporado + infiltrado) de la visita, 1 u por depósito con los
+                    // valores de fábrica. Es el resto del residuo de la R131.
+                    hum[i] = (byte)vol;
                     LabTransformar(i, MaterialId.Sedimento, vol, 0);
                     LabDepositado++;
                     return;
@@ -534,6 +553,16 @@ namespace Alkahest.Sim
                     }
                     if (_grid.temp[i] >= LabParams.TerracotaRaw && h <= LabParams.TerracotaHumMax)
                     {
+                        // (R132) La terracota es impermeable: no puede quedarse con agua. La
+                        // que le quede a la arcilla se va al AIRE antes de cocer — un horno de
+                        // cerámica HUMEDECE el cuarto, y eso es una observación de verdad, no
+                        // una pérdida silenciosa. Lo que no quepa (aire ya saturado) sí se
+                        // pierde, y el auditor lo cuenta.
+                        h = LabSecarHacia(h, i, i + W);
+                        h = LabSecarHacia(h, i, i - 1);
+                        h = LabSecarHacia(h, i, i + 1);
+                        h = LabSecarHacia(h, i, i - W);
+                        hum[i] = (byte)h;
                         LabTransformar(i, MaterialId.Terracota, 0, 0);
                         LabCocido++;
                         return;
@@ -551,8 +580,14 @@ namespace Alkahest.Sim
                         {
                             int f = _grid.carga[tgt] + LabParams.AbonoCeniza; if (f > 255) f = 255;
                             _grid.carga[tgt] = (byte)f;
-                            int hf = _grid.humedad[tgt] + h; if (hf > 255) hf = 255;
+                            // (R132) Solo se va lo que CABE: si el sustrato ya está empapado,
+                            // el resto sigue siendo agua de la ceniza hasta el momento de
+                            // disolverse. Antes se apuntaba la transferencia entera aunque el
+                            // destino la hubiera recortado a 255.
+                            int humAntes = _grid.humedad[tgt];
+                            int hf = humAntes + h; if (hf > 255) hf = 255;
                             _grid.humedad[tgt] = (byte)hf; // su agua también pasa al sustrato.
+                            hum[i] = (byte)(h - (hf - humAntes));
                             LabTransformar(i, MaterialId.Empty, 0, 0);
                             LabAbonado++;
                             return;
@@ -763,11 +798,17 @@ namespace Alkahest.Sim
                         // se mueve. Antes la mudanza borraba el vapor del destino y el
                         // libro mayor perdía ~4,5 u por mudanza (−20 006 u en 9000 ticks,
                         // el 85 % del descuadre): la presión "secaba" el aire de la cueva.
+                        // (R132, retoque de Fable a R1) El intercambio es COMPLETO: masa y
+                        // energía. Antes el hueco cedía su vapor pero se quedaba con la
+                        // temperatura del agua, así que la presión también repartía calor
+                        // que no era suyo.
                         int vaporDelHueco = hum[target];
+                        byte tempDelHueco = temp[target];
                         _grid.SetCell(target, MaterialId.Water);
                         temp[target] = temp[src]; hum[target] = hum[src]; carga[target] = carga[src]; reposo[target] = 0;
                         _grid.SetCell(src, MaterialId.Empty);
                         hum[src] = (byte)vaporDelHueco;
+                        temp[src] = tempDelHueco;
                         _labVisita[target] = pase;
                         _grid.WakeChunk(target % W, target / W, _tick);
                         _grid.WakeChunk(src % W, src / W, _tick);

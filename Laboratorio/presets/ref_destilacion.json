@@ -1,7 +1,7 @@
 {
-  "nombre": "_defaults",
-  "fecha": "2026-09-03 17:06",
-  "nota": "valores de fábrica del laboratorio (los escribe el panel al arrancar; no lo edites a mano)",
+  "nombre": "ref_destilacion",
+  "fecha": "2026-09-03 17:09",
+  "nota": "H3.1 (R132): hervir agua sobre el hogar, subir por la chimenea y llover en la camara alta fria. Los tres numeros que lo hacen posible: vapor.condensaC 10 C (era 60, por encima del ambiente de la cueva: el vapor moria a dos celdas del fuego), vapor.vidaVapor 180 (era 60, la chimenea mide 65 celdas) y vapor.ascenso 12 (era 6). Medido: primera gota arriba a los ~1000 ticks, sedimento seco de la camara alta de 0 a 17-22 de humedad.",
   "params": {
     "tiempo.presupuestoMs": 20,
     "agua.evapBase": 1,

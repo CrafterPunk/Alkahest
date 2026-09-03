@@ -6886,3 +6886,48 @@ ca_playtest84.cmd barre la ronda.
   tres archivos; capturas de las pestañas y de las vistas. Regresión: con `ModoLaboratorio` en
   false, `LabActivo`, el tinte, `VistaLab`, el panel y el sprite de la vista están apagados o
   no existen, y `BloqueaHerramientas` es false. 0 errores de consola. Sin push (cmd 131).
+
+## Ronda 132 — EL LABORATORIO: CONSERVACIÓN AL BIT Y EL CICLO DEL AGUA (Opus 5, con Fable respondiendo)
+
+· Fable contestó los tres escalados de la R131 (`docs/LAB/PREGUNTAS_A_FABLE.md`): aceptó el
+  intercambio de vapor en `LabPresion` (y pidió añadir también el de temperatura, hecho),
+  aceptó la grieta atascada de grava, y DIAGNOSTICÓ el residuo de conservación leyendo el
+  código en vez de suponerlo: no estaba en `SimStepper.cs` sino en `LabAgua`, donde `vol` es
+  una variable local y `hum[i]` solo se escribe al final, así que el auditor apuntaba como
+  DESTRUIDO lo que se acababa de TRANSFERIR. Correcto.
+· Su parche (las cuatro salidas por `vol <= 0`) llevó el residuo de **632 a 144**, no a cero.
+  La medida encontró el resto: **Δresiduo == Δdepósito en cada tick, 1 u por depósito**. El
+  DEPÓSITO es la QUINTA salida del método y ocurre después de evaporar e infiltrar, así que
+  arrastra el mismo desfase. Con la quinta sincronización: **residuo 0 EXACTO** a t=3 000,
+  9 000 y 18 000, y en un canal de prueba aislado. `Σ humedad(t) − Σ humedad(0) == LabBalanceU`
+  al bit; el invariante 3 del handoff pasa de aspiración a aserción comprobable.
+  Queda escrita en el código la regla: toda salida anticipada de `LabAgua` sincroniza.
+· También del mismo diagnóstico: el abono de ceniza solo cede lo que CABE en el sustrato, y la
+  cocción manda al aire el agua que le queda a la arcilla antes de volverse terracota (un horno
+  de cerámica humedece el cuarto) en vez de destruirla en silencio.
+· **H3.1 — el ciclo del agua, y una hipótesis de Fable refutada midiendo.** Él sospechaba que
+  el vapor moría de vejez a mitad de chimenea (`vidaVapor` 60 ticks vs ~65 celdas). Medido con
+  el gesto de H3.1 (verter agua sobre el hogar): **CERO celdas de vapor vivas, nunca, con
+  cualquier `vidaVapor`** — subirlo a 200 no cambió nada. No moría de vejez: moría en el mismo
+  tick. `Steam.condensesAt` estaba escrito A MANO en 60 °C dentro de
+  `AplicarOverridesLaboratorio`, por encima de los 20 °C de la cueva, así que cada celda de
+  vapor se volvía agua a dos celdas de la brasa. Ese número no era un `LabParam`: ni el panel
+  lo enseñaba ni un preset lo capturaba, contra el invariante 5 del propio handoff.
+· Promovido a **`vapor.condensaC`** (86 parámetros) y puesto en **10 °C**: por debajo del
+  ambiente, para que el vapor VIAJE; por encima de los 8 °C de la cámara alta, para que
+  condense donde de verdad hace frío. Con él, `vapor.vidaVapor` 60 → 180 (ahí Fable sí tenía
+  razón: la chimenea mide 65 celdas) y `vapor.ascenso` 6 → 12.
+· **Resultado**: hervir agua sobre la brasa eterna manda una columna de vapor por la chimenea y
+  **llueve en la cámara alta a los 450-1000 ticks = 15-33 s de mundo** (el criterio pedía menos
+  de 3 minutos). 21 celdas de agua líquida arriba y el sedimento seco del piso pasando de 0 a
+  17-22 de humedad. Destilación en columna salida de la geometría del plano, no de un guion.
+  Preset y snapshot `ref_destilacion`; capturas de la columna, del reflujo cayendo por la
+  chimenea y de la cámara fría mojándose.
+· Autorización de Fable usada: contador `LabCondensadoGas` (la condensación del vapor VISIBLE
+  no la contaba nadie, así que «condensado = 0» no significaba lo que parecía) con sus dos
+  líneas en `SimStepper.cs`, marcadas `(R132)`.
+· Regresión: el circuito de agua de H1 idéntico con los defaults nuevos (residuo 0, poza 136,
+  sumidero 4 802 celdas a t=9 000, 1,89 ms/tick, 528 ticks/s), 0 errores de consola.
+· Escalados nuevos a Fable (Q4, Q5): hay DOS mecanismos de condensación y solo dispara el del
+  gas — `LabGoteos` sigue en 0 porque el aire nunca llega a su saturación en una cámara de
+  2 548 celdas; y el aviso de que `condensaC` era un número del decreto físico. Sin push (cmd 132).

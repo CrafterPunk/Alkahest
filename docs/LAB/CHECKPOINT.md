@@ -40,15 +40,16 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 5 — H1 y H2 CERRADOS, siguiente H3.** El laboratorio existe, compila sin errores, entra desde
+**Fase: 6 — H1, H2 y H3.1 CERRADOS; sigue H3.2-H3.5.** El laboratorio existe, compila sin errores, entra desde
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
 grieta atascada. El libro mayor cuadra al 0,113 % y hay una auditoría de conservación
 permanente (`LabBalanceU`). El panel está COMPLETO (presets JSON, snapshots con PNG y libro, pincel de
-materia, seis vistas de depuración, ayuda general). El ciclo agua→vapor→condensación sigue SIN
-afinar (condensado = 0: es H3). Plantas, cuerpos cohesionados, banco headless e informe:
-pendientes (H3-H8).
+materia, seis vistas de depuración, ayuda general). El libro mayor cuadra AL BIT (residuo 0 exacto). El ciclo
+agua→vapor→condensación FUNCIONA: hervir sobre el hogar llueve en la cámara alta en 15-33 s de
+mundo (§6d). Faltan H3.2-H3.5 (sedimentación, colmatación, arcilla, sifón), plantas, cuerpos
+cohesionados, banco headless e informe.
 
 Documentos: `docs/LAB/DISENO_LABORATORIO.md` (diseño), `docs/LAB/HANDOFF_OPUS.md` (hitos e
 interfaces), `docs/LAB/MULTIPLAYER.md` (análisis de red), `docs/LAB/mapa/*.md` (9 mapas del
@@ -84,6 +85,18 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   madre sigue sin rendir nada (R60). Terracota y roca suelta se rompen en grava.
 - **D11 Tiempo** = N ticks enteros por frame con presupuesto de ms (jamás `FixedDt`); las
   máquinas con acumulador propio NO escalan (el mundo corre más deprisa que las manos; deliberado).
+- **D17 (R132, H3.1) El punto de rocío del vapor visible es un PARÁMETRO y vale 10 °C.**
+  `Steam.condensesAt` estaba escrito a mano en 60 °C dentro de `AplicarOverridesLaboratorio`,
+  contra el invariante 5 del HANDOFF ("todo número físico vive en LabParams"), y era el número
+  que rompía la cadena entera del agua: por encima de los 20 °C de la cueva, cada celda de
+  vapor se volvía agua a dos celdas del fuego. Medido: CERO celdas de vapor vivas en toda la
+  corrida, con cualquier `vidaVapor`. Ahora es `vapor.condensaC` = 10 °C — por debajo del
+  ambiente (el vapor VIAJA) y por encima de la cámara alta a 8 °C (condensa donde hace frío).
+  Con él, `vidaVapor` 60 → 180 (la chimenea mide ~65 celdas) y `vapor.ascenso` 6 → 12.
+- **D18 (R132) Toda salida anticipada de `LabAgua` sincroniza `hum[i] = vol`.** Son CINCO: las
+  cuatro por `vol <= 0` y el DEPÓSITO. `vol` es local y `hum[i]` solo se escribe al final, así
+  que salir sin sincronizar hace que el auditor apunte como destruido lo que se acababa de
+  transferir. Con las cinco, el residuo de conservación es **0 exacto** en todos los escenarios.
 - **D15 (R131, H2) El panel guarda en `Laboratorio/presets/` con JSON escrito a mano.**
   `JsonUtility` no serializa diccionarios y el formato del handoff es un mapa clave→número;
   son 40 líneas de escritor y lector para un formato que se edita en el bloc de notas y se
@@ -146,6 +159,13 @@ cuarta textura) · `Sim/SimRenderer.cs` (**la excepción del HANDOFF §2**: 5 co
 líneas — `LabVistaAntesDelFrame` en RenderFrame, la bandera por chunk, `LabVistaCelda` en el
 bucle, `LabVistaSetPixels` al cerrar el chunk y `LabVistaApply` en el Apply).
 
+(R132) `Sim/SimStepper.Laboratorio.cs` (las cinco salidas sincronizadas, abono y cocción
+conservativos, intercambio de temperatura en la presión, `LabCondensadoGas`) ·
+`Sim/LabParams.cs` (`vapor.condensaC` nuevo, 86 parámetros; defaults de vida y ascenso) ·
+`Sim/Universe.Laboratorio.cs` (`ReaplicarVapor` aplica también el punto de rocío) ·
+`Sim/SimStepper.cs` (**segunda excepción, autorizada por Fable en R2**: dos líneas
+`if (LabActivo) LabCondensadoGas++;` en las dos ramas de condensación del vapor visible).
+
 Nuevos: `Sim/LabParams.cs`, `Sim/LabMateriales.cs`, `Sim/SimStepper.Laboratorio.cs`,
 `Sim/SimLevelBuilder.Laboratorio.cs`, `Sim/SimRenderer.Laboratorio.cs`, `Sim/Universe.Laboratorio.cs`,
 `Game/LabPanel.cs`, `docs/LAB/*`, `Laboratorio/*`, `ca_playtest130.cmd`.
@@ -156,7 +176,8 @@ Ver `HANDOFF_OPUS.md` §1 (lista verificada) y `DISENO_LABORATORIO.md` §2-§6 (
 
 ## 5. PLAN (hitos de Opus, `HANDOFF_OPUS.md` §4)
 
-H1 plano/arenisca y circuito del agua **(HECHO, §6b)** → H2 panel completo **(HECHO, §6c)** (presets, snapshots, pincel, vistas)
+H1 plano/arenisca y circuito del agua **(HECHO, §6b)** → H2 panel completo **(HECHO, §6c)**
+→ H3.1 ciclo del agua **(HECHO, §6d)** (presets, snapshots, pincel, vistas)
 → H3 ciclo del agua afinado jugando (5 presets de referencia) → H4 plantas y fibra → H5
 rendimiento y banco headless → H6 cuerpos cohesionados → H7 arco largo con capturas → H8 informe.
 
@@ -242,19 +263,39 @@ panel y el sprite de la vista están todos apagados o no existen, y `BloqueaHerr
 false. Capturas: `R131_h2_panel_presets_vista_humedad.png`, `R131_h2_panel_pincel.png`,
 `R131_h2_vista_temperatura.png`, `R131_h2_vista_luz.png`.
 
+## 6d. R132 — CONSERVACIÓN EXACTA Y EL CICLO DEL AGUA (H3.1)
+
+Detalle y tablas: `Laboratorio/benchmarks/2026-09-03_r132_conservacion_y_destilacion.md`.
+
+**El residuo de conservación es 0.** El diagnóstico de Fable (el auditor leía el volumen viejo
+en `LabAgua`) era correcto y su parche llevó 632 → 144; la medida encontró el resto en la
+QUINTA salida, que su parche no listaba: el depósito. Ahora
+`Σ humedad(t) − Σ humedad(0) == LabBalanceU` **al bit** a t=3 000, 9 000 y 18 000.
+
+**H3.1 cumple con margen.** La hipótesis de Fable (el vapor moría de vejez a mitad de chimenea)
+resultó falsa al medirla: CERO celdas de vapor vivas con cualquier `vidaVapor`, porque
+`condensesAt` estaba en 60 °C y la cueva a 20 °C. Con `vapor.condensaC` = 10 °C, `vidaVapor`
+180 y `vapor.ascenso` 12: **primera gota de agua líquida en la cámara alta a los 450-1000 ticks
+= 15-33 s de mundo** (el criterio pedía < 3 min), 21 celdas de agua arriba y el sedimento seco
+del piso de 0 a 17-22 de humedad. Preset `ref_destilacion`.
+
+Regresión: el circuito de H1 idéntico (residuo 0, poza 136, sumidero 4 802 a t=9 000,
+1,89 ms/tick).
+
 ## 7. PARÁMETROS / DEFAULTS ACTUALES
 
-Los **85** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
-diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, y el nuevo `suelo.permArenisca` = 30
-(R131). `_defaults.json` lo escribe el panel al arrancar (H2, hecho).
+Los **86** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
+diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` = 30 (R131) y,
+de la R132, el nuevo `vapor.condensaC` = 10 °C más `vapor.vidaVapor` 60 → 180 y
+`vapor.ascenso` 6 → 12. `_defaults.json` lo escribe el panel al arrancar (H2, hecho).
 
 ## 8. PROBLEMAS CONOCIDOS
 
 1. ~~**La fisura de arena es polvo y cae**~~ **RESUELTO (R131, H1)**: `Arenisca` porosa
    estática en la fisura y grava sobre repisa en la grieta. Sumidero 10 949 celdas a t=18 000.
 2. **LabLuz 5 ms/ejecución** sobre el mundo entero (H5).
-3. **Condensación = 0** en 2 min: el vapor no llega a la zona fría o la saturación está mal
-   escalada (H3.1). La térmica propia sí enfría la cámara alta hacia 8 °C (ambiente por celda).
+3. ~~**Condensación = 0**~~ **RESUELTO (R132, H3.1)**: no era la saturación, era
+   `Steam.condensesAt` escrito a mano en 60 °C (por encima del ambiente de la cueva). Ver D17.
 4. **Churn erosión↔depósito** en el lecho junto al manantial (H3.2: decidir número o rasgo).
 5. **Editar `.cs` en Play** rompe la sesión (recarga de dominio por el RunCommand): receta en
    HANDOFF §3.
@@ -262,19 +303,19 @@ diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, y el nuevo `suelo.perm
    cuerpos (H6).
 7. `RocaSuelta` hoy se comporta como piedra tallable (gancho `LabCuerpos` vacío).
 8. La pestaña TIEMPO fija `LabPresupuestoMs` desde `LabParams.PresupuestoMs` cada frame (ok).
-9. **(R131) Residuo de conservación del barrido ordinario**: 632 u en 18 000 ticks (0,113 %, y
-   deja de crecer). No está en las pasadas del laboratorio — `LabBalanceU` las cubre enteras —
-   sino en `SimStepper.cs`, que el HANDOFF §2 me prohíbe tocar. Escalado en
-   `PREGUNTAS_A_FABLE.md`. Muy por debajo del ±5 % pedido; no bloquea nada.
+9. ~~**(R131) Residuo de conservación**~~ **RESUELTO (R132)**: no estaba en el barrido
+   ordinario. Era `LabAgua` saliendo con `vol` sin sincronizar (cinco sitios). Residuo 0.
 
 ## 9. SIGUIENTE PASO EXACTO
 
-**Opus 5**: H1 (§6b) y H2 (§6c) cerrados. Ahora **H3**: afinar el ciclo del agua JUGANDO, con
-los cinco presets de referencia `ref_*` (evaporación→condensación→goteo, sedimentación en la
-poza, canal sellado por colmatación, arcilla→terracota, sifón/fuente artesiana). El primero de
-la serie, `ref_h1_circuito`, ya está guardado. El problema conocido nº 3 (condensado = 0) es
-justo el punto 1 de H3, y la vista de HUMEDAD del panel es la herramienta para atacarlo: ahora
-se ve dónde está el vapor.
+**Opus 5**: H1 (§6b), H2 (§6c) y H3.1 (§6d) cerrados; presets `ref_h1_circuito` y
+`ref_destilacion` guardados. Siguen los cuatro puntos que quedan de H3 (HANDOFF §4):
+**H3.2** sedimentación en la poza (decidir el churn erosión↔depósito: ¿sube `sed.depositoReposo`
+y baja `sed.erosionPct`, o es un rasgo?), **H3.3** canal sellado por colmatación (medir cuánto
+tarda la arena en dejar de infiltrar con agua turbia frente a agua limpia — el pincel ya
+distingue las dos), **H3.4** arcilla → secar → compactar → cocer → cuenco de terracota estanco,
+**H3.5** sifón y fuente artesiana con el pincel. Cada uno deja su `ref_*.json` con captura y
+números. Después H4 (plantas).
 **Cesar**: correr `ca_playtest131.cmd` (commit + push de H1) cuando quiera.
 
 **Hallazgo operativo (R131)**: en `Unity_RunCommand` NO hace falta reflexión para los tipos del

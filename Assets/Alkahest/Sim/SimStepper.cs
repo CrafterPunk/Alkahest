@@ -659,6 +659,7 @@ namespace Alkahest.Sim
             }
             else if (def.condensesAt != short.MinValue && t <= def.condensesAt)
             {
+                if (LabActivo) LabCondensadoGas++; // (R132) el vapor VISIBLE que se vuelve agua, al libro mayor.
                 Transform(idx, def.condensesInto);
             }
             // (fix playtest 9) AUTOIGNICIÓN POR TEMPERATURA. Antes un material inflamable
@@ -1444,7 +1445,10 @@ namespace Alkahest.Sim
                 {
                     byte t = _grid.temp[idx];
                     if (def.condensesAt != short.MinValue && t <= def.condensesAt)
+                    {
+                        if (LabActivo) LabCondensadoGas++; // (R132) idem al expirar la vida del gas.
                         Transform(idx, def.condensesInto);
+                    }
                     else
                         Transform(idx, MaterialId.Empty);
                     return;
