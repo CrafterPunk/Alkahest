@@ -53,6 +53,7 @@ namespace Alkahest.Sim
         public static int CondensaRate = 24;
         public static int VaporVida = 180;
         public static int VaporCondensaC = 10;
+        public static int HumedadInicialPct = 60;
         public static int Latente = 4;
 
         // ---------------- SEDIMENTO ----------------
@@ -61,7 +62,7 @@ namespace Alkahest.Sim
         public static int FactorMovilPct = 25;
         public static int ReposoMovil = 3;
         public static int DepositoUmbral = 200;
-        public static int DepositoReposo = 8;
+        public static int DepositoReposo = 24;
         public static int Mezcla = 8;
         public static int ErosionPct = 6;
         public static int ErosionCargaMax = 64;
@@ -150,6 +151,8 @@ namespace Alkahest.Sim
               "Cuando aceleras el tiempo (5x, 10x, 50x, 100x) el juego intenta correr más ticks por frame. Si un frame ya gastó estos milisegundos en simular, se corta y el tiempo que faltó se pierde. Súbelo si quieres más velocidad real a costa de fluidez.");
 
             // AGUA / VAPOR
+            R("aire.humedadInicialPct", "Humedad del aire al nacer el mundo", "AGUA", "% de su saturación", 60, 0, 100, () => HumedadInicialPct, v => HumedadInicialPct = (int)v,
+              "Con cuánta humedad arranca cada celda de aire, en porcentaje de SU PROPIA saturación (que depende de su temperatura: el aire frío de la cámara alta cabe menos que el templado del arroyo). Ninguna celda nace supersaturada, así que el mundo no llueve solo al empezar. Con 0 la cueva nace SECA y el primer vapor que produzcas se gasta entero en humedecer el aire antes de que ninguna pared pueda sudar; una cueva de verdad vive cerca de la saturación. Solo se aplica al CONSTRUIR el mundo.", true, true);
             R("agua.evapBase", "Evaporación base", "AGUA", "u/visita", 1, 0, 40, () => EvapBase, v => EvapBase = (int)v,
               "Cuánta agua pierde por evaporación una celda de superficie a 20 °C en cada visita (una visita = cada 8 ticks). 255 unidades = una celda entera. Solo evapora si el aire de encima no está saturado.");
             R("agua.evapPorGrado", "Evaporación por calor", "AGUA", "u/visita por raw", 1, 0, 10, () => EvapPorGrado, v => EvapPorGrado = (int)v,
@@ -167,7 +170,7 @@ namespace Alkahest.Sim
             R("vapor.vidaVapor", "Vida del vapor visible", "AGUA", "ticks", 180, 10, 255, () => VaporVida, v => { VaporVida = (int)v; VaporVidaCambiado = true; },
               "Cuántos ticks vive una celda de VAPOR VISIBLE (el gas blanco) antes de disolverse en humedad del aire. No se pierde agua: pasa al aire. Más vida = columnas de vapor más largas. (R132) 60 → 180 tras medir: del hogar a la cámara alta hay ~65 celdas de chimenea y con 60 ticks el vapor moría por el camino.");
             R("vapor.condensaC", "El vapor visible se vuelve agua a", "AGUA", "°C", 10, -40, 120, () => VaporCondensaC, v => { VaporCondensaC = (int)v; VaporVidaCambiado = true; },
-              "Punto de rocío del VAPOR VISIBLE (el gas blanco): por debajo de esta temperatura, una celda de vapor se vuelve agua de golpe, donde esté. Es el motor del juego base, no la saturación del laboratorio. OJO: si lo pones por encima del ambiente de la cueva (20 °C), el vapor muere a dos celdas del fuego y NO PUEDE VIAJAR — la cadena hervir→subir→condensar arriba se rompe entera. Por debajo del ambiente, el vapor sube como gas, expira convertido en humedad del aire y condensa donde de verdad hace frío.");
+              "Punto de rocío del VAPOR VISIBLE (el gas blanco): por debajo de esta temperatura, una celda de vapor se vuelve agua de golpe, donde esté. Es el motor del juego base, no la saturación del laboratorio. OJO: si lo pones por encima del ambiente de la cueva (20 °C), el vapor muere a dos celdas del fuego y NO PUEDE VIAJAR — la cadena hervir→subir→condensar arriba se rompe entera. Por debajo del ambiente, el vapor sube como gas, expira convertido en humedad del aire y condensa donde de verdad hace frío.\n\nDÓNDE LLUEVE LO DECIDE EL MAPA TÉRMICO, Y TÚ PUEDES MOVERLO: con los 10 °C de fábrica el vapor NO condensa en el arroyo (20 °C) ni en la cámara profunda (12 °C); solo en la cámara alta (8 °C), sobre un bloque de núcleo frío, o en cualquier rincón que enfríes por debajo de 10 °C.");
             R("termica.latente", "Calor latente", "AGUA", "raw por celda", 4, 0, 16, () => Latente, v => Latente = (int)v,
               "Evaporar enfría lo que se evapora y condensar calienta la superficie: cuántos raw (2 °C) cambia la temperatura por cada celda entera de agua que cambia de estado.");
 
@@ -182,8 +185,8 @@ namespace Alkahest.Sim
               "Cuántas visitas sin moverse necesita una celda de agua para contar como quieta.");
             R("sed.depositoUmbral", "Umbral de depósito", "SEDIMENTO", "u", 200, 50, 255, () => DepositoUmbral, v => DepositoUmbral = (int)v,
               "Con cuántos finos una celda de agua del fondo, quieta, se convierte en SEDIMENTO (se pierde esa celda de agua: los finos ocupan su sitio).");
-            R("sed.depositoReposo", "Quietud para depositar", "SEDIMENTO", "visitas", 8, 0, 100, () => DepositoReposo, v => DepositoReposo = (int)v,
-              "Cuántas visitas quieta debe llevar la celda de fondo antes de depositar.");
+            R("sed.depositoReposo", "Quietud para depositar", "SEDIMENTO", "visitas", 24, 0, 100, () => DepositoReposo, v => DepositoReposo = (int)v,
+              "Cuántas visitas quieta debe llevar la celda de fondo antes de depositar. (R133) 8 → 24 tras medir el churn del lecho: con 8, el agua depositaba y volvía a erosionar 6 279 veces en 6 000 ticks para un cambio NETO de 375 celdas — ruido de 17 a 1. Con 24 el neto es el mismo (372) con menos de la mitad de eventos, Y la poza decanta mejor (el agua sale un 61 % más limpia en vez de un 53 %): al agua le da tiempo a soltar los finos antes de que el fondo los fije. La erosión se deja alta a propósito: que el agua que corre arranque y la que se para suelte es lo que el jugador tiene que aprender.");
             R("sed.mezcla", "Mezcla lateral", "SEDIMENTO", "/256", 8, 0, 64, () => Mezcla, v => Mezcla = (int)v,
               "Cuánto se igualan los finos entre celdas de agua vecinas de lado en cada visita.");
             R("sed.erosionPct", "Erosión del sedimento", "SEDIMENTO", "%", 6, 0, 100, () => ErosionPct, v => ErosionPct = (int)v,

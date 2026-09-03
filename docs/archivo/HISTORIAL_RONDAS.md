@@ -6931,3 +6931,61 @@ ca_playtest84.cmd barre la ronda.
 · Escalados nuevos a Fable (Q4, Q5): hay DOS mecanismos de condensación y solo dispara el del
   gas — `LabGoteos` sigue en 0 porque el aire nunca llega a su saturación en una cámara de
   2 548 celdas; y el aviso de que `condensaC` era un número del decreto físico. Sin push (cmd 132).
+
+## Ronda 133 — EL LABORATORIO, H3 COMPLETO: LAS CINCO CADENAS DEL AGUA (Opus 5, con Fable)
+
+· Fable respondió Q4/Q5 y añadió una corrección de condición inicial (R5.1) que resultó ser la
+  pieza que faltaba: **el aire de la cueva no nace seco**. `aire.humedadInicialPct` = 60 — cada
+  celda de aire arranca al 60 % de SU PROPIA saturación, que depende de su ambiente, así que
+  ninguna nace supersaturada. Con aire seco, el primer vapor que el jugador produce se gastaba
+  entero en humedecer el volumen (en una cámara de 2 548 celdas, ~350 celdas de agua tiradas).
+  Efecto medido y mayor de lo que él predijo: su mecanismo de condensación por saturación, que
+  estaba MUERTO (`LabCondensado` = 0 en toda la R132), revive con 755 en 9 000 ticks y aparecen
+  **los primeros goteos de la historia del laboratorio** (t=2 597 = 87 s; con el aire al 85 %,
+  64 s; con aire seco, nunca). Mi Q4 no era «elegir entre los dos mecanismos»: el suyo estaba
+  apagado por la condición inicial. 0 supersaturadas, residuo 0, circuito de H1 idéntico.
+· **H3.2 SEDIMENTACIÓN**: la poza es un decantador de verdad — el agua entra a 96 de turbidez y
+  sale a 45. El churn erosión↔depósito era **ruido puro**: las cuatro configuraciones probadas
+  dan el MISMO resultado neto (372-380 celdas), o sea 6 279 eventos para mover 375 celdas, 17 a
+  1. Fable proponía subir `sed.depositoReposo` Y bajar `sed.erosionPct`; midiendo los dos
+  mandos por separado, el reposo hace todo el trabajo (churn −57 % y la poza decanta MEJOR,
+  61 % contra 53 %) y bajar la erosión empeora la clarificación (49 %) y deja el lecho estático.
+  Adoptada media propuesta: reposo 8 → 24, erosión se queda en 6.
+· **H3.3 CANAL SELLADO**: con agua turbia (carga 255) el lecho de arena deja de infiltrar en
+  ~15 s; con la turbidez del manantial (40), en ~100 s; con agua limpia, **nunca** (meseta de
+  14 850 u por bloque, plana durante 2 700 ticks). Y un detalle no previsto: **la costra tiene
+  UNA celda de espesor** — debajo la arena sigue seca (col=0, hum=20), mientras que con agua
+  limpia el frente mojado atraviesa el lecho entero. Colmatación superficial como en un filtro
+  real, y la lección sale sola: *decanta primero, filtra después*.
+· **H3.4 ARCILLA**: el sedimento húmedo enterrado compacta en arcilla a los 106 s. Cocer NO
+  ocurre en un montón estático y el perfil dice por qué: las dos condiciones **se excluyen en el
+  sitio** (compactar pide humedad 100-230, cocer pide ≤ 30), así que la arcilla se forma justo
+  donde está mojada y, una vez formada, su permeabilidad 2 le impide secarse por dentro. No es
+  un bug: es la receta del alfarero — moldear enterrado y DESENTERRAR. Expuesta al aire junto al
+  hogar cuece en **22-30 s**, y solo las 16 celdas de la CARA: la pieza queda cruda por dentro,
+  como una cerámica mal cocida de verdad. El cuenco de terracota retiene 164 de 160 celdas en
+  300 s; el mismo cuenco de arena se queda en 3.
+· **H3.5 ALAMBIQUE**: el serpentín de `NucleoFrio` pintado en el techo de la cámara alta lleva
+  el primer goteo de 84 s a **7 s** y de 11 goteos a 93, con 2 614 u de rocío colgando. Fable
+  acertó de lleno con el serpentín. Su predicción sobre el tamaño, en cambio, NO se cumple:
+  cerrar la cámara con tabiques supersatura el aire (42,8 sobre 36) pero deja el goteo
+  exactamente igual (11 goteos, 85 s). La razón está en la aritmética de `LabAire`: cada celda
+  de aire condensa como mucho 24 u sobre UNA superficie vecina por visita, así que lo que decide
+  el goteo no es cuánta humedad hay sino cuántas celdas de aire tocan cada celda de pared — y
+  una cámara pequeña tiene MENOS aire por pared. La regla que el laboratorio enseña no es «frío
+  y poco aire» sino **«una superficie muy fría»**. Escalado como Q6 con la propuesta de dejarlo.
+· **Un bug de bordes en `LabPresion`, cazado por el banco.** El escenario del cuenco (grilla
+  sintética sin roca alrededor) reventó con `IndexOutOfRangeException`: el BFS de los cuerpos de
+  agua encolaba vecinos sin comprobar los límites del mundo — agua en la fila 0 hacía `c - W`
+  negativo, y agua en la columna 0 tomaba como vecino izquierdo la última celda de la fila
+  anterior, o sea un cuerpo de agua ENVUELTO por el borde del mundo. En el plano no salta porque
+  hay roca alrededor, pero un jugador que talle hasta el borde lo provoca. Acotado con una
+  división por celda desencolada; **el tubo en U de Fable sigue dando sus números exactos de la
+  R130 (237/199 → 219/217)** y la presión cuesta lo mismo (0,094 ms/tick).
+· Los CINCO fenómenos de H3 ocurren con **un solo juego de números**: no hizo falta un preset
+  por cadena porque las cadenas no compiten entre ellas. Defaults nuevos:
+  `aire.humedadInicialPct` 60, `sed.depositoReposo` 24 (87 parámetros en total).
+· Presets y snapshots `ref_destilacion` y `ref_alambique`; captura `R133_h35_alambique.png`;
+  medidas en `Laboratorio/benchmarks/2026-09-03_r133_h3_completo.md`; decisiones D19-D21 y §6e
+  en `docs/LAB/CHECKPOINT.md`; respuestas R5b-R7c y escalado Q6 en `PREGUNTAS_A_FABLE.md`.
+  Verificado jugando, 0 errores de consola. Sin push (cmd 133).

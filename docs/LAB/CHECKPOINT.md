@@ -40,16 +40,17 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 6 — H1, H2 y H3.1 CERRADOS; sigue H3.2-H3.5.** El laboratorio existe, compila sin errores, entra desde
+**Fase: 7 — H1, H2 y H3 ENTEROS CERRADOS; sigue H4 (plantas).** El laboratorio existe, compila sin errores, entra desde
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
 grieta atascada. El libro mayor cuadra al 0,113 % y hay una auditoría de conservación
 permanente (`LabBalanceU`). El panel está COMPLETO (presets JSON, snapshots con PNG y libro, pincel de
-materia, seis vistas de depuración, ayuda general). El libro mayor cuadra AL BIT (residuo 0 exacto). El ciclo
-agua→vapor→condensación FUNCIONA: hervir sobre el hogar llueve en la cámara alta en 15-33 s de
-mundo (§6d). Faltan H3.2-H3.5 (sedimentación, colmatación, arcilla, sifón), plantas, cuerpos
-cohesionados, banco headless e informe.
+materia, seis vistas de depuración, ayuda general). El libro mayor cuadra AL BIT (residuo 0 exacto). **Las cinco
+cadenas de H3 ocurren, medidas, con un solo juego de números** (§6e): destilación, decantación
+en la poza, canal que se sella con agua turbia y nunca con agua limpia, arcilla → terracota
+estanca, y el alambique con serpentín frío. Faltan plantas (H4), cuerpos cohesionados (H6),
+banco headless (H5) e informe (H8).
 
 Documentos: `docs/LAB/DISENO_LABORATORIO.md` (diseño), `docs/LAB/HANDOFF_OPUS.md` (hitos e
 interfaces), `docs/LAB/MULTIPLAYER.md` (análisis de red), `docs/LAB/mapa/*.md` (9 mapas del
@@ -85,6 +86,26 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   madre sigue sin rendir nada (R60). Terracota y roca suelta se rompen en grava.
 - **D11 Tiempo** = N ticks enteros por frame con presupuesto de ms (jamás `FixedDt`); las
   máquinas con acumulador propio NO escalan (el mundo corre más deprisa que las manos; deliberado).
+- **D19 (R133, H3, decisión de arquitectura de Fable en R5.1) El aire no nace seco.**
+  `aire.humedadInicialPct` = 60: cada celda de aire arranca al 60 % de SU PROPIA saturación
+  (que depende de su ambiente), así que ninguna nace supersaturada y el mundo no llueve solo.
+  Con el aire seco, el primer vapor que el jugador produce se gastaba ENTERO en humedecer el
+  volumen: en una cámara de 2 548 celdas eso son ~350 celdas de agua tiradas antes de que
+  ninguna pared pudiera sudar. **Efecto medido: el mecanismo de condensación por saturación,
+  que estaba muerto (`LabCondensado` = 0), revive (755 en 9 000 ticks) y aparecen los PRIMEROS
+  GOTEOS del laboratorio.** La evaporación del arroyo cae a la mitad, que es lo correcto.
+- **D20 (R133, H3.2) `sed.depositoReposo` 8 → 24; la erosión se queda en 6.** Fable proponía
+  subir el reposo Y bajar la erosión; midiendo los dos mandos por separado resultó que el
+  reposo hace todo el trabajo (churn −57 % y la poza decanta MEJOR, 61 % contra 53 %) y que
+  bajar la erosión empeora la clarificación y deja el lecho estático. El churn era ruido puro:
+  las cuatro configuraciones dan el mismo resultado NETO (372-380 celdas) — 6 279 eventos para
+  mover 375 celdas era 17 a 1.
+- **D21 (R133) El BFS de `LabPresion` se queda dentro del mundo.** Encolaba vecinos sin
+  comprobar los bordes: agua en la fila 0 → `c - W` negativo (excepción que mataba el tick), y
+  agua en la columna 0 → vecino izquierdo en la fila anterior (cuerpo de agua envuelto por el
+  borde). Lo cazó un escenario de banco con la grilla sin roca alrededor; en el plano no salta,
+  pero un jugador que talle hasta el borde lo provoca. El tubo en U de Fable sigue dando sus
+  números exactos de la R130 (237/199 → 219/217): la regla no cambió.
 - **D17 (R132, H3.1) El punto de rocío del vapor visible es un PARÁMETRO y vale 10 °C.**
   `Steam.condensesAt` estaba escrito a mano en 60 °C dentro de `AplicarOverridesLaboratorio`,
   contra el invariante 5 del HANDOFF ("todo número físico vive en LabParams"), y era el número
@@ -166,6 +187,11 @@ conservativos, intercambio de temperatura en la presión, `LabCondensadoGas`) ·
 `Sim/SimStepper.cs` (**segunda excepción, autorizada por Fable en R2**: dos líneas
 `if (LabActivo) LabCondensadoGas++;` en las dos ramas de condensación del vapor visible).
 
+(R133) `Sim/LabParams.cs` (`aire.humedadInicialPct` nuevo → 87 parámetros; `sed.depositoReposo`
+24; ayuda de `vapor.condensaC` ampliada con R6) · `Sim/SimLevelBuilder.Laboratorio.cs` (la
+humedad inicial del aire, después del clima) · `Sim/SimStepper.Laboratorio.cs` (`LabPresion`
+acotada a los bordes del mundo).
+
 Nuevos: `Sim/LabParams.cs`, `Sim/LabMateriales.cs`, `Sim/SimStepper.Laboratorio.cs`,
 `Sim/SimLevelBuilder.Laboratorio.cs`, `Sim/SimRenderer.Laboratorio.cs`, `Sim/Universe.Laboratorio.cs`,
 `Game/LabPanel.cs`, `docs/LAB/*`, `Laboratorio/*`, `ca_playtest130.cmd`.
@@ -177,7 +203,7 @@ Ver `HANDOFF_OPUS.md` §1 (lista verificada) y `DISENO_LABORATORIO.md` §2-§6 (
 ## 5. PLAN (hitos de Opus, `HANDOFF_OPUS.md` §4)
 
 H1 plano/arenisca y circuito del agua **(HECHO, §6b)** → H2 panel completo **(HECHO, §6c)**
-→ H3.1 ciclo del agua **(HECHO, §6d)** (presets, snapshots, pincel, vistas)
+→ H3 ciclo del agua completo **(HECHO, §6d y §6e)** (presets, snapshots, pincel, vistas)
 → H3 ciclo del agua afinado jugando (5 presets de referencia) → H4 plantas y fibra → H5
 rendimiento y banco headless → H6 cuerpos cohesionados → H7 arco largo con capturas → H8 informe.
 
@@ -282,12 +308,46 @@ del piso de 0 a 17-22 de humedad. Preset `ref_destilacion`.
 Regresión: el circuito de H1 idéntico (residuo 0, poza 136, sumidero 4 802 a t=9 000,
 1,89 ms/tick).
 
+## 6e. R133 — H3 COMPLETO: LAS CINCO CADENAS (Opus 5, con R5-R7 de Fable)
+
+Detalle y tablas: `Laboratorio/benchmarks/2026-09-03_r133_h3_completo.md`.
+
+**H3.1 destilación** (ya en §6d) + la corrección de Fable: con el aire al 60 % de su saturación
+llegan los **primeros goteos** del laboratorio (t=2 597 = 87 s; con el aire al 85 %, 64 s).
+
+**H3.2 sedimentación**: la poza es un decantador de verdad — el agua entra a 96 de turbidez y
+sale a 45 (limpia un 53-61 %). El churn erosión↔depósito era ruido: 6 279 eventos para un neto
+de 375 celdas. Con `sed.depositoReposo` 24, mismo neto con la mitad de eventos y mejor
+decantación (D20).
+
+**H3.3 canal sellado**: con agua turbia (carga 255) el lecho de arena deja de infiltrar en
+**~15 s**; con la turbidez del manantial (40), en ~100 s; con agua limpia, **nunca** (meseta de
+14 850 u por bloque, plana durante 2 700 ticks). Y la costra tiene UNA celda de espesor: debajo
+la arena sigue seca. La lección sale sola: *decanta primero, filtra después*.
+
+**H3.4 arcilla**: el sedimento húmedo enterrado compacta en arcilla a los 106 s. Cocer NO ocurre
+en un montón estático porque las dos condiciones se excluyen en el sitio (compactar pide humedad
+100-230; cocer, ≤ 30) — hay que moldear enterrado y DESENTERRAR: expuesta al aire junto al hogar
+cuece en **22-30 s**, y solo las 16 celdas de la CARA (la pieza queda cruda por dentro). Un
+cuenco de terracota retiene 164 de 160 celdas en 300 s; el mismo cuenco de arena se queda en 3.
+
+**H3.5 alambique**: el serpentín de `NucleoFrio` en el techo lleva el primer goteo de 84 s a
+**7 s** y de 11 goteos a 93. Cerrar la cámara con tabiques NO ayuda (supersatura el aire a 42
+sobre 36 pero deja el goteo igual): lo que decide el goteo no es cuánta humedad hay sino cuántas
+celdas de aire tocan cada celda de pared, y una cámara pequeña tiene MENOS aire por pared. La
+lección no es «frío y poco aire» sino **«una superficie muy fría»** — corrige la predicción de
+Fable en R5.2. Presets `ref_destilacion` y `ref_alambique`.
+
+Los cinco fenómenos ocurren con **un solo juego de números**: no hizo falta un preset por
+cadena porque las cadenas no compiten entre ellas.
+
 ## 7. PARÁMETROS / DEFAULTS ACTUALES
 
-Los **86** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
-diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` = 30 (R131) y,
-de la R132, el nuevo `vapor.condensaC` = 10 °C más `vapor.vidaVapor` 60 → 180 y
-`vapor.ascenso` 6 → 12. `_defaults.json` lo escribe el panel al arrancar (H2, hecho).
+Los **87** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
+diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` = 30 (R131);
+`vapor.condensaC` = 10 °C (nuevo), `vapor.vidaVapor` 180 y `vapor.ascenso` 12 (R132); y
+`aire.humedadInicialPct` = 60 (nuevo) más `sed.depositoReposo` = 24 (R133).
+`_defaults.json` lo escribe el panel al arrancar (H2, hecho).
 
 ## 8. PROBLEMAS CONOCIDOS
 
@@ -296,7 +356,8 @@ de la R132, el nuevo `vapor.condensaC` = 10 °C más `vapor.vidaVapor` 60 → 18
 2. **LabLuz 5 ms/ejecución** sobre el mundo entero (H5).
 3. ~~**Condensación = 0**~~ **RESUELTO (R132, H3.1)**: no era la saturación, era
    `Steam.condensesAt` escrito a mano en 60 °C (por encima del ambiente de la cueva). Ver D17.
-4. **Churn erosión↔depósito** en el lecho junto al manantial (H3.2: decidir número o rasgo).
+4. ~~**Churn erosión↔depósito**~~ **RESUELTO (R133, H3.2)**: era ruido (17 eventos por celda
+   de cambio neto). `sed.depositoReposo` 24 lo parte por la mitad y además decanta mejor. Ver D20.
 5. **Editar `.cs` en Play** rompe la sesión (recarga de dominio por el RunCommand): receta en
    HANDOFF §3.
 6. ~~Sin presets/snapshots/vistas/pincel~~ **RESUELTO (R131, H2)**. Sin plantas (H4); sin
@@ -308,14 +369,14 @@ de la R132, el nuevo `vapor.condensaC` = 10 °C más `vapor.vidaVapor` 60 → 18
 
 ## 9. SIGUIENTE PASO EXACTO
 
-**Opus 5**: H1 (§6b), H2 (§6c) y H3.1 (§6d) cerrados; presets `ref_h1_circuito` y
-`ref_destilacion` guardados. Siguen los cuatro puntos que quedan de H3 (HANDOFF §4):
-**H3.2** sedimentación en la poza (decidir el churn erosión↔depósito: ¿sube `sed.depositoReposo`
-y baja `sed.erosionPct`, o es un rasgo?), **H3.3** canal sellado por colmatación (medir cuánto
-tarda la arena en dejar de infiltrar con agua turbia frente a agua limpia — el pincel ya
-distingue las dos), **H3.4** arcilla → secar → compactar → cocer → cuenco de terracota estanco,
-**H3.5** sifón y fuente artesiana con el pincel. Cada uno deja su `ref_*.json` con captura y
-números. Después H4 (plantas).
+**Opus 5**: H1 (§6b), H2 (§6c) y H3 ENTERO (§6d, §6e) cerrados; presets `ref_h1_circuito`,
+`ref_destilacion` y `ref_alambique`. Ahora **H4 (plantas y fibra)**, spec completa en
+`HANDOFF_OPUS.md` §4/H4: germinación por humedad y luz, raíz que bebe, savia que sube, punta que
+crece, ramas, marchitez → fibra, fertilidad de la ceniza. La vista de LUZ y la de HUMEDAD del
+panel son las herramientas para afinarlo, y `aire.humedadInicialPct` ya deja la cámara alta con
+goteo, que es donde el diseño quiere que broten solas. Queda de H3 una sola cosa sin medir: el
+SIFÓN y la fuente artesiana con el pincel (la presión ya está verificada con el tubo en U, así
+que es una demostración, no una incógnita) — hacerlo en H7, jugando.
 **Cesar**: correr `ca_playtest131.cmd` (commit + push de H1) cuando quiera.
 
 **Hallazgo operativo (R131)**: en `Unity_RunCommand` NO hace falta reflexión para los tipos del

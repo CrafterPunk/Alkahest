@@ -142,6 +142,27 @@ namespace Alkahest.Sim
             Clima(90, 240, 200, 287, 64);
             Clima(110, 50, 370, 118, 66);
 
+            // (R133, decisión de Fable en R5.1) EL AIRE NO NACE SECO. Una cueva
+            // real vive cerca de la saturación; con humedad 0 en todo el aire, el
+            // primer vapor que el jugador produce se gasta ENTERO en humedecer el
+            // volumen antes de que ninguna pared pueda sudar — y en una cámara de
+            // 2 548 celdas eso son ~350 celdas de agua tiradas. Cada celda arranca
+            // al `aire.humedadInicialPct` de SU PROPIA saturación, que depende de
+            // SU temperatura ambiente: la cámara alta (8 °C, satura a 36) nace con
+            // menos agua que el arroyo (20 °C, satura a 60), y NINGUNA nace
+            // supersaturada, así que el mundo no llueve solo al arrancar.
+            // Va después del clima a propósito: necesita el ambiente ya pintado.
+            int pct = LabParams.HumedadInicialPct;
+            if (pct > 0)
+            {
+                for (int i = 0; i < grid.mat.Length; i++)
+                {
+                    if (grid.mat[i] != MaterialId.Empty) continue;
+                    int h = LabParams.Saturacion(grid.ambient[i]) * pct / 100;
+                    grid.humedad[i] = (byte)(h > 255 ? 255 : h);
+                }
+            }
+
             // Todo lo colocado arranca a temperatura ambiente (el constructor de
             // CellGrid ya inicializa temp a AmbientRaw); el Hogar se fija solo en
             // su primera visita de LabCampos. Nada de PaintStable aquí: este

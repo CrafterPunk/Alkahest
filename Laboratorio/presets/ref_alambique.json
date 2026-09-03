@@ -1,7 +1,7 @@
 {
-  "nombre": "_defaults",
-  "fecha": "2026-09-03 18:28",
-  "nota": "valores de fábrica del laboratorio (los escribe el panel al arrancar; no lo edites a mano)",
+  "nombre": "ref_alambique",
+  "fecha": "2026-09-03 18:29",
+  "nota": "H3.5 (R133): serpentin de NUCLEO FRIO pintado en el techo de la camara alta + agua hirviendo en el hogar. Medido contra la camara desnuda: primer goteo a los 7 s en vez de 84, 93 goteos en vez de 11 y 2614 u de rocio colgando del serpentin. Cerrar la camara con tabiques NO ayuda (supersatura el aire a 42 sobre 36 pero sigue en 11 goteos): la leccion no es 'frio y poco aire', es 'una superficie MUY fria'. Defaults de H3: vapor.condensaC 10, vidaVapor 180, ascenso 12, aire.humedadInicialPct 60, sed.depositoReposo 24.",
   "params": {
     "tiempo.presupuestoMs": 20,
     "aire.humedadInicialPct": 60,

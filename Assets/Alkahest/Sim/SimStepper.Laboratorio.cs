@@ -768,12 +768,23 @@ namespace Alkahest.Sim
                     while (head < tail)
                     {
                         int c = _labCola[head++];
-                        if (mat[c + W] == MaterialId.Empty) _labSup[nSup++] = c;
+                        // (R133) EL BFS SE QUEDA DENTRO DEL MUNDO. El bucle de fuera solo
+                        // SIEMBRA en el interior (x,y en 1..W-2 / 1..H-2), pero el BFS
+                        // encolaba vecinos sin comprobar nada: una celda de agua en la fila
+                        // 0 hacía `c - W` NEGATIVO (IndexOutOfRange, reventaba el tick), y
+                        // una en la columna 0 tomaba como vecino de la izquierda la última
+                        // celda de la FILA ANTERIOR — un cuerpo de agua envuelto por el
+                        // borde del mundo. En el plano del laboratorio no salta porque hay
+                        // roca alrededor, pero un jugador que talle hasta el borde sí lo
+                        // provoca; lo cazó un escenario de banco con la grilla vacía.
+                        // Una división por celda desencolada, invisible frente al barrido.
+                        int cy = c / W, cx = c - cy * W;
+                        if (cy < H - 1 && mat[c + W] == MaterialId.Empty) _labSup[nSup++] = c;
                         int v;
-                        v = c - 1; if (mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
-                        v = c + 1; if (mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
-                        v = c - W; if (mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
-                        v = c + W; if (mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
+                        v = c - 1; if (cx > 0 && mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
+                        v = c + 1; if (cx < W - 1 && mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
+                        v = c - W; if (cy > 0 && mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
+                        v = c + W; if (cy < H - 1 && mat[v] == MaterialId.Water && _labVisita[v] != pase) { _labVisita[v] = pase; _labCola[tail++] = v; }
                     }
                     if (tail < minCeldas || nSup < 2) continue;
 
@@ -785,12 +796,13 @@ namespace Alkahest.Sim
                         {
                             int c = _labSup[s];
                             if (c < 0) continue;
-                            if (mat[c] != MaterialId.Water || mat[c + W] != MaterialId.Empty) { _labSup[s] = -1; continue; }
+                            if (c + W >= mat.Length || mat[c] != MaterialId.Water || mat[c + W] != MaterialId.Empty) { _labSup[s] = -1; continue; }
                             int cy = c / W;
                             if (cy > srcY) { srcY = cy; src = c; }
                             if (cy < dstY) { dstY = cy; dst = c; }
                         }
                         if (src < 0 || dst < 0 || src == dst || srcY - dstY < desnivel) break;
+                        if (dstY >= H - 1 || srcY <= 0) break; // (R133) la mudanza no sale del mundo.
 
                         int target = dst + W;
                         // (R131) El aire del destino NO se aniquila: se muda al hueco que
@@ -815,8 +827,8 @@ namespace Alkahest.Sim
                         LabPresionMovidas++;
 
                         // superficies nuevas: bajo la fuente (si sigue siendo agua) y el destino.
-                        if (mat[src - W] == MaterialId.Water && nSup < _labSup.Length) _labSup[nSup++] = src - W;
-                        if (mat[target + W] == MaterialId.Empty && nSup < _labSup.Length) _labSup[nSup++] = target;
+                        if (srcY > 0 && mat[src - W] == MaterialId.Water && nSup < _labSup.Length) _labSup[nSup++] = src - W;
+                        if (dstY < H - 2 && mat[target + W] == MaterialId.Empty && nSup < _labSup.Length) _labSup[nSup++] = target;
                     }
                 }
             }

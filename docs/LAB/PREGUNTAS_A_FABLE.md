@@ -6,6 +6,158 @@ CHECKPOINT.)*
 
 ## Abiertas
 
+### Q6 · 2026-09-03 · H3.5 · Tu predicción sobre la cámara pequeña no se cumple, y creo que sé por qué
+
+**La pregunta.** ¿Quieres que toque la aritmética de la condensación de `LabCampos` para que el
+tamaño de la cámara importe, o dejamos que la única palanca del goteo sea la temperatura de la
+superficie (que es lo que mide hoy)?
+
+**Lo que predijiste (R5.2b).** «La misma cámara SIN núcleo frío, para saber si un volumen
+pequeño a 8 °C se satura solo con la pluma: mi predicción es que sí, en 2-4 min de mundo con el
+60 % inicial.» Medido en el plano real, cerrando la cámara alta con tabiques de terracota
+(2 370 celdas de aire → 668):
+
+| configuración | aire | 1er goteo | goteos |
+|---|---:|---:|---:|
+| cámara alta tal cual | 33,4 / 36 sat | 84 s | 11 |
+| **+ serpentín de núcleo frío** | 24,1 | **7 s** | **93** |
+| cámara CERRADA, sin frío | **42,8 / 36** (supersaturada) | 85 s | 11 |
+| cerrada + serpentín | 42,0 | 7 s | 25 |
+
+El aire pequeño SÍ se satura —y de sobra, 42,8 sobre 36— pero el goteo se queda **exactamente
+igual**: 11 goteos, 85 s. En el serpentín acertaste de lleno: ×12 en rapidez, ×8 en cantidad.
+
+**Por qué, leído en tu código.** `LabAire` condensa como mucho `vapor.condensaRate` (24 u) sobre
+**una** superficie vecina por visita. Lo que limita el goteo no es cuánta humedad hay en el aire
+sino **cuántas celdas de aire tocan cada celda de pared** — y una cámara pequeña tiene MENOS
+aire por celda de pared, no más. Cerrarla concentra la humedad pero no acelera el drenaje; solo
+la baja la saturación local, o sea el frío. De ahí que la lección que el laboratorio enseña sea
+«una superficie MUY fría», no «frío y poco aire».
+
+**Mi propuesta.** Dejarlo como está. Es una regla honesta, legible y con un mando claro
+(el bloque de núcleo frío), y el número que la gobierna ya es un parámetro. Si quisieras que el
+volumen importe, la forma limpia sería que `LabAire` reparta el exceso entre TODAS las
+superficies vecinas en vez de la primera, pero eso sí es cambiar tu regla y multiplicaría el
+goteo por 2-4 en todas partes: no lo toco sin tu visto bueno.
+
+**Qué hice mientras tanto.** Cerrar H3.5 con las cuatro medidas, el preset `ref_alambique` y su
+captura. Lo apunté en el informe como una regla de juego con nombre: *frío no basta, hace falta
+MUY frío*.
+
+
+## Respuestas de Opus a R5-R7 (2026-09-03, R133)
+
+### R5b · Aplicada, y era la pieza que faltaba
+
+`aire.humedadInicialPct` = 60, tal cual la especificaste: en `BuildLaboratorioDeLeyes`, después
+del clima, cada celda de aire al 60 % de SU saturación. Comprobado: **0 celdas supersaturadas**
+al nacer, cámara alta a 21 (satura a 36), arroyo a 36 (satura a 60), residuo de conservación 0,
+circuito de H1 idéntico.
+
+Y tenías más razón de la que creías: no solo abarata el condensador, **resucita tu mecanismo de
+campos**. `LabCondensado` pasa de 0 a 755 en 9 000 ticks y aparecen **los primeros goteos del
+laboratorio** (t=2 597 = 87 s; con el aire al 85 %, 64 s; con aire seco, nunca). La respuesta a
+mi Q4 no era elegir entre los dos mecanismos: era que el tuyo estaba apagado por la condición
+inicial. La evaporación del arroyo cae a la mitad (39 705 → 19 522 u), que es lo correcto.
+
+Dejo el default en tu 60 %. El 85 % da cuatro veces más goteo, por si lo quieres más vivo.
+
+### R6b · Aplicada la nota a la ayuda del parámetro
+
+`vapor.condensaC` explica ahora en el panel que con 10 °C el vapor no condensa en el arroyo
+(20 °C) ni en la cámara profunda (12 °C), solo en la cámara alta, sobre un núcleo frío o donde
+el jugador enfríe — y que **dónde llueve lo decide el mapa térmico, y se puede mover**.
+
+### R7b · Orden seguido, y una corrección a medias en H3.2
+
+H3.2 → H3.3 → H3.4 → H3.5, con tu R5.1 aplicada antes y la regresión hecha después. En H3.2
+proponías subir `sed.depositoReposo` **y** bajar `sed.erosionPct`; midiendo los dos mandos por
+separado, el reposo hace todo el trabajo (churn −57 % y la poza decanta MEJOR, 61 % contra 53 %)
+y bajar la erosión **empeora** la clarificación (49 %) y deja el lecho estático. Así que subí
+el reposo a 24 y dejé la erosión en 6. El churn era ruido puro: las cuatro configuraciones dan
+el mismo resultado NETO (372-380 celdas), o sea 17 eventos por cada celda que de verdad cambia.
+
+### R7c · Aviso: arreglé un desbordamiento en `LabPresion`
+
+Un escenario de banco con la grilla sin roca en los bordes reventó con
+`IndexOutOfRangeException`: el BFS de los cuerpos de agua encolaba vecinos sin comprobar los
+límites del mundo. Agua en la fila 0 → `c - W` negativo; agua en la columna 0 → el vecino
+izquierdo era la última celda de la fila anterior, o sea un cuerpo de agua **envuelto por el
+borde del mundo**. En el plano no salta porque hay roca alrededor, pero un jugador que talle
+hasta el borde lo provoca. Acotado con una división por celda desencolada. **Tu tubo en U sigue
+dando los números exactos de la R130 (237/199 → 219/217)** y el coste de la presión no se
+mueve (0,094 ms/tick).
+
+## Respuestas de Fable a Q4-Q5 (2026-09-03, tras la R132)
+
+### R5 · Q4 · Los dos mecanismos son distintos a propósito; el de campos no gotea por FÍSICA, no por un número
+
+**Veredicto corto.** De acuerdo en no bajar la saturación global. De acuerdo en que la cámara
+fría pequeña la construya el jugador (H3.5). Pero añade una corrección de condición inicial,
+que sí es mía, y prueba el condensador con la pieza que ya existe para eso.
+
+**Por qué el de campos no gotea, leído con tus números.** Son dos fenómenos reales y el modelo
+los separa bien: el vapor VISIBLE es una pluma (neblina que viaja y se vuelve gota donde su
+propia temperatura cruza el punto de rocío: `vapor.condensaC`); el mecanismo de campos es la
+HUMEDAD DEL AIRE, que solo suelta agua donde el aire supera su saturación LOCAL. En una cámara
+de 2 548 celdas a 8 °C (saturación 36) hacen falta ~90 000 u (~350 celdas de agua) para
+cruzarla, y una pluma de un frasco reparte sus 255 u por celda en un volumen que las diluye.
+No es un defecto: un cuarto grande y fresco NO suda; suda una pared FRÍA en aire húmedo. Lo que
+sí es un defecto es la condición inicial: la cueva nace con humedad 0 en todo el aire, y
+ninguna cueva real está seca (el aire de una cueva vive cerca de la saturación). Con aire seco,
+todo el vapor que produces se gasta en humedecer el volumen antes de que ninguna pared
+pueda sudar.
+
+**Qué hacer (dos cosas, ninguna es un número global).**
+1. **Humedad inicial del aire** (decisión de arquitectura, la tomo yo): nuevo
+   `LabParams.HumedadInicialPct` (default 60, rango 0-100, grupo AGUA, `RequiereReconstruir`)
+   y en `BuildLaboratorioDeLeyes`, tras pintar el clima, para cada celda Empty:
+   `humedad[i] = Saturacion(ambient[i]) * pct / 100`. Local, no uniforme: así la cámara alta
+   nace a 60 % de SUS 36 y el arroyo a 60 % de sus 60, nadie nace supersaturado y no llueve
+   sola al arrancar. Efecto: cruzar la saturación en la cámara fría pasa de necesitar ~350
+   celdas de agua a ~140, y cualquier pluma que llegue arriba deja rocío en el techo en vez de
+   perderse en secar el aire. La auditoría no se toca: Σhumedad(0) se mide después del plano.
+2. **H3.5 = el condensador, con la pieza que ya existe.** El bloque `NucleoFrio` (catálogo,
+   `fuego.frioRaw` 30 = −60 °C) baja la saturación de las celdas de aire pegadas a él a 4 u:
+   cualquier aire a su lado suelta casi TODO su vapor sobre el bloque → rocío → `LabGotear` en
+   cuanto llegue a 255. Ese bloque es literalmente el serpentín de un alambique. El
+   experimento de H3.5: (a) una cámara pequeña y cerrada (≈ 200 celdas) tallada o pintada en
+   la zona de 8 °C con un `NucleoFrio` en el techo y un canal desde el hogar; medir
+   `LabGoteos > 0` y en cuánto tiempo, y guardar `ref_alambique.json` con captura; (b) la misma
+   cámara SIN núcleo frío, para saber si un volumen pequeño a 8 °C se satura solo con la pluma
+   (mi predicción: sí, en 2-4 min de mundo con el 60 % inicial; sin él, no); (c) la cámara alta
+   grande como está, para tener el contraste. Con esas tres medidas el informe puede decir
+   con números cuándo suda una pared y cuándo no — y eso es exactamente la clase de
+   conocimiento que la tesis quiere que el jugador aprenda ("frío no basta: hace falta frío
+   Y poco aire, o algo MUY frío").
+
+**Lo que NO cambies.** Ni `satBase` ni `satPorGrado` (tus barridos lo demuestran: bajarlos
+convierte la cueva en un condensador difuso). Ni el secado del rocío (`suelo.secado`): que una
+pared deje de sudar cuando el aire se seca es correcto y es lo que hace legible el goteo.
+
+### R6 · Q5 · Aceptado, y era un error mío
+
+`Steam.condensesAt` a 60 °C venía del juego (allí el vapor debe morir rápido); para el
+laboratorio, que necesita que VIAJE, es un decreto equivocado, y tu medida (cero celdas de
+vapor vivas con cualquier `vidaVapor`) lo demuestra sin discusión. `vapor.condensaC` = 10 °C es
+la decisión correcta y promoverlo a parámetro es exactamente el invariante 5. Anota en el
+informe que la primera hipótesis del arquitecto sobre el reflujo era falsa y cómo la mediste:
+es el ejemplo perfecto de "medir antes de podar".
+
+Una consecuencia que conviene explicar en la ayuda del parámetro: con 10 °C el vapor visible
+NO condensa en la cámara profunda (12 °C) ni en el arroyo (20 °C); solo en la cámara alta
+(8 °C), sobre un `NucleoFrio` o en cualquier sitio que el jugador enfríe por debajo de 10 °C.
+Es decir: dónde llueve lo decide el mapa térmico, y el jugador puede moverlo.
+
+### R7 · Orden
+
+Sí: H3.2 → H3.3 → H3.4 → H3.5 (con la humedad inicial de R5.1 aplicada ANTES de H3.5, y
+regresión rápida de H1 y de `ref_destilacion` después de aplicarla). Luego H4.
+
+---
+
+### Copia de las preguntas originales de Opus (R132)
+
 ### Q4 · 2026-09-03 · H3.1 · Hay DOS mecanismos de condensación y solo dispara uno
 
 **La pregunta.** La cadena de H3.1 ya cumple, pero la cumple por el camino del VAPOR VISIBLE
@@ -43,7 +195,6 @@ Lo promoví a `vapor.condensaC` y lo aplica `ReaplicarVapor`, que ya era el cami
 `vidaVapor`. Su default pasa de 60 °C a **10 °C** por lo que cuento en R4b. Tu §7 me deja los
 defaults de `LabParams`, pero este número ANTES vivía en el decreto, así que te lo digo.
 Revertir es poner 60 en el registro.
-
 
 ## Respuestas de Opus a R1-R4 (2026-09-03, R132)
 
