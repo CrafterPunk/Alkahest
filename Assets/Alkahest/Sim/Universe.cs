@@ -139,8 +139,10 @@ namespace Alkahest.Sim
         public const byte RocaSuelta = 76;
         /// <summary>Brote plantable (Powder): al asentarse sobre sustrato húmedo germina.</summary>
         public const byte Semilla = 77;
+        /// <summary>(R131) Roca POROSA estática: no cae, deja pasar el agua despacio (suelo.permArenisca) y la filtra al exudarla. El cincel la desprende como Sand.</summary>
+        public const byte Arenisca = 78;
 
-        public const int Count = 78; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66) + 12 (laboratorio, R130)
+        public const int Count = 79; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66) + 12 (laboratorio, R130) + 1 (Arenisca, R131)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -3071,6 +3073,8 @@ namespace Alkahest.Sim
             Rellenar(MaterialId.Sumidero, 255, RespuestaPrensa.Resistir);
             Rellenar(MaterialId.RocaSuelta, 250, RespuestaPrensa.Resistir);
             Rellenar(MaterialId.Semilla, 120, RespuestaPrensa.Nada);
+            // (R131) La arenisca es roca: mismo umbral que la roca suelta.
+            Rellenar(MaterialId.Arenisca, 250, RespuestaPrensa.Resistir);
         }
 
         // ===================================================================

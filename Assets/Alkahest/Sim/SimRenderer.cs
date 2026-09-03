@@ -821,6 +821,7 @@ namespace Alkahest.Sim
         {
             _ultimoTick = tick;
             _frameCounter++;
+            LabVistaAntesDelFrame(); // (R131) vistas de depuración del laboratorio; fuera de él no hace nada.
             bool full = forceFull || (_frameCounter % FullRefreshEveryFrames) == 0;
 
             // (playtest 15) EL BARRIDO YA NO RECORRE LOS 48x18=864 CHUNKS DEL
@@ -908,6 +909,7 @@ namespace Alkahest.Sim
                 _texture.Apply(false);
                 if (_frontTexture != null) _frontTexture.Apply(false); // el labio (si está activo) va al mismo ritmo.
                 _veloTexture.Apply(false); // (R129) el velo de líquidos va al mismo ritmo.
+                LabVistaApply();              // (R131) y la vista de depuración del laboratorio.
             }
         }
 
@@ -1059,6 +1061,7 @@ namespace Alkahest.Sim
             int t = (int)tick;
             int scratchI = 0;
             bool chunkAnimado = false;
+            bool vistaLab = LabVistaRellenando; // (R131) una lectura por chunk, no por celda.
             for (int y = y0; y < y1; y++)
             {
                 int rowBase = y * CellGrid.W;
@@ -1077,6 +1080,9 @@ namespace Alkahest.Sim
                         _universe.Get(matVelo).archetype == MaterialArchetype.Liquid)
                         ? new Color32(c.r, c.g, c.b, VeloAlfa)
                         : default;
+                    // (R131) La vista de depuración del laboratorio: el campo elegido
+                    // en vez de la materia, en la misma pasada (ver SimRenderer.Laboratorio).
+                    if (vistaLab) LabVistaCelda(x, y, idx, scratchI);
                     scratchI++;
                 }
             }
@@ -1092,6 +1098,7 @@ namespace Alkahest.Sim
             _texture.SetPixels32(x0, y0, w, h, scratch);
             if (_frontTexture != null) _frontTexture.SetPixels32(x0, y0, w, h, _frontScratch);
             _veloTexture.SetPixels32(x0, y0, w, h, _veloScratch);
+            LabVistaSetPixels(x0, y0, w, h); // (R131) la cuarta textura, al mismo ritmo.
         }
 
         /// <summary>

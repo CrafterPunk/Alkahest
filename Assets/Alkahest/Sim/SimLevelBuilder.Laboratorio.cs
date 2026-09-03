@@ -16,9 +16,10 @@ namespace Alkahest.Sim
     ///   POZO                x62-77   y150-177  baja de la sala al arroyo.
     ///   GALERÍA DEL ARROYO  x36-430  y128-152  piso escalonado 138→130 hacia el este,
     ///                       MANANTIAL en el muro oeste (x31-35 y139-145),
-    ///                       fisura de arena (x192-202 y111-134) hasta la cámara profunda,
+    ///                       fisura de ARENISCA (x192-202 y111-134) hasta la cámara profunda,
     ///                       grava en el lecho, POZA x250-330 (fondo 122, prellenada),
-    ///                       grieta x336-343 a la cámara profunda, pozo del SUMIDERO x416-429.
+    ///                       grieta x336-343 (atascada de grava sobre repisa de arenisca)
+    ///                       a la cámara profunda, pozo del SUMIDERO x416-429.
     ///   CÁMARA PROFUNDA     x120-360 y60-110   con cubeta x140-180 y52-59.
     ///   CHIMENEA            x140-149 y215-244  de la sala a la cámara alta.
     ///   CÁMARA ALTA         x100-190 y245-272  fría, sedimento seco en el piso.
@@ -92,13 +93,28 @@ namespace Alkahest.Sim
                 for (int x = tramoX[t]; x < tramoX[t + 1]; x++)
                     for (int y = 128; y <= pisoTop[t]; y++) grid.SetCell(x, y, MaterialId.Stone);
             Bloque(31, 139, 35, 145, MaterialId.Manantial);  // emite hacia x=36
-            Bloque(192, 111, 202, 134, MaterialId.Sand);      // fisura de arena: del lecho a la cámara profunda
+            // (R131, H1) LA FISURA ERA ARENA SUELTA Y SE CAÍA: el polvo se
+            // derrumbaba a la cámara profunda y el arroyo entero se colaba por
+            // el agujero (el sumidero no veía una gota). Ahora es ARENISCA:
+            // roca porosa estática. El agua la atraviesa despacio, sale LIMPIA
+            // por abajo (el poroso se queda los finos) y el resto del caudal
+            // sigue su camino aguas abajo. Se ve el frente mojado bajar.
+            Bloque(192, 111, 202, 134, MaterialId.Arenisca);  // fisura porosa: del lecho a la cámara profunda
             Bloque(350, 133, 372, 135, MaterialId.Grava);     // banco de grava en el lecho
             Bloque(251, 122, 329, 123, MaterialId.Sedimento); // fondo de la poza: sedimento húmedo
             Campo(251, 122, 329, 123, 255, 0);
             Bloque(251, 124, 329, 128, MaterialId.Water);     // poza medio llena, turbia
             Campo(251, 124, 329, 128, 255, 60);
-            Aire(336, 111, 343, 132);                         // grieta aguas abajo de la poza → cámara profunda
+            // (R131, H1) LA GRIETA SIGUE AHÍ, pero ATASCADA DE ESCOMBRO. Abierta
+            // era un pozo de 8 celdas en mitad del lecho: se tragaba TODO lo que
+            // rebosaba de la poza y el sumidero seguía seco. Rellena de grava
+            // sobre una repisa de arenisca, sangra un hilo hacia la cámara
+            // profunda (percolación grava→arenisca→exudación limpia en y110) y
+            // deja pasar el resto aguas abajo. Además la grava se va COLMATANDO
+            // con los finos del manantial: el hilo se cierra solo con el tiempo.
+            // Y es un mando para el jugador: destapar la grieta vacía el arroyo.
+            Bloque(336, 111, 343, 111, MaterialId.Arenisca);   // repisa: sostiene el escombro y filtra lo que gotea abajo
+            Bloque(336, 112, 343, 132, MaterialId.Grava);      // grieta atascada de escombro grueso
             Aire(416, 100, 429, 131);                         // pozo del sumidero
             Bloque(416, 96, 429, 99, MaterialId.Sumidero);
 

@@ -73,6 +73,7 @@ namespace Alkahest.Sim
         public static int PermCeniza = 30;
         public static int PermFibra = 30;
         public static int PermArcilla = 2;
+        public static int PermArenisca = 30;
         public static int Infiltracion = 32;
         public static int Percolacion = 24;
         public static int Capilaridad = 4;
@@ -196,6 +197,8 @@ namespace Alkahest.Sim
             R("suelo.permCeniza", "Permeabilidad de la ceniza", "SUELO", "0-255", 30, 0, 255, () => PermCeniza, v => PermCeniza = (int)v, "La ceniza absorbe agua; mojada se vuelve abono del sustrato.");
             R("suelo.permFibra", "Permeabilidad de la fibra", "SUELO", "0-255", 30, 0, 255, () => PermFibra, v => PermFibra = (int)v, "La fibra seca empapa agua (y mojada no prende).");
             R("suelo.permArcilla", "Permeabilidad de la arcilla", "SUELO", "0-255", 2, 0, 255, () => PermArcilla, v => PermArcilla = (int)v, "La arcilla casi no deja pasar agua: un canal de arcilla es estanco.");
+            R("suelo.permArenisca", "Permeabilidad de la arenisca", "SUELO", "0-255", 30, 0, 255, () => PermArenisca, v => PermArenisca = (int)v,
+              "La arenisca es roca porosa: no cae, pero el agua la atraviesa despacio y sale LIMPIA por el otro lado (los finos se quedan dentro y la van colmatando). Es el filtro natural del laboratorio.");
             R("suelo.infiltracion", "Infiltración", "SUELO", "u/visita", 32, 0, 255, () => Infiltracion, v => Infiltracion = (int)v,
               "Cuánta agua pasa por visita de una celda de agua a un poroso vecino, a permeabilidad máxima y sin colmatar. Se multiplica por la permeabilidad y por (1 − colmatación)².");
             R("suelo.percolacion", "Percolación", "SUELO", "u/visita", 24, 0, 255, () => Percolacion, v => Percolacion = (int)v,

@@ -508,6 +508,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Alkahest.Runtime::Alkahest.AlkahestSim
   seed: 0
+  LabMultiplicador: 1
+  LabPresupuestoMs: 20
 --- !u!114 &1640792159
 MonoBehaviour:
   m_ObjectHideFlags: 0

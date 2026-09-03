@@ -141,6 +141,16 @@ namespace Alkahest.Sim
                 density = short.MaxValue,
                 caeSolido = false, // NO usa la cohesión por celda: LabCuerpos mueve el bloque ENTERO.
             };
+            mats[MaterialId.Arenisca] = new MaterialDef
+            {
+                id = MaterialId.Arenisca,
+                devName = "Arenisca",
+                archetype = MaterialArchetype.StaticSolid,
+                baseColor = new Color32(196, 172, 128, 255), // arena cementada: se lee como arena, se comporta como roca.
+                colorJitter = 12,
+                density = 235,
+                caeSolido = false, // (R131) ESTÁTICA a propósito: la fisura de arena caía a la cámara profunda y se llevaba el arroyo entero.
+            };
             mats[MaterialId.Semilla] = new MaterialDef
             {
                 id = MaterialId.Semilla,

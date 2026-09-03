@@ -24,6 +24,7 @@ namespace Alkahest.Sim
                 case MaterialId.Manantial:
                 case MaterialId.Sumidero:
                 case MaterialId.RocaSuelta:
+                case MaterialId.Arenisca:
                     return true;
                 default:
                     return false;
@@ -40,6 +41,7 @@ namespace Alkahest.Sim
                 case MaterialId.Arcilla:
                 case MaterialId.Terracota:
                 case MaterialId.RocaSuelta:
+                case MaterialId.Arenisca:
                     return true;
                 default:
                     return false;
@@ -54,6 +56,7 @@ namespace Alkahest.Sim
                 case MaterialId.Arcilla: return MaterialId.Sedimento;
                 case MaterialId.Terracota: return MaterialId.Grava;
                 case MaterialId.RocaSuelta: return MaterialId.Grava;
+                case MaterialId.Arenisca: return MaterialId.Sand; // (R131) arena cementada: el cincel la devuelve a arena suelta.
                 default: return MaterialId.Empty;
             }
         }
@@ -69,6 +72,7 @@ namespace Alkahest.Sim
                 case MaterialId.Ash: return LabParams.PermCeniza;
                 case MaterialId.Fibra: return LabParams.PermFibra;
                 case MaterialId.Arcilla: return LabParams.PermArcilla;
+                case MaterialId.Arenisca: return LabParams.PermArenisca;
                 default: return 0;
             }
         }

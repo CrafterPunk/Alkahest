@@ -6797,3 +6797,92 @@ ca_playtest84.cmd barre la ronda.
   Opus lo corrige en H1 con una roca porosa estática.
 · Handoff a Opus 5: 8 hitos con interfaces, criterios de aceptación, benchmarks, riesgos y
   qué escalar (`docs/LAB/HANDOFF_OPUS.md`). Sin push (cmd 130 para Cesar).
+
+## Ronda 131 — EL LABORATORIO, H1: EL CIRCUITO DEL AGUA SE CIERRA (Opus 5, verificada en vivo)
+
+· Primer hito del handoff de Fable (`docs/LAB/HANDOFF_OPUS.md` §4, H1). El plano de la R130
+  tenía una fuga de diseño medida: la fisura x192-202 era ARENA (Powder), se derrumbaba a la
+  cámara profunda y el arroyo entero se colaba por el agujero — el sumidero no recibía una
+  gota (`LabAguaSumida = 0`). Y detrás quedaba una segunda trampa: la grieta x336-343, abierta,
+  era otro pozo de 8 celdas justo después del labio de la poza.
+· **`Arenisca`** (id 78, `MaterialId.Count` = 79): roca POROSA estática (`caeSolido=false`,
+  `suelo.permArenisca` = 30, color 196/172/128). No cae, el agua la atraviesa despacio y sale
+  LIMPIA por el otro lado — los finos se quedan dentro y la van colmatando. El cincel la
+  desprende como `Sand`. Entra en las cuatro tablas de `LabMateriales`, en el `switch` de
+  porosos de `LabCampos`, en `LabK`/`LabC` como roca, en `Rellenar(250, Resistir)` y en el
+  tinte del renderer (la arenisca mojada se oscurece: el frente de agua bajando SE VE).
+· La fisura pasa a `Arenisca`. La grieta se mantiene en sitio y tamaño pero **atascada de
+  escombro**: `Grava` y112-132 sobre una repisa de `Arenisca` en y111. Sangra un hilo
+  (≈0,24 celdas/s) hacia la cámara profunda y deja pasar el resto aguas abajo; además la grava
+  se colmata con los finos del manantial, así que el hilo se cierra solo, y destaparla a
+  cincel es un mando real. Alternativas descartadas documentadas en el código (regla 15).
+· **Resultado medido** (banco headless, 18 000 ticks, determinista): régimen permanente desde
+  t≈3 000 — los niveles no se mueven en 15 000 ticks y el sumidero traga 20 celdas/s, que es
+  exactamente lo que entrega el manantial. Sumidero 10 949 celdas (antes 0), 160 exudaciones,
+  charco estable de 15 celdas en la cámara profunda, arena del mundo constante en 95 celdas
+  (la fisura ya no se derrumba). 2,08 ms/tick, 480 ticks/s.
+· **Tres correcciones de conservación encontradas midiendo** (el balance salía +10,4 %):
+  (1) el depósito escribía 255 de humedad fija en el sedimento en vez del volumen real de la
+  celda de agua — el propio comentario ya decía qué debía hacer; (2) `LabPresion` aniquilaba
+  el vapor del hueco al mudar el agua (−4,5 u por mudanza, el 85 % del descuadre: la presión
+  iba SECANDO el aire de la cueva, justo lo contrario de lo que H3 necesita) — ahora el aire
+  se muda al hueco que deja el agua, que es un intercambio como cualquier otro; (3) la
+  auditoría no cubría el vaciado del poro al exudar/gotear.
+· **`LabBalanceU`**: auditoría de conservación permanente. Suma todo lo que el laboratorio crea
+  o destruye de `humedad[]` en los tres únicos sitios que escriben sin restar en otro lado, así
+  que el invariante 3 del handoff se comprueba con una resta exacta:
+  `Σ humedad(t) − Σ humedad(0) == LabBalanceU`. Descuadre final **0,113 %** (pedido: ±5 %) y
+  deja de crecer. El residuo no está en el laboratorio sino en el barrido ordinario de
+  `SimStepper.cs`, que el handoff prohíbe tocar: escalado a Fable con la medida.
+  También `LabAguaSumidaU` (unidades, no celdas: contar "255 × celdas" sobreestimaba un 4 %).
+· **Hallazgo operativo**: `Unity_RunCommand` puede instanciar los tipos del proyecto
+  directamente (`using Alkahest.Sim;` + `new CellGrid()` + `new SimStepper(u, g)` + `Step()`)
+  y correr la simulación **sin entrar en Play**, a ~530 ticks/s, y dibujar la grilla a un PNG.
+  Eso adelanta el banco headless de H5 y quita el riesgo de matar la sesión de Play editando
+  un `.cs`. La reflexión solo hace falta para miembros privados (`DayCycle.RestartRun`).
+· Verificado JUGANDO (regla 52): Play → `ModoLaboratorio` + `RestartRun(777002)` → 10×
+  sostenido (`LabMultiplicadorReal` = 10,0), 0 errores de consola, capturas en vivo de la
+  panorámica, la fisura y la grieta. Evidencia: `Laboratorio/capturas/R131_h1_*.png`,
+  medidas en `Laboratorio/benchmarks/2026-09-03_h1_circuito_del_agua.md`, decisiones D13/D14 y
+  §6b en `docs/LAB/CHECKPOINT.md`, escalados Q1-Q3 en `docs/LAB/PREGUNTAS_A_FABLE.md`.
+  Sin push (cmd 131 para Cesar).
+
+## Ronda 131b — EL LABORATORIO, H2: EL PANEL COMPLETO (Opus 5, verificada en vivo)
+
+· Segundo hito del handoff. El panel de la R130 sabía enseñar y tocar números; ahora sabe
+  GUARDARLOS, PINTAR MATERIA y ENSEÑAR LOS CAMPOS QUE NO SE VEN.
+· **`Game/LabPresets.cs`**: presets JSON en `Laboratorio/presets/` (nombre, fecha, nota y los
+  85 números), cargar, listar, comparar y `_defaults.json` escrito solo al arrancar. JSON a
+  mano y a propósito: `JsonUtility` no serializa diccionarios y el formato es un mapa
+  clave→número que se edita en el bloc de notas y se versiona en git. El lector es TOLERANTE
+  (clave que ya no existe → se ignora; clave que falta → se queda como está) y lo cuenta, para
+  que un preset de hoy siga cargando cuando H4 añada los parámetros de las plantas.
+· **Snapshot** = preset + PNG (misma receta URP que el curador) + `_libro.json` con censo por
+  material, libro mayor completo, inventario de agua por clase, tick y posición del muñeco. El
+  primero, `ref_h1_circuito`, sirvió además de comprobación real: en su libro,
+  `251 752 − 184 535 = 67 217 = balanceU` EXACTO — la auditoría de conservación de H1 cuadra al
+  bit también en el juego en vivo, no solo en el banco headless.
+· **Pincel de materia**: 22 entradas en cuatro grupos (SUELO, VIDA, LEYES, FLUIDOS), radio 0-8
+  con −/+ y anillo en el cursor, izquierdo pinta y derecho borra. Con el pincel armado
+  `BloqueaHerramientas` es true aunque el ratón esté fuera del panel: no se talla y se pinta a
+  la vez. El agua turbia entra por `PaintLab` (los finos son un campo: `PaintStable` la haría
+  nacer limpia) y la brasa/fuego por `PaintCell` a 220 raw (regla 22). Colocar un MANANTIAL o
+  un SUMIDERO con el pincel es el gesto más potente del sandbox.
+· **Vistas de depuración**: cuarta textura siguiendo el patrón exacto del velo de líquidos
+  (R129) — textura propia, sprite propio (orden 54, alfa 150), rellenada en el mismo barrido
+  por chunks. Seis campos: temperatura (diferencia con el ambiente DE CADA CELDA), humedad,
+  carga, reposo, luz y chunks despiertos. Coste cero cuando no se usa: la textura no se crea
+  hasta que alguien elige una vista, y `LabPanel.OnDestroy` devuelve `VistaLab` a Ninguna al
+  salir del laboratorio (es estática y sobrevive a la escena). Es la excepción documentada del
+  HANDOFF §2 a «no tocar los archivos grandes»: 5 costuras de 7 líneas en `SimRenderer.cs`.
+· **Lo que las vistas enseñaron a la primera**: la de temperatura muestra el penacho del hogar
+  subiendo por la chimenea (la convección funciona) y el arroyo MÁS FRÍO que la cueva, porque
+  evaporar enfría — calor latente visible sin abrir un solo número. La de luz, el cono del
+  hogar y la columna que baja por la boca del cielo.
+· Ayuda general plegable (qué es una visita, por qué 255 = una celda, raw→°C, el punto ●, y el
+  aviso de que los chunks dormidos pueden ir 30 frames por detrás en una vista).
+· Verificado JUGANDO (regla 52): guardar → cambiar 5 números → «TODO A DEFAULTS» → cargar
+  restaura exactamente esos 5 (85 aplicados, 0 desconocidas, 0 ausentes); snapshot deja los
+  tres archivos; capturas de las pestañas y de las vistas. Regresión: con `ModoLaboratorio` en
+  false, `LabActivo`, el tinte, `VistaLab`, el panel y el sprite de la vista están apagados o
+  no existen, y `BloqueaHerramientas` es false. 0 errores de consola. Sin push (cmd 131).

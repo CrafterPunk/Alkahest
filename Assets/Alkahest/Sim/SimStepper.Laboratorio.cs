@@ -53,6 +53,16 @@ namespace Alkahest.Sim
         public long LabCompactado, LabAblandado, LabCocido, LabAbonado;
         public long LabPlantasNacidas, LabPlantasMuertas;
         public long LabPresionMovidas, LabCuerposCaidos, LabFracturas;
+        /// <summary>(R131) AUDITORÍA DE CONSERVACIÓN. Suma de TODO lo que este stepper ha creado
+        /// (+) o destruido (−) de humedad[] en unidades, contado en los dos únicos sitios que
+        /// escriben humedad sin restarla en otro lado (LabNacerAgua y LabTransformar). El resto
+        /// de las reglas son transferencias emparejadas, así que el invariante 3 del HANDOFF se
+        /// comprueba con una sola resta: Σhumedad(t) − Σhumedad(0) DEBE ser exactamente esto.
+        /// Con los contadores por CELDA no cuadraba: el sumidero traga celdas a medio llenar y
+        /// el manantial las hace llenas, así que "255 × celdas" sobreestimaba el caudal real.</summary>
+        public long LabBalanceU;
+        /// <summary>(R131) Agua que el sumidero tragó, en UNIDADES (la de celdas, LabAguaSumida, cuenta celdas a medio llenar como enteras).</summary>
+        public long LabAguaSumidaU;
 
         // ---- Sales propias (grep-verificadas: las de SimStepper.cs llegan a 563) --
         private const uint SalLabErosion = 601;
@@ -148,6 +158,7 @@ namespace Alkahest.Sim
                     case MaterialId.Fibra:
                     case MaterialId.Arcilla:
                     case MaterialId.Semilla:
+                    case MaterialId.Arenisca: // (R131) roca porosa: percola, exuda limpio y se colmata.
                         LabPoroso(x, y, i, m); break;
                     case MaterialId.Stone:
                     case MaterialId.Terracota:
@@ -178,6 +189,7 @@ namespace Alkahest.Sim
         // ---- helpers de transformación (siempre despiertan el chunk) --------------
         private void LabTransformar(int idx, byte nuevo, int humedad, int carga)
         {
+            LabBalanceU += humedad - _grid.humedad[idx]; // (R131) auditoría: lo que esta transformación crea o destruye.
             _grid.SetCell(idx, nuevo);
             _grid.humedad[idx] = (byte)humedad;
             _grid.carga[idx] = (byte)carga;
@@ -187,6 +199,7 @@ namespace Alkahest.Sim
 
         private void LabNacerAgua(int idx, byte tempRaw, int carga)
         {
+            LabBalanceU += 255 - _grid.humedad[idx]; // (R131) auditoría: el agua nace llena (SetCell) sobre lo que hubiera.
             _grid.SetCell(idx, MaterialId.Water); // humedad = 255 (SetCell)
             _grid.temp[idx] = tempRaw;
             _grid.carga[idx] = (byte)carga;
@@ -242,6 +255,7 @@ namespace Alkahest.Sim
             int j = LabVecinoVacio(idx, abajoPrimero: true, permitirArriba: false);
             if (j < 0) return; // saturada sin sitio: espera.
             LabNacerAgua(j, _grid.temp[idx], 0);
+            LabBalanceU -= _grid.humedad[idx]; // (R131) el rocío que se va del techo, auditado.
             _grid.humedad[idx] = 0;
             LabGoteos++;
         }
@@ -376,7 +390,13 @@ namespace Alkahest.Sim
                     // La celda de agua SE VUELVE sedimento húmedo: los finos ocupan
                     // su sitio. (255 de carga = una celda de finos; el agua que
                     // había queda como humedad del sedimento.)
-                    LabTransformar(i, MaterialId.Sedimento, 255, 0);
+                    // (R131) `vol`, NO 255: escribir 255 fijo CREABA agua en cada
+                    // depósito (una celda a medio llenar salía del depósito con
+                    // más agua de la que entró). Con 7670 depósitos en 9000 ticks
+                    // el inventario se desviaba +10 % del libro mayor; con `vol`
+                    // el depósito es exactamente la transferencia que dice el
+                    // comentario (invariante 3 del HANDOFF: restar donde se suma).
+                    LabTransformar(i, MaterialId.Sedimento, vol, 0);
                     LabDepositado++;
                     return;
                 }
@@ -441,6 +461,7 @@ namespace Alkahest.Sim
                 if (j >= 0)
                 {
                     LabNacerAgua(j, _grid.temp[i], 0);
+                    LabBalanceU -= hum[i]; // (R131) el agua que el poro suelta, auditada (si no, el libro perdía 255 u por exudación).
                     hum[i] = 0;
                     LabExudado++;
                     if (_grid.reposo[i] < 255) _grid.reposo[i]++;
@@ -667,7 +688,7 @@ namespace Alkahest.Sim
             byte m = _grid.mat[j];
             if (m == MaterialId.Empty) return;
             if (_universe.Get(m).archetype != MaterialArchetype.Liquid) return;
-            if (m == MaterialId.Water) LabAguaSumida++;
+            if (m == MaterialId.Water) { LabAguaSumida++; LabAguaSumidaU += _grid.humedad[j]; }
             LabTransformar(j, MaterialId.Empty, 0, 0);
         }
 
@@ -737,9 +758,16 @@ namespace Alkahest.Sim
                         if (src < 0 || dst < 0 || src == dst || srcY - dstY < desnivel) break;
 
                         int target = dst + W;
+                        // (R131) El aire del destino NO se aniquila: se muda al hueco que
+                        // deja el agua. Es un INTERCAMBIO, como el de cualquier celda que
+                        // se mueve. Antes la mudanza borraba el vapor del destino y el
+                        // libro mayor perdía ~4,5 u por mudanza (−20 006 u en 9000 ticks,
+                        // el 85 % del descuadre): la presión "secaba" el aire de la cueva.
+                        int vaporDelHueco = hum[target];
                         _grid.SetCell(target, MaterialId.Water);
                         temp[target] = temp[src]; hum[target] = hum[src]; carga[target] = carga[src]; reposo[target] = 0;
                         _grid.SetCell(src, MaterialId.Empty);
+                        hum[src] = (byte)vaporDelHueco;
                         _labVisita[target] = pase;
                         _grid.WakeChunk(target % W, target / W, _tick);
                         _grid.WakeChunk(src % W, src / W, _tick);
@@ -906,6 +934,7 @@ namespace Alkahest.Sim
                 case MaterialId.Arcilla: case MaterialId.Terracota: return LabParams.KArcilla;
                 case MaterialId.Stone: case MaterialId.PisoEstructural: case MaterialId.Ice: case MaterialId.Hogar:
                 case MaterialId.NucleoFrio: case MaterialId.Manantial: case MaterialId.Sumidero: case MaterialId.RocaSuelta:
+                case MaterialId.Arenisca:
                     return LabParams.KRoca;
                 default: return LabParams.KPolvo;
             }
@@ -919,6 +948,7 @@ namespace Alkahest.Sim
                 case MaterialId.Water: case MaterialId.Ice: return LabParams.CAgua;
                 case MaterialId.Stone: case MaterialId.PisoEstructural: case MaterialId.Arcilla: case MaterialId.Terracota: case MaterialId.Hogar:
                 case MaterialId.NucleoFrio: case MaterialId.Manantial: case MaterialId.Sumidero: case MaterialId.RocaSuelta:
+                case MaterialId.Arenisca:
                     return LabParams.CRoca;
                 default: return LabParams.CPolvo;
             }

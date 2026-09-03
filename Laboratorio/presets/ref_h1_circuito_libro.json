@@ -1,0 +1,43 @@
+{
+  "nombre": "ref_h1_circuito",
+  "fecha": "2026-09-03 16:01",
+  "tick": 378,
+  "multiplicador": 1,
+  "munheco": { "x": 118, "y": 182 },
+  "libro": {
+    "aguaEmitida": 264,
+    "aguaSumida": 0,
+    "aguaSumidaU": 0,
+    "evaporadoU": 6442,
+    "condensadoU": 0,
+    "goteos": 0,
+    "infiltradoU": 593,
+    "exudado": 0,
+    "depositado": 79,
+    "erosionado": 0,
+    "compactado": 0,
+    "ablandado": 0,
+    "cocido": 0,
+    "abonado": 0,
+    "plantasNacidas": 0,
+    "plantasMuertas": 0,
+    "presionMovidas": 117,
+    "cuerposCaidos": 0,
+    "fracturas": 0,
+    "balanceU": 67217
+  },
+  "inventarioU": { "agua": 142577, "aire": 6339, "poroso": 102836, "roca": 0, "total": 251752 },
+  "censo": {
+    "Empty": 27885,
+    "Stone": 191329,
+    "Sand": 95,
+    "Water": 580,
+    "Sedimento": 387,
+    "Arcilla": 272,
+    "Grava": 237,
+    "Hogar": 36,
+    "Manantial": 35,
+    "Sumidero": 56,
+    "Arenisca": 272
+  }
+}

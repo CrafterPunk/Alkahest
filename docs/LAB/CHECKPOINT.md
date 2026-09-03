@@ -5,9 +5,9 @@ Fuente de verdad: este archivo + `docs/LAB/*.md` + `Laboratorio/` (presets, capt
 benchmarks) + el código bajo `Assets/Alkahest/`. Se actualiza antes y después de cada cambio
 grande. Quien retome: Opus 5 según `docs/LAB/HANDOFF_OPUS.md`.)*
 
-Última actualización: 2026-09-03 07:30 (Fable, fin de la fase de costuras y handoff).
-HEAD del repo al empezar: `371dea4` (Ronda 129). Rama `main`. Cambios SIN commitear (Cesar corre
-`ca_playtest130.cmd`). NO hacer `git push` (regla del proyecto).
+Última actualización: 2026-09-03 (Opus 5, fin de H1). HEAD `36805fa` (Ronda 130: las costuras
+de Fable ya commiteadas por Cesar). Rama `main`. Los cambios de H1 están SIN commitear: Cesar
+corre `ca_playtest131.cmd`. NO hacer `git push` (regla 6b del proyecto).
 
 ---
 
@@ -40,11 +40,15 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 3 — HANDOFF A OPUS.** El laboratorio existe, compila sin errores, entra desde el título,
-simula (2,3 ms/tick con 87 chunks despiertos), la presión hidrostática está verificada (tubo en
-U), el ciclo agua→vapor→humedad→condensación está implementado pero NO afinado (condensado = 0 a
-los 2 min), la sedimentación y la erosión ocurren, la infiltración ocurre. Plantas, cuerpos
-cohesionados, presets/snapshots/vistas, banco headless e informe: pendientes (hitos H1-H8).
+**Fase: 5 — H1 y H2 CERRADOS, siguiente H3.** El laboratorio existe, compila sin errores, entra desde
+el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
+además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
+abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
+grieta atascada. El libro mayor cuadra al 0,113 % y hay una auditoría de conservación
+permanente (`LabBalanceU`). El panel está COMPLETO (presets JSON, snapshots con PNG y libro, pincel de
+materia, seis vistas de depuración, ayuda general). El ciclo agua→vapor→condensación sigue SIN
+afinar (condensado = 0: es H3). Plantas, cuerpos cohesionados, banco headless e informe:
+pendientes (H3-H8).
 
 Documentos: `docs/LAB/DISENO_LABORATORIO.md` (diseño), `docs/LAB/HANDOFF_OPUS.md` (hitos e
 interfaces), `docs/LAB/MULTIPLAYER.md` (análisis de red), `docs/LAB/mapa/*.md` (9 mapas del
@@ -80,6 +84,36 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   madre sigue sin rendir nada (R60). Terracota y roca suelta se rompen en grava.
 - **D11 Tiempo** = N ticks enteros por frame con presupuesto de ms (jamás `FixedDt`); las
   máquinas con acumulador propio NO escalan (el mundo corre más deprisa que las manos; deliberado).
+- **D15 (R131, H2) El panel guarda en `Laboratorio/presets/` con JSON escrito a mano.**
+  `JsonUtility` no serializa diccionarios y el formato del handoff es un mapa clave→número;
+  son 40 líneas de escritor y lector para un formato que se edita en el bloc de notas y se
+  versiona en git (un `git diff` contra `_defaults.json` cuenta la historia del experimento).
+  El lector es TOLERANTE a propósito: una clave que ya no existe se ignora, una que falta se
+  queda como está, y el panel cuenta ambas — así un preset de hoy sigue cargando cuando H4
+  añada parámetros de plantas.
+- **D16 (R131, H2) Las vistas son una CUARTA TEXTURA, no un modo de `ComputeCellColor`.**
+  Mismo patrón que el velo de líquidos (R129): textura propia, sprite propio (orden 54, alfa
+  150), rellenada en el mismo barrido por chunks. Descartado teñir el color de la celda: eso
+  obligaría a meter el laboratorio dentro del camino caliente del render del juego normal.
+  Coste cero cuando no se usa: la textura no se crea hasta que alguien elige una vista, y
+  `LabPanel.OnDestroy` devuelve `VistaLab` a Ninguna al salir del laboratorio (es estática y
+  sobrevive a la escena: sin eso, el overlay se quedaría encendido en el juego normal).
+- **D13 (R131, H1) La fisura es ARENISCA y la grieta está ATASCADA DE GRAVA.** La fisura era
+  arena suelta: se derrumbaba y el arroyo entero se colaba a la cámara profunda. Ahora es
+  `Arenisca` (id 78), roca porosa estática: el agua la cruza despacio y sale limpia. La grieta
+  x336-343 se mantiene, pero rellena de `Grava` sobre una repisa de `Arenisca` en y111: abierta
+  era un segundo pozo de 8 celdas en mitad del lecho y el sumidero seguía sin ver una gota.
+  Atascada sangra un hilo (≈0,24 celdas/s) y deja pasar el resto. Además la grava se COLMATA
+  con los finos del manantial, así que el hilo se cierra solo con el tiempo, y destaparla a
+  cincel es un mando real para el jugador. Alternativas descartadas (regla 15): estrechar la
+  grieta (cualquier agujero en el lecho se traga TODO el caudal, el ancho da igual) y dejarla
+  abierta confiando en que la cámara profunda se llene (240×50 celdas: horas de mundo).
+- **D14 (R131) Auditoría de conservación permanente** (`SimStepper.LabBalanceU`): la suma de
+  todo lo que el laboratorio crea o destruye de `humedad[]`, contada en los tres únicos sitios
+  que escriben sin restar en otro lado (`LabNacerAgua`, `LabTransformar`, el vaciado del poro
+  al exudar/gotear). El invariante 3 del HANDOFF pasa a comprobarse con una resta exacta en vez
+  de a ojo. Descartado contar solo por celdas: el sumidero traga celdas a medio llenar, así que
+  "255 × celdas" sobreestimaba el caudal un 4 % (por eso también existe `LabAguaSumidaU`).
 - **D12 Defaults cambiados tras medir**: `agua.evapBase` 2→1 (pozas duraban 2,5 min al aire),
   `sed.turbidezFuente` 90→40 (la poza se cegaba en 2 min), `luz.cadaTicks` 8→16 (5 ms por
   ejecución). Manantial: solo cuentan las celdas con cara libre (el caudal pedido se reparte
@@ -98,6 +132,20 @@ LabTinte al final de ComputeCellColor) · `Sim/SimLevelBuilder.cs` (partial) ·
 HUD silenciado, resets) · `Net/SimSync.cs` (3 resets) · `Game/Mudanza.cs` · `Game/WorkshopBackdrop.cs`
 · `Game/Cincel.cs` (tallable, producto, LOS) · `Game/Flask.cs` (no aspirar sólidos del lab,
 guarda del panel) · `Game/ApprenticeController.cs` (colisión, sombra) · `Game/Termometro.cs` (guarda).
+(R131, H1) Además: `Sim/Universe.cs` (id `Arenisca`=78, `Count`=79, `Rellenar`) ·
+`Sim/Universe.Laboratorio.cs` (def de la Arenisca) · `Sim/LabParams.cs`
+(`suelo.permArenisca`, 85 parámetros) · `Sim/LabMateriales.cs` (Arenisca en las 4 tablas) ·
+`Sim/SimStepper.Laboratorio.cs` (Arenisca en `LabCampos`/`LabK`/`LabC`; depósito conservativo;
+presión conservativa; `LabBalanceU` y `LabAguaSumidaU`) · `Sim/SimRenderer.Laboratorio.cs`
+(la arenisca mojada se oscurece) · `Sim/SimLevelBuilder.Laboratorio.cs` (fisura y grieta).
+
+(R131, H2) Nuevo: `Game/LabPresets.cs` (presets, comparación, snapshots). Modificados:
+`Game/LabPanel.cs` (pestañas PRESETS/PINCEL/VISTAS, campos de texto con la guarda de la regla
+12, anillo del radio, ayuda general) · `Sim/SimRenderer.Laboratorio.cs` (las seis vistas y la
+cuarta textura) · `Sim/SimRenderer.cs` (**la excepción del HANDOFF §2**: 5 costuras de 7
+líneas — `LabVistaAntesDelFrame` en RenderFrame, la bandera por chunk, `LabVistaCelda` en el
+bucle, `LabVistaSetPixels` al cerrar el chunk y `LabVistaApply` en el Apply).
+
 Nuevos: `Sim/LabParams.cs`, `Sim/LabMateriales.cs`, `Sim/SimStepper.Laboratorio.cs`,
 `Sim/SimLevelBuilder.Laboratorio.cs`, `Sim/SimRenderer.Laboratorio.cs`, `Sim/Universe.Laboratorio.cs`,
 `Game/LabPanel.cs`, `docs/LAB/*`, `Laboratorio/*`, `ca_playtest130.cmd`.
@@ -108,7 +156,7 @@ Ver `HANDOFF_OPUS.md` §1 (lista verificada) y `DISENO_LABORATORIO.md` §2-§6 (
 
 ## 5. PLAN (hitos de Opus, `HANDOFF_OPUS.md` §4)
 
-H1 plano/arenisca y circuito del agua → H2 panel completo (presets, snapshots, pincel, vistas)
+H1 plano/arenisca y circuito del agua **(HECHO, §6b)** → H2 panel completo **(HECHO, §6c)** (presets, snapshots, pincel, vistas)
 → H3 ciclo del agua afinado jugando (5 presets de referencia) → H4 plantas y fibra → H5
 rendimiento y banco headless → H6 cuerpos cohesionados → H7 arco largo con capturas → H8 informe.
 
@@ -130,30 +178,113 @@ rendimiento y banco headless → H6 cuerpos cohesionados → H7 arco largo con c
   `costuras_04_panoramica_t3565.png` (todo el plano: la fisura de arena cayó a la cámara
   profunda y el arroyo se cuela por ahí → laguna abajo).
 
+## 6b. H1 — EL CIRCUITO DEL AGUA (Opus 5, banco headless + verificación jugando)
+
+Detalle completo y capturas: `Laboratorio/benchmarks/2026-09-03_h1_circuito_del_agua.md`.
+
+| t | nivel poza x290 (labio 132) | x400 | cámara profunda | **sumida** | exudado | descuadre |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 128 | — | 0 | 0 | 0 | 0 (0,000 %) |
+| 3 000 | 136 | 131 | 17 | 759 | 4 | 426 (0,081 %) |
+| 9 000 | 136 | 131 | 15 | 4 802 | 72 | 616 (0,113 %) |
+| 18 000 | 136 | 131 | 15 | 10 949 | 160 | 632 (0,113 %) |
+
+**Régimen permanente desde t≈3 000**: los niveles no se mueven en 15 000 ticks y el sumidero
+traga 20 celdas/s, exactamente lo que entrega el manantial. La arena del mundo sigue siendo 95
+celdas en t=18 000 (el montículo de la sala): la fisura ya no se derrumba. 2,08 ms/tick.
+Libro a t=18 000: emitida 12 095 · sumida 10 949 · infiltrado 148 939 u · evaporado 63 271 u ·
+condensado 0 (H3) · depositado 21 256 · erosionado 20 283 · presión 11 084.
+
+Tres correcciones de conservación encontradas midiendo (el balance salía +10,4 %):
+el depósito escribía 255 de humedad fija en vez del volumen real; `LabPresion` aniquilaba el
+vapor del hueco al mudar el agua (−4,5 u por mudanza, el 85 % del descuadre; ahora el aire se
+muda al hueco que deja el agua); y la auditoría no cubría el vaciado del poro al exudar.
+
+Verificado JUGANDO (regla 52): Play → `ModoLaboratorio` + `RestartRun(777002)` → 10× sostenido
+(`LabMultiplicadorReal` = 10,0), 0 errores en consola, capturas
+`R131_h1_vivo_panoramica/fisura/grieta.png`.
+
+## 6c. H2 — EL PANEL COMPLETO (Opus 5, verificado jugando)
+
+**Presets** (`Laboratorio/presets/*.json`): guardar con nombre y nota, cargar, listar, «TODO A
+DEFAULTS», y una tabla «QUÉ HE TOCADO» que lista los parámetros que no valen su default y, si
+hay un preset elegido, también su valor allí. `_defaults.json` se escribe solo al arrancar el
+panel. Probado: guardar → cambiar 5 números → defaults (los 5 vuelven a fábrica) → cargar
+(los 5 vuelven a 7/111/55/42/21), 85 aplicados, 0 desconocidas, 0 ausentes; comparar lista
+exactamente esos 5.
+
+**Snapshot** (un botón, un nombre): deja `<nombre>.json` (preset), `<nombre>.png` (la foto,
+misma receta URP que `GaleriaCurador.Capturar`) y `<nombre>_libro.json` (censo por material,
+libro mayor completo, inventario de agua por clase, tick, multiplicador y dónde estaba el
+muñeco). El primero es `ref_h1_circuito`. **Y sirvió para una comprobación de verdad**: en ese
+libro, `inventario total 251 752 − inventario inicial 184 535 = 67 217 = balanceU` **exacto**,
+o sea que la auditoría de conservación de H1 también cuadra al bit en el juego en vivo, no
+solo en el banco headless.
+
+**Pincel de materia**: 22 entradas en cuatro grupos (SUELO, VIDA, LEYES, FLUIDOS), radio 0-8
+con −/+ y anillo en el cursor, izquierdo pinta y derecho borra. Con el pincel armado
+`BloqueaHerramientas` es true aunque el ratón esté fuera del panel: no se talla y se pinta a la
+vez. El agua turbia va por `PaintLab` (los finos son un campo: `PaintStable` la haría nacer
+limpia); la brasa y el fuego por `PaintCell` a 220 raw (regla 22).
+
+**Vistas de depuración**: ninguna · temperatura (diferencia con el ambiente DE CADA CELDA:
+gris/rojo/azul) · humedad (negro→cian) · carga (negro→ámbar) · reposo (negro→violeta) · luz
+(negro→blanco) · chunks (verde = despierto). Verificadas en vivo: la de temperatura enseña el
+penacho del hogar subiendo por la chimenea (la convección funciona) **y el arroyo más FRÍO que
+la cueva, porque evaporar enfría** — calor latente visible; la de luz, el cono del hogar y la
+columna que baja por la boca del cielo.
+
+**Ayuda general** plegable: qué es una visita, por qué 255 = una celda, cómo se traduce raw a
+°C, qué significa el punto ●, y el aviso de que los chunks dormidos no repintan.
+
+Regresión comprobada: con `ModoLaboratorio` en false, `LabActivo`, el tinte, `VistaLab`, el
+panel y el sprite de la vista están todos apagados o no existen, y `BloqueaHerramientas` es
+false. Capturas: `R131_h2_panel_presets_vista_humedad.png`, `R131_h2_panel_pincel.png`,
+`R131_h2_vista_temperatura.png`, `R131_h2_vista_luz.png`.
+
 ## 7. PARÁMETROS / DEFAULTS ACTUALES
 
-Los 84 de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al diseño:
-evapBase 1, turbidezFuente 40, luz.cadaTicks 16. `_defaults.json` lo escribirá el panel (H2).
+Los **85** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
+diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, y el nuevo `suelo.permArenisca` = 30
+(R131). `_defaults.json` lo escribe el panel al arrancar (H2, hecho).
 
 ## 8. PROBLEMAS CONOCIDOS
 
-1. **La fisura de arena es polvo y cae** (plano): el arroyo drena entero a la cámara profunda y
-   el sumidero no recibe nada. Solución en H1 (`Arenisca` porosa estática).
+1. ~~**La fisura de arena es polvo y cae**~~ **RESUELTO (R131, H1)**: `Arenisca` porosa
+   estática en la fisura y grava sobre repisa en la grieta. Sumidero 10 949 celdas a t=18 000.
 2. **LabLuz 5 ms/ejecución** sobre el mundo entero (H5).
 3. **Condensación = 0** en 2 min: el vapor no llega a la zona fría o la saturación está mal
    escalada (H3.1). La térmica propia sí enfría la cámara alta hacia 8 °C (ambiente por celda).
 4. **Churn erosión↔depósito** en el lecho junto al manantial (H3.2: decidir número o rasgo).
 5. **Editar `.cs` en Play** rompe la sesión (recarga de dominio por el RunCommand): receta en
    HANDOFF §3.
-6. Sin presets/snapshots/vistas/pincel todavía (H2); sin plantas (H4); sin cuerpos (H6).
+6. ~~Sin presets/snapshots/vistas/pincel~~ **RESUELTO (R131, H2)**. Sin plantas (H4); sin
+   cuerpos (H6).
 7. `RocaSuelta` hoy se comporta como piedra tallable (gancho `LabCuerpos` vacío).
 8. La pestaña TIEMPO fija `LabPresupuestoMs` desde `LabParams.PresupuestoMs` cada frame (ok).
+9. **(R131) Residuo de conservación del barrido ordinario**: 632 u en 18 000 ticks (0,113 %, y
+   deja de crecer). No está en las pasadas del laboratorio — `LabBalanceU` las cubre enteras —
+   sino en `SimStepper.cs`, que el HANDOFF §2 me prohíbe tocar. Escalado en
+   `PREGUNTAS_A_FABLE.md`. Muy por debajo del ±5 % pedido; no bloquea nada.
 
 ## 9. SIGUIENTE PASO EXACTO
 
-**Opus 5**: leer `HANDOFF_OPUS.md` §0 y §3; ejecutar H1 (Arenisca + fisura + verificar el
-circuito del agua con sondas y capturas) y anotar aquí los números; seguir con H2.
-**Cesar**: correr `ca_playtest130.cmd` (commit + push de las costuras) cuando quiera.
+**Opus 5**: H1 (§6b) y H2 (§6c) cerrados. Ahora **H3**: afinar el ciclo del agua JUGANDO, con
+los cinco presets de referencia `ref_*` (evaporación→condensación→goteo, sedimentación en la
+poza, canal sellado por colmatación, arcilla→terracota, sifón/fuente artesiana). El primero de
+la serie, `ref_h1_circuito`, ya está guardado. El problema conocido nº 3 (condensado = 0) es
+justo el punto 1 de H3, y la vista de HUMEDAD del panel es la herramienta para atacarlo: ahora
+se ve dónde está el vapor.
+**Cesar**: correr `ca_playtest131.cmd` (commit + push de H1) cuando quiera.
+
+**Hallazgo operativo (R131)**: en `Unity_RunCommand` NO hace falta reflexión para los tipos del
+proyecto — `using Alkahest.Sim;` y llamar a `Universe.Create(777002)`, `new CellGrid()`,
+`SimLevelBuilder.BuildLaboratorioDeLeyes(g)`, `new SimStepper(u, g) { LabActivo = true }` y
+`st.Step()` compila y corre **sin entrar en Play**, a ~530 ticks/s. Eso adelanta el banco
+headless de H5 y elimina el riesgo de romper la sesión de Play editando `.cs`. La reflexión
+solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `BindingFlags`
+numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
+salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 
