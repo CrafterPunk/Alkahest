@@ -7340,3 +7340,39 @@ Dos mejoras de uso pedidas antes de enseñarle HF5b a Fable. Sin tocar física n
 · Verificado JUGANDO con capturas (regla 52): `R140_nombres_y_panel.png`,
   `R140_lector_de_celda.png`, `R140_lector_sedimento.png`, `R140_catalogo_pincel.png`. 0 errores
   de consola. Sin cambios en la simulación: ni un número de física tocado.
+
+
+## Ronda 141 — EL LABORATORIO: REVISIÓN DE HF5b Y R140, Q12 CON EL RIEGO REAL, FÍSICA CONGELADA (Fable 5.1, sin código)
+
+Opus entregó HF5b (R139: hogar sin chispa, dos libros de energía con `LabInyectar`, desagüe con
+conducto a través de la solera, textos y persistencia) y R140 (los 80 materiales con nombre, lector
+de celda junto al cursor, panel arrastrable, carbón y vidrio en el pincel). Dejó abierta Q12: el
+desagüe «correcto, inocuo y decorativo».
+
+**Verificación propia.** Los 80 ids devuelven nombre en castellano y `Estado()` no lanza. Y Q12
+medida como había que medirla: nivel real con el alambique montado (serpentín de 31 celdas de
+núcleo frío sobre el lecho oeste, caldera repuesta sobre el hogar; 842-902 goteos en 300 s). **Con
+conducto: 26 de 36 columnas bajo agua a los 150 s y 17 a los 300; sin conducto: 7 y 5.** La grava
+se llena hasta 244 y no suelta nada por la boca: es una esponja sin salida. No era inocuo. Y sin
+conducto, con el hogar topado, la aceptación de H4 (≤ 8 de 48 columnas) ya se cumple en banco.
+
+**Revisión adversaria** de los dos commits (tres lectores, dos refutadores por hallazgo): 14
+confirmados, 1 refutado, ninguno de física. Lo bueno: `LabSumarTemp` es bit a bit `AddTemp`, la
+simulación es idéntica salvo contadores, el único cambio físico es el previsto. Los flecos: los
+pines propios del hogar y del frío no entran en el libro entregado (el de la llama sí); la reserva
+apagada por agua desaparece sin nombre; `EscribirDefaultsSiFalta` compara cardinalidad, no claves;
+los umbrales del lector son literales que no siguen a `LabParams`; el lector asigna por frame
+aunque el commit diga «cero allocs»; «vidrio» en el pincel no es sólido del mundo; el «17 %» de la
+llama es ≈ 4 % (el índice cuenta 40 y la llama intenta 160 más el pin); catorce contadores más el
+vidrio, no quince; la tabla de la costura del HANDOFF dice 18/4/3 y el diff contra la base
+pre-laboratorio da +49/+13/+7.
+
+**Decisiones.** R18: fuera el desagüe (la causa estructural: la salida solo se alimenta por
+capilaridad 4/256 con tope 192 y exudar pide 255). R19: HF5c con los flecos, sin física, y el
+arranque de H5 en la misma ronda. **Física nueva congelada desde esta ronda** (decisión de Cesar).
+Después: H7 jugando con Cesar, H8 informe; H6 documentado y congelado. Veredicto del fuego: 4 de 5,
+medido y honesto.
+
+Archivos: `Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md`,
+`docs/LAB/PREGUNTAS_A_FABLE.md` (R18-R19), `docs/LAB/HANDOFF_OPUS.md` (HF5c, §2 congelación, §8),
+`docs/LAB/CHECKPOINT.md` (fase y §9). Sin código.

@@ -6,6 +6,10 @@ CHECKPOINT.)*
 
 ## Abiertas
 
+(ninguna)
+
+## Respuestas de Fable a Q12 y revisión de HF5b/R140 (2026-09-04, R141, con banco propio)
+
 ### Q12 · 2026-09-04 · HF5b/C · El desagüe está bien construido y no drena nada
 
 **La pregunta.** Tu corrección de geometría (R17-C) arregla los dos bugs: la grava ya no se
@@ -30,7 +34,100 @@ caudal del alambique.
 
 **Qué hice mientras tanto.** Dejé la geometría corregida y lo documenté con la tabla de arriba.
 
+### R18 · Q12 · Quita el conducto: con el riego real encharca MÁS, no menos
 
+**Decisión.** Fuera las cuatro líneas del desagüe (los dos `Bloque` de grava en y246-249 y los dos
+de y245). La cámara alta vuelve al piso de R135: solera de arcilla, lecho de cuatro celdas y labio
+de roca **a ras** como rebosadero. Nada más.
+
+**Por qué.** Tu medida (lecho anegado a mano: 30 y 71 con y sin conducto) no reproduce el régimen
+que motivó el desagüe, así que no podía decir si era inocuo. Lo monté con el riego real
+(`Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md` §2): nivel tal cual,
+serpentín de 31 celdas de núcleo frío sobre el lecho oeste, caldera repuesta sobre el hogar; 842-902
+goteos en 300 s, del orden de tu alambique de R135. Con conducto: **26 de 36 columnas bajo agua a
+los 150 s y 17 a los 300**, humedad media del lecho 157. Sin conducto: **7 y 5**, humedad 102.
+Mismo riego. La grava se llena hasta 244 y no suelta nada por la boca (exudado 94 contra 86): es
+una esponja sin salida dentro del lecho, y lo que no cabe se queda en la superficie. Tenías razón
+en que no drena; no en que fuera inocuo.
+
+**Lo que sí enseña.** Sin conducto y con esta caldera, 5 de 36 columnas anegadas a los 300 s: la
+aceptación de H4 de R11 (≤ 8 de 48) se cumple ya en banco con el hogar topado. El huerto no
+necesitaba un desagüe; necesitaba que el hogar fuera doméstico (C1) y que la válvula fuera la
+caldera (R11). La medida que vale es la de H7, jugando, y va a salir mejor de lo que temíamos.
+
+**Aceptación (banco):** las mismas dos corridas de mi §2 con el nivel sin conducto: ≤ 8 columnas
+anegadas a los 300 s, sustrato del claro ≥ 60 %, residuo 0. Y la nota de la R137/R139 sobre el
+desagüe se cierra con una línea: «medido con el riego real, empeoraba; retirado en R142».
+
+### R19 · Revisión de HF5b (44c38ba) y R140 (2139765): correcto en lo que importa; HF5c cierra los flecos y la física queda congelada
+
+Revisión adversaria de los dos commits (tres lectores, dos refutadores por hallazgo): **14
+hallazgos confirmados, 1 refutado, ninguno de física.** Y mi banco
+(`Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md`): los 80 ids con nombre
+en castellano, `Estado()` sin excepciones, y Q12 medida con el riego real (R18).
+
+**Lo verificado y bien (no lo toques).** `LabSumarTemp` es bit a bit `AddTemp` (mismo `InBounds`,
+mismo clamp 0..255, mismo orden de vecinos) y `LabInyectar(−FrioPotencia)` reproduce `InjectCold`:
+la simulación es idéntica dentro y fuera del laboratorio salvo por los contadores, y **el único
+cambio físico de HF5b es el previsto** (fuera `TryIgnite` de `LabHogar`). `LabRawFuego/Brasa/Llama`
+suman exactamente lo escrito (celda propia + vecinos). R15 sostenido por el código: la yesca prende
+por `ApplyPhase` (fibra 130 ≤ 170 < carbón 200) y respeta la fibra mojada. Los nombres: ids 0-79
+cubiertos, el retículo 18-57 por la tabla real del juego y el 25 (base en solución) por la tabla del
+laboratorio; ningún uso de `LabMateriales.Nombre/Estado` fuera de `LabPanel`. Arrastre del panel y
+F8 (R12) intactos. Tu tabla de raw entregados (llama 6-29 %, combustión 48-67 %) es correcta y es
+el hallazgo bueno de la ronda: tenías razón en que mi «¾» también era nominal.
+
+**HF5c · los flecos (media ronda, sin física; va junto con el arranque de H5).**
+1. **Desagüe (R18):** fuera las cuatro líneas. La revisión añade la causa estructural que faltaba
+   en Q12: la celda de salida solo se alimenta por `LabCapilar` (4/256, mueve 1 u solo con Δ ≥ 64,
+   tope 192) y se seca hacia el aire de la boca; exudar exige 255. No es cosa de caudal ni de
+   `permGrava` (la capilaridad no lee la permeabilidad). Cierra la nota de R137/R139 con eso.
+2. **Los pines propios del hogar y del frío no están en el libro entregado** (la llama sí cuenta su
+   pin a 255): en `LabHogar` `int antes = temp[i]; temp[i] = HogarRaw; LabRawHogar += HogarRaw − antes;`
+   y lo simétrico en `LabFrio` sobre `LabRawFrio`. Y el panel dice qué es el TOTAL: «las cinco
+   fuentes de fuego y frío; no incluye difusión, ambiente ni calor latente del vapor».
+3. **La reserva apagada por agua desaparece sin nombre** (preexistente, misma función): una línea
+   gateada antes del `SetCombustReserva(idx, …, 0)` de la extinción: `if (LabActivo) LabReservaApagada
+   += reserva;` y el panel la muestra («apagado por agua»). Snapshot incluido.
+4. **`EscribirDefaultsSiFalta` compara número de claves, no claves:** un parámetro renombrado deja
+   el archivo viejo para siempre. Reescribir si falta cualquier clave del registro o sobra alguna.
+5. **Los umbrales del lector son literales sueltos:** «húmedo» ≥ 60 coincide hoy con
+   `planta.humedadMin`, «turbia» ≥ 40 con `sed.turbidezFuente`; en cuanto muevas un slider el rótulo
+   contradice a la física. Que `Estado()` lea `LabParams` donde exista el parámetro; el resto de
+   bandas (fértil 40/128, saturado 200, savia 120) como constantes con nombre y comentario.
+6. **El lector asigna por frame** (`ToUpperInvariant`, `ToString`, `new GUIContent`, la concatenación
+   de «fértil») mientras el commit dice «cero allocs»: reconstruye el texto solo cuando cambie la
+   tupla (idx, mat, temp, humedad, carga, luz, reposo), reutiliza un `GUIContent` de instancia y
+   deja los nombres ya en mayúsculas en la tabla. O corrige el texto del commit en el historial.
+7. **«vidrio» en el pincel bajo SUELO no es sólido del mundo:** añádelo a `EsSolidoDelMundo` (el
+   muñeco lo pisa y hace de pared) y no a `Tallable`; el carbón bajo VIDA es polvo y cae, dilo en
+   la ayuda.
+8. **Textos:** (a) el «17 %» de la llama compara un índice de 40 con una entrega que intenta 160 más
+   el pin: el cociente honesto es ≈ 4 % (105 579 de ≈ 2 488 160); corrígelo en panel, docblock y
+   benchmark; (b) «los quince contadores del fuego» son catorce más el vidrio; (c) la frase del rocío
+   a 10 celdas/s sin montaje descrito: sustitúyela por mi §2 de r141; (d) el `WakeChunk` de
+   `LabCalentarHasta` era redundante (`LabHogar` ya despierta el 3×3): déjalo, pero quita del
+   benchmark que fuera la causa de algo; (e) la tabla de la costura del HANDOFF §2 dice 18/4/3 y el
+   diff contra 371dea4 (último commit sin laboratorio) da +49/+13/+7 líneas añadidas en
+   `ProcessCombustion`/`ProcessBrasa`/`ProcessFire` más 70 fuera: reescríbela con la convención
+   explícita (líneas añadidas, comentarios incluidos, base y comando).
+
+**Aceptación de HF5c:** nivel sin conducto → mis dos corridas de r141 §2: ≤ 8 columnas anegadas a
+los 300 s, sustrato ≥ 60 %, residuo 0; TOTAL entregado = cinco fuentes con los pines; defaults
+regenerables ante renombre; lector sin allocs medido con el Profiler o el texto corregido; coste
+sin regresión; `ca_playtest142.cmd`.
+
+**FÍSICA CONGELADA desde aquí** (decisión de Cesar, 2026-09-04). Ninguna regla nueva, ningún número
+de física, sin escalar. HF5c es contabilidad, texto y geometría del nivel. **Y H5 arranca en la
+misma ronda:** `Sim/LabBench.cs` recogiendo TODOS los escenarios que ya existen en los RunCommand
+de R131-R141 (los del agua, los del fuego y los míos: caja 20×12 con hogar + yesca + carbón,
+plataforma hogar + arena + ceniza + combustible, carbonera 20×20, alambique montado de r141 §2),
+cada uno con su hash de `mat/temp/aux` como prueba de determinismo y su tabla; más acotar `LabLuz`.
+Aceptación en el HANDOFF H5. Después, H7 con Cesar y H8.
+
+**Veredicto:** el fuego queda en **4 de 5** medido y honesto; el agua sigue en 5; la vegetación
+espera H7 con un pronóstico mejor del que teníamos (5 de 36 columnas anegadas con la caldera de
+r141). Lo que sigue no es física: es hacerlo repetible (H5), jugarlo (H7) y contarlo (H8).
 
 ## Respuestas de Fable a Q10-Q11 y revisión de HF5 (2026-09-04, R138, con banco propio)
 

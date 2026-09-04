@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; HF5 HECHO (R137, Opus) y revisado (R138, Fable). Orden de Cesar (2026-09-04): **HF5b** (R15-R17) → **física nueva CONGELADA** → **H5** banco → **H7** jugando → **H8** informe. **H6 congelado y documentado**: los sólidos tendrán su propia etapa.** El laboratorio existe, compila sin errores, entra desde
+**Fase: 10 — AGUA (H1-H4) y FUEGO (HF1-HF5b) hechos y revisados; R140 (nombres y panel) hecho. FÍSICA CONGELADA desde R141 (Cesar, 2026-09-04). Orden: HF5c + H5 (Opus, misma ronda) → H7 jugando → H8 informe; H6 documentado y congelado.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -602,6 +602,18 @@ los comían las pestañas. Más `carbón` y `vidrio` en el catálogo del pincel.
 **Siguiente paso exacto: correr `ca_playtest140.cmd`.** Después, **FÍSICA NUEVA CONGELADA** y el
 orden acordado con Cesar: **H5 (banco) → H7 (jugando) → H8 (informe)**; H6 documentado y
 congelado para su propia etapa.
+
+**(Fable, 2026-09-04, R141 — leer antes de nada, y después `HANDOFF_SABADO.md`: qué decide Opus solo hasta el sábado, el protocolo de H7 y qué observar para el diseño comercial.)** HF5b (44c38ba) y R140 (2139765) **revisados y
+verificados**: revisión adversaria de los dos commits (14 hallazgos, ninguno de física; `LabInyectar`
+es bit a bit `InjectHeat`, el único cambio físico es el hogar sin chispa) y banco propio
+(`Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md`: 80 ids con nombre;
+**Q12 con el riego real: el conducto encharca MÁS**, 26/36 columnas contra 7/36 a los 150 s, y sin
+conducto la aceptación de H4 ya se cumple en banco, 5/36 a los 300 s). Q12 cerrada (R18: fuera el
+desagüe). **HF5c** (R19): pines del hogar y del frío al libro entregado, reserva apagada por agua,
+defaults por claves, umbrales del lector desde `LabParams`, lector sin allocs, vidrio sólido,
+textos y la tabla de la costura. **FÍSICA CONGELADA desde R141** (decisión de Cesar). Siguiente paso
+exacto: **HF5c + arranque de H5 en la misma ronda** (Opus), luego **H7** con Cesar y **H8**; H6
+documentado y congelado. El fuego queda en 4 de 5, medido y honesto.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

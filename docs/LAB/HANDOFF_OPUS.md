@@ -91,6 +91,11 @@ Flujo de un tick con `LabActivo`: `LabDifusionTermica` (o `DiffuseTemperature` s
 contabilidad de chunks → `MorphTick` → `LabCampos` → `LabPresion` (cada N) → `LabLuz` (cada N)
 → `LabCuerpos` (gancho vacío).
 
+**(R141) FÍSICA CONGELADA — decisión de Cesar, 2026-09-04.** Desde HF5c no entra ninguna regla
+nueva de simulación ni cambia ningún número de física sin escalarlo a Fable y a Cesar. Lo que
+queda —HF5c, H5, H7, H8— es contabilidad, herramienta, juego e informe. H6 (sólidos) espera su
+propia etapa.
+
 ## 3. OPERATIVA CON EL EDITOR DE CESAR (aprendida a golpes esta noche)
 
 - Editar código → `AssetDatabase.Refresh(ForceSynchronousImport)` +
@@ -201,7 +206,21 @@ deja ceniza que abona. Coste de `LabCampos` sigue < 0,5 ms con 2000 plantas.
 **Decides tú**: forma (ramas), colores. **Escala**: si quieres que las plantas alteren
 permeabilidad/cohesión del suelo (nuevo acoplamiento).
 
-### H5 · Rendimiento y banco (1 día) — **VA JUSTO DESPUÉS DE HF5b** (orden de Cesar, 2026-09-04): herramienta y rendimiento, CERO física nueva
+### HF5c · LOS FLECOS DE HF5b Y R140 (R141 de Fable; media ronda; sin física; arranca H5 en la misma ronda)
+Índice; el detalle exacto está en `PREGUNTAS_A_FABLE.md` R18 y R19. (1) Fuera el desagüe (cuatro
+líneas): medido con el riego real encharcaba MÁS (26/36 contra 7/36 a los 150 s), y la causa es
+estructural (capilaridad 4/256 con tope 192; exudar pide 255). (2) Los pines propios del hogar y
+del frío al libro entregado; el panel dice qué incluye el TOTAL. (3) `LabReservaApagada` para la
+extinción por agua. (4) `EscribirDefaultsSiFalta` compara claves, no cardinalidad. (5) `Estado()`
+lee `LabParams` donde exista el parámetro. (6) Lector sin allocs por frame (o texto corregido).
+(7) «vidrio» a `EsSolidoDelMundo`. (8) Textos: el 17 % de la llama es ≈ 4 %, catorce contadores
+más el vidrio, el rocío sin montaje, el `WakeChunk` redundante, y la tabla de la costura del §2
+con convención explícita (+49/+13/+7 contra 371dea4).
+**Aceptación:** nivel sin conducto ≤ 8 columnas anegadas a los 300 s con el alambique de r141 §2,
+sustrato ≥ 60 %, residuo 0; TOTAL entregado = cinco fuentes con pines; coste sin regresión;
+`ca_playtest142.cmd`. **Desde aquí la física está CONGELADA** (Cesar, 2026-09-04).
+
+### H5 · Rendimiento y banco (1 día) — **ARRANCA EN LA MISMA RONDA QUE HF5c** (orden de Cesar, 2026-09-04): herramienta y rendimiento, CERO física nueva
 Los escenarios ya existen a trozos en los RunCommand de las R131-R138 (los de Fable están en
 `Laboratorio/benchmarks/2026-09-04_r136_*.md` y `_r138_*.md`: caja 20×12 con hogar + yesca + carbón,
 plataforma hogar + arena + ceniza + combustible, carbonera 20×20 con doble corrida y hash). Recógelos
@@ -422,17 +441,14 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-**(Actualizado por Fable, 2026-09-04, R138; el orden es de Cesar.)**
+**(Actualizado por Fable, 2026-09-04, R141; el orden es de Cesar.)**
 
-1. **HF5b** (media ronda, Opus): R15 (el hogar calienta, no chispea: fuera `TryIgnite` de `LabHogar`),
-   R16 (`LabCalorNoSoltado` + etiquetas honestas del panel), y lo que la revisión R17 dejó abierto en
-   `PREGUNTAS_A_FABLE.md` (grava del desagüe que resbala a la boca, etc.). Regresión del agua, banco
-   corto, `ca_playtest139.cmd`.
-2. **FÍSICA NUEVA CONGELADA** desde aquí (decisión de Cesar). Ninguna regla nueva sin escalar.
-3. **H5** banco y rendimiento (`Sim/LabBench.cs`, acotar `LabLuz`): herramienta, cero física.
-4. **H7** el arco largo jugando con Cesar (ahí se mide el riego real que H4 necesita, y la cadena cruzada
-   del criterio 4 del fuego).
+**Hasta el sábado, sin Fable: `HANDOFF_SABADO.md`** (qué decides solo, protocolo de H7, qué capturar para lo comercial, qué se aparca).
+
+1. **HF5c + arranque de H5** en la misma ronda (Opus): R18 (fuera el desagüe) y R19 (los ocho
+   flecos), luego `Sim/LabBench.cs` con todos los escenarios de R131-R141 y su hash. `ca_playtest142.cmd`.
+2. **FÍSICA CONGELADA** (ya en vigor, §2).
+3. **H5** completo (banco, `LabLuz` acotado, tabla de rendimiento).
+4. **H7** el arco largo jugando con Cesar (riego real, huerto, cadena cruzada del fuego).
 5. **H8** informe final.
-6. **H6** congelado y documentado. Los sólidos tendrán su propia etapa.
-
-El texto original de este paso (R130) queda en el historial; lo operativo de arranque sigue en §0 y §3.
+6. **H6** documentado y congelado.
