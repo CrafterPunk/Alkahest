@@ -110,9 +110,34 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   bancada. Seis costuras `(R135)` en `SimStepper.cs` (excepción autorizada por el diseño).
 - **D30 (R135, HF2) El vidrio como marcador de calor industrial**, y `fuego.hogarRaw` 220 → 170.
   El hogar gratuito hierve, seca y cuece la cara de la arcilla, pero NO vidria: para eso hace
-  falta un recinto. Y apareció sola una cadena de encendido que nadie escribió: el hogar no
-  puede prender el carbón (ignición 200 raw > 170), así que hace falta LLAMA — hogar → yesca de
-  fibra → llama 255 raw → carbón. Dos números y una consecuencia.
+  falta un recinto. Y apareció sola una cadena de encendido que nadie escribió: hogar → yesca de
+  fibra → llama → carbón. **(Corregido en R136:** la explicación que di —«el hogar no puede
+  prender el carbón porque 170 < 200»— era falsa; `TryIgnite` enciende por contacto con un 12 %
+  por tick sin mirar la temperatura. La cadena es real, pero la sostiene la SOLERA DE CENIZA que
+  separa el piloto del combustible: sin yesca que la atraviese, 144 celdas de carbón siguen
+  intactas a los 300 s. Geometría, no umbral. Ver D31 y Q10.**)**
+- **D31 (R136, C1) El hogar no calienta a nadie por encima de sí mismo.** `LabHogar` usa
+  `LabCalentarHasta` con tope en `fuego.hogarRaw`, no `InjectHeat`, que sumaba sin límite y
+  ponía a sus vecinos a 255 raw: arena con ceniza sobre el hogar se volvía VIDRIO en 27 s, sin
+  horno. O sea que «el hogar es doméstico» era falso, y con él la frontera entre vivir y
+  fabricar. Medido tras el parche: **0 vidrio a 3 000 ticks**, el agua hierve y la fibra prende.
+- **D32 (R136, C2) Carbonizar no crea energía: `fuego.rendimientoCarbonPct` = 25 y la reserva
+  del carbón 160 → 50.** Solo una de cada cuatro celdas ahogadas deja carbón; el resto, ceniza.
+  Las dos constantes no son ajuste de dificultad: de los 224 000 raw de una carbonera de 400
+  celdas de fibra, la quema ahogada suelta 112 000 y el carbón que nace guarda **112 200**.
+  Mitad y mitad con un 0,2 % de diferencia. Una carbonera cambia cantidad por calidad y pierde
+  por el camino, como la de verdad. Pico de carbón medido: **25,0 % exacto**.
+- **D33 (R136, C3) El libro cuenta los TRES calores, y el cuarto contador que hizo falta.**
+  `LabCalorLlama` + `LabCalorHogar` + `LabCalorFuego`, porque contar solo la brasa mentía: en un
+  horno la llama pone 130 240 raw contra 45 400 de la brasa. Y `LabCalorCarbon`, que no estaba
+  en la especificación: sin separar lo que suelta el carbón al RE-ARDER, la identidad de C2 se
+  desviaba +27,6 % por doble conteo (la energía de una celda carbonizada se cuenta al nacer y
+  otra vez al quemarse). Con él, la identidad cierra a **+1,0 %**.
+- **D34 (R136, Q8) El desagüe de grava es geometría del nivel, no una regla** — y drena al revés
+  de lo que se temía: la grava le da al agua un camino al subsuelo en vez de dejarla correr
+  hasta la boca, y el labio de grava fija el nivel freático a la altura del lecho. Conservación
+  intacta (residuo 0). **H4 sigue abierto**: el banco ya no reproduce el encharcamiento y el
+  régimen que falta medir es el del alambique real, jugando.
 - **D22 (R134, H4) `suelo.compactVecinos` = 4, y era un número suelto en el stepper.**
   La compactación pedía `LabVecinosSolidos(i) >= 3`, escrito a mano (contra el invariante 5).
   Pero 3 vecinos sólidos los tiene también la CARA de un suelo (abajo y los dos lados), así que
@@ -531,17 +556,24 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Fable, 2026-09-04, R136 — leer antes de nada.)** Q8 y Q9 cerradas en
-`PREGUNTAS_A_FABLE.md` (R11-R14) con banco propio
-(`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`). Lo medido en la build R135:
-el hogar calienta a **255 raw** a sus vecinos (arena + ceniza sobre el hogar → vidrio en 27 s,
-sin horno), carbonizar crea energía **×6,3**, el libro no cuenta la llama (40 raw/tick, la
-fuente dominante), `vidaHumo` 400 es 255, y el tiro no existe porque el aire no se gasta y la
-llama sobre combustible es inmortal (humo del carbón 4 % → 40 %: simulación idéntica al bit).
-Veredicto del fuego: 3,5 → **2,5 medido → 4 tras HF5**. Siguiente paso exacto: **HF5** (los
-cuatro parches C1-C4 de R13 + repetir B-F3 y HF2 + Q8 si cabe; `HANDOFF_OPUS.md` HF5). Después
-de HF5, **física nueva congelada** (recomendación; decide Cesar): H7 jugando, luego H5 y H8; H6
-espera. Lo de abajo queda como historia.
+**(Opus, 2026-09-04, R137 — leer antes de nada.)** **HF5 ejecutado y medido**;
+`Laboratorio/benchmarks/2026-09-04_r137_hf5_cierres_del_fuego.md`. Los cuatro parches de Fable
+(C1-C4) están puestos, más un quinto que hizo falta (`LabCalorCarbon`) para que su identidad
+fuera comprobable. Resultados: hogar doméstico de verdad (**0 vidrio** a 3 000 ticks), pico de
+carbón **25,0 % exacto**, identidad de C2 a **+1,0 %**, horno con yesca **18 de 18** celdas
+vidriadas y **0** sin yesca, tolva **466 s** (antes 324), agua con **residuo 0**, coste 1,85
+ms/tick sin regresión. Criterio 3 cerrado como «recinto y contacto»: a igual masa y misma boca,
+la pila fina da **×5 de llama** que la maciza. **96 parámetros.**
+
+Dos aceptaciones NO se cumplen y están escaladas: **Q10** (el hogar sí enciende el carbón, por
+el 12 % de `TryIgnite`, que es regla base del juego — y eso corrige lo que R135 escribió sobre
+la cadena de encendido) y **Q11** (arder ahogado destruye la mitad de la energía; para la fibra
+está compensado por diseño, para el carbón no). Ninguna de las dos bloquea.
+
+**Siguiente paso exacto: correr `ca_playtest137.cmd`** (con el 134 y el 135 aún pendientes) y
+después **H7 jugando con Cesar** — que es donde se mide el régimen de riego real que H4 necesita.
+Luego H5 y H8; H6 espera. Tras HF5, **física nueva congelada** (recomendación de Fable; decide
+Cesar).
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

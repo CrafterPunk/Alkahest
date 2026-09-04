@@ -156,7 +156,12 @@ namespace Alkahest.Sim
                 // (R135, F2) El combustible de segunda generación: cuatro veces la reserva de
                 // la fibra y casi el doble de calor, con muy poco humo. Es lo que hace que un
                 // horno se pueda alimentar una vez y trabajar minutos.
-                combustReserva = 160,
+                // (R136, C2) Reserva 50, no 160: con 160 una carbonera al 100 % de rendimiento
+                // multiplicaba por 6,3 la energía de la fibra de partida. 25 % × 50 × 22 = 275,
+                // que es media fibra (½ × 40 × 14 = 280). Un carbón arde 13 s respirando y 53 s
+                // ahogado; el horno sigue trabajando minutos porque la pila es MACIZA, no porque
+                // la celda sea eterna.
+                combustReserva = 50,
                 combustPasoTicks = 8,
                 combustCalorRaw = 22,
                 combustHumoPct = 4,

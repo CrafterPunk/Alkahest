@@ -100,10 +100,11 @@ namespace Alkahest.Sim
         public static int FibraMojadaMin = 100;
         public static int Caudal = 24;
         public static int FuenteTempRaw = 70;
-        public static int VidaHumo = 400;
+        public static int VidaHumo = 255;
         public static int PermCarbon = 20;
         public static int VidrioRaw = 200;
         public static int VidrioVisitas = 60;
+        public static int RendimientoCarbonPct = 25;
 
         // ---------------- TÉRMICA ----------------
         public static int TermicaPropia = 1;
@@ -242,8 +243,8 @@ namespace Alkahest.Sim
             // FUEGO / FUENTES
             R("fuego.hogarRaw", "Temperatura del hogar", "FUEGO", "raw", 170, 100, 255, () => HogarRaw, v => HogarRaw = (int)v,
               "La brasa eterna fija su celda a esta temperatura. (R135, F4) 220 → 170 raw (320 → 220 °C): el hogar es DOMÉSTICO. Hierve agua, seca, enciende, da luz y cuece la superficie de la arcilla, pero NO llega a la temperatura del vidrio ni cuece una vasija por dentro. Para eso hace falta llama contenida en un recinto — o sea, un horno que tú construyas. Es la frontera entre vivir y fabricar, y cuesta un número.");
-            R("fuego.vidaHumo", "Vida del humo", "FUEGO", "ticks", 400, 20, 255, () => VidaHumo, v => { VidaHumo = (int)v; VaporVidaCambiado = true; },
-              "Cuántos ticks vive una celda de humo antes de disolverse. En el juego son 200 (7 s); súbelo y una bolsa bajo un techo sin salida dura lo bastante para AHOGAR el fuego que la produce (el humo cuenta como aire gastado) y para oscurecer un claro. Es lo que convierte una chimenea en una necesidad en vez de un adorno.");
+            R("fuego.vidaHumo", "Vida del humo", "FUEGO", "ticks", 255, 20, 255, () => VidaHumo, v => { VidaHumo = (int)v; VaporVidaCambiado = true; },
+              "Cuántos ticks vive una celda de humo antes de disolverse. En el juego son 200 (7 s). TOPE 255: es un byte, y pedir más se recorta en silencio (R136, C4). Bajo un techo el humo cuenta doble, así que una bolsa embolsada dura hasta 510 ticks: lo bastante para AHOGAR el fuego que la produce (el humo cuenta como aire gastado) y para oscurecer un claro.");
             R("suelo.permCarbon", "Permeabilidad del carbón", "FUEGO", "0-255", 20, 0, 255, () => PermCarbon, v => PermCarbon = (int)v,
               "El carbón absorbe agua, y mojado NO prende (fuego.fibraMojadaMin). Guardar el combustible bajo el agua o en un rincón húmedo es el granero del laboratorio: no hace falta un cofre, hace falta un charco.");
             R("fuego.hogarCalor", "Calor que inyecta el hogar", "FUEGO", "raw/visita", 40, 0, 80, () => HogarCalor, v => HogarCalor = (int)v, "Cuánto calienta a sus cuatro vecinos en cada visita, además de la difusión.");
@@ -254,6 +255,8 @@ namespace Alkahest.Sim
             R("fuente.tempRaw", "Temperatura del manantial", "FUEGO", "raw", 70, 0, 255, () => FuenteTempRaw, v => FuenteTempRaw = (int)v, "A qué temperatura nace el agua del manantial (70 = 20 °C). Prueba agua caliente: evapora sola.");
 
             // TÉRMICA
+            R("fuego.rendimientoCarbonPct", "Rendimiento de la carbonera", "FUEGO", "%", 25, 0, 100, () => RendimientoCarbonPct, v => RendimientoCarbonPct = (int)v,
+              "Qué parte de las celdas que se consumen SIN RESPIRAR deja carbón; el resto deja ceniza. (R136, C2) No es un ajuste de dificultad: es lo que impide que carbonizar CREE energía. Un carbón que naciera de cada celda ahogada, con su reserva y su calor, multiplicaría por seis la energía de la fibra de partida. Con este 25 %, la energía del carbón que nace es la mitad de la que la fibra no llegó a soltar al arder ahogada — que es justo lo que hace una carbonera de verdad: cambiar cantidad por calidad, perdiendo por el camino.");
             R("fuego.vidrioRaw", "El vidrio pide", "FUEGO", "raw (°C = raw·2−120)", 200, 100, 255, () => VidrioRaw, v => VidrioRaw = (int)v,
               "Temperatura a la que la ARENA, con ceniza al lado como fundente, empieza a contar su tiempo al rojo. 200 raw = 280 °C. Es la frontera entre el fuego doméstico y el industrial: el hogar gratuito llega a 170 y una llama suelta cae a ~200 a dos celdas al aire libre. Solo un recinto aislado con carbón sostiene esto en un volumen — o sea, un horno que construyas tú.");
             R("fuego.vidrioVisitas", "Tiempo al rojo para vidriar", "FUEGO", "visitas", 60, 5, 255, () => VidrioVisitas, v => VidrioVisitas = (int)v,

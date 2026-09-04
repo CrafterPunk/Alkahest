@@ -889,14 +889,36 @@ namespace Alkahest.Sim
             }
 
             reserva--;
-            if (LabActivo) { LabCombustibleQuemado++; LabCalorFuego += calorPaso; } // (R135, HF4) el libro de energía.
+            if (LabActivo)
+            {
+                LabCombustibleQuemado++; LabCalorFuego += calorPaso; // (R135, HF4) el libro de energía.
+                // (R136, C3) El calor del CARBÓN, aparte. Sin separarlo la identidad de C2 no se
+                // puede comprobar: la energía de una celda carbonizada se cuenta al nacer
+                // (LabEnergiaCarbon) y otra vez cuando ese mismo carbón vuelve a arder.
+                if (def.id == MaterialId.Carbon) LabCalorCarbon += calorPaso;
+            }
             if (reserva <= 0)
             {
                 SetCombustReserva(idx, def.archetype, 0);
                 // (R135, F2) LA CARBONERA: lo que se consumió SIN RESPIRAR no deja brasa,
                 // deja CARBÓN. Enterrar una pila, encenderla por una boca y taparla es la
                 // tecnología real, descubierta por geometría y sin una regla dedicada.
-                if (sordina && def.id != MaterialId.Carbon) Transform(idx, MaterialId.Carbon);
+                // (R136, C2) Pero NO todas: solo `fuego.rendimientoCarbonPct`, y el resto es
+                // ceniza. Si cada celda ahogada diera carbón con su reserva entera, carbonizar
+                // CREARÍA energía (×6,3 medido). Una carbonera cambia cantidad por calidad y
+                // pierde por el camino, como la de verdad.
+                if (sordina && def.id != MaterialId.Carbon)
+                {
+                    var rc = XorShift.FromCell(_tick, x, y, SalLabCarboniza);
+                    if (rc.ChancePercent(LabParams.RendimientoCarbonPct))
+                    {
+                        Transform(idx, MaterialId.Carbon);
+                        LabCarbonizado++;
+                        var defC = _universe.Get(MaterialId.Carbon);
+                        LabEnergiaCarbon += (long)defC.combustReserva * defC.combustCalorRaw;
+                    }
+                    else Transform(idx, MaterialId.Ash);
+                }
                 else if (def.combustResiduo == MaterialId.Brasa) ConvertirEnBrasa(x, y, idx);
                 else Transform(idx, def.combustResiduo);
             }
@@ -1663,6 +1685,7 @@ namespace Alkahest.Sim
 
             // El fuego calienta fuertemente su propia celda (fuente de calor para la difusión).
             _grid.temp[idx] = 255;
+            if (LabActivo) LabCalorLlama += 40; // (R136, C3) la fuente DOMINANTE del calor de un horno, al libro.
             InjectHeat(x, y, 40);
 
             // Intenta encender vecinos inflamables (cada vecino tira su propio dado,

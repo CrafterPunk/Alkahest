@@ -61,6 +61,18 @@ namespace Alkahest.Sim
         /// mitad, así que la razón calor/reserva CAE entre esos dos valores y esa razón es, por sí
         /// sola, la medida de cuánto de la quema ocurrió sin respirar.</summary>
         public long LabCombustibleQuemado, LabCalorFuego;
+        /// <summary>(R136, C3) Los otros dos calores, que antes no contaba nadie: la LLAMA (40 raw por
+        /// tick y celda, sin gastar reserva — en un horno es el 90 % del calor) y el HOGAR. Con los
+        /// tres, el libro de energía dice la verdad en vez de contar solo la fuente pequeña.</summary>
+        public long LabCalorLlama, LabCalorHogar;
+        /// <summary>(R136, C2) Celdas que la carbonera convirtió en carbón, y la energía que ese carbón
+        /// lleva dentro (reserva × calor, leídos de su MaterialDef). La identidad que tiene que cuadrar:
+        /// `LabCalorFuego + LabEnergiaCarbon ≈ celdas de combustible × su reserva × su calor`.</summary>
+        public long LabCarbonizado, LabEnergiaCarbon;
+        /// <summary>(R136, C3) De `LabCalorFuego`, la parte que soltó el CARBÓN al volver a arder.
+        /// Restándola queda el calor del combustible ORIGINAL, y solo entonces se puede escribir la
+        /// identidad de C2 sin contar dos veces la misma energía.</summary>
+        public long LabCalorCarbon;
         public long LabPresionMovidas, LabCuerposCaidos, LabFracturas;
         /// <summary>(R131) AUDITORÍA DE CONSERVACIÓN. Suma de TODO lo que este stepper ha creado
         /// (+) o destruido (−) de humedad[] en unidades, contado en los dos únicos sitios que
@@ -87,6 +99,7 @@ namespace Alkahest.Sim
         private const uint SalLabCuerpo = 631;
         private const uint SalLabGermina = 641;   // (R134) germinación espontánea del sustrato
         private const uint SalLabRama = 643;      // (R134) ¿esta vez la punta se va en diagonal?
+        private const uint SalLabCarboniza = 632; // (R136, C2) ¿esta celda ahogada deja carbón o ceniza?
 
         private int _labManantialCeldas = -1;
 
@@ -876,9 +889,34 @@ namespace Alkahest.Sim
         private void LabHogar(int x, int y, int i)
         {
             _grid.temp[i] = (byte)LabParams.HogarRaw;
-            InjectHeat(x, y, LabParams.HogarCalor);
+            // (R136, C1) SEGUNDA LEY: el hogar no calienta a NADIE por encima de su propia
+            // temperatura. Antes usaba InjectHeat, que suma sin tope, y la celda de encima del
+            // hogar acababa a 255 raw (390 °C) con caja o al aire: arena con ceniza al lado
+            // sobre el hogar se volvía VIDRIO en 800 ticks, sin horno ninguno. O sea que
+            // «el hogar es doméstico» era falso, y con él la frontera entre vivir y fabricar.
+            // Con tope: hierve agua (110), seca, cuece la cara de la arcilla (150) y prende
+            // fibra (130), pero NO vidria (200) ni prende carbón (200). Para eso hace falta
+            // LLAMA, y la llama pide combustible y recinto.
+            LabCalentarHasta(x - 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
+            LabCalentarHasta(x + 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
+            LabCalentarHasta(x, y - 1, LabParams.HogarCalor, LabParams.HogarRaw);
+            LabCalentarHasta(x, y + 1, LabParams.HogarCalor, LabParams.HogarRaw);
             _grid.WakeChunk(x, y, _tick); // R55: la brasa eterna mantiene vivo su chunk (si no, lo que le acercan nunca prende).
             TryIgnite(x - 1, y); TryIgnite(x + 1, y); TryIgnite(x, y - 1); TryIgnite(x, y + 1);
+        }
+
+        /// <summary>(R136, C1) Suma calor a (x,y) sin pasar de `tope`. Lo que ya está a tope no recibe nada. Mismo clamp que AddTemp.</summary>
+        private void LabCalentarHasta(int x, int y, int cuanto, int tope)
+        {
+            if (!CellGrid.InBounds(x, y)) return;
+            int j = CellGrid.Idx(x, y);
+            int t = _grid.temp[j];
+            if (t >= tope) return;
+            int nuevo = t + cuanto;
+            if (nuevo > tope) nuevo = tope;
+            if (nuevo > 255) nuevo = 255;
+            LabCalorHogar += nuevo - t; // (C3) el libro también lo cuenta.
+            _grid.temp[j] = (byte)nuevo;
         }
 
         private void LabFrio(int x, int y, int i)

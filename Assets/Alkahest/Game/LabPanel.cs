@@ -368,6 +368,13 @@ namespace Alkahest.Game
             GUILayout.Label($"compactado {st.LabCompactado} · ablandado {st.LabAblandado} · cocido {st.LabCocido} · abonado {st.LabAbonado}", _estiloPie);
             GUILayout.Label($"plantas nacidas {st.LabPlantasNacidas} · muertas {st.LabPlantasMuertas} · presión movió {st.LabPresionMovidas} · cuerpos caídos {st.LabCuerposCaidos} · fracturas {st.LabFracturas}", _estiloPie);
             GUILayout.Space(6f);
+            GUILayout.Label("LIBRO DE ENERGÍA (raw inyectados)", _estiloTitulo);
+            long total = st.LabCalorFuego + st.LabCalorLlama + st.LabCalorHogar;
+            GUILayout.Label($"combustible {st.LabCombustibleQuemado} u · brasa {st.LabCalorFuego} · LLAMA {st.LabCalorLlama} · hogar {st.LabCalorHogar} · TOTAL {total}", _estiloPie);
+            GUILayout.Label($"carbonizadas {st.LabCarbonizado} celdas, con {st.LabEnergiaCarbon} raw guardados dentro · de la brasa, {st.LabCalorCarbon} los soltó el propio carbón al re-arder", _estiloPie);
+            GUILayout.Label($"identidad de la carbonera: combustible original {st.LabCalorFuego - st.LabCalorCarbon} + carbón {st.LabEnergiaCarbon} = {st.LabCalorFuego - st.LabCalorCarbon + st.LabEnergiaCarbon} raw · quema ahogada {(st.LabCombustibleQuemado > 0 ? (st.LabCalorFuego / (float)st.LabCombustibleQuemado).ToString("F1") : "—")} raw/u", _estiloPie);
+            GUILayout.Label("(R136, C3) Los TRES calores, porque contar solo la brasa mentía: en un horno la LLAMA es el 90 % del calor, y la brasa que se ve por la boca, la parte pequeña. El raw/u de la última línea mide por sí solo cuánto de la quema ocurrió SIN RESPIRAR: la fibra al aire da 14 y en sordina 7, así que 10 quiere decir «la mitad de esta pila ardió ahogada» — que es justo lo que hace durar una tolva cinco minutos en vez de uno. Y el carbón no es energía gratis: solo el 25 % de lo que se ahoga lo deja (fuego.rendimientoCarbonPct), de modo que lo que guarda es la MITAD de lo que la fibra no llegó a soltar. Una carbonera cambia cantidad por calidad y pierde por el camino.", _estiloAyuda);
+            GUILayout.Space(6f);
             GUILayout.Label("BALANCE DE AGUA", _estiloTitulo);
             GUILayout.Label($"el laboratorio ha creado/destruido {st.LabBalanceU / 255f:F1} celdas netas de agua (LabBalanceU = {st.LabBalanceU} u).", _estiloPie);
             GUILayout.Label("(R131) La suma de humedad[] de todo el mundo menos la que había al construirlo tiene que dar EXACTAMENTE ese número: es la auditoría de conservación. Toda regla que no sea una transferencia emparejada pasa por LabNacerAgua o LabTransformar, y las dos se cuentan aquí.", _estiloAyuda);

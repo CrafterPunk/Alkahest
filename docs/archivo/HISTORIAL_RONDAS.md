@@ -7130,3 +7130,73 @@ en H7). Recomendación: **congelar física nueva** tras HF5; H7 jugando; H6 espe
 Archivos: `Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R11-R14), `docs/LAB/DISENO_FUEGO.md` §10,
 `docs/LAB/HANDOFF_OPUS.md` HF5, `docs/LAB/CHECKPOINT.md` §9. Sin cambios de código.
+
+## Ronda 137 — EL LABORATORIO: HF5, LOS CIERRES DEL FUEGO (Opus 5, parches de Fable)
+
+· **El punto de partida es que Fable midió la build R135 en su propio banco y desmintió tres
+  cosas de su propio diseño**: el hogar calentaba a sus vecinos a 255 raw (arena con ceniza
+  encima vidriaba en 27 s, sin horno), carbonizar multiplicaba la energía ×6,3, y el libro no
+  contaba la llama. Más `vidaHumo` 400, que era un byte y se recortaba en silencio. HF5 son sus
+  cuatro parches, y salió un quinto.
+· **C1 — EL HOGAR ES DOMÉSTICO DE VERDAD.** `LabHogar` usa `LabCalentarHasta`, con tope en
+  `fuego.hogarRaw`, en vez de `InjectHeat`, que sumaba sin límite. Medido a 3 000 ticks: hogar +
+  arena + ceniza → **0 vidrio**; el agua encima hierve; la fibra pegada prende. La frontera
+  entre vivir y fabricar vuelve a estar donde tenía que estar.
+· **PERO el carbón pegado también prende, y eso corrige un hallazgo de R135.** La causa está
+  fuera del laboratorio: `TryIgnite` enciende cualquier vecino inflamable con un **12 % por
+  tick** que NO mira la temperatura de ignición. Así que la «cadena de encendido emergente» que
+  celebré en R135 —hogar no prende carbón porque 170 < 200, luego hace falta yesca— era falsa.
+  Lo bueno: **medida otra vez, la cadena sigue en pie por un motivo mejor**. En el horno la
+  SOLERA DE CENIZA se interpone entre el piloto y el combustible, y sin yesca que la atraviese
+  el carbón sigue intacto a los 300 s (144 celdas, 170 raw). Con yesca, 18 de 18 de vidrio. Es
+  geometría, no un umbral. Escalado como Q10 sin tocar la regla base.
+· **C2 — CARBONIZAR YA NO CREA ENERGÍA.** `fuego.rendimientoCarbonPct` = 25 (sal 632) y la
+  reserva del carbón 160 → 50. Solo una de cada cuatro celdas ahogadas deja carbón; el resto,
+  ceniza. **Pico de carbón medido: 25,0 % EXACTO**, justo cuando la fibra se agota. Y el número
+  que justifica las dos constantes: de los 224 000 raw de una carbonera de 400 celdas de fibra,
+  la quema ahogada suelta 112 000 y el carbón que nace guarda **112 200** — mitad y mitad con un
+  0,2 % de diferencia. Cambiar cantidad por calidad perdiendo por el camino, como una carbonera
+  de verdad.
+· **EL QUINTO PARCHE, que no estaba en la spec.** La identidad de Fable daba **+27,6 %** y la
+  causa no era ninguno de sus tres diagnósticos: **el carbón nace y vuelve a arder**, así que su
+  energía se cuenta al nacer y otra vez al quemarse. La prueba dura fue el propio libro:
+  `LabCombustibleQuemado` = 21 100 = fibra 16 000 + carbón 5 100, exacto. Añadido
+  `LabCalorCarbon` (una línea en la costura ya autorizada), la identidad se escribe entera y
+  cierra a **+1,0 % con 900 celdas** (−0,8 % y +0,8 % en dos configuraciones de 400; el +5,5 %
+  de una cuarta es ruido del sorteo con n pequeña).
+· **C3 — LOS TRES CALORES.** `LabCalorLlama`, `LabCalorHogar`, `LabCalorCarbon`,
+  `LabCarbonizado` y `LabEnergiaCarbon`, con la identidad en el panel. Lo que se ve al contarlos
+  y antes no: **la llama es la fuente dominante**. En el horno, 130 240 raw de llama contra
+  45 400 de brasa — la brasa que se ve por la boca es la cuarta parte del calor.
+· **C4** — `fuego.vidaHumo` 400 → **255**, con la ayuda reescrita (tope de byte; bajo techo
+  cuenta doble, 510 ticks).
+· **CRITERIO 3 CERRADO COMO «RECINTO Y CONTACTO».** A igual masa (400 celdas) y la MISMA boca,
+  cambiando solo la forma de la pila: maciza 20×20 → 27 % de carbón y 267 560 raw de llama;
+  media 40×10 → 22,5 % y 541 480; **fina 100×4 → 19,5 % y 1 333 200**. Monótono en las dos
+  columnas y **×5 de llama** entre extremos. El mando de geometría existe y vive en el
+  COMBUSTIBLE, no en la boca del recinto: el aire nunca se consume, pero el contacto se decide
+  vecino a vecino. Era exactamente lo que quedó abierto en Q9.
+· **Aceptaciones**: horno con yesca **18 de 18** celdas de carga vidriadas (pedía ≥10), sin
+  yesca **0**, con recinto y yesca pero sin carbón **1** — las tres líneas juntas son la
+  frontera entera y ninguna estaba programada. Tolva **466 s** por encima de 150 raw (antes
+  324), porque el hogar ya no sobrecalienta la base: la razón calor/reserva baja de 10,3 a
+  **8,3 raw/u**, arde más ahogada y por eso dura más. Regresión del agua con **residuo 0** a los
+  50, 150, 300 y 600 s. Coste **1,85 ms/tick** en reposo y 1,80 con 5 000 celdas ardiendo, sin
+  regresión.
+· **Q8, el desagüe de grava** (4 líneas en `SimLevelBuilder.Laboratorio.cs`): dos columnas de
+  grava junto a cada labio y la mitad baja del labio también de grava. Conservación intacta. Y
+  **drena al revés de lo que se temía**: la grava le da al agua un camino al subsuelo en vez de
+  dejarla correr hasta la boca, y el labio fija el nivel freático a la altura del lecho — un
+  drenaje CON nivel, que es lo que quiere un jardín. **H4 sigue abierto**: el banco ya no
+  reproduce el encharcamiento de R135 (con rocío repartido el sustrato llega a humedad 12 en
+  300 s y germinar pide 60), así que lo que falta medir es el caudal del alambique real, y eso
+  se ve jugando. Va a H7, como propuso Fable.
+· **Q11 escalada**: arder ahogado DESTRUYE la mitad de la energía (la sordina consume reserva a
+  ¼ y da ½ del calor por unidad). Para la fibra está compensado por diseño; para el carbón, que
+  al agotarse deja ceniza y no carbón, se pierde de verdad. Mi lectura es que está bien y además
+  empuja a apagar la carbonera y sacar el producto, pero el criterio 5 dice «todo raw contado» y
+  esa pérdida no la nombra nadie.
+· 96 parámetros. Benchmark `2026-09-04_r136_hf5_cierres_del_fuego.md`, CHECKPOINT D31-D34 (y D30
+  corregida), buzón con R11b-R14b y Q10/Q11. Verificado en banco headless, sin Play. Tras HF5,
+  física nueva CONGELADA (recomendación de Fable; decide Cesar): sigue H7 jugando. Sin push
+  (cmd 137; el 134 y el 135 siguen pendientes).

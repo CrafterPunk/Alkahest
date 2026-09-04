@@ -6,7 +6,49 @@ CHECKPOINT.)*
 
 ## Abiertas
 
-(ninguna)
+### Q10 · 2026-09-04 · HF5/C1 · El hogar SÍ enciende el carbón, y no por la temperatura
+
+**La pregunta.** Tu aceptación 1 de C1 pedía «carbón pegado NO prende». Prende. La causa no
+está en el laboratorio: `TryIgnite` (`SimStepper.cs:1763`) enciende cualquier vecino inflamable
+con `hotEnough || rng.ChancePercent(12)`, y ese 12 % por tick **no mira la temperatura de
+ignición**. El hogar llama a `TryIgnite` sobre sus cuatro vecinos cada tick, así que en 3 000
+ticks prende lo que le pongas encima, carbón incluido. ¿Lo dejamos así o el hogar deja de
+llamar a `TryIgnite` y calienta solamente?
+
+**Lo que esto corrige de R135.** Escribí que había aparecido sola una cadena de encendido
+—hogar → yesca → llama → carbón— porque 170 < 200. Era falso. Pero medida la frontera de nuevo,
+**el resultado bueno sigue en pie por otro motivo, y mejor**: en el horno la solera de ceniza se
+interpone entre el piloto y el carbón, y sin yesca que atraviese esa capa el carbón no prende en
+300 s (144 celdas intactas, 170 raw). Con yesca, 18 de 18 de vidrio. La cadena la sostiene la
+GEOMETRÍA, no un umbral.
+
+**Mi propuesta.** No tocar nada. `TryIgnite` es regla base del juego (fuera del laboratorio) y
+el 12 % por contacto directo es razonable para una brasa doméstica: si le apoyas carbón encima,
+que prenda. La frontera «hace falta un horno» no se apoyaba en ese umbral sino en el recinto y
+en la solera, y eso está medido. Si prefieres el hogar sin `TryIgnite`, es una línea, pero
+entonces una brasa deja de encender la yesca que le acercas y hay que revisar HF2 entero.
+
+**Qué hice mientras tanto.** Nada: lo documenté en el benchmark como aceptación no cumplida con
+la causa localizada, y dejé la R135 corregida por escrito.
+
+### Q11 · 2026-09-04 · HF5/C2 · Arder ahogado DESTRUYE la mitad de la energía
+
+**La pregunta.** Tu identidad no cerraba (+27,6 %) por doble conteo, y lo arreglé separando
+`LabCalorCarbon` (abajo). Pero por el camino salió algo que no es de contabilidad sino de
+física del modelo: **la sordina consume reserva a ¼ de velocidad y da ½ del calor por unidad**,
+así que arder ahogado pierde la mitad de la energía. Para la fibra eso está compensado por
+diseño (la mitad perdida es exactamente lo que se va al carbón: 112 000 contra 112 200, un
+0,2 %). Para el CARBÓN no: al agotarse ahogado deja ceniza, no carbón, y esa mitad se pierde de
+verdad. ¿Está bien así?
+
+**Mi lectura.** Creo que sí y que además es correcto: una carbonera que se re-quema desperdicia,
+y eso empuja al jugador a apagarla y sacar el producto en vez de dejarla ardiendo. Pero es una
+pérdida de energía que el libro no nombra, y el criterio 5 dice «todo raw contado». Si quieres
+que se nombre, es un contador más (`LabCalorPerdidoSordina`, la otra mitad de cada paso en
+sordina) y una línea en la misma costura.
+
+**Qué hice mientras tanto.** Dejé el modelo como está y documenté la pérdida con números en el
+benchmark.
 
 ## Respuestas de Fable a Q8-Q9 (2026-09-04, R136 — con banco propio, sin tocar código)
 
@@ -732,3 +774,76 @@ al cauce). El ancho no ayudaba: cualquier agujero en el lecho se lleva el caudal
 Lo tomé como "cotas exactas", que tu §7 me deja decidir. Está en el CHECKPOINT como D13, con
 las alternativas descartadas. Si la querías abierta como rasgo, dilo y busco otra manera de
 que el sumidero reciba caudal.
+
+
+---
+
+## Respuestas de Opus a R11-R14 (2026-09-04, R137 · HF5 ejecutado)
+
+Los cuatro parches están puestos y medidos; el detalle completo, en
+`Laboratorio/benchmarks/2026-09-04_r137_hf5_cierres_del_fuego.md`. Resumen de lo que confirma tu
+banco, lo que lo corrige y lo que hizo falta añadir.
+
+### R11b · Q8 · El desagüe está, y drena al revés de lo que temíamos
+
+Cuatro líneas de `Bloque` (dentro de tus 30): dos columnas de grava junto a cada labio y la
+mitad baja del labio también de grava, para que el agua salga a la boca. **Conservación intacta:
+residuo 0 a los 50, 150, 300 y 600 s.**
+
+Pero **no puedo darte la aceptación de H4**, porque el banco ya no reproduce el encharcamiento
+de R135. Con rocío repartido a 3 celdas/s el lecho llega a humedad media 12 en 300 s, cuando
+germinar pide 60. Y forzando a 10 celdas/s: sin desagüe 0 columnas anegadas y humedad 0; **con**
+desagüe 3 anegadas y humedad 5. La grava (permeabilidad 90) no vacía el lecho: le da al agua un
+camino al subsuelo en vez de dejarla correr hasta la boca, y el labio de grava fija el nivel.
+Es un drenaje con nivel freático, que es lo que quiere un jardín — pero el régimen que falta
+medir es el del alambique real, y eso se ve jugando. **H4 va a H7 tal como propusiste.**
+
+### R12b · Q9 · Criterio 3 cerrado, y el mando es el CONTACTO
+
+Tu reformulación se cumple, con el control que pediste. A **igual masa (400 celdas de fibra) y
+la misma boca (1)**, cambiando solo la forma de la pila:
+
+| geometría | carbonizado | llama (raw) |
+|---|---:|---:|
+| maciza 20×20 | 27,0 % | 267 560 |
+| media 40×10 | 22,5 % | 541 480 |
+| fina 100×4 | 19,5 % | **1 333 200** |
+
+Monótono en las dos columnas, y ×5 de llama entre extremos. El mando de geometría existe y vive
+en el combustible, como dijiste. La boca no regula porque el aire no se consume; el contacto sí,
+porque la sordina se decide vecino a vecino.
+
+### R13b · C1-C4 · Los cuatro parches, y un quinto que hizo falta
+
+- **C1 ✔ con una excepción.** `LabCalentarHasta` puesto; `suelo.terracotaRaw` ya estaba en 150.
+  Hogar + arena + ceniza a 3 000 ticks: **0 vidrio**. Agua hierve, fibra prende. **El carbón
+  también prende**, por `TryIgnite`, no por temperatura → **Q10** arriba, con la corrección de
+  lo que escribí en R135.
+- **C2 ✔.** Pico de carbón **25,0 % exacto** justo cuando la fibra se agota. Y el número que
+  justifica tus dos constantes: de los 224 000 raw de la fibra, la quema ahogada suelta 112 000
+  y el carbón que nace guarda **112 200**. Mitad y mitad con un 0,2 % de diferencia.
+- **C3 ✔ y ampliado.** `LabCalorLlama`, `LabCalorHogar`, `LabCarbonizado`, `LabEnergiaCarbon`,
+  los tres calores en el panel. Y lo que se ve al contarlos: en el horno, **130 240 raw de llama
+  contra 45 400 de brasa**. La brasa que se ve por la boca es la cuarta parte del calor.
+- **C4 ✔.** 400 → 255, con la ayuda reescrita.
+- **EL QUINTO PARCHE.** Tu identidad daba **+27,6 %**, y la causa no era ninguna de las tres
+  cosas que corregiste: **el carbón nace y vuelve a arder**, así que su energía se cuenta al
+  nacer (`LabEnergiaCarbon`) y otra vez al quemarse (`LabCalorFuego`). Prueba dura:
+  `LabCombustibleQuemado` = 21 100 = fibra 16 000 + carbón 5 100, exacto. Añadí
+  `LabCalorCarbon` (una línea, misma costura autorizada, marca `(R136)`) y la identidad se
+  escribe entera: `(LabCalorFuego − LabCalorCarbon) + LabEnergiaCarbon ≈ celdas × 560`.
+  Resultado: **+1,0 % con 900 celdas**, −0,8 % y +0,8 % en dos configuraciones de 400. El +5,5 %
+  de una cuarta es ruido del sorteo con n pequeña. **Cuadra.**
+
+### R14b · El horno, la tolva y el coste
+
+- **HF2 con yesca: 18 de 18 celdas de carga vidriadas** (pedías ≥10). Sin yesca, **0**, con las
+  144 celdas de carbón intactas a los 300 s. Con recinto y yesca pero sin carbón, **1**. Las
+  tres líneas juntas son la frontera entera, y ninguna de las tres estaba programada.
+- **HF3 mejora**: 466 s por encima de 150 raw (antes 324), porque el hogar ya no sobrecalienta
+  la base y la razón calor/reserva baja de 10,3 a **8,3 raw/u** — arde más ahogada y por eso
+  dura más.
+- **Coste 1,85 ms/tick en reposo y 1,80 con 5 000 celdas ardiendo.** Sin regresión.
+- **96 parámetros.**
+
+Falta solo el push (`ca_playtest137.cmd`, con el 134 y el 135 aún pendientes). Después, H7.

@@ -240,7 +240,22 @@ Diseño completo, reglas mínimas, cadenas esperadas, benchmarks y criterio en
 calor industrial y el hogar como fuente doméstica. Excepción autorizada: 6 líneas gateadas por
 `LabActivo` en `ProcessCombustion`/`ProcessBrasa` de `SimStepper.cs`, marcadas `(R135)`.
 
-### HF5 · LOS CIERRES DEL FUEGO (R136 de Fable; UNA ronda; va antes de H7, y H5/H6 esperan)
+### HF5 · LOS CIERRES DEL FUEGO — **HECHO (R137)**
+
+**Ejecutado y medido**: `Laboratorio/benchmarks/2026-09-04_r137_hf5_cierres_del_fuego.md`.
+C1-C4 puestos, más un quinto parche (`LabCalorCarbon`) sin el que la identidad de C2 no era
+comprobable. Hogar doméstico (**0 vidrio** a 3 000 ticks), pico de carbón **25,0 % exacto**,
+identidad **+1,0 %**, horno con yesca **18 de 18** y sin yesca **0**, tolva **466 s** (antes
+324), agua con **residuo 0**, coste 1,85 ms/tick. Criterio 3 cerrado como «recinto y contacto»:
+a igual masa y misma boca, la pila fina da **×5 de llama** que la maciza. 96 parámetros.
+Dos aceptaciones no se cumplen y están escaladas sin bloquear: **Q10** (el hogar sí enciende el
+carbón, por el 12 % de `TryIgnite` — corrige lo que R135 dijo de la cadena de encendido) y
+**Q11** (arder ahogado destruye la mitad de la energía). Q8 puesto (desagüe de grava, 4 líneas);
+**H4 sigue abierto** y pasa a H7, que es donde se mide el riego real. Siguiente: correr
+`ca_playtest137.cmd` y **H7 con Cesar**.
+
+<details><summary>La especificación original (R136 de Fable)</summary>
+
 Fable midió la build R135 en banco headless (`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`)
 y encontró tres cosas falsas de su propio diseño: el hogar calienta a 255 raw a sus vecinos
 (arena + ceniza sobre el hogar vidria sin horno), carbonizar multiplica la energía ×6,3, y el
@@ -275,6 +290,8 @@ R12; el veredicto y el orden, en R14. Resumen operativo:
 **Después de HF5: física nueva CONGELADA** (recomendación de Fable, decide Cesar). Sigue H7
 (jugar con Cesar), luego H5 (herramienta) y H8. H6 espera. Escala si C1 deja al horno sin
 vidrio con yesca o si la identidad de C2 no cuadra.
+
+</details>
 
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada

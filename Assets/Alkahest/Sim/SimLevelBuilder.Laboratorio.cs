@@ -147,6 +147,17 @@ namespace Alkahest.Sim
             // porque a su altura tiene roca al lado, no hueco.
             Bloque(136, 246, 136, 249, MaterialId.Stone);     // labio oeste de la boca (a ras del lecho)
             Bloque(153, 246, 153, 249, MaterialId.Stone);     // labio este
+            // (R136, R11 de Fable) EL DESAGÜE. Un lecho sobre solera impermeable y con labio se
+            // encharca: el goteo del alambique no tiene por dónde irse y a los 150 s la mitad de
+            // las columnas del claro están BAJO AGUA, donde no germina nada. Dos columnas de
+            // grava (permeabilidad 90) junto a cada labio conducen el agua al fondo, y la mitad
+            // baja del propio labio, también de grava, la deja salir a la boca de la chimenea.
+            // El nivel se queda por DEBAJO de la superficie: la tierra se moja, no se inunda.
+            // Es geometría del nivel, no una regla: un jardinero pondría exactamente esto.
+            Bloque(134, 246, 135, 249, MaterialId.Grava);     // conductos del lecho oeste
+            Bloque(154, 246, 155, 249, MaterialId.Grava);     // conductos del lecho este
+            Bloque(136, 246, 136, 247, MaterialId.Grava);     // salida por la mitad baja del labio
+            Bloque(153, 246, 153, 247, MaterialId.Grava);
             Aire(118, 273, 124, 286);
             LabParams.LuzCieloX0 = 118; LabParams.LuzCieloX1 = 124;
 
