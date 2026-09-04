@@ -43,6 +43,9 @@ namespace Alkahest.Game
         private int _pestana;
         private string[] _pestanas;
         private GUIStyle _estiloTitulo, _estiloPie, _estiloBoton, _estiloBotonSel, _estiloAyuda, _estiloCampo;
+        private GUIStyle _estiloAgarre, _estiloLectura;
+        /// <summary>(R140) Reutilizado por el lector de celda: se dibuja cada frame y el proyecto no admite allocs por frame.</summary>
+        private readonly System.Text.StringBuilder _sbLectura = new System.Text.StringBuilder(160);
         private readonly HashSet<string> _ayudaAbierta = new HashSet<string>();
         private float _conteoHasta;
         private int _nAgua, _nSedimento, _nArcilla, _nPlanta, _nVapor; private long _vaporAire;
@@ -83,10 +86,12 @@ namespace Alkahest.Game
             new Pintable { Grupo = "SUELO",  Nombre = "arena",       Mat = MaterialId.Sand },
             new Pintable { Grupo = "SUELO",  Nombre = "roca",        Mat = MaterialId.Stone },
             new Pintable { Grupo = "SUELO",  Nombre = "roca suelta", Mat = MaterialId.RocaSuelta },
+            new Pintable { Grupo = "SUELO",  Nombre = "vidrio",      Mat = MaterialId.VidrioVerde }, // (R140) el producto del horno, impintable hasta ahora.
             new Pintable { Grupo = "VIDA",   Nombre = "planta",      Mat = MaterialId.Planta },
             new Pintable { Grupo = "VIDA",   Nombre = "fibra",       Mat = MaterialId.Fibra },
             new Pintable { Grupo = "VIDA",   Nombre = "semilla",     Mat = MaterialId.Semilla },
             new Pintable { Grupo = "VIDA",   Nombre = "ceniza",      Mat = MaterialId.Ash },
+            new Pintable { Grupo = "VIDA",   Nombre = "carbón",      Mat = MaterialId.Carbon },      // (R140) faltaba desde que nació en R135.
             new Pintable { Grupo = "LEYES",  Nombre = "hogar",       Mat = MaterialId.Hogar },
             new Pintable { Grupo = "LEYES",  Nombre = "núcleo frío", Mat = MaterialId.NucleoFrio },
             new Pintable { Grupo = "LEYES",  Nombre = "manantial",   Mat = MaterialId.Manantial },
@@ -277,6 +282,14 @@ namespace Alkahest.Game
             float w = UiStyles.Ancho(_estiloPie, pie) + 16f;
             GUI.Label(new Rect((Screen.width - w) * 0.5f, Screen.height - UiStyles.S(26f), w, UiStyles.S(22f)), pie, _estiloPie);
 
+            // (R140) EL LECTOR DE CELDA. Un rótulo junto al cursor que dice QUÉ hay debajo, con
+            // su nombre y su estado en palabras. Sin esto el laboratorio se miraba a ciegas: la
+            // grilla tiene cuatro campos por celda y ninguno se ve, así que un sedimento
+            // empapado y uno seco eran el mismo píxel pardo, y el carbón que sale de una
+            // carbonera no se distinguía de la ceniza que lo rodea salvo cambiando de vista.
+            // Nombrar lo que se ve es la mitad de poder investigarlo.
+            DibujarLectura();
+
             // (H2) El anillo del radio en el cursor, como el del curador: sin él
             // no se sabe cuánto se va a pintar hasta después de pintarlo.
             if (PincelActivo && !RatonSobrePanel && Event.current.type == EventType.Repaint)
@@ -326,7 +339,19 @@ namespace Alkahest.Game
             else if (grupo == "VISTAS") DibujarVistas();
             else DibujarParametros(grupo);
             GUILayout.EndScrollView();
-            GUI.DragWindow(new Rect(0, 0, 10000, 20));
+
+            // (R140) LA BARRA DE AGARRE. El `GUI.DragWindow` de antes cubría los 20 primeros
+            // píxeles SIN ESCALAR de la ventana, y ahí es justo donde caen los botones de la
+            // primera fila de pestañas: se comían el clic y el panel no se podía mover. Ahora el
+            // arrastre cubre el título (escalado, no 20 píxeles fijos) y además esta franja
+            // explícita al pie, que se ve y dice para qué sirve. Mover el panel importa porque
+            // tapa un tercio del mundo: el laboratorio se mira por zonas y la que quieras ver
+            // puede estar justo debajo.
+            var rAgarre = GUILayoutUtility.GetRect(GUIContent.none, _estiloAgarre,
+                GUILayout.ExpandWidth(true), GUILayout.Height(UiStyles.S(18f)));
+            GUI.Box(rAgarre, "≡   arrastra aquí (o la barra del título) para mover el panel", _estiloAgarre);
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, UiStyles.S(26f)));
+            GUI.DragWindow(rAgarre);
         }
 
         private void DibujarTiempo()
@@ -591,6 +616,53 @@ namespace Alkahest.Game
             }
         }
 
+        /// <summary>
+        /// (R140) Rótulo junto al cursor con el material bajo el ratón, su estado en palabras y
+        /// sus cuatro campos. Solo con el panel abierto y el ratón fuera de él.
+        /// </summary>
+        private void DibujarLectura()
+        {
+            if (!_abierto || RatonSobrePanel || Event.current.type != EventType.Repaint) return;
+            var cam = Camera.main; var m = Mouse.current; var g = _sim != null ? _sim.Grid : null;
+            if (cam == null || m == null || g == null) return;
+
+            Vector2 p = m.position.ReadValue();
+            Vector3 mundo = cam.ScreenToWorldPoint(new Vector3(p.x, p.y, 10f));
+            int cx = Mathf.FloorToInt(mundo.x / SimRenderer.CellWorldSize);
+            int cy = Mathf.FloorToInt(mundo.y / SimRenderer.CellWorldSize);
+            if (!CellGrid.InBounds(cx, cy)) return;
+
+            int i = CellGrid.Idx(cx, cy);
+            byte mat = g.mat[i];
+            string nombre = LabMateriales.Nombre(mat);
+            string estado = LabMateriales.Estado(mat, g.humedad[i], g.carga[i]);
+
+            _sbLectura.Length = 0;
+            _sbLectura.Append(nombre.ToUpperInvariant());
+            if (estado != null) _sbLectura.Append("  ·  ").Append(estado);
+            _sbLectura.Append("\n(").Append(cx).Append(", ").Append(cy).Append(")   ")
+                      .Append(g.temp[i] * 2 - 120).Append(" °C");
+            if (g.humedad[i] > 0) _sbLectura.Append("   humedad ").Append(g.humedad[i]);
+            if (g.carga[i] > 0) _sbLectura.Append("   carga ").Append(g.carga[i]);
+            if (g.luz[i] > 0) _sbLectura.Append("   luz ").Append(g.luz[i]);
+            if (g.reposo[i] > 0) _sbLectura.Append("   reposo ").Append(g.reposo[i]);
+            string txt = _sbLectura.ToString();
+
+            var tam = _estiloLectura.CalcSize(new GUIContent(txt));
+            float ancho = tam.x + UiStyles.S(10f), alto = UiStyles.S(38f);
+            // A la derecha del cursor, salvo que no quepa; siempre dentro de la pantalla.
+            float rx = p.x + UiStyles.S(18f);
+            if (rx + ancho > Screen.width) rx = p.x - UiStyles.S(18f) - ancho;
+            float ry = Mathf.Clamp(Screen.height - p.y - alto - UiStyles.S(8f), 0f, Screen.height - alto);
+            var r = new Rect(rx, ry, ancho, alto);
+
+            var antes = GUI.color;
+            GUI.color = new Color(0.06f, 0.06f, 0.07f, 0.82f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = antes;
+            GUI.Label(r, txt, _estiloLectura);
+        }
+
         private void PrepararEstilos()
         {
             if (_estiloTitulo != null) return;
@@ -605,6 +677,10 @@ namespace Alkahest.Game
             _estiloBotonSel = new GUIStyle(_estiloBoton) { fontStyle = FontStyle.Bold };
             _estiloBotonSel.normal.textColor = new Color(1f, 0.82f, 0.55f, 1f);
             _estiloCampo = new GUIStyle(GUI.skin.textField) { fontSize = UiStyles.F(12) };
+            _estiloAgarre = new GUIStyle(GUI.skin.box) { fontSize = UiStyles.F(10), alignment = TextAnchor.MiddleCenter };
+            _estiloAgarre.normal.textColor = new Color(0.70f, 0.66f, 0.58f, 0.85f);
+            _estiloLectura = new GUIStyle(UiStyles.Cuerpo) { fontSize = UiStyles.F(12), alignment = TextAnchor.UpperLeft, padding = new RectOffset(6, 6, 3, 3) };
+            _estiloLectura.normal.textColor = new Color(1f, 0.94f, 0.82f, 1f);
         }
     }
 }

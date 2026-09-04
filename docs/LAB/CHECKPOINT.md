@@ -592,7 +592,14 @@ Abierta **Q12**: el desagüe está bien construido (grava 11/11, solera 34/34) p
 medible** — con y sin conducto el lecho anegado baja igual. Propuesta: dejarlo, sin afinar
 `permGrava` contra un banco que no reproduce el caudal real.
 
-**Siguiente paso exacto: correr `ca_playtest139.cmd`.** Después, **FÍSICA NUEVA CONGELADA** y el
+**(R140, dos mejoras de uso pedidas por Cesar, sin tocar física.)** `LabMateriales.Nombre` da
+nombre en castellano a **los 80 materiales** (delegando en `Universe.NombreReal` cuando existe, y
+sin tocar el bautizo de la campaña: la regla 13/23 sigue en pie allí), `LabMateriales.Estado` dice
+el estado en palabras, hay un **lector de celda** junto al cursor, y el panel **se arrastra** por
+el título o por su franja al pie — el `GUI.DragWindow` viejo cubría 20 píxeles sin escalar y se
+los comían las pestañas. Más `carbón` y `vidrio` en el catálogo del pincel. Verificado jugando.
+
+**Siguiente paso exacto: correr `ca_playtest140.cmd`.** Después, **FÍSICA NUEVA CONGELADA** y el
 orden acordado con Cesar: **H5 (banco) → H7 (jugando) → H8 (informe)**; H6 documentado y
 congelado para su propia etapa.
 

@@ -7303,3 +7303,40 @@ Archivos: `Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`,
   HANDOFF HF5b y §2. Verificado en banco headless, sin Play. **Después de esto, física nueva
   CONGELADA**: sigue H5 (banco) → H7 (jugando) → H8 (informe); H6 documentado y congelado para su
   propia etapa. Sin push (cmd 139).
+
+## Ronda 140 — EL LABORATORIO: NOMBRAR LO QUE SE VE Y MOVER EL PANEL (Opus 5, pedido de Cesar)
+
+Dos mejoras de uso pedidas antes de enseñarle HF5b a Fable. Sin tocar física ni el orden H5-H8.
+
+· **NADA SIN NOMBRE.** `LabMateriales.Nombre(byte)` da nombre en castellano a **los 80 materiales**.
+  Auditados uno a uno: veintitrés no lo tenían y salían con su `devName` en inglés (`Sedimento`,
+  `NucleoFrio`, `Carbon`…). La tabla pregunta PRIMERO al juego (`Universe.NombreReal`), así que lo
+  que ya tiene nombre real lo conserva y no se inventa un segundo — el producto del horno se sigue
+  llamando «vidrio de botella» aquí y en la campaña — y solo cubre el hueco: los quince del
+  laboratorio (ids 65-79) y los INNOMINADOS. Con estos últimos hay un matiz de diseño que conviene
+  dejar escrito: en la campaña salen como «???» **a propósito** (regla 13/23, se bautizan jugando)
+  y ese silencio se respeta allí; pero el laboratorio es un banco de trabajo, no una partida, y
+  quien mira es el investigador y no el aprendiz. La tabla es del LABORATORIO y no toca
+  `SubstanceKnowledge` ni el álbum. Caso raro cazado de paso: el id 25 no tiene constante propia
+  porque el retículo base×estado va por aritmética — se referencia como `BaseEstado0 + 7`.
+· **`LabMateriales.Estado(...)`: el estado en PALABRAS**, no en números. Un sedimento empapado y
+  uno seco son la misma `mat` y dos cosas distintas para el mundo, y hasta ahora la diferencia
+  solo se veía cambiando a la vista de humedad. Ahora se lee «empapado, fértil», «agua muy
+  turbia», «aire saturado de vapor», «planta con savia».
+· **EL LECTOR DE CELDA.** Un rótulo junto al cursor que dice qué hay debajo: nombre, estado y los
+  cuatro campos. Verificado jugando: `SEDIMENTO · empapado, fértil / (166, 248) 10 °C humedad 190
+  carga 90 reposo 67`. Sin esto el laboratorio se miraba a ciegas — la grilla tiene cuatro campos
+  por celda y ninguno se ve, así que el carbón de una carbonera no se distinguía de la ceniza que
+  lo rodea. Solo con el panel abierto y el ratón fuera de él; `StringBuilder` reutilizado, cero
+  allocs por frame.
+· **EL PANEL SE ARRASTRA DE VERDAD.** Ya tenía `GUI.DragWindow`, pero cubría los 20 primeros
+  píxeles SIN ESCALAR de la ventana, que es justo donde caen los botones de la primera fila de
+  pestañas: se comían el clic. Ahora el arrastre cubre el título escalado (`UiStyles.S(26)`) y una
+  franja explícita al pie, visible y rotulada («≡ arrastra aquí (o la barra del título) para mover
+  el panel»). Importa porque el panel tapa un tercio del mundo y el laboratorio se mira por zonas.
+  F8 sigue abriendo y cerrando igual.
+· **Dos que faltaban en el catálogo del pincel**: `carbón` (nacido en R135 y nunca pintable) y
+  `vidrio`, en su grupo SUELO para que no abriera un segundo encabezado.
+· Verificado JUGANDO con capturas (regla 52): `R140_nombres_y_panel.png`,
+  `R140_lector_de_celda.png`, `R140_lector_sedimento.png`, `R140_catalogo_pincel.png`. 0 errores
+  de consola. Sin cambios en la simulación: ni un número de física tocado.

@@ -100,5 +100,81 @@ namespace Alkahest.Sim
 
         /// <summary>Fuente de luz propia (para LabLuz): fuego vivo, brasa y hogar.</summary>
         public static bool EmiteLuz(byte m) => m == MaterialId.Fire || m == MaterialId.Brasa || m == MaterialId.Hogar;
+
+        /// <summary>
+        /// (R140) Nombre en castellano de CUALQUIER material, para que en el laboratorio no quede
+        /// nada sin nombrar: lo que se ve tiene que poder decirse.
+        ///
+        /// Primero pregunta al juego (`Universe.NombreReal`), así que lo que ya tiene nombre real
+        /// lo conserva y no se inventa un segundo — el vidrio del horno se sigue llamando «vidrio
+        /// de botella» aquí y en la campaña. La tabla de abajo solo cubre el hueco, que son dos
+        /// grupos: los quince materiales del laboratorio (ids 65-79), que no están en la tabla del
+        /// juego y salían con su `devName` en inglés; y los INNOMINADOS (aceite, limo, azoth…),
+        /// que en la campaña salen como «???» **por diseño** —regla 13/23: se bautizan jugando— y
+        /// ese silencio hay que respetarlo allí. Pero el laboratorio es un banco de trabajo, no
+        /// una partida: aquí quien mira es el investigador, no el aprendiz, y necesita poder leer
+        /// la grilla. Por eso esta tabla nombra por lo que la cosa ES, sin tocar el bautizo.
+        /// </summary>
+        public static string Nombre(byte m)
+        {
+            if (m < MaterialId.Count && Universe.TieneIdentidadReal(m)) return Universe.NombreReal(m);
+            switch (m)
+            {
+                case MaterialId.Empty:           return "aire";
+                case MaterialId.Oil:             return "aceite";
+                case MaterialId.Slime:           return "limo";
+                case MaterialId.Nutrient:        return "nutriente";
+                case MaterialId.Vivium:          return "vivium";
+                case MaterialId.Azoth:           return "azoth";
+                case MaterialId.CrystalSeed:     return "semilla de cristal";
+                case MaterialId.Crystal:         return "cristal";
+                case MaterialId.Acid:            return "ácido";
+                // El retículo base x estado (ids 18-57) va por aritmética y no tiene constante
+                // propia por celda; de los cuarenta, este es el único sin identidad real.
+                case (byte)(MaterialId.BaseEstado0 + 7): return "base en solución";
+                // --- los quince del laboratorio (65-79) ---
+                case MaterialId.PisoEstructural: return "piso estructural";
+                case MaterialId.Sedimento:       return "sedimento";
+                case MaterialId.Arcilla:         return "arcilla";
+                case MaterialId.Terracota:       return "terracota";
+                case MaterialId.Grava:           return "grava";
+                case MaterialId.Planta:          return "planta";
+                case MaterialId.Fibra:           return "fibra";
+                case MaterialId.Hogar:           return "hogar";
+                case MaterialId.NucleoFrio:      return "núcleo frío";
+                case MaterialId.Manantial:       return "manantial";
+                case MaterialId.Sumidero:        return "sumidero";
+                case MaterialId.RocaSuelta:      return "roca suelta";
+                case MaterialId.Semilla:         return "semilla";
+                case MaterialId.Arenisca:        return "arenisca de laboratorio";
+                case MaterialId.Carbon:          return "carbón";
+                default:                         return "material " + m;
+            }
+        }
+
+        /// <summary>
+        /// (R140) El ESTADO de una celda dicho en palabras, no en números: lo que la distingue de
+        /// otra del mismo material. Un sedimento empapado y uno seco son la misma `mat` y dos
+        /// cosas distintas para el mundo, y hasta ahora la diferencia solo se veía cambiando a la
+        /// vista de humedad. Devuelve null si no hay nada que destacar.
+        /// </summary>
+        public static string Estado(byte m, byte humedad, byte carga)
+        {
+            if (m == MaterialId.Water) return carga >= 128 ? "muy turbia" : carga >= 40 ? "turbia" : "limpia";
+            if (m == MaterialId.Empty || EsGasId(m))
+                return humedad >= 200 ? "saturado de vapor" : humedad >= 120 ? "húmedo"
+                     : humedad >= 40 ? "algo húmedo" : "seco";
+            if (EsPoroso(m))
+            {
+                string h = humedad >= 230 ? "encharcado" : humedad >= 150 ? "empapado"
+                         : humedad >= 60 ? "húmedo" : humedad >= 20 ? "apenas húmedo" : "seco";
+                if (carga >= 128) return h + ", muy fértil";
+                if (carga >= 40) return h + ", fértil";
+                return h;
+            }
+            if (m == MaterialId.Planta) return humedad >= 120 ? "con savia" : humedad >= 40 ? "poca savia" : "marchitándose";
+            if (humedad >= 150) return "con rocío";
+            return null;
+        }
     }
 }
