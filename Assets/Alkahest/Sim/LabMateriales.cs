@@ -25,6 +25,7 @@ namespace Alkahest.Sim
                 case MaterialId.Sumidero:
                 case MaterialId.RocaSuelta:
                 case MaterialId.Arenisca:
+                case MaterialId.VidrioVerde: // (R142, R19-7) el producto del horno es OBRA: se pisa y hace pared. No es tallable.
                     return true;
                 default:
                     return false;
@@ -152,28 +153,56 @@ namespace Alkahest.Sim
             }
         }
 
+        /// <summary>(R142, R19-6) El mismo nombre ya en mayúsculas, cacheado: el rótulo del lector lo
+        /// pinta cada frame y `ToUpperInvariant` asignaba una cadena nueva cada vez.</summary>
+        public static string NombreMayus(byte m)
+        {
+            if (_mayus == null) _mayus = new string[MaterialId.Count];
+            if (m >= MaterialId.Count) return Nombre(m).ToUpperInvariant();
+            return _mayus[m] ?? (_mayus[m] = Nombre(m).ToUpperInvariant());
+        }
+        private static string[] _mayus;
+
         /// <summary>
         /// (R140) El ESTADO de una celda dicho en palabras, no en números: lo que la distingue de
         /// otra del mismo material. Un sedimento empapado y uno seco son la misma `mat` y dos
         /// cosas distintas para el mundo, y hasta ahora la diferencia solo se veía cambiando a la
         /// vista de humedad. Devuelve null si no hay nada que destacar.
         /// </summary>
+        // (R142, R19-5) Las bandas del rótulo que NO tienen parámetro propio. Antes eran literales
+        // sueltos, y dos de ellos coincidían por casualidad con `planta.humedadMin` y
+        // `sed.turbidezFuente`: en cuanto el jugador moviera un slider, el rótulo habría
+        // contradicho a la física sin avisar. Las que sí tienen parámetro se leen de `LabParams`
+        // (abajo); estas son juicios de lenguaje, no umbrales de simulación, y por eso son fijas.
+        private const int EncharcadoU = 230, EmpapadoU = 150, ApenasU = 20;
+        private const int FertilU = 40, MuyFertilU = 128;
+        private const int AireSaturadoU = 200, AireHumedoU = 120, AireAlgoU = 40;
+        private const int SaviaBastanteU = 120, SaviaPocaU = 40, RocioU = 150;
+
         public static string Estado(byte m, byte humedad, byte carga)
         {
-            if (m == MaterialId.Water) return carga >= 128 ? "muy turbia" : carga >= 40 ? "turbia" : "limpia";
+            // La turbidez que el jugador ve como «turbia» es la que el manantial inyecta: si mueve
+            // sed.turbidezFuente, el rótulo se mueve con él en vez de mentir.
+            if (m == MaterialId.Water)
+                return carga >= LabParams.TurbidezFuente * 2 ? "muy turbia"
+                     : carga >= LabParams.TurbidezFuente ? "turbia" : "limpia";
             if (m == MaterialId.Empty || EsGasId(m))
-                return humedad >= 200 ? "saturado de vapor" : humedad >= 120 ? "húmedo"
-                     : humedad >= 40 ? "algo húmedo" : "seco";
+                return humedad >= AireSaturadoU ? "saturado de vapor" : humedad >= AireHumedoU ? "húmedo"
+                     : humedad >= AireAlgoU ? "algo húmedo" : "seco";
             if (EsPoroso(m))
             {
-                string h = humedad >= 230 ? "encharcado" : humedad >= 150 ? "empapado"
-                         : humedad >= 60 ? "húmedo" : humedad >= 20 ? "apenas húmedo" : "seco";
-                if (carga >= 128) return h + ", muy fértil";
-                if (carga >= 40) return h + ", fértil";
+                // «húmedo» es exactamente el umbral en que una planta puede beber: el rótulo dice
+                // lo que le importa al mundo, no un número redondo.
+                string h = humedad >= EncharcadoU ? "encharcado" : humedad >= EmpapadoU ? "empapado"
+                         : humedad >= LabParams.PlantaHumedadMin ? "húmedo"
+                         : humedad >= ApenasU ? "apenas húmedo" : "seco";
+                if (carga >= MuyFertilU) return h + ", muy fértil";
+                if (carga >= FertilU) return h + ", fértil";
                 return h;
             }
-            if (m == MaterialId.Planta) return humedad >= 120 ? "con savia" : humedad >= 40 ? "poca savia" : "marchitándose";
-            if (humedad >= 150) return "con rocío";
+            if (m == MaterialId.Planta)
+                return humedad >= SaviaBastanteU ? "con savia" : humedad >= SaviaPocaU ? "poca savia" : "marchitándose";
+            if (humedad >= RocioU) return "con rocío";
             return null;
         }
     }

@@ -147,24 +147,19 @@ namespace Alkahest.Sim
             // porque a su altura tiene roca al lado, no hueco.
             Bloque(136, 246, 136, 249, MaterialId.Stone);     // labio oeste de la boca (a ras del lecho)
             Bloque(153, 246, 153, 249, MaterialId.Stone);     // labio este
-            // (R136/R138, R11 y R17 de Fable) EL DESAGÜE. Un lecho sobre solera impermeable y con
-            // labio se encharca: el goteo del alambique no tiene por dónde irse y no germina nada
-            // bajo el agua. Dos columnas de grava (permeabilidad 90) junto a cada labio conducen
-            // el agua al fondo, y el conducto ATRAVIESA LA SOLERA hasta asomar a la boca de la
-            // chimenea, que es donde exuda al saturar. El nivel se queda por DEBAJO de la
-            // superficie: la tierra se moja, no se inunda. Geometría del nivel, no una regla.
+            // (R142, R18 de Fable) AQUÍ HUBO UN DESAGÜE DE GRAVA, Y SE RETIRÓ. La idea era drenar
+            // el lecho para que el goteo del alambique no lo encharcara. Medido con el riego REAL
+            // (serpentín de 31 celdas, ~870 goteos en 300 s) encharca MÁS, no menos: 26 de 36
+            // columnas bajo agua a los 150 s con conducto contra 7 sin él. La causa es estructural
+            // y no de caudal: la celda de salida solo se alimenta por `LabCapilar` (4/256, mueve
+            // 1 u solo con Δ ≥ 64 y tope 192) y exudar exige 255, así que la grava se llena hasta
+            // 244 y no suelta nada — una esponja sin salida dentro del lecho, y lo que no cabe se
+            // queda arriba. La capilaridad ni siquiera lee la permeabilidad, de modo que subir
+            // `suelo.permGrava` tampoco lo habría arreglado.
             //
-            // El primer intento (R136) puso la salida en la mitad baja del LABIO, y estaba mal por
-            // dos motivos que midió Fable: un poroso solo suelta agua a un VACÍO al saturar, y al
-            // labio el agua solo le llega por capilaridad lateral, que no basta; y además la grava
-            // es polvo, así que `ProcessPowder` la deslizaba en diagonal al aire de (137,245) y el
-            // labio se derrumbaba en la boca en el primer tick. Por eso el labio vuelve a ser roca
-            // ENTERA y el conducto baja hasta y245: ahí tiene roca debajo, sedimento al lado y el
-            // aire de la boca justo al costado, sin diagonal por la que escurrirse.
-            Bloque(134, 246, 135, 249, MaterialId.Grava);     // conductos del lecho oeste
-            Bloque(154, 246, 155, 249, MaterialId.Grava);     // conductos del lecho este
-            Bloque(134, 245, 136, 245, MaterialId.Grava);     // y a través de la solera, hasta la boca
-            Bloque(153, 245, 155, 245, MaterialId.Grava);
+            // Lo que el huerto necesitaba no era un desagüe: era que el hogar fuera doméstico
+            // (R136, C1) y que la válvula estuviera aguas arriba, en la caldera (R11). Con eso,
+            // 5 de 36 columnas anegadas a los 300 s. (R15 del proyecto: documentar lo retirado.)
             Aire(118, 273, 124, 286);
             LabParams.LuzCieloX0 = 118; LabParams.LuzCieloX1 = 124;
 

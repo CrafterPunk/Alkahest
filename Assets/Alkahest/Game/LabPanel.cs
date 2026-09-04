@@ -46,6 +46,11 @@ namespace Alkahest.Game
         private GUIStyle _estiloAgarre, _estiloLectura;
         /// <summary>(R140) Reutilizado por el lector de celda: se dibuja cada frame y el proyecto no admite allocs por frame.</summary>
         private readonly System.Text.StringBuilder _sbLectura = new System.Text.StringBuilder(160);
+        /// <summary>(R142, R19-6) Lo que el lector mostró la última vez. Si nada de esto cambió, no se reconstruye el texto.</summary>
+        private int _lecturaIdx = -1;
+        private byte _lecturaMat, _lecturaTemp, _lecturaHum, _lecturaCarga, _lecturaLuz, _lecturaReposo;
+        private readonly GUIContent _lecturaTexto = new GUIContent("");
+        private Vector2 _lecturaTam;
         private readonly HashSet<string> _ayudaAbierta = new HashSet<string>();
         private float _conteoHasta;
         private int _nAgua, _nSedimento, _nArcilla, _nPlanta, _nVapor; private long _vaporAire;
@@ -406,8 +411,10 @@ namespace Alkahest.Game
             GUILayout.Label("LIBRO DEL CALOR ENTREGADO (raw escritos de verdad en la grilla)", _estiloTitulo);
             long entregado = st.LabRawFuego + st.LabRawLlama + st.LabRawBrasa + st.LabRawHogar + st.LabRawFrio;
             GUILayout.Label($"combustión {st.LabRawFuego} · LLAMA {st.LabRawLlama} · brasa {st.LabRawBrasa} · hogar {st.LabRawHogar} · frío {st.LabRawFrio} · TOTAL {entregado}", _estiloPie);
+            GUILayout.Label($"(el TOTAL son esas CINCO fuentes de fuego y frío, pines propios incluidos; no entra la difusión, ni el ambiente, ni el calor latente del vapor)", _estiloPie);
+            GUILayout.Label($"apagado por agua: {st.LabReservaApagada} u de reserva que se fueron sin arder", _estiloPie);
             GUILayout.Label($"(índice de llama: {st.LabCalorLlama} nominales, 40 por celda y tick)", _estiloPie);
-            GUILayout.Label("(R138, B) Este es el único libro que admite un TOTAL, porque todos sus sumandos son la misma cosa: raw que acabaron escritos en temp[] después del recorte a 0-255. El de arriba NO se puede sumar — mezcla calor nominal por unidad de reserva con un índice de llama — y sumarlo daba un total de nada. Y la diferencia entre los dos libros no es un detalle: en una hoguera al aire la llama SUELTA 622 040 nominales y ENTREGA 105 579, el 17 %, porque lo que ya está a 255 no admite más. Cuanto más caliente el sitio, menos entrega la llama, y por eso la fuente que más escribe es siempre la combustión (medido: 51 % al aire, 67 % en carbonera sellada, 48 % en el horno) con la llama entre el 6 y el 29 %. El frío resta, que es lo que hace un núcleo frío.", _estiloAyuda);
+            GUILayout.Label("(R138, B) Este es el único libro que admite un TOTAL, porque todos sus sumandos son la misma cosa: raw que acabaron escritos en temp[] después del recorte a 0-255. El de arriba NO se puede sumar — mezcla calor nominal por unidad de reserva con un índice de llama — y sumarlo daba un total de nada. Y la diferencia entre los dos libros no es un detalle: en una hoguera al aire la llama INTENTA unos 2 488 160 raw (40 a cada uno de sus cuatro vecinos más el pin a 255, cada tick) y ENTREGA 105 579 — un 4 % —, porque lo que ya está a 255 no admite más. Cuanto más caliente el sitio, menos entrega la llama, y por eso la fuente que más escribe es siempre la combustión (medido: 51 % al aire, 67 % en carbonera sellada, 48 % en el horno) con la llama entre el 6 y el 29 %. El frío resta, que es lo que hace un núcleo frío.", _estiloAyuda);
             GUILayout.Space(6f);
             GUILayout.Label("BALANCE DE AGUA", _estiloTitulo);
             GUILayout.Label($"el laboratorio ha creado/destruido {st.LabBalanceU / 255f:F1} celdas netas de agua (LabBalanceU = {st.LabBalanceU} u).", _estiloPie);
@@ -619,6 +626,9 @@ namespace Alkahest.Game
         /// <summary>
         /// (R140) Rótulo junto al cursor con el material bajo el ratón, su estado en palabras y
         /// sus cuatro campos. Solo con el panel abierto y el ratón fuera de él.
+        /// (R142, R19-6) El texto se reconstruye SOLO cuando cambia lo que muestra: se dibuja cada
+        /// frame, y el proyecto no admite allocs por frame. El `GUIContent` es de instancia y el
+        /// nombre viene ya en mayúsculas de la tabla, así que un cursor quieto no asigna nada.
         /// </summary>
         private void DibujarLectura()
         {
@@ -633,23 +643,28 @@ namespace Alkahest.Game
             if (!CellGrid.InBounds(cx, cy)) return;
 
             int i = CellGrid.Idx(cx, cy);
-            byte mat = g.mat[i];
-            string nombre = LabMateriales.Nombre(mat);
-            string estado = LabMateriales.Estado(mat, g.humedad[i], g.carga[i]);
+            byte mat = g.mat[i], temp = g.temp[i], hum = g.humedad[i], car = g.carga[i], luz = g.luz[i], rep = g.reposo[i];
+            if (i != _lecturaIdx || mat != _lecturaMat || temp != _lecturaTemp || hum != _lecturaHum
+                || car != _lecturaCarga || luz != _lecturaLuz || rep != _lecturaReposo)
+            {
+                _lecturaIdx = i; _lecturaMat = mat; _lecturaTemp = temp; _lecturaHum = hum;
+                _lecturaCarga = car; _lecturaLuz = luz; _lecturaReposo = rep;
 
-            _sbLectura.Length = 0;
-            _sbLectura.Append(nombre.ToUpperInvariant());
-            if (estado != null) _sbLectura.Append("  ·  ").Append(estado);
-            _sbLectura.Append("\n(").Append(cx).Append(", ").Append(cy).Append(")   ")
-                      .Append(g.temp[i] * 2 - 120).Append(" °C");
-            if (g.humedad[i] > 0) _sbLectura.Append("   humedad ").Append(g.humedad[i]);
-            if (g.carga[i] > 0) _sbLectura.Append("   carga ").Append(g.carga[i]);
-            if (g.luz[i] > 0) _sbLectura.Append("   luz ").Append(g.luz[i]);
-            if (g.reposo[i] > 0) _sbLectura.Append("   reposo ").Append(g.reposo[i]);
-            string txt = _sbLectura.ToString();
+                _sbLectura.Length = 0;
+                _sbLectura.Append(LabMateriales.NombreMayus(mat));
+                string estado = LabMateriales.Estado(mat, hum, car);
+                if (estado != null) _sbLectura.Append("  ·  ").Append(estado);
+                _sbLectura.Append('\n').Append('(').Append(cx).Append(", ").Append(cy).Append(")   ")
+                          .Append(temp * 2 - 120).Append(" °C");
+                if (hum > 0) _sbLectura.Append("   humedad ").Append(hum);
+                if (car > 0) _sbLectura.Append("   carga ").Append(car);
+                if (luz > 0) _sbLectura.Append("   luz ").Append(luz);
+                if (rep > 0) _sbLectura.Append("   reposo ").Append(rep);
+                _lecturaTexto.text = _sbLectura.ToString();
+                _lecturaTam = _estiloLectura.CalcSize(_lecturaTexto);
+            }
 
-            var tam = _estiloLectura.CalcSize(new GUIContent(txt));
-            float ancho = tam.x + UiStyles.S(10f), alto = UiStyles.S(38f);
+            float ancho = _lecturaTam.x + UiStyles.S(10f), alto = UiStyles.S(38f);
             // A la derecha del cursor, salvo que no quepa; siempre dentro de la pantalla.
             float rx = p.x + UiStyles.S(18f);
             if (rx + ancho > Screen.width) rx = p.x - UiStyles.S(18f) - ancho;
@@ -660,7 +675,7 @@ namespace Alkahest.Game
             GUI.color = new Color(0.06f, 0.06f, 0.07f, 0.82f);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.color = antes;
-            GUI.Label(r, txt, _estiloLectura);
+            GUI.Label(r, _lecturaTexto, _estiloLectura);
         }
 
         private void PrepararEstilos()

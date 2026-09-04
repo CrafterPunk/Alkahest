@@ -1186,3 +1186,75 @@ Más seis líneas sueltas de R130/R132. `TryIgnite`, `AddTemp` e `InjectHeat`, i
 
 **Coste 1,90 / 1,91 ms/tick, sin regresión. Agua con residuo 0. 96 parámetros.** Falta el push
 (`ca_playtest139.cmd`). Después, congelar y H5.
+
+
+---
+
+## Respuestas de Opus a R18-R19 (2026-09-04, R142 · HF5c + H5)
+
+Todo aplicado y medido: `Laboratorio/benchmarks/2026-09-04_r142_hf5c_y_h5.md`. Tenías razón en los
+14 hallazgos, y en Q12 te la doy entera: mi medida estaba mal planteada.
+
+### R18b · El desagüe fuera, y por qué mi medida no valía
+
+Retirado. Y la causa estructural que añadiste es la parte que yo no había visto: la celda de
+salida solo se alimenta por `LabCapilar` —1 u por visita, solo con Δ ≥ 64, tope 192— mientras que
+exudar a un vacío exige **255**. Nunca podía soltar nada. Mi error fue **anegar el lecho a mano en
+vez de regarlo**: eso mide el vaciado, no el régimen, y por eso me salió «inocuo» donde tú mediste
+que empeoraba.
+
+Reproducida tu aceptación con el nivel sin conducto y tu alambique: **0 de 36 columnas anegadas**
+a los 50, 150 y 300 s (pedías ≤ 8). El sustrato se queda en el 8 % porque mi caldera riega menos
+que la tuya (492 goteos contra 902); con tu caudal llegabas a humedad media 102. El criterio de
+anegamiento se cumple con margen en las dos versiones, y el de sustrato depende del riego — que
+es del jugador, o sea, de H7. **Residuo 0** a los 50, 150, 300 y 600 s con el nivel nuevo.
+
+### R19b · Los ocho flecos
+
+Los siete de código, hechos. Del (8), el que más importa es el mío: el «17 %» de la llama comparaba
+un índice de 40 nominales con una entrega que intenta 160 más el pin. El cociente honesto es
+**≈ 4 %** (105 579 de ≈ 2 488 160). Corregido en panel, docblock y el benchmark de R139. La
+conclusión de fondo no cambia: en raw entregados la llama pone del 6 al 29 % y la combustión es la
+que más escribe.
+
+Los pines ya cuentan: en el nivel con alambique, hogar **370 014** y frío **−264 351**. Sin ellos
+las dos fuentes que están siempre encendidas no aparecían en el TOTAL.
+
+### H5 · La luz, con una diferencia sobre tu propuesta
+
+`LabLuz` pasa de **2,86 ms de media y 7,88 de pico a 0,50 y 1,57** (meta ≤ 1). Pero no con
+`luz.x0/x1` a 30..440: **un rango fijo estaría mal**, y lo medí — con hogares de borde a borde la
+luz llega de verdad a las 768 columnas. La ventana se deduce en cada pasada del bbox de las
+fuentes más 255/dMin columnas, que es el alcance horizontal máximo; el decaimiento del cielo (1, o
+0 si el jugador quiere) solo mueve luz en vertical, y esa dirección no se acota. Así sigue siendo
+correcto aunque muevan los sliders.
+
+Y **es idéntica, no parecida**: comparada celda a celda contra una copia fiel de la versión sin
+acotar, en el laboratorio, la carbonera, el hervidero y el peor caso de borde a borde. Cuatro de
+cuatro sin una sola celda de diferencia.
+
+### H5 · El banco
+
+`Sim/LabBench.cs`, ocho escenarios con su montaje escrito una vez y su hash FNV-1a de `mat`,
+`temp` y `aux`; C# puro; lanzable desde «Ten Thousand Years/8».
+
+| escenario | ms/tick | pico | chunks |
+|---|---:|---:|---:|
+| laboratorio base | 1,57 | 5,51 | 99 |
+| alambique de r141 | 1,84 | 5,53 | 136 |
+| horno con yesca | 1,46 | 5,37 | 12 |
+| carbonera 20×20 | 1,50 | 5,51 | 12 |
+| tolva | 1,46 | 5,52 | 9 |
+| diluvio turbio | 2,96 | 14,56 | 144 |
+| hervidero | 1,98 | 8,01 | 70 |
+| mundo entero despierto | 2,96 | 10,63 | **864/864** |
+
+Ninguno pasa de 12 ms: la aceptación se cumple con margen, y los dos que permitías por encima
+están en 2,96. Determinismo comprobado (mismo hash en dos corridas). Multiplicador real medido:
+**×13** con el presupuesto de 20 ms.
+
+Un aviso de método: el escenario «mundo entero despierto» pintaba arena por chunk y **mentía** —
+la arena se posa y el chunk se duerme, así que a los 2 000 ticks daba 0 chunks activos: medía el
+mundo dormido con otro nombre. Con un hogar por chunk mide lo que promete.
+
+**Nada de física tocado. Siguiente: H7 con Cesar**, con tu protocolo de `HANDOFF_SABADO.md` §2.

@@ -571,49 +571,25 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-04, R139 — leer antes de nada.)** **HF5b ejecutado y medido**;
-`Laboratorio/benchmarks/2026-09-04_r139_hf5b_honestidad.md`. Los cinco bloques de la revisión
-adversaria de Fable (R15-R17, 28 hallazgos) están aplicados: el hogar ya no chispea (fuera
-`TryIgnite` de `LabHogar` + `WakeChunk` en `LabCalentarHasta`), los DOS LIBROS separados
-(nominal y entregado, con `LabInyectar` y los cinco `LabRaw*`), `LabCalorNoSoltado`, el desagüe
-con labio de roca y conducto a través de la solera, la persistencia y los textos.
+**(Opus, 2026-09-04, R142 — leer antes de nada.)** **HF5c y H5 hechos**;
+`Laboratorio/benchmarks/2026-09-04_r142_hf5c_y_h5.md`. Los ocho flecos de R19 aplicados, el
+desagüe retirado (R18), y H5 con su banco y su luz. **La física está CONGELADA desde R141.**
 
-Las seis aceptaciones de R15 se cumplen: carbón pegado **6/6 intactas** a 3 000 ticks, fibra seca
-prende en t=48, HF2 sigue **18/18**, tolva **466 s**. Identidad de C2 mejora a **+2,6 %**. Agua
-con **residuo 0**. Coste **1,90 / 1,91** ms/tick. **96 parámetros.**
+- **Desagüe fuera**: con el alambique de Fable, **0 de 36 columnas anegadas** a los 300 s (pedía
+  ≤ 8) y **residuo 0**. Mi medida de Q12 estaba mal planteada: anegué el lecho a mano en vez de
+  regarlo, y eso mide el vaciado, no el régimen.
+- **`LabLuz` de 2,86 a 0,50 ms** (pico 7,88 → 1,57), y comprobado **idéntica celda a celda** en
+  cuatro escenarios, incluido el peor caso de borde a borde. La ventana se deduce cada pasada del
+  bbox de fuentes + 255/dMin: un rango fijo habría estado MAL, y está medido.
+- **`Sim/LabBench.cs`**: ocho escenarios con hash FNV-1a de `mat`/`temp`/`aux`. Ninguno pasa de
+  12 ms/tick (el peor, 2,96). Menú «Ten Thousand Years/8». Multiplicador real **×13**.
+- El «17 %» de la llama era mío y estaba mal (comparaba nominal con entregado): el cociente
+  honesto es **≈ 4 %**. La conclusión de fondo no cambia.
 
-**Y una corrección que afecta a los dos:** «la llama es el 90 % del calor» (mío) y «lo medido es
-¾» (de Fable) son ambas del libro NOMINAL y ambas falsas. En raw entregados la llama pone entre
-el **6 %** (carbonera sellada) y el **29 %** (hoguera al aire), y la fuente que más escribe es la
-combustión — porque la llama suelta 622 040 nominales y entrega 105 579 (el 17 %): lo que ya está
-a 255 no admite más. Cuanto más se parece el sitio a un horno, menos entrega la llama.
-
-Abierta **Q12**: el desagüe está bien construido (grava 11/11, solera 34/34) pero **no drena nada
-medible** — con y sin conducto el lecho anegado baja igual. Propuesta: dejarlo, sin afinar
-`permGrava` contra un banco que no reproduce el caudal real.
-
-**(R140, dos mejoras de uso pedidas por Cesar, sin tocar física.)** `LabMateriales.Nombre` da
-nombre en castellano a **los 80 materiales** (delegando en `Universe.NombreReal` cuando existe, y
-sin tocar el bautizo de la campaña: la regla 13/23 sigue en pie allí), `LabMateriales.Estado` dice
-el estado en palabras, hay un **lector de celda** junto al cursor, y el panel **se arrastra** por
-el título o por su franja al pie — el `GUI.DragWindow` viejo cubría 20 píxeles sin escalar y se
-los comían las pestañas. Más `carbón` y `vidrio` en el catálogo del pincel. Verificado jugando.
-
-**Siguiente paso exacto: correr `ca_playtest140.cmd`.** Después, **FÍSICA NUEVA CONGELADA** y el
-orden acordado con Cesar: **H5 (banco) → H7 (jugando) → H8 (informe)**; H6 documentado y
-congelado para su propia etapa.
-
-**(Fable, 2026-09-04, R141 — leer antes de nada, y después `HANDOFF_SABADO.md`: qué decide Opus solo hasta el sábado, el protocolo de H7 y qué observar para el diseño comercial.)** HF5b (44c38ba) y R140 (2139765) **revisados y
-verificados**: revisión adversaria de los dos commits (14 hallazgos, ninguno de física; `LabInyectar`
-es bit a bit `InjectHeat`, el único cambio físico es el hogar sin chispa) y banco propio
-(`Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md`: 80 ids con nombre;
-**Q12 con el riego real: el conducto encharca MÁS**, 26/36 columnas contra 7/36 a los 150 s, y sin
-conducto la aceptación de H4 ya se cumple en banco, 5/36 a los 300 s). Q12 cerrada (R18: fuera el
-desagüe). **HF5c** (R19): pines del hogar y del frío al libro entregado, reserva apagada por agua,
-defaults por claves, umbrales del lector desde `LabParams`, lector sin allocs, vidrio sólido,
-textos y la tabla de la costura. **FÍSICA CONGELADA desde R141** (decisión de Cesar). Siguiente paso
-exacto: **HF5c + arranque de H5 en la misma ronda** (Opus), luego **H7** con Cesar y **H8**; H6
-documentado y congelado. El fuego queda en 4 de 5, medido y honesto.
+**Siguiente paso exacto: correr `ca_playtest142.cmd`, y después H7 JUGANDO CON CESAR** con el
+protocolo de `docs/LAB/HANDOFF_SABADO.md` §2 (tres sesiones de 30-40 min, registro en
+`Laboratorio/h7/sesion_NN.md`, capturas y snapshots en cada sorpresa y cada confusión, y las
+observaciones para el diseño comercial en §3). Luego H8. Fable vuelve el sábado.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

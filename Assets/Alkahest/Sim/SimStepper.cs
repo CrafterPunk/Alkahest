@@ -838,6 +838,7 @@ namespace Alkahest.Sim
             bool waterAbove = y < H - 1 && _grid.mat[idx + W] == MaterialId.Water;
             if (waterAbove || waterNeighbors >= 2)
             {
+                if (LabActivo) LabReservaApagada += reserva; // (R142, R19-3) lo que el agua se llevó sin quemar.
                 SetCombustReserva(idx, def.archetype, 0);
                 SpawnSteamPuff(x, y);
                 return;

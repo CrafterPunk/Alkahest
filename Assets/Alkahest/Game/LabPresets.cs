@@ -116,7 +116,7 @@ namespace Alkahest.Game
         public static void EscribirDefaultsSiFalta()
         {
             string ruta = Ruta(NombreDefaults);
-            if (File.Exists(ruta) && ContarClaves(ruta) >= LabParams.Registro.Count) return;
+            if (File.Exists(ruta) && MismasClaves(ruta)) return;
             var reg = LabParams.Registro;
             var actuales = new float[reg.Count];
             for (int i = 0; i < reg.Count; i++) { actuales[i] = reg[i].Leer(); reg[i].Escribir(reg[i].Def); }
@@ -125,15 +125,21 @@ namespace Alkahest.Game
             UltimoMensaje = "escrito _defaults.json";
         }
 
-        /// <summary>(R138) Cuántos parámetros trae ya un archivo de preset. −1 si no se puede leer.</summary>
-        private static int ContarClaves(string ruta)
+        /// <summary>
+        /// (R142, R19-4) ¿El archivo tiene EXACTAMENTE las claves del registro de hoy?
+        /// Contar cuántas hay no basta: un parámetro renombrado deja el mismo número y el archivo
+        /// viejo se quedaba para siempre, describiendo una fábrica que ya no existe.
+        /// </summary>
+        private static bool MismasClaves(string ruta)
         {
             try
             {
                 var d = Parsear(File.ReadAllText(ruta));
-                return d == null ? -1 : d.Count;
+                if (d == null || d.Count != LabParams.Registro.Count) return false;
+                foreach (var p in LabParams.Registro) if (!d.ContainsKey(p.Clave)) return false;
+                return true;
             }
-            catch { return -1; }
+            catch { return false; }
         }
 
         // =================================================================

@@ -7376,3 +7376,59 @@ medido y honesto.
 Archivos: `Laboratorio/benchmarks/2026-09-04_r141_fable_verificacion_hf5b_y_q12.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R18-R19), `docs/LAB/HANDOFF_OPUS.md` (HF5c, §2 congelación, §8),
 `docs/LAB/CHECKPOINT.md` (fase y §9). Sin código.
+
+## Ronda 142 — EL LABORATORIO: HF5c (LOS FLECOS) Y H5 (EL BANCO Y LA LUZ) (Opus 5)
+
+Ninguna regla nueva y ningún número de física: la física quedó CONGELADA en R141 por decisión de
+Cesar. Esta ronda es contabilidad, geometría del nivel, herramienta y rendimiento.
+
+· **FUERA EL DESAGÜE (R18 de Fable), y me equivoqué en cómo lo medí.** Fable lo montó con el riego
+  REAL —serpentín de 31 celdas y caldera repuesta— y con el conducto se encharcaban **26 de 36
+  columnas contra 7 sin él**. Yo lo había medido anegando el lecho A MANO, y eso mide el vaciado,
+  no el régimen: por eso me salió «inocuo». La causa estructural que él añadió es la que faltaba:
+  la celda de salida solo se alimenta por `LabCapilar` (1 u por visita, solo con Δ ≥ 64, tope 192)
+  y exudar a un vacío exige **255**, así que la grava se llenaba hasta 244 y no soltaba nada — una
+  esponja sin salida dentro del lecho. Y como la capilaridad ni siquiera lee la permeabilidad,
+  subir `suelo.permGrava` tampoco lo habría arreglado. Reproducida su aceptación con el nivel
+  limpio: **0 de 36 columnas anegadas** a los 300 s y **residuo 0**.
+· **LOS PINES Y LA RESERVA APAGADA.** `LabHogar` y `LabFrio` ya cuentan su propio pin (la llama ya
+  lo hacía): en el nivel con alambique, hogar 370 014 y frío −264 351, las dos fuentes que están
+  SIEMPRE encendidas y no aparecían en el TOTAL. Y `LabReservaApagada` cuenta lo que el agua apaga
+  de golpe, un agujero preexistente desde el contrato 1a. El panel dice ahora qué ES el total: las
+  cinco fuentes con sus pines, sin difusión, ambiente ni calor latente.
+· **EL «17 %» DE LA LLAMA ERA MÍO Y ESTABA MAL.** Comparaba un índice de 40 nominales por tick con
+  una entrega que intenta 160 más el pin a 255. El cociente honesto es **≈ 4 %** (105 579 de
+  ≈ 2 488 160). Corregido en panel, docblock y benchmark de R139. La conclusión de fondo aguanta:
+  en raw entregados la llama pone del 6 al 29 % y la combustión es la que más escribe.
+· **Y CUATRO FLECOS DE HONESTIDAD**: `EscribirDefaultsSiFalta` compara las CLAVES y no cuántas hay
+  (un parámetro renombrado dejaba el archivo viejo para siempre); `Estado()` lee `LabParams` donde
+  el umbral existe, porque dos literales coincidían POR CASUALIDAD con `planta.humedadMin` y
+  `sed.turbidezFuente` y en cuanto se moviera un slider el rótulo habría contradicho a la física;
+  el lector reconstruye el texto solo cuando cambia lo que muestra (el commit de R140 decía «cero
+  allocs» y no era verdad); y el vidrio entra en `EsSolidoDelMundo` y no en `Tallable`.
+· **H5 — LA LUZ, DE 2,86 A 0,50 ms.** `LabLuz` recorría el mundo entero cinco veces cada 16 ticks
+  (2,86 ms de media, 7,88 de pico, casi seis veces la meta) mientras que en el laboratorio la luz
+  solo ocupa **73 columnas de 768**: el 99 % del trabajo era pintar de negro lo que ya estaba
+  negro. **La ventana NO se fija a mano**, y esto es lo interesante: un rango fijo estaría mal, y
+  lo medí — con hogares de borde a borde la luz llega de verdad a las 768 columnas. Se deduce en
+  cada pasada del bbox de las fuentes más 255/dMin columnas (el alcance horizontal máximo), porque
+  el decaimiento del cielo solo mueve luz en vertical y esa dirección no se acota; así sigue
+  siendo correcto aunque el jugador cambie los sliders de caída. **Y es IDÉNTICA, no parecida**:
+  comparada celda a celda contra una copia fiel de la versión sin acotar en cuatro escenarios,
+  incluido el peor caso, sin una sola celda de diferencia.
+· **H5 — EL BANCO (`Sim/LabBench.cs`).** Ocho escenarios recogidos de los RunCommand de R131-R141,
+  cada uno con su montaje escrito UNA VEZ y su hash FNV-1a de `mat`, `temp` y `aux`. C# puro, sin
+  API de Unity, lanzable desde «Ten Thousand Years/8». El hash no es adorno: es la licencia para
+  optimizar — un cambio de rendimiento que los deje intactos no ha tocado la física, y uno que
+  mueva un solo hash es un cambio de física disfrazado. Medido: laboratorio 1,57 ms/tick,
+  alambique 1,84, horno 1,46, carbonera 1,50, tolva 1,46, hervidero 1,98, y los dos peores casos
+  —diluvio turbio y mundo entero despierto— en **2,96**, cuando la aceptación permitía 12.
+  Determinismo comprobado con dos corridas por escenario. **Multiplicador real ×13** con el
+  presupuesto de 20 ms.
+· **Un escenario que mentía**, cazado al montarlo: «mundo entero despierto» pintaba una celda de
+  arena por chunk, pero la arena cae, se posa y el chunk se duerme — a los 2 000 ticks daba **0
+  chunks activos**, o sea que medía el mundo dormido con otro nombre. Con un hogar por chunk
+  (brasa eterna que se despierta a sí misma, R55) mide lo que promete: 864 de 864.
+· 96 parámetros. Benchmark `2026-09-04_r142_hf5c_y_h5.md`, CHECKPOINT §9, buzón R18b-R19b (y
+  «Abiertas» vacía), HANDOFF HF5c marcado. **Siguiente: H7 JUGANDO CON CESAR** con el protocolo de
+  `HANDOFF_SABADO.md` §2, luego H8. Fable revisa el sábado. Sin push (cmd 142).

@@ -206,7 +206,7 @@ deja ceniza que abona. Coste de `LabCampos` sigue < 0,5 ms con 2000 plantas.
 **Decides tú**: forma (ramas), colores. **Escala**: si quieres que las plantas alteren
 permeabilidad/cohesión del suelo (nuevo acoplamiento).
 
-### HF5c · LOS FLECOS DE HF5b Y R140 (R141 de Fable; media ronda; sin física; arranca H5 en la misma ronda)
+### HF5c · LOS FLECOS — **HECHO (R142)**, junto con H5. Ocho flecos aplicados, desagüe retirado (0/36 anegadas, residuo 0), `LabLuz` 2,86 → 0,50 ms idéntica, `LabBench.cs` con ocho escenarios y sus hashes, ninguno por encima de 2,96 ms/tick. Detalle abajo.
 Índice; el detalle exacto está en `PREGUNTAS_A_FABLE.md` R18 y R19. (1) Fuera el desagüe (cuatro
 líneas): medido con el riego real encharcaba MÁS (26/36 contra 7/36 a los 150 s), y la causa es
 estructural (capilaridad 4/256 con tope 192; exudar pide 255). (2) Los pines propios del hogar y

@@ -95,6 +95,10 @@ namespace Alkahest.Sim
         /// Restándola queda el calor del combustible ORIGINAL, y solo entonces se puede escribir la
         /// identidad de C2 sin contar dos veces la misma energía.</summary>
         public long LabCalorCarbon;
+        /// <summary>(R142, R19-3) Unidades de reserva que el AGUA apagó de golpe. Es energía que estaba
+        /// en el mundo y desaparece sin soltarse: sin este contador, apagar un fuego con agua era un
+        /// agujero silencioso en el libro. Preexistente desde el contrato 1a; ahora tiene nombre.</summary>
+        public long LabReservaApagada;
         public long LabPresionMovidas, LabCuerposCaidos, LabFracturas;
         /// <summary>(R131) AUDITORÍA DE CONSERVACIÓN. Suma de TODO lo que este stepper ha creado
         /// (+) o destruido (−) de humedad[] en unidades, contado en los dos únicos sitios que
@@ -910,7 +914,12 @@ namespace Alkahest.Sim
         // ---- HOGAR / FRÍO / MANANTIAL / SUMIDERO ---------------------------------
         private void LabHogar(int x, int y, int i)
         {
+            // (R142, R19-2) El pin de la propia celda también es calor entregado. La llama ya
+            // contaba el suyo; el hogar y el frío no, y por eso el TOTAL cojeaba en las dos
+            // fuentes que están SIEMPRE encendidas.
+            int antesPin = _grid.temp[i];
             _grid.temp[i] = (byte)LabParams.HogarRaw;
+            LabRawHogar += LabParams.HogarRaw - antesPin;
             // (R136, C1) SEGUNDA LEY: el hogar no calienta a NADIE por encima de su propia
             // temperatura. Antes usaba InjectHeat, que suma sin tope, y la celda de encima del
             // hogar acababa a 255 raw (390 °C) con caja o al aire: arena con ceniza al lado
@@ -981,7 +990,9 @@ namespace Alkahest.Sim
 
         private void LabFrio(int x, int y, int i)
         {
+            int antesPin = _grid.temp[i];                        // (R142, R19-2) el pin, como en el hogar.
             _grid.temp[i] = (byte)LabParams.FrioRaw;
+            LabRawFrio += LabParams.FrioRaw - antesPin;
             // (R138, B) El frío es la única fuente NEGATIVA, y sin contarla el libro entregado
             // solo sabría sumar. `LabInyectar` con signo hace lo mismo que `InjectCold`.
             LabRawFrio += LabInyectar(x, y, -LabParams.FrioPotencia);
@@ -1165,20 +1176,57 @@ namespace Alkahest.Sim
         {
             var luz = _grid.luz; var mat = _grid.mat;
             int n = W * H;
-            for (int i = 0; i < n; i++) luz[i] = LabMateriales.EmiteLuz(mat[i]) ? (byte)255 : (byte)0;
+            // (H5) El reset recorre el mundo entero —es una escritura por celda, barata— y de paso
+            // apunta DÓNDE están las fuentes. Los cuatro barridos de abajo son lo caro (un switch
+            // de decaimiento por celda y dirección), y esos sí se acotan.
+            int fx0 = int.MaxValue, fx1 = -1;
+            for (int i = 0; i < n; i++)
+            {
+                if (LabMateriales.EmiteLuz(mat[i]))
+                {
+                    luz[i] = 255;
+                    int x = i % W;
+                    if (x < fx0) fx0 = x;
+                    if (x > fx1) fx1 = x;
+                }
+                else luz[i] = 0;
+            }
             int cx0 = LabParams.LuzCieloX0, cx1 = LabParams.LuzCieloX1;
             if (cx0 >= 0)
             {
                 int yc = H - 2;
                 for (int x = cx0; x <= cx1 && x < W - 1; x++) { int i = yc * W + x; if (mat[i] == MaterialId.Empty) luz[i] = 255; }
+                if (cx0 < fx0) fx0 = cx0;
+                if (cx1 > fx1) fx1 = cx1 < W - 1 ? cx1 : W - 2;
             }
+            if (fx1 < 0) return; // sin una sola fuente no hay nada que propagar: el reset ya dejó todo a 0.
+
             int dAire = LabParams.LuzDecayAire, dCielo = LabParams.LuzDecayCielo, dAgua = LabParams.LuzDecayAgua, dPlanta = LabParams.LuzDecayPlanta;
+
+            // (H5) LA VENTANA. Medido: la pasada entera costaba 2,86 ms de media y 7,88 de pico,
+            // cinco veces la meta del hito, y en el laboratorio la luz solo ocupa 73 columnas de
+            // 768 — el 99 % del trabajo era pintar de negro lo que ya estaba negro.
+            //
+            // El límite no se fija a mano (un rango fijo estaría MAL: con hogares de borde a borde
+            // la luz llega de verdad a las 768 columnas). Se deduce: en horizontal la luz pierde
+            // al menos `dMin` por celda, así que desde la columna de una fuente no puede alcanzar
+            // más de 255/dMin columnas por lejos que haya bajado antes — el decaimiento vertical
+            // del cielo, que puede ser 1 o 0, solo la mueve en vertical, y esa dirección no se
+            // acota. Como se recalcula en cada pasada, sigue siendo correcto aunque el jugador
+            // mueva los sliders de caída a la mitad o al doble.
+            int dMin = dAire;
+            if (dAgua < dMin) dMin = dAgua;
+            if (dPlanta < dMin) dMin = dPlanta;
+            if (LabParams.LuzDecayHumo < dMin) dMin = LabParams.LuzDecayHumo;
+            int alcance = dMin > 0 ? (255 + dMin - 1) / dMin : W;
+            int bx0 = fx0 - alcance; if (bx0 < 1) bx0 = 1;
+            int bx1 = fx1 + alcance; if (bx1 > W - 2) bx1 = W - 2;
 
             // arriba → abajo (la luz del cielo cae casi sin perder)
             for (int y = H - 2; y >= 1; y--)
             {
                 int fila = y * W;
-                for (int x = 1; x < W - 1; x++)
+                for (int x = bx0; x <= bx1; x++)
                 {
                     int i = fila + x;
                     int v = LabLuzDesde(i + W) - LabLuzDecay(mat[i], dCielo, dAire, dAgua, dPlanta);
@@ -1189,7 +1237,7 @@ namespace Alkahest.Sim
             for (int y = 1; y < H - 1; y++)
             {
                 int fila = y * W;
-                for (int x = 1; x < W - 1; x++)
+                for (int x = bx0; x <= bx1; x++)
                 {
                     int i = fila + x;
                     int v = LabLuzDesde(i - W) - LabLuzDecay(mat[i], dAire, dAire, dAgua, dPlanta);
@@ -1200,13 +1248,13 @@ namespace Alkahest.Sim
             for (int y = 1; y < H - 1; y++)
             {
                 int fila = y * W;
-                for (int x = 1; x < W - 1; x++)
+                for (int x = bx0; x <= bx1; x++)
                 {
                     int i = fila + x;
                     int v = LabLuzDesde(i - 1) - LabLuzDecay(mat[i], dAire, dAire, dAgua, dPlanta);
                     if (v > luz[i]) luz[i] = (byte)v;
                 }
-                for (int x = W - 2; x >= 1; x--)
+                for (int x = bx1; x >= bx0; x--)
                 {
                     int i = fila + x;
                     int v = LabLuzDesde(i + 1) - LabLuzDecay(mat[i], dAire, dAire, dAgua, dPlanta);
