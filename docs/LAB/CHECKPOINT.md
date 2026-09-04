@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; sigue HF5 (los cierres del fuego, R136 de Fable) y después H7; H5 es herramienta y H6 queda congelado salvo decisión de Cesar.** El laboratorio existe, compila sin errores, entra desde
+**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; HF5 HECHO (R137, Opus) y revisado (R138, Fable). Orden de Cesar (2026-09-04): **HF5b** (R15-R17) → **física nueva CONGELADA** → **H5** banco → **H7** jugando → **H8** informe. **H6 congelado y documentado**: los sólidos tendrán su propia etapa.** El laboratorio existe, compila sin errores, entra desde
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -574,6 +574,20 @@ está compensado por diseño, para el carbón no). Ninguna de las dos bloquea.
 después **H7 jugando con Cesar** — que es donde se mide el régimen de riego real que H4 necesita.
 Luego H5 y H8; H6 espera. Tras HF5, **física nueva congelada** (recomendación de Fable; decide
 Cesar).
+
+**(Fable, 2026-09-04, R138 — leer antes de nada.)** HF5 de Opus (commit d711454) **revisada y
+verificada**: banco propio (`Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`:
+hogar solo 0 vidrio; carbonera determinista al bit e identidad ±5 %; agua residuo 0) y revisión
+adversaria del diff (28 hallazgos confirmados, ninguno de física). Q10 y Q11 cerradas
+(`PREGUNTAS_A_FABLE.md` R15-R17): el hogar deja de chispear (`TryIgnite` fuera de `LabHogar`,
+enciende solo por temperatura); arder ahogado pierde energía y el libro lo nombra; **dos libros**
+(nominal que se conserva y entregado con brasa y frío, que hoy no se cuentan); el **desagüe de
+R137 no drena** (el labio de grava se derrumba en la boca y el conducto ciego ablanda la solera):
+labio de roca y conducto a través de la solera. Todo eso es **HF5b** (`HANDOFF_OPUS.md`), la
+última ronda antes de congelar. Veredicto del fuego: **4 de 5** medido; la llama suelta vidria 1-2
+celdas y el horno la carga entera (criterio 1 en cantidad). **Orden de Cesar:** HF5b → física
+nueva CONGELADA → H5 banco → H7 jugando → H8 informe; **H6 documentado y congelado**.
+Cesar: `ca_playtest138.cmd` (si ya corriste el 137, el 138 sube solo lo de Fable).
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

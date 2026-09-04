@@ -7200,3 +7200,42 @@ Archivos: `Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`,
   corregida), buzón con R11b-R14b y Q10/Q11. Verificado en banco headless, sin Play. Tras HF5,
   física nueva CONGELADA (recomendación de Fable; decide Cesar): sigue H7 jugando. Sin push
   (cmd 137; el 134 y el 135 siguen pendientes).
+
+
+## Ronda 138 — EL LABORATORIO: REVISIÓN DE HF5 Y ORDEN DE CIERRE (Fable 5.1, sin código)
+
+Opus entregó HF5 (R137, commit d711454): los cuatro parches de honestidad del fuego (tope del
+hogar, rendimiento de la carbonera 25 % con reserva 50, contadores de llama/hogar/carbón, vidaHumo
+255), el desagüe de grava de Q8, y dos preguntas nuevas: Q10 (el hogar sí prende carbón por el 12 %
+de contacto de `TryIgnite`) y Q11 (arder ahogado pierde la mitad de la energía).
+
+**Verificación propia (banco headless, geometrías distintas de las de Opus).** Hogar solo: 0
+vidrio. Cuatro celdas de fibra sobre el hogar: **2 celdas de vidrio** (la llama, no el hogar; el
+horno hace 18 de 18 → el criterio 1 se reescribe en cantidad). Carbonera 20×20 con boca 1: dos
+corridas con **hash idéntico** (determinismo de la sal 632), identidad energética dentro del ±5 %.
+Nivel real: **residuo 0** de conservación del agua a 3 000 ticks; y la grava del desagüe se mueve
+(5 de 8 por conducto en su sitio, dos celdas en la boca de la chimenea).
+
+**Revisión adversaria del diff** (cinco lectores + dos refutadores por hallazgo): 28 hallazgos
+confirmados, 1 refutado, ninguno de física. Los cuatro altos: el hogar chispea desde el archivo
+del laboratorio (línea 905), no desde el juego base; la brasa (material) no existe para el libro
+de energía; el labio de grava del desagüe se derrumba en la boca en el primer tick (todo polvo
+desliza en diagonal a un hueco, `fluidity` no lo impide); y la «salida por la mitad baja del labio»
+no puede drenar (un poroso solo suelta agua a un vacío al saturar a 255). Además: los tres calores
+del panel están en unidades distintas y se suman como TOTAL; el «12 % por tick» es por visita; la
+causa de los 466 s de la tolva no la respalda el código; el carbón agotado va a brasa, no a ceniza;
+la identidad es 555 por celda y estadística; el snapshot no guarda los contadores del fuego;
+`_defaults.json` está viejo.
+
+**Decisiones (R15-R17).** R15: el hogar calienta, no chispea (fuera `TryIgnite` de `LabHogar`;
+enciende solo por temperatura: fibra sí, carbón no, mojada no) más `WakeChunk` en
+`LabCalentarHasta`. R16: la pérdida en sordina se nombra (`LabCalorNoSoltado`) y el panel deja de
+sumar peras con manzanas. R17: dos libros (nominal que se conserva; entregado con brasa y frío),
+labio de roca y conducto a través de la solera, textos del benchmark corregidos. Todo junto es
+**HF5b**, la última ronda antes de congelar. Orden acordado con Cesar: HF5b → **física nueva
+congelada** → H5 banco → H7 jugando → H8 informe; **H6 (sólidos) documentado y congelado** para su
+propia etapa. Veredicto del fuego: 4 de 5 medido.
+
+Archivos: `Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`,
+`docs/LAB/PREGUNTAS_A_FABLE.md` (R15-R17), `docs/LAB/HANDOFF_OPUS.md` (HF5b, H5/H6, §8),
+`docs/LAB/CHECKPOINT.md` (fase y §9), `docs/LAB/DISENO_FUEGO.md` §10 ampliado. Sin código.

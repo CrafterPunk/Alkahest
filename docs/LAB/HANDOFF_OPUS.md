@@ -201,7 +201,11 @@ deja ceniza que abona. Coste de `LabCampos` sigue < 0,5 ms con 2000 plantas.
 **Decides tú**: forma (ramas), colores. **Escala**: si quieres que las plantas alteren
 permeabilidad/cohesión del suelo (nuevo acoplamiento).
 
-### H5 · Rendimiento y banco (1 día)
+### H5 · Rendimiento y banco (1 día) — **VA JUSTO DESPUÉS DE HF5b** (orden de Cesar, 2026-09-04): herramienta y rendimiento, CERO física nueva
+Los escenarios ya existen a trozos en los RunCommand de las R131-R138 (los de Fable están en
+`Laboratorio/benchmarks/2026-09-04_r136_*.md` y `_r138_*.md`: caja 20×12 con hogar + yesca + carbón,
+plataforma hogar + arena + ceniza + combustible, carbonera 20×20 con doble corrida y hash). Recógelos
+todos en `Sim/LabBench.cs` con el hash de `mat/temp/aux` como prueba de determinismo por escenario.
 - `LabLuz`: acotar a `LabParams.LuzX0..X1` (30..440) y a filas con aire (mantén un `bool[]` de
   filas con aire por chunk-fila), o incremental por chunks despiertos + vecinos. Meta: ≤ 1 ms
   por ejecución.
@@ -218,7 +222,11 @@ permeabilidad/cohesión del suelo (nuevo acoplamiento).
 (2) y (7), y esos con su número. **Decides tú**: técnica de acotación. **Escala**: cambiar la
 frecuencia base de `LabCampos` (1/8) o el tamaño de chunk.
 
-### H6 · Cuerpos cohesionados — hipótesis (1 día, después de H1-H5)
+### H6 · Cuerpos cohesionados — hipótesis · **CONGELADO (decisión de Cesar, 2026-09-04)**
+Queda DOCUMENTADO (aquí y en `DISENO_LABORATORIO.md` §8, con `RocaSuelta`, `LabCuerpos` vacío y
+`Grava`) y **no se implementa en esta etapa**: los sólidos merecen su propia etapa y no entran a
+contaminar un sistema de partículas, líquidos, gases, calor y vida que acaba de quedar coherente.
+Lo de abajo es la hipótesis tal como se dejó, para cuando llegue su momento.
 `LabCuerpos()` cada tick (o cada 2): etiquetar componentes de `RocaSuelta` (reusa
 `_labVisita/_labCola`, solo en chunks despiertos o vecinos); un cuerpo está apoyado si alguna
 celda tiene debajo algo que no es Empty/gas/agua y no es del cuerpo, o y==1. Sin apoyo: mover
@@ -293,6 +301,27 @@ vidrio con yesca o si la identidad de C2 no cuadra.
 
 </details>
 
+### HF5b · HONESTIDAD DEL LIBRO Y DEL DESAGÜE (R138 de Fable; UNA ronda; la última antes de congelar)
+Sale de la revisión adversaria de d711454 (28 hallazgos, ninguno de física) y de mi banco
+(`Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`). Todo está en
+`PREGUNTAS_A_FABLE.md` R15-R17; aquí solo el índice:
+
+- **Ignición (R15 + R17 A).** `LabHogar` sin `TryIgnite` (enciende solo por temperatura) y
+  `WakeChunk` en `LabCalentarHasta`. Carbón pegado NO prende; fibra sí; fibra mojada no.
+- **Dos libros (R16 + R17 B).** Nominal (combustible, se conserva: + `LabCombustibleCarbon`,
+  `LabUnidadesRespiradas`, `LabCalorNoSoltado`; razón depurada) y entregado (`LabInyectar` con
+  deltas reales: fuego, llama, **brasa**, hogar, **frío**; el único TOTAL). Textos del panel y
+  docblocks; contadores del fuego en el snapshot `_libro.json`; `_defaults.json` regenerable.
+- **Desagüe (R17 C).** Labio de roca entero; conducto que atraviesa la solera hasta (136,245) y
+  (153,245) con salida al aire de la boca; comentario de `Grava` corregido. Medido con rocío a
+  10 celdas/s durante 300 s.
+- **Textos del benchmark R137 (R17 D).** Tolva sin causa inventada; brasa en la tabla de C2 y en
+  Q11; identidad 555 por celda y estadística.
+
+**Aceptación:** las de R15; TOTAL entregado coherente (signo del frío incluido); B-F3 20×20 con
+su +5,5 % y la identidad reescrita; desagüe medido; regresión del agua residuo 0; coste sin
+regresión; `ca_playtest139.cmd`. **Después de esto la física queda congelada** y sigue H5.
+
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es
@@ -364,8 +393,17 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-1. Leer §0. 2. `git --no-optional-locks status` (debe mostrar los archivos del checkpoint §3
-sin commitear hasta que Cesar corra `ca_playtest130.cmd`). 3. Abrir Unity (suele estar
-abierto), compilar con la receta de §3, Play, título → «laboratorio de leyes», F8, jugar 5
-minutos, Ctrl+1..6. 4. Empezar H1: crear `Arenisca`, corregir la fisura, verificar el circuito
-del agua con sondas y capturas, anotar en CHECKPOINT §6. 5. Seguir con H2.
+**(Actualizado por Fable, 2026-09-04, R138; el orden es de Cesar.)**
+
+1. **HF5b** (media ronda, Opus): R15 (el hogar calienta, no chispea: fuera `TryIgnite` de `LabHogar`),
+   R16 (`LabCalorNoSoltado` + etiquetas honestas del panel), y lo que la revisión R17 dejó abierto en
+   `PREGUNTAS_A_FABLE.md` (grava del desagüe que resbala a la boca, etc.). Regresión del agua, banco
+   corto, `ca_playtest139.cmd`.
+2. **FÍSICA NUEVA CONGELADA** desde aquí (decisión de Cesar). Ninguna regla nueva sin escalar.
+3. **H5** banco y rendimiento (`Sim/LabBench.cs`, acotar `LabLuz`): herramienta, cero física.
+4. **H7** el arco largo jugando con Cesar (ahí se mide el riego real que H4 necesita, y la cadena cruzada
+   del criterio 4 del fuego).
+5. **H8** informe final.
+6. **H6** congelado y documentado. Los sólidos tendrán su propia etapa.
+
+El texto original de este paso (R130) queda en el historial; lo operativo de arranque sigue en §0 y §3.

@@ -250,3 +250,17 @@ calor de un horno en este motor es calor de **llama** (40 raw por tick y celda, 
 combustible; el combustible solo decide cuánto dura la llama. Eso no invalida el horno como
 máquina —sigue siendo geometría que encierra calor— pero cambia lo que enseña: el jugador no
 domina el carbón, domina la llama. Conviene decirlo así en el informe.
+
+
+**Añadido (R138, tras la HF5 de Opus).** Los cuatro parches están puestos y medidos por Opus
+(`Laboratorio/benchmarks/2026-09-04_r137_hf5_cierres_del_fuego.md`) y verificados por mí con
+geometrías distintas (`…_r138_fable_verificacion_hf5.md`): hogar solo → 0 vidrio; carbonera al
+25 %, determinista al bit e identidad dentro del ±5 %; agua con residuo 0. Dos precisiones que
+salen del banco: (1) el hogar seguía **chispeando** por el 12 % de contacto de `TryIgnite`, así que
+prendía carbón; se le quita (R15) y enciende solo por temperatura, con lo que la cadena hogar →
+yesca → carbón es verdadera por dos números; (2) **la llama suelta sí vidria**, 1-2 celdas pegadas
+a ella (cuatro celdas de fibra sobre el hogar bastan), y el horno vidria la carga entera (18 de
+18): el criterio 1 se reescribe en cantidad, no en absoluto. Arder ahogado pierde la mitad de la
+energía en gases sin quemar, como en la realidad, y el libro lo nombra (R16). Con eso el fuego
+queda en **4 de 5** y la física nueva se congela por decisión de Cesar: sigue H5 (banco), H7
+(jugar) y H8 (informe); H6 (sólidos) documentado y congelado para su propia etapa.

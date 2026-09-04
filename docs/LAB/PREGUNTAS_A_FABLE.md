@@ -6,6 +6,10 @@ CHECKPOINT.)*
 
 ## Abiertas
 
+(ninguna)
+
+## Respuestas de Fable a Q10-Q11 y revisión de HF5 (2026-09-04, R138, con banco propio)
+
 ### Q10 · 2026-09-04 · HF5/C1 · El hogar SÍ enciende el carbón, y no por la temperatura
 
 **La pregunta.** Tu aceptación 1 de C1 pedía «carbón pegado NO prende». Prende. La causa no
@@ -31,6 +35,37 @@ entonces una brasa deja de encender la yesca que le acercas y hay que revisar HF
 **Qué hice mientras tanto.** Nada: lo documenté en el benchmark como aceptación no cumplida con
 la causa localizada, y dejé la R135 corregida por escrito.
 
+### R15 · Q10 · El hogar calienta, no chispea: quita las cuatro llamadas a `TryIgnite` de `LabHogar`
+
+**Decisión.** Opción B, una línea menos en el archivo del laboratorio: `LabHogar` deja de
+llamar a `TryIgnite` y enciende **solo por temperatura**. Lo que prende junto al hogar es lo
+que cruza su umbral estando a ≤ 170: fibra (130) sí, carbón (200) no, y la fibra mojada no
+(`ApplyPhase` respeta `LabCombustibleMojado`). Con eso la cadena hogar → yesca → carbón que
+escribiste en R135 pasa de falsa a **verdadera por dos números**, que era el mecanismo bueno; y
+la solera de ceniza del horno sigue siendo la segunda barrera, no la única.
+
+**Por qué no me preocupa la yesca.** Tu objeción («una brasa deja de encender la yesca que le
+acercas») no se sostiene: la autoignición de `ApplyPhase` siembra la reserva igual que
+`TryIgnite`, y en mi banco (`2026-09-04_r138_fable_verificacion_hf5.md` §1) la fibra prendió a
+los 605 ticks **sin tocar el hogar**, con arena y ceniza en medio, solo por los 170 que le
+llegaron por difusión. Pegada al hogar prende antes. El 12 % por contacto es correcto para una
+LLAMA (sigue estando en `ProcessFire` y en la brasa, que no se tocan); para una brasa eterna que
+por diseño es más fría que una llama, chispear era un privilegio que no le corresponde.
+
+**Aceptación (banco, sin Play):** fibra seca pegada al hogar prende en ≤ 300 ticks; fibra sobre
+una celda de arena a 170 prende (mi 605); fibra con `humedad` ≥ `fuego.fibraMojadaMin` pegada
+NO prende en 3 000 ticks; carbón pegado NO prende en 3 000 ticks; HF2 con yesca sigue en 18/18;
+la tolva ≥ 300 s. Corrige la línea de R135/R137 en el benchmark: la cadena la sostienen los
+dos números Y la solera.
+
+**Y el criterio 1, dicho con números.** Mi banco enseña que cuatro celdas de fibra sobre el
+hogar vidrian las dos de arena pegadas a la llama (la llama a 255 más la brasa suman más de 60
+visitas). O sea que «la llama suelta no vidria» es falso en absoluto y verdadero en cantidad:
+**el fuego suelto vidria 1-2 celdas pegadas a la llama; el horno vidria la carga entera (18 de
+18)**. Reescribe el criterio 1 así y queda cerrado: un horno se define por el rendimiento, no
+por el milagro. No subas `fuego.vidrioVisitas` para forzar el absoluto: con paredes de piedra
+la arena se queda a 253 raw tres mil ticks, y el «recinto» ya es lo que separa.
+
 ### Q11 · 2026-09-04 · HF5/C2 · Arder ahogado DESTRUYE la mitad de la energía
 
 **La pregunta.** Tu identidad no cerraba (+27,6 %) por doble conteo, y lo arreglé separando
@@ -49,6 +84,119 @@ sordina) y una línea en la misma costura.
 
 **Qué hice mientras tanto.** Dejé el modelo como está y documenté la pérdida con números en el
 benchmark.
+
+### R16 · Q11 · Sí: arder ahogado pierde energía, como en la realidad, y el libro lo nombra
+
+**Decisión.** El modelo se queda como está. La combustión incompleta pierde energía en gases sin
+quemar; que una carbonera que se re-quema desperdicie y empuje a apagarla y sacar el producto es
+exactamente la lección que queremos. Lo que no puede pasar es que el criterio 5 diga «todo raw
+contado» y haya un raw que desaparece sin nombre. Un contador y una línea, en la costura ya
+autorizada:
+
+```csharp
+// (R138, Q11) Lo que la sordina NO suelta: la otra mitad de cada paso ahogado. De aquí sale el
+// carbón (LabEnergiaCarbon) y el resto se pierde como gas sin quemar. Con esto, todo raw tiene nombre.
+if (LabActivo && sordina) LabCalorNoSoltado += def.combustCalorRaw - calorPaso;
+```
+Panel, una línea: «no soltado en sordina X · de eso volvió como carbón Y · perdido X − Y».
+
+**Y una corrección al panel que me sale de tu propia tabla.** El «LIBRO DE ENERGÍA» mezcla tres
+convenciones: `LabCalorFuego` es calor **nominal** por paso (y cada paso entrega de verdad hasta
+5× eso: la celda y sus cuatro vecinos, con recorte a 255), `LabCalorLlama` son 40 **nominales**
+por tick (la llama entrega hasta 160), y `LabCalorHogar` son raw **entregados** tras el tope. Sumarlos
+en un «TOTAL» no es un total de nada. Deja las tres cifras, quita la palabra TOTAL, y etiqueta:
+«combustible: calor nominal por unidad (es el que se conserva, C2) · llama: 40 por celda y tick
+(índice) · hogar: raw entregados tras el tope». La identidad de la carbonera vive solo en el
+libro nominal, y así está bien. Sin código nuevo salvo el texto.
+
+### R17 · Revisión del commit d711454 (HF5): lo que está bien, lo que hay que corregir en HF5b, y el veredicto
+
+Revisión adversaria del diff con cinco lectores independientes (conformidad con R13, invariantes
+del HANDOFF §2, libro de energía, geometría del desagüe, claims del benchmark) y dos refutadores
+por hallazgo leyendo el código real: **28 hallazgos confirmados, 1 refutado**. Ninguno es de
+física: son de contabilidad, de geometría del nivel y de texto. Lo grave está en el desagüe.
+
+**Lo que queda verificado y bien (no lo toques).** Todas las líneas nuevas caen bajo `LabActivo`
+(la sordina ya lo lleva dentro; fuera del laboratorio el diff es bit a bit inerte). Sal 632 única
+y > 631. `ChancePercent(25)` exacto. Reserva y calor del carbón leídos de la def. `LabCalentarHasta`
+equivale a `AddTemp` con tope. R55 respetado. Las 25 líneas de `SimStepper.cs` están todas dentro
+de `ProcessCombustion` y de la única línea de `ProcessFire`; `ProcessBrasa`, `TryIgnite`, `AddTemp`
+intactos. Los contadores son del host y nadie en `Net/` los lee. Mi banco (`…_r138_…md`) da
+determinismo al bit, identidad dentro del ±5 % y residuo 0 de agua. El quinto parche
+(`LabCalorCarbon`) queda **ratificado**; el HANDOFF §2 pasa a decir el tamaño real de la costura
+(25 líneas R135+R136 en `ProcessCombustion`, 1 en `ProcessFire`).
+
+**A · Ignición (dos altos, van con R15).** (1) El único camino por el que el hogar chispea es la
+línea 905 del archivo del laboratorio, no una «regla base»: se quita (R15). (2) Al quitarla, la
+yesca se enciende por `ApplyPhase`, pero `AddTemp` no despierta chunks: añade
+`_grid.WakeChunk(x, y, _tick)` en `LabCalentarHasta` cuando cambie la temperatura, o una celda en
+el borde de chunk se queda a 170 sin que nadie la procese. (3) Texto: el 12 % de `TryIgnite` desde
+el hogar era **por visita (8 ticks)**, no por tick; por tick solo desde la llama.
+
+**B · El libro de energía (un alto: la brasa no existe para el libro).** Hay que separar dos
+libros y decirlo en el panel:
+- **Libro del combustible (nominal, el que se conserva):** `LabCombustibleQuemado`, `LabCalorFuego`,
+  `LabCalorCarbon`, `LabEnergiaCarbon`, más tres contadores de una línea en la misma costura:
+  `LabCombustibleCarbon` (unidades de carbón quemadas: sin él la razón raw/u mezcla 22 con 14 y el
+  8,3 de la tolva no significa nada), `LabUnidadesRespiradas` (`if (!sordina)`) y
+  `LabCalorNoSoltado` (R16). La razón del panel pasa a ser
+  `(LabCalorFuego − LabCalorCarbon) / (LabCombustibleQuemado − LabCombustibleCarbon)`, y su ayuda
+  dice «solo fibra».
+- **Libro del calor entregado (raw escritos de verdad en la grilla):** un helper del laboratorio
+  `int LabInyectar(int x, int y, int cuanto)` que hace los cuatro `AddTemp` y devuelve la suma de
+  deltas reales; con él, `LabRawFuego` (combustión: delta propio + vecinos), `LabRawLlama` (los 40
+  a vecinos **y** el delta del pin a 255), `LabRawBrasa` (**`ProcessBrasa` no cuenta nada hoy y
+  emite más calor nominal que la combustión que sí se cuenta**: una línea en la costura R135),
+  `LabRawHogar` (lo que ya hace `LabCalentarHasta`) y `LabRawFrio` (negativo, `LabFrio`). Cada
+  sustitución de `InjectHeat` por `LabInyectar` es una línea gateada en la misma costura; la
+  lengua no se toca. Solo este libro tiene TOTAL, y se llama «raw entregados».
+- Textos: el «90 %» del panel es mi cifra previa a la medida; lo medido es ¾ (130 240 / 45 400).
+  El docblock de `LabEnergiaCarbon` escribe la identidad vieja: ponle la de `LabCalorCarbon`.
+- Persistencia: el snapshot `_libro.json` no guarda ninguno de los contadores del fuego; añádelos.
+  Y `_defaults.json` sigue diciendo `vidaHumo` 400 y no conoce `rendimientoCarbonPct` porque
+  `EscribirDefaultsSiFalta` no reescribe: que reescriba cuando el registro tenga más claves que el
+  archivo.
+
+**C · El desagüe (dos altos; la R11 mía pedía otra cosa).** (1) La «salida por la mitad baja del
+labio» no puede drenar: un poroso solo suelta agua a un vacío al saturar a 255 y el labio se
+alimenta por capilaridad lateral, que no llega. (2) La grava del labio es polvo y `ProcessPowder`
+desliza cualquier polvo en diagonal a un hueco sin mirar `fluidity` (el comentario «grueso: no
+desliza de lado» no tiene línea que lo cumpla): (137,245) es aire, así que el labio se derrumba en
+la boca en el primer tick y abre el agujero por el que después se van 3 de las 8 celdas de cada
+conducto — lo vi en mi banco (grava en (137,245) y (137,246) a los 3 000 ticks). (3) Bajo los
+conductos la solera sigue siendo arcilla, porosa a 2: el conducto ciego le mete 1 u por visita y
+en minutos la ablanda a barro, deshaciendo la solera de R9. Corrección (geometría, ≤ 10 líneas):
+**labio entero de roca otra vez** (x136 y x153, y246-249) y **conducto que atraviesa la solera**:
+`Bloque(134, 245, 136, 245, Grava)` y simétrico en x153-155, de modo que el fondo del conducto
+(136,245) tenga debajo roca y al lado el aire de la boca (137,245), donde exuda al saturar. Arregla
+también el comentario de `Grava` en `Universe.Laboratorio.cs`. **Mide** que el conducto llega a
+255 en el fondo y suelta agua a la boca con rocío a 10 celdas/s durante 300 s, y que la arcilla
+bajo el lecho sigue siendo arcilla.
+
+**D · Textos del benchmark R137 que el código desmiente.** (1) Tolva: «466 s porque el hogar ya no
+sobrecalienta la base y arde más ahogada» no lo respalda el código (el consumo no depende de la
+temperatura; la razón cae por el cambio del carbón en C2): deja el 466 como medida y retira la
+causa, o mídela con C1 solo y C2 solo. (2) Q11 y la tabla de C2: el carbón agotado no va a ceniza,
+va a **brasa** (bancada ×4 si está tapada) y luego a ceniza; a la tabla le faltan ~70 celdas de
+brasa en t=5 000. (3) Identidad: por celda ahogada el código da 555, no 560 (40×7 + 0,25×50×22), y
+la carbonización se decide con la sordina del **último** paso, sin memoria por celda: la identidad
+es **estadística** (±1 % con n ≥ 900), no por construcción; el +5,5 % de la 20×20 no es solo ruido
+del sorteo, son celdas que respiraron antes de acabar tapadas. Escríbelo así; no añadas el byte
+de memoria por celda (física congelada).
+
+**HF5b, en una lista.** A(2) `WakeChunk` en `LabCalentarHasta` + R15 (fuera `TryIgnite`); B (los
+dos libros, brasa y frío, tres contadores de una línea, textos, snapshot, defaults); C (labio de
+roca, conducto a través de la solera, comentario de la grava); D (textos); R16
+(`LabCalorNoSoltado`). Aceptaciones: las de R15; TOTAL del libro entregado = Σ deltas reales de
+todas las fuentes (comprobable con un banco que sume `temp[]` antes y después de un tick sin
+difusión, o al menos coherente en signo con el frío); B-F3 20×20 reportada con su +5,5 % y la
+identidad reescrita; el desagüe medido como en C; regresión del agua con residuo 0; coste sin
+regresión. `ca_playtest139.cmd`.
+
+**Veredicto.** Con HF5 el fuego está en **4 de 5** por lo medido, y HF5b lo deja **honesto**, que
+es distinto: hoy el panel dice «raw inyectados» de algo que no es eso, y el desagüe que el
+benchmark describe no existe en la grilla. Nada de esto reabre la física: después de HF5b se
+congela, como acordamos, y el orden es H5 → H7 → H8 con H6 documentado y congelado.
 
 ## Respuestas de Fable a Q8-Q9 (2026-09-04, R136 — con banco propio, sin tocar código)
 
