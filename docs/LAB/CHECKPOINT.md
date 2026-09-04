@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 7 — H1, H2 y H3 ENTEROS CERRADOS; sigue H4 (plantas).** El laboratorio existe, compila sin errores, entra desde
+**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; siguen H5 (banco) y H6 (cuerpos).** El laboratorio existe, compila sin errores, entra desde
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -51,6 +51,10 @@ cadenas de H3 ocurren, medidas, con un solo juego de números** (§6e): destilac
 en la poza, canal que se sella con agua turbia y nunca con agua limpia, arcilla → terracota
 estanca, y el alambique con serpentín frío. Faltan plantas (H4), cuerpos cohesionados (H6),
 banco headless (H5) e informe (H8).
+**H4**: la mecánica de plantas está completa y medida (§6f) — germinan, beben, suben savia,
+crecen con luz, ramifican, transpiran, se marchitan en fibra, la fibra arde y la ceniza abona —
+pero NO hay régimen estable de vegetación: nacen 36 y mueren 24. Tres causas corregidas y una
+abierta (Q7).
 
 Documentos: `docs/LAB/DISENO_LABORATORIO.md` (diseño), `docs/LAB/HANDOFF_OPUS.md` (hitos e
 interfaces), `docs/LAB/MULTIPLAYER.md` (análisis de red), `docs/LAB/mapa/*.md` (9 mapas del
@@ -86,6 +90,47 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   madre sigue sin rendir nada (R60). Terracota y roca suelta se rompen en grava.
 - **D11 Tiempo** = N ticks enteros por frame con presupuesto de ms (jamás `FixedDt`); las
   máquinas con acumulador propio NO escalan (el mundo corre más deprisa que las manos; deliberado).
+- **D26 (R135, R8 de Fable) La condensación va al vecino MÁS FRÍO.** El jugador elige dónde
+  gotea poniendo un bloque frío: el rocío se CONCENTRA en él (5 926 u) en vez de repartirse por
+  el techo (0 u en la roca), y un serpentín en la pared con techo encima ya recibe rocío. El
+  número de goteos BAJA (93 → 70 con el mismo plano) precisamente porque el mismo rocío cae
+  desde menos celdas: la métrica buena no es cuántas gotas, es dónde caen.
+- **D27 (R135, R9 de Fable + un añadido mío) El piso de la cámara alta y el REBOSADERO.** Solera
+  de arcilla, lecho de 4 celdas de sedimento y labio de roca a los lados de la boca — pero el
+  labio va **a ras del lecho**, no una celda por encima. Con el labio alto, la solera impermeable
+  hace una BAÑERA: 24 de las 48 columnas del claro acaban bajo agua y bajo el agua no germina
+  nada. A ras, el sobrante se va por la boca. Sustrato del claro a los 150 s: 28 % → **84 %**.
+- **D28 (R135, R9 de Fable) Un sedimento con una PLANTA encima no se erosiona.** Una línea en
+  `LabErosion`. Es lo que le da a la vegetación su papel sistémico (más plantas → menos lavado →
+  más sustrato) y la única forma de que H4 tenga régimen estable sin apagar la erosión.
+- **D29 (R135, HF1) EL AIRE DE CONTACTO.** Quien arde sin un vecino de aire, o ahogado en su
+  propio humo, arde EN SORDINA (consume a ¼, calienta a ½, sin lengua, humo a ¼) y al agotarse
+  deja CARBÓN en vez de brasa. Sin campo de oxígeno: el aire es el vacío que ya existe y el humo
+  es el aire gastado. De esa sola regla salen la carbonera, el regulador, el tiro y la brasa
+  bancada. Seis costuras `(R135)` en `SimStepper.cs` (excepción autorizada por el diseño).
+- **D30 (R135, HF2) El vidrio como marcador de calor industrial**, y `fuego.hogarRaw` 220 → 170.
+  El hogar gratuito hierve, seca y cuece la cara de la arcilla, pero NO vidria: para eso hace
+  falta un recinto. Y apareció sola una cadena de encendido que nadie escribió: el hogar no
+  puede prender el carbón (ignición 200 raw > 170), así que hace falta LLAMA — hogar → yesca de
+  fibra → llama 255 raw → carbón. Dos números y una consecuencia.
+- **D22 (R134, H4) `suelo.compactVecinos` = 4, y era un número suelto en el stepper.**
+  La compactación pedía `LabVecinosSolidos(i) >= 3`, escrito a mano (contra el invariante 5).
+  Pero 3 vecinos sólidos los tiene también la CARA de un suelo (abajo y los dos lados), así que
+  la superficie de cualquier huerto se volvía ARCILLA —que no es sustrato— y las plantas perdían
+  la raíz de golpe (medido: sustrato 254 → 54 mientras arcilla 60 → 302 en 100 s). Con 4 la
+  arcilla se forma bajo tierra, como en la realidad. La cadena de H3.4 no se rompe.
+- **D23 (R134, H4) `suelo.capilarArriba` 2 → 16.** Con 2, un suelo empapado subía 1 unidad por
+  visita a su superficie mientras el secado se llevaba 3: la cara de CUALQUIER suelo tendía a
+  cero por mojado que estuviera por dentro, y nada podía germinar nunca. Con 16 se equilibra
+  alrededor de 100. Es el número que hacía imposible la vegetación, y no estaba a la vista.
+- **D24 (R134, H4) `luz.decayPlanta` 40 → 12.** Con 40, la segunda celda de tallo ya quedaba a
+  oscuras (la luz del claro es 48-216) y ninguna planta pasaba de 4 de altura con el tope en 14.
+  Con 12, bajo la boca del cielo llegan al tope y en el borde del claro apenas levantan una:
+  la vegetación toma la forma de la luz, que es la regla 40 funcionando sola.
+- **D25 (R134, H4) La planta TRANSPIRA** (`planta.transpira` = 2 u/visita, nuevo). No estaba en
+  la spec, pero sin un sumidero la savia se quedaría dentro para siempre y ninguna planta se
+  marchitaría nunca — el criterio "sin agua mueren" sería inalcanzable. Y trae acoplamiento
+  gratis: un rincón plantado humedece el aire, así que condensa más.
 - **D19 (R133, H3, decisión de arquitectura de Fable en R5.1) El aire no nace seco.**
   `aire.humedadInicialPct` = 60: cada celda de aire arranca al 60 % de SU PROPIA saturación
   (que depende de su ambiente), así que ninguna nace supersaturada y el mundo no llueve solo.
@@ -192,6 +237,22 @@ conservativos, intercambio de temperatura en la presión, `LabCondensadoGas`) ·
 humedad inicial del aire, después del clima) · `Sim/SimStepper.Laboratorio.cs` (`LabPresion`
 acotada a los bordes del mundo).
 
+(R134) `Sim/SimStepper.Laboratorio.cs` (`LabPlanta` completo, germinación de la semilla y
+espontánea, `LabNacerPlanta`, `LabSecarHacia` con tasa, sales 641/643) · `Sim/LabParams.cs`
+(`planta.transpira`, `planta.abonoMuerte`, `suelo.compactVecinos` nuevos → 90 parámetros;
+`suelo.capilarArriba` 16, `luz.decayPlanta` 12) · `Sim/SimRenderer.Laboratorio.cs` (el brote
+más claro que el tallo, por `aux`).
+
+(R135) `Sim/Universe.cs` (`Carbon` = 79, `Count` = 80, `Rellenar`) · `Sim/Universe.Laboratorio.cs`
+(def del Carbón; `fuego.vidaHumo` al Smoke) · `Sim/LabParams.cs` (95 parámetros: `fuego.vidaHumo`,
+`luz.decayHumo`, `suelo.permCarbon`, `fuego.vidrioRaw`, `fuego.vidrioVisitas`; `fuego.hogarRaw`
+170) · `Sim/LabMateriales.cs` (permeabilidad del carbón) · `Sim/SimLevelBuilder.Laboratorio.cs`
+(piso de la cámara alta con solera, lecho y rebosadero) · `Sim/SimStepper.Laboratorio.cs`
+(`LabRespira`, `LabPasoSordina`, `LabVecinoEs`, la regla del vidrio, el vecino más frío, las
+raíces que sujetan el suelo, `LabVidrio`, `LabCombustibleQuemado`/`LabCalorFuego`) ·
+`Sim/SimStepper.cs` (**tercera excepción, autorizada por el diseño del fuego**: las costuras del
+aire de contacto en `ProcessCombustion`/`ProcessBrasa` y el libro de energía, marcadas `(R135)`).
+
 Nuevos: `Sim/LabParams.cs`, `Sim/LabMateriales.cs`, `Sim/SimStepper.Laboratorio.cs`,
 `Sim/SimLevelBuilder.Laboratorio.cs`, `Sim/SimRenderer.Laboratorio.cs`, `Sim/Universe.Laboratorio.cs`,
 `Game/LabPanel.cs`, `docs/LAB/*`, `Laboratorio/*`, `ca_playtest130.cmd`.
@@ -203,7 +264,7 @@ Ver `HANDOFF_OPUS.md` §1 (lista verificada) y `DISENO_LABORATORIO.md` §2-§6 (
 ## 5. PLAN (hitos de Opus, `HANDOFF_OPUS.md` §4)
 
 H1 plano/arenisca y circuito del agua **(HECHO, §6b)** → H2 panel completo **(HECHO, §6c)**
-→ H3 ciclo del agua completo **(HECHO, §6d y §6e)** (presets, snapshots, pincel, vistas)
+→ H3 ciclo del agua completo **(HECHO, §6d y §6e)** → H4 plantas **(mecánica HECHA, §6f)** → cierres R8/R9 y FUEGO HF1-HF4 **(HECHO, §6g)** (presets, snapshots, pincel, vistas)
 → H3 ciclo del agua afinado jugando (5 presets de referencia) → H4 plantas y fibra → H5
 rendimiento y banco headless → H6 cuerpos cohesionados → H7 arco largo con capturas → H8 informe.
 
@@ -341,12 +402,75 @@ Fable en R5.2. Presets `ref_destilacion` y `ref_alambique`.
 Los cinco fenómenos ocurren con **un solo juego de números**: no hizo falta un preset por
 cadena porque las cadenas no compiten entre ellas.
 
+## 6f. R134 — H4: PLANTAS Y FIBRA (mecánica completa; sin régimen estable)
+
+Detalle y tablas: `Laboratorio/benchmarks/2026-09-03_r134_h4_plantas.md`.
+
+**Lo que funciona, medido**: germinan sobre sustrato húmedo e iluminado (36 nacidas sin plantar
+ninguna) · **sin luz no** (0 en tres corridas) · **sin agua no** (0) · la raíz bebe, la savia
+sube, la punta crece con luz y ramifica · sin savia mueren y dejan **fibra** (24 muertas → 13
+fibras) · **la fibra prende y deja ceniza** (fuego → brasa → ceniza 18 → 37) · `LabCampos`
+**0,48-0,50 ms** (el criterio pedía < 0,5).
+
+**Lo que NO**: a los 150 s han muerto todas. No hay régimen estable de vegetación.
+
+**Tres causas corregidas** (D22, D23, D24) y una abierta: el piso de la cámara alta es polvo de
+2 celdas con un agujero al lado (la boca de la chimenea), así que el goteo lo erosiona y lo
+escurre — `sustrato en el claro 74 → 22` en 300 s, y apagando la erosión 74 → 65, o sea que la
+erosión explica dos tercios. Escalado a Fable como **Q7**.
+
+**Mapa de luz de la cámara alta** (medido, con la boca en x118-124): x100=72 · x110=152 ·
+x120=216 · x130=168 · x140=88 · x145=48 · x150 en adelante = 0. **47 de 91 celdas** superan el
+mínimo de 40: el claro es de sobra, `planta.luzMin` se queda en 40.
+
+**Aviso operativo**: un serpentín de núcleo frío pintado en x104-133 **tapa la boca del cielo** y
+deja la cámara a oscuras. Al montar el alambique hay que dejar la ventana libre (x104-116 y
+x126-145). Costó una tarde de diagnóstico.
+
+## 6g. R135 — CIERRES DE Q6/Q7 Y EL DOMINIO DEL FUEGO (HF1-HF4)
+
+Detalle y tablas: `Laboratorio/benchmarks/2026-09-04_r135_cierres_y_fuego.md`.
+
+**Cierres.** R8 aplicado (D26): su criterio numérico (≥ 93 goteos) NO se cumple —salen 70— pero
+la medida explica por qué y demuestra que el efecto sí: el rocío pasa de repartirse por el techo
+a concentrarse ENTERO en el bloque frío (5 926 u en el serpentín, **0 en la roca**), y un
+serpentín en la pared con techo encima ya recibe rocío. R9 aplicado (D27, D28) más un rebosadero
+que no estaba en la spec y que era imprescindible; el sustrato del claro pasa de 28 % a **84 %**
+a los 150 s. El criterio revisado de H4 sigue sin cumplirse y el diagnóstico está medido:
+**el mismo alambique que trae el agua ahoga el huerto** (Q8).
+
+**HF1 (el aire de contacto).** Carbonera con boca 1: **100 % de carbón, 0 de ceniza, 0 de llama,
+0 de humo**; al abrir la boca aparece lo que se consume del todo (19 % de ceniza con boca 4). Una
+pila maciza al aire es su propia carbonera (sus 324 celdas interiores no tienen aire). Coste
+**+2,6 %** sobre el laboratorio en reposo (1,95 contra 1,90 ms/tick) con 5 000 celdas ardiendo.
+El humo persiste con `vidaHumo` 400 (128 celdas estables) a ≤ 2 ms/tick. Regresión del agua
+idéntica (residuo 0, sumidero 4 819, 1,90 ms/tick).
+
+**HF2 (el horno).** 386 °C sostenidos dentro del recinto y **29 celdas de vidrio**; el hogar
+suelto (170 raw) no vidria nada. La curva boca→temperatura sale **PLANA** (228/232/231 raw): con
+el carbón macizo la boca no regula, porque el grueso no respira igualmente. Escalado como Q9.
+
+**HF3 (la tolva).** **324 s de mundo** con el fogón por encima de 150 raw y **cero
+intervenciones** (la aceptación pedía 300 s).
+
+**HF4 (el libro de energía).** `LabCombustibleQuemado` y `LabCalorFuego`; su razón mide por sí
+sola cuánto de la quema ocurrió sin respirar (10,3 frente a los 14 de la fibra al aire → el 53 %
+de la tolva ardió ahogada).
+
+**Veredicto §7 del diseño del fuego: 3,5 de 5.** Cumplen la máquina escondida (horno → vidrio),
+la automatización sin jugador (tolva) y el libro de energía; falla el mando monótono tal como
+está formulado (Q9) y queda pendiente la cadena cruzada (B-F6, va en H7 jugando).
+
 ## 7. PARÁMETROS / DEFAULTS ACTUALES
 
-Los **87** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
+Los **95** de `Assets/Alkahest/Sim/LabParams.cs` (registro con ayuda). Cambios respecto al
 diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` = 30 (R131);
 `vapor.condensaC` = 10 °C (nuevo), `vapor.vidaVapor` 180 y `vapor.ascenso` 12 (R132); y
-`aire.humedadInicialPct` = 60 (nuevo) más `sed.depositoReposo` = 24 (R133).
+`aire.humedadInicialPct` = 60 (nuevo) más `sed.depositoReposo` = 24 (R133); y de la R134
+`planta.transpira` = 2, `planta.abonoMuerte` = 40 y `suelo.compactVecinos` = 4 (nuevos), más
+`suelo.capilarArriba` 2 → 16 y `luz.decayPlanta` 40 → 12. De la R135: `fuego.vidaHumo` = 400,
+`luz.decayHumo` = 24, `suelo.permCarbon` = 20, `fuego.vidrioRaw` = 200 y `fuego.vidrioVisitas`
+= 60 (nuevos), más `fuego.hogarRaw` 220 → **170**.
 `_defaults.json` lo escribe el panel al arrancar (H2, hecho).
 
 ## 8. PROBLEMAS CONOCIDOS
@@ -360,8 +484,9 @@ diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` =
    de cambio neto). `sed.depositoReposo` 24 lo parte por la mitad y además decanta mejor. Ver D20.
 5. **Editar `.cs` en Play** rompe la sesión (recarga de dominio por el RunCommand): receta en
    HANDOFF §3.
-6. ~~Sin presets/snapshots/vistas/pincel~~ **RESUELTO (R131, H2)**. Sin plantas (H4); sin
-   cuerpos (H6).
+6. ~~Sin presets/snapshots/vistas/pincel~~ **RESUELTO (R131, H2)**. ~~Sin plantas~~
+   **RESUELTO (R134, H4)**: la mecánica está entera; lo que falta es que la vegetación se
+   MANTENGA (§6f, escalado Q7). Sin cuerpos cohesionados (H6).
 7. `RocaSuelta` hoy se comporta como piedra tallable (gancho `LabCuerpos` vacío).
 8. La pestaña TIEMPO fija `LabPresupuestoMs` desde `LabParams.PresupuestoMs` cada frame (ok).
 9. ~~**(R131) Residuo de conservación**~~ **RESUELTO (R132)**: no estaba en el barrido
@@ -369,14 +494,32 @@ diseño: evapBase 1, turbidezFuente 40, luz.cadaTicks 16, `suelo.permArenisca` =
 
 ## 9. SIGUIENTE PASO EXACTO
 
-**Opus 5**: H1 (§6b), H2 (§6c) y H3 ENTERO (§6d, §6e) cerrados; presets `ref_h1_circuito`,
-`ref_destilacion` y `ref_alambique`. Ahora **H4 (plantas y fibra)**, spec completa en
-`HANDOFF_OPUS.md` §4/H4: germinación por humedad y luz, raíz que bebe, savia que sube, punta que
-crece, ramas, marchitez → fibra, fertilidad de la ceniza. La vista de LUZ y la de HUMEDAD del
-panel son las herramientas para afinarlo, y `aire.humedadInicialPct` ya deja la cámara alta con
-goteo, que es donde el diseño quiere que broten solas. Queda de H3 una sola cosa sin medir: el
-SIFÓN y la fuente artesiana con el pincel (la presión ya está verificada con el tubo en U, así
-que es una demostración, no una incógnita) — hacerlo en H7, jugando.
+**(Fable, 2026-09-04)** Q6 y Q7 cerradas en `PREGUNTAS_A_FABLE.md` (R8: vecino condensable más
+frío; R9: plano de la cámara alta + raíces que sujetan el sedimento; R10: orden). Después de
+aplicarlas y pasar la regresión, Opus entra en el DOMINIO DEL FUEGO (`DISENO_FUEGO.md`, hitos
+HF1-HF4) antes de H5/H6. Lo de abajo es el estado que dejó Opus en la R134:
+
+
+**Opus 5**: H1 (§6b), H2 (§6c), H3 entero (§6d, §6e), H4 en su mecánica (§6f) y los cierres
+R8/R9 más el DOMINIO DEL FUEGO HF1-HF4 (§6g) cerrados. **Parado aquí por instrucción de Cesar:
+no entrar en H5 ni H6.** Escalados abiertos: Q8 (el alambique ahoga el huerto) y Q9 (la boca del
+horno no regula con el combustible macizo).
+
+Lo anterior, para cuando se retome:
+Presets `ref_h1_circuito`, `ref_destilacion` y `ref_alambique`. Lo siguiente, por orden de
+utilidad:
+
+1. **H5 (banco headless y rendimiento)** — es lo más rentable ahora mismo: los siete escenarios
+   del HANDOFF ya existen a trozos dentro de los RunCommand de las R131-R134; recogerlos en
+   `Sim/LabBench.cs` los hace repetibles y da la tabla que el informe necesita. Además el banco
+   ya ha cazado dos bugs (el desbordamiento de `LabPresion` y el conflicto suelo/arcilla) sin
+   proponérselo. Incluye acotar `LabLuz` (sigue costando ~5 ms cada ejecución).
+2. **H6 (cuerpos cohesionados)**, que es el último sistema sin empezar.
+3. **H7 (arco largo jugando)** y **H8 (informe)**.
+
+Pendientes menores: el SIFÓN y la fuente artesiana de H3.5 (la presión ya está verificada con el
+tubo en U, así que es una demostración, no una incógnita) — hacerlo en H7, jugando. Y la
+respuesta de Fable a Q6 (condensación) y Q7 (régimen estable de vegetación).
 **Cesar**: correr `ca_playtest131.cmd` (commit + push de H1) cuando quiera.
 
 **Hallazgo operativo (R131)**: en `Unity_RunCommand` NO hace falta reflexión para los tipos del

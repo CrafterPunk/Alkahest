@@ -141,6 +141,29 @@ namespace Alkahest.Sim
                 density = short.MaxValue,
                 caeSolido = false, // NO usa la cohesión por celda: LabCuerpos mueve el bloque ENTERO.
             };
+            mats[MaterialId.Carbon] = new MaterialDef
+            {
+                id = MaterialId.Carbon,
+                devName = "Carbon",
+                archetype = MaterialArchetype.Powder,
+                baseColor = new Color32(38, 34, 32, 255), // negro mate: se distingue de la ceniza (gris claro) de un vistazo.
+                colorJitter = 10,
+                density = 110, // más ligero que la arena; se hunde en el agua por poco.
+                fluidity = 1,
+                flammable = true,
+                ignitionTemp = CellGrid.CToRaw(280), // cuesta MÁS prenderlo que a la fibra (140 °C): hace falta una brasa, no una chispa.
+                burnsInto = MaterialId.Fire,
+                // (R135, F2) El combustible de segunda generación: cuatro veces la reserva de
+                // la fibra y casi el doble de calor, con muy poco humo. Es lo que hace que un
+                // horno se pueda alimentar una vez y trabajar minutos.
+                combustReserva = 160,
+                combustPasoTicks = 8,
+                combustCalorRaw = 22,
+                combustHumoPct = 4,
+                combustPropagacionPct = 10,
+                combustLenguaPct = 30,
+                combustResiduo = MaterialId.Brasa,
+            };
             mats[MaterialId.Arenisca] = new MaterialDef
             {
                 id = MaterialId.Arenisca,
@@ -198,6 +221,12 @@ namespace Alkahest.Sim
             var vapor = u.Get(MaterialId.Steam);
             vapor.gasLifetime = (byte)vida;
             vapor.condensesAt = CellGrid.CToRaw(LabParams.VaporCondensaC);
+            // (R135, F3) El HUMO del laboratorio dura más que el del juego: una bolsa bajo el
+            // techo tiene que aguantar lo suficiente para AHOGAR un fuego (F1) y para
+            // oscurecer un claro. Es lo que convierte la chimenea de decorado en necesidad.
+            int vh = LabParams.VidaHumo;
+            if (vh < 1) vh = 1; else if (vh > 255) vh = 255;
+            u.Get(MaterialId.Smoke).gasLifetime = (byte)vh;
             LabParams.VaporVidaCambiado = false;
         }
     }

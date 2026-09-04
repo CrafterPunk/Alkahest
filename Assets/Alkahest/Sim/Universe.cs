@@ -141,8 +141,10 @@ namespace Alkahest.Sim
         public const byte Semilla = 77;
         /// <summary>(R131) Roca POROSA estática: no cae, deja pasar el agua despacio (suelo.permArenisca) y la filtra al exudarla. El cincel la desprende como Sand.</summary>
         public const byte Arenisca = 78;
+        /// <summary>(R135) CARBÓN: lo que deja un combustible que se consumió SIN RESPIRAR (carbonera). Polvo negro, arde 4 veces más y más caliente que la fibra. Mojado no prende: el agua es el granero.</summary>
+        public const byte Carbon = 79;
 
-        public const int Count = 79; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66) + 12 (laboratorio, R130) + 1 (Arenisca, R131)
+        public const int Count = 80; // 18 + 5*8 + 1 (Brasa) + 6 (recetas cruzadas, playtest 47) + 1 (PisoEstructural, ronda 66) + 12 (laboratorio, R130) + 1 (Arenisca, R131) + 1 (Carbon, R135)
 
         /// <summary>true si `id` cae dentro del bloque bases×estados (18..57).</summary>
         public static bool EsBaseEstado(byte id) => id >= BaseEstado0 && id < BaseEstado0 + BasesCount * 8;
@@ -3075,6 +3077,8 @@ namespace Alkahest.Sim
             Rellenar(MaterialId.Semilla, 120, RespuestaPrensa.Nada);
             // (R131) La arenisca es roca: mismo umbral que la roca suelta.
             Rellenar(MaterialId.Arenisca, 250, RespuestaPrensa.Resistir);
+            // (R135) El carbón es polvo combustible, como la fibra.
+            Rellenar(MaterialId.Carbon, 120, RespuestaPrensa.Nada);
         }
 
         // ===================================================================

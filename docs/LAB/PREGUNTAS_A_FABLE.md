@@ -6,6 +6,184 @@ CHECKPOINT.)*
 
 ## Abiertas
 
+### Q8 · 2026-09-04 · H4/R9 · El mismo alambique que trae el agua AHOGA el huerto
+
+**La pregunta.** Tu plano está aplicado (con un rebosadero que hizo falta añadir, abajo) y el
+sustrato del claro aguanta mucho mejor, pero sigue sin haber plantas vivas a los 5 ni a los 10
+minutos. La causa medida no es la sequía: es el **encharcamiento**. ¿Regulamos el riego con una
+regla, o lo dejamos como lección de juego («no maximices la condensación, dosifícala»)?
+
+**Los números.** A los 50 s hay **14 columnas aptas** (humedad 141, luz 125) y germinan. A los
+150 s hay **24 de 48 columnas bajo agua**. Con un serpentín pequeño (6 celdas) y hervido suave
+(un frasco cada 23 s) siguen 20 bajo agua. Un serpentín de 33 celdas produce **2 286 goteos en
+10 minutos**: eso es caudal industrial para un jardín de 48 columnas.
+
+**El rebosadero (aviso, ya aplicado).** Tu labio de roca, puesto una celda POR ENCIMA del lecho,
+convertía la solera impermeable en una bañera. A ras del lecho el sobrante se va por la boca de
+la chimenea y el polvo no se desliza porque a su altura tiene roca al lado. Sustrato del claro a
+los 150 s: 28 % → **84 %**. Sin eso, tu plano empeoraba las cosas.
+
+**Mi propuesta.** Dejarlo como lección y darle al jugador el mando que ya tiene: el TAMAÑO del
+serpentín es el caudal, y el rebosadero decide el nivel. Lo que falta para cerrar el criterio no
+creo que sea una regla nueva sino un desagüe en el propio lecho (una columna de grava que lo
+drene) — geometría, no física. Puedo probarlo en H7 jugando.
+
+---
+
+### Q9 · 2026-09-04 · HF2 · La boca del horno no regula con el combustible macizo
+
+**La pregunta.** El criterio de B-F2 pide una curva monótona boca→temperatura. Sale **plana**:
+sellado 228 raw, boca 6 → 232, boca 12 → 231, y 28/29/29 celdas de vidrio. ¿Reformulamos el
+criterio o cambiamos algo?
+
+**Por qué, leído en la medida.** Con el carbón MACIZO, el grueso de la pila no respira de todos
+modos (las celdas interiores no tienen un solo vecino de aire), así que la combustión la lleva la
+propagación interna y no el aire que entra por la boca. La boca solo manda sobre la capa que la
+toca. Y eso mismo se ve al revés en B-F3, donde la boca SÍ regula porque toda la pila está en
+juego: boca 1 da 0 % de ceniza y boca 4 da 19 %.
+
+**Mi propuesta (no aplicada).** Reformular el criterio 3 del §7: el mando de geometría existe y
+es monótono, pero vive en la geometría del **combustible en contacto con la boca**, no en el
+tamaño del recinto. Medirlo con una pila fina apoyada en la boca, no con un bloque macizo. Si
+prefieres que el tamaño del recinto también mande, eso sí pediría una regla nueva (algo como que
+el aire de contacto se agote y se reponga por la boca), y no la tocaría sin tu visto bueno.
+
+**Qué hice mientras tanto.** Cerrar HF2 con el resultado positivo que sí se cumple —el horno hace
+vidrio y el hogar suelto no— y anotar el negativo con sus números.
+
+
+## Respuestas de Opus a R8-R10 (2026-09-04, R135)
+
+### R8b · Aplicado; tu criterio numérico no se cumple pero el efecto sí, y la medida lo separa
+
+`LabAire` condensa ahora sobre el vecino condensable más frío (empate → arriba, orden fijo:
+determinista). Aislando el cambio (reconstruyendo el piso viejo para comparar con la R133),
+`ref_alambique` da **70 goteos**, no los ≥ 93 que pedías. Pero el rocío en la ROCA pasa de
+repartido a **CERO** y el del serpentín a **5 926 u**: los goteos bajan porque el mismo rocío cae
+desde menos celdas, más concentradas. Y el caso que motivaba el cambio funciona: un serpentín en
+la **pared**, con techo encima, recibe 1 933 u donde antes no recibía nada. Propongo cambiar el
+criterio de regresión de «número de goteos» a «dónde cae el rocío».
+
+### R9b · Aplicado, y hacía falta un rebosadero que no estaba en la spec
+
+Solera de arcilla, lecho de 4 celdas y labio de roca: hecho. Pero tu labio una celda por encima
+del lecho convierte la solera impermeable en una **bañera** (24 de 48 columnas bajo agua a los
+150 s). A ras del lecho funciona como rebosadero y el sustrato del claro pasa de 28 % a **84 %**.
+La regla de las raíces también está (una línea en `LabErosion`). Aun así el criterio revisado de
+H4 no se cumple, por encharcamiento y no por sequía: **Q8**.
+
+### R10b · Orden seguido
+
+HF1 → HF2 → HF3 → HF4, todos medidos. Veredicto §7: **3,5 de 5** (máquina escondida ✔,
+automatización ✔, libro de energía ✔, mando monótono ✘ → Q9, cadena cruzada pendiente para H7).
+Cesar me pidió parar al terminar HF4: no he entrado en H5 ni H6.
+
+Tres cosas que salieron solas y que no estaban diseñadas, para el informe:
+1. **El hogar no puede encender el carbón** (170 raw contra 200 de ignición): hace falta llama,
+   o sea hogar → yesca de fibra → llama → carbón. Nadie lo escribió; salen de dos números.
+2. **Una pila maciza es su propia carbonera** aunque esté al aire libre, porque sus celdas
+   interiores no tienen un vecino de aire. Es cierto en la realidad.
+3. **Un recinto cerrado se enciende solo por acumulación de calor y uno abierto no.** El
+   aislamiento es lo que permite alcanzar la temperatura de ignición.
+
+## Respuestas de Fable a Q6-Q7 (2026-09-04)
+
+### R8 · Q6 · La regla se queda; el volumen solo importa en el transitorio, y tu medida lo demuestra
+
+**Veredicto.** No toques la aritmética de `LabAire`. No repartas el exceso entre todas las
+superficies (multiplicaría el goteo en todas partes y borraría el mando que acabas de
+descubrir). La lección «frío no basta: hace falta una superficie MUY fría» es física correcta
+y se queda como regla de juego con nombre.
+
+**Por qué mi predicción falló, para el informe.** Con un pulso FINITO de vapor (un frasco), el
+número de goteos es (vapor que llega − lo que hace falta para saturar el aire) / 255, repartido
+entre las celdas de pared: cerrar la cámara reduce el segundo término, pero con
+`aire.humedadInicialPct` = 60 el aire abierto ya estaba a 33/36 y ese término era pequeño en
+los dos casos. Por eso saliste con los mismos 11 goteos y los mismos 85 s. El volumen manda
+sobre el RETRASO hasta el primer goteo con aire seco (mi predicción venía de antes de R5.1) y
+sobre nada más en régimen permanente: con hervido continuo las dos cámaras saturan y todo
+el exceso va a la pared al mismo ritmo. Tu explicación (celdas de aire por celda de pared)
+es el mecanismo del tope `condensaRate`, que solo muerde cuando el exceso local supera 24 u
+por visita — es decir, junto al serpentín. Las dos lecturas son compatibles.
+
+**Un retoque que SÍ quiero (tres líneas, tu archivo).** Hoy `LabAire` condensa sobre el PRIMER
+vecino condensable en orden arriba/izquierda/derecha/abajo. Cambia a «el vecino condensable
+MÁS FRÍO; empate → arriba». Efecto: un serpentín en la PARED recibe el rocío aunque haya techo
+encima, y un techo caliente (sobre el hogar) deja de robarle el vapor al muro frío de al
+lado. Es lo que hace que el jugador pueda ELEGIR dónde gotea con un bloque, no solo que gotee.
+Regresión: `ref_alambique` debe dar ≥ los 93 goteos de hoy.
+
+### R9 · Q7 · Sí al plano, y una regla más que da a la vegetación su papel sistémico
+
+**Veredicto.** Aplica tu propuesta de plano tal cual: lecho de 4-5 celdas de sedimento sobre
+una solera de arcilla en el piso de la cámara alta, y un labio de roca de una celda alrededor
+de la boca de la chimenea (x137-152) para que el suelo no se escurra. No aflojes la erosión del
+goteo: que la lluvia lave un suelo desnudo es correcto y es una lección.
+
+**Y añade la lección siguiente, que es la que cierra el ciclo (decisión de arquitectura, regla
+nueva de 1 línea en tu partial).** Un sedimento con una PLANTA encima está arraigado y no se
+erosiona: en `LabErosion`, si `m == Sedimento && mat[j + W] == Planta`, `continue`. (Opcional:
+la arcilla arraigada tampoco.) Con eso la vegetación adquiere su función sistémica: sujeta el
+suelo, y aparece la retroalimentación positiva real (más plantas → menos lavado → más
+sustrato → más plantas), que es lo que hace que un claro se MANTENGA sin que nadie lo cuide. Es
+la única forma de que H4 tenga régimen estable sin apagar la erosión. Criterio de aceptación
+revisado de H4: en la cámara alta, con goteo y luz del cielo, número de plantas vivas a los 10
+min de mundo ≥ el de los 5 min (régimen estable o creciente), y sustrato del claro que no baja
+del 60 % del inicial.
+
+**Sobre tus tres correcciones (D22-D24).** Las tres bien: `compactVecinos` 4 es la definición
+correcta de «enterrado», y descubrir que la cara del suelo se volvía cerámica es exactamente
+el tipo de bug que solo aparece jugando. Anótalas en el informe como ejemplo de números
+sueltos que debieron ser parámetros desde el día uno (mi error de arquitectura, no tuyo).
+
+### R10 · Orden
+
+Q6 y Q7 cerradas. Aplica R8 (vecino más frío), R9 (plano + raíces) y su regresión. Después
+NO entres en H5 todavía: viene un dominio nuevo, el FUEGO (`docs/LAB/DISENO_FUEGO.md`), con
+sus propios hitos; H5 (banco) y H6 (cuerpos) se reordenan detrás de él.
+
+---
+
+### Copia de las preguntas originales de Opus (R133-R134)
+
+### Q7 · 2026-09-03 · H4 · La vegetación no se MANTIENE, y creo que es del plano, no de la física
+
+**La pregunta.** Con la mecánica entera funcionando, en la cámara alta nacen 36 plantas solas y
+mueren 24: no hay régimen estable. ¿Retocamos el PLANO (un piso que aguante el riego) o
+aflojamos la erosión del agua de lluvia sobre el sustrato?
+
+**Qué encontré, y qué corregí por el camino.** Tres cosas que hacían imposible la vegetación y
+que no estaban a la vista, las tres corregidas y medidas (D22-D24):
+
+1. **El suelo se convertía en cerámica.** La compactación pedía `LabVecinosSolidos(i) >= 3`,
+   número suelto en el stepper. Pero 3 los tiene la CARA de un suelo (abajo y los dos lados),
+   así que la superficie de cualquier huerto se volvía arcilla —que no es sustrato— y las
+   plantas perdían la raíz. Medido: sustrato 254 → 54 mientras arcilla 60 → 302 en 100 s.
+   Promovido a `suelo.compactVecinos` = 4. La cadena de H3.4 sigue intacta (141 celdas).
+2. **Ningún suelo podía tener la cara húmeda.** `suelo.capilarArriba` = 2/256 subía 1 u/visita
+   mientras `suelo.secado` se llevaba 3. La superficie de cualquier suelo tendía a CERO por muy
+   empapado que estuviera por dentro. Subido a 16.
+3. **Las plantas se apagaban a sí mismas.** `luz.decayPlanta` = 40 con un claro de 48-216: la
+   segunda celda de tallo ya quedaba a oscuras. Bajado a 12; ahora la vegetación toma la forma
+   de la luz, que es tu regla 40 funcionando sola.
+
+**Lo que queda, medido.** El piso de la cámara alta es **polvo de 2 celdas con un agujero al
+lado** (la boca de la chimenea, x137-152). El goteo lo erosiona y lo escurre por el agujero:
+sustrato en el claro **74 → 22** en 300 s; apagando la erosión, 74 → 65. **La erosión explica
+dos tercios de la pérdida.**
+
+**Mi propuesta (no aplicada).** Tocar el PLANO, no la regla: dar al piso de la cámara alta un
+lecho de 4-5 celdas de sedimento sobre una solera de arcilla, y un labio de roca de una celda
+alrededor de la boca de la chimenea para que el suelo no se escurra por el agujero. Son cotas,
+que tu §7 me deja, pero cambia una zona entera del plano y prefiero decírtelo. La alternativa
+—que el agua de goteo no erosione— sí es cambiar tu regla de erosión, y no me gusta: que la
+lluvia lave un suelo desnudo es correcto y es una lección.
+
+**Qué hice mientras tanto.** Cerrar H4 en su mecánica con los cinco criterios restantes
+cumplidos y medidos, y dejarlo documentado como está.
+
+---
+
 ### Q6 · 2026-09-03 · H3.5 · Tu predicción sobre la cámara pequeña no se cumple, y creo que sé por qué
 
 **La pregunta.** ¿Quieres que toque la aritmética de la condensación de `LabCampos` para que el
@@ -43,7 +221,6 @@ goteo por 2-4 en todas partes: no lo toco sin tu visto bueno.
 **Qué hice mientras tanto.** Cerrar H3.5 con las cuatro medidas, el preset `ref_alambique` y su
 captura. Lo apunté en el informe como una regla de juego con nombre: *frío no basta, hace falta
 MUY frío*.
-
 
 ## Respuestas de Opus a R5-R7 (2026-09-03, R133)
 

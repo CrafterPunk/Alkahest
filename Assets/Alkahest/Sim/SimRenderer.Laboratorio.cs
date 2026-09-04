@@ -75,6 +75,16 @@ namespace Alkahest.Sim
                         g = (byte)(g - t / 3);
                         b = (byte)(b - b * t / 160);
                     }
+                    // (R134) El BROTE es más claro que el tallo: `aux` es la altura sobre
+                    // la raíz, así que la parte joven de la planta se lee de un vistazo.
+                    int alt = _grid.aux[idx];
+                    if (alt > 0)
+                    {
+                        int k = alt > 12 ? 12 : alt; // satura pronto: no queremos una planta blanca.
+                        r = (byte)Mathf.Min(255, r + k * 4);
+                        g = (byte)Mathf.Min(255, g + k * 6);
+                        b = (byte)Mathf.Min(255, b + k * 3);
+                    }
                     break;
                 }
                 case MaterialId.Stone:

@@ -22,7 +22,9 @@ namespace Alkahest.Sim
     ///                       a la cámara profunda, pozo del SUMIDERO x416-429.
     ///   CÁMARA PROFUNDA     x120-360 y60-110   con cubeta x140-180 y52-59.
     ///   CHIMENEA            x140-149 y215-244  de la sala a la cámara alta.
-    ///   CÁMARA ALTA         x100-190 y245-272  fría, sedimento seco en el piso.
+    ///   CÁMARA ALTA         x100-190 y245-272  fría; piso de lecho de sedimento (4 celdas)
+    ///                       sobre solera de arcilla, con labio de roca a los lados de la
+    ///                       boca de la chimenea para que el suelo no se escurra (R135).
     ///   BOCA DEL CIELO      x118-124 y273-286  luz.
     /// </summary>
     public static partial class SimLevelBuilder
@@ -125,8 +127,26 @@ namespace Alkahest.Sim
             // ---- CHIMENEA, CÁMARA ALTA y BOCA DEL CIELO ----
             Aire(140, 215, 149, 244);
             Aire(100, 245, 190, 272);
-            Bloque(100, 245, 136, 246, MaterialId.Sedimento); // sedimento SECO en el piso (a los lados de la boca de la chimenea)
-            Bloque(153, 245, 190, 246, MaterialId.Sedimento);
+            // (R135, R9 de Fable) EL PISO QUE AGUANTA EL RIEGO. Antes eran dos celdas de
+            // sedimento suelto sobre roca, con la boca de la chimenea (x137-152) abierta
+            // justo en medio: el goteo del alambique lavaba el suelo y lo escurría por el
+            // agujero (medido en R134: 74 → 22 celdas de sustrato en el claro en 300 s).
+            // Ahora hay SOLERA de arcilla (impermeable: el agua no se pierde por abajo),
+            // LECHO de cuatro celdas de sedimento encima, y un LABIO de roca de una celda
+            // a cada lado de la boca, más alto que el lecho, para que el polvo no se
+            // deslice al vacío. El claro de luz (x100-147) queda entero sobre tierra.
+            Bloque(100, 245, 136, 245, MaterialId.Arcilla);   // solera oeste
+            Bloque(153, 245, 190, 245, MaterialId.Arcilla);   // solera este
+            Bloque(100, 246, 135, 249, MaterialId.Sedimento); // lecho SECO de 4 celdas
+            Bloque(154, 246, 190, 249, MaterialId.Sedimento);
+            // El labio llega EXACTAMENTE a la altura del lecho, ni una celda más: es un
+            // REBOSADERO. Un labio más alto convierte la solera impermeable en una bañera
+            // — medido: a los 150 s, 24 de las 48 columnas del claro estaban BAJO AGUA y
+            // no puede germinar nada bajo el agua. A ras, el sobrante del goteo se va por
+            // la boca de la chimenea en cuanto supera la tierra, y el polvo no se desliza
+            // porque a su altura tiene roca al lado, no hueco.
+            Bloque(136, 246, 136, 249, MaterialId.Stone);     // labio oeste de la boca (a ras del lecho)
+            Bloque(153, 246, 153, 249, MaterialId.Stone);     // labio este
             Aire(118, 273, 124, 286);
             LabParams.LuzCieloX0 = 118; LabParams.LuzCieloX1 = 124;
 

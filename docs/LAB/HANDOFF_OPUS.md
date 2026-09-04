@@ -233,6 +233,13 @@ líneas en Cincel; documenta). Catálogo: pincel MATERIA coloca bloques de RocaS
 poza, y se fractura si cae ≥ 6 celdas; coste < 0,3 ms con 20 cuerpos.
 **Decides tú**: forma de la grieta. **Escala**: empuje lateral o rotación (no).
 
+### HF · EL DOMINIO DEL FUEGO (2026-09-04, va ANTES de H5 y H6)
+Diseño completo, reglas mínimas, cadenas esperadas, benchmarks y criterio en
+`docs/LAB/DISENO_FUEGO.md` (§8 tiene los hitos HF1-HF4 con sus aceptaciones). Una regla nueva
+(el aire de contacto), un material (`Carbon`), tres parámetros, el vidrio como marcador de
+calor industrial y el hogar como fuente doméstica. Excepción autorizada: 6 líneas gateadas por
+`LabActivo` en `ProcessCombustion`/`ProcessBrasa` de `SimStepper.cs`, marcadas `(R135)`.
+
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es

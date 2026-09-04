@@ -73,6 +73,7 @@ namespace Alkahest.Sim
                 case MaterialId.Fibra: return LabParams.PermFibra;
                 case MaterialId.Arcilla: return LabParams.PermArcilla;
                 case MaterialId.Arenisca: return LabParams.PermArenisca;
+                case MaterialId.Carbon: return LabParams.PermCarbon;
                 default: return 0;
             }
         }

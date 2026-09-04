@@ -6989,3 +6989,112 @@ ca_playtest84.cmd barre la ronda.
   medidas en `Laboratorio/benchmarks/2026-09-03_r133_h3_completo.md`; decisiones D19-D21 y §6e
   en `docs/LAB/CHECKPOINT.md`; respuestas R5b-R7c y escalado Q6 en `PREGUNTAS_A_FABLE.md`.
   Verificado jugando, 0 errores de consola. Sin push (cmd 133).
+
+## Ronda 134 — EL LABORATORIO, H4: PLANTAS Y FIBRA (Opus 5)
+
+· Una planta es una COLUMNA de celdas que se pasan savia hacia arriba, y los campos que ya
+  existían bastan: `humedad` es la savia, `aux` la altura sobre la raíz (la planta no se mueve,
+  así que su aux no lo usa nadie) y `reposo` el contador de sequía. Cinco cosas por visita: sin
+  raíz ni tallo debajo se seca en fibra; la RAÍZ bebe del sustrato sin bajarlo del punto de
+  marchitez (y más si el suelo es fértil: el bonus se aplica a lo que bebe, no a un contador
+  aparte); la SAVIA sube media diferencia con tope; TRANSPIRA al aire no saturado; y la PUNTA
+  crece si tiene savia, sitio y LUZ en el destino, con su tirada de rama en diagonal.
+· **Germinación**: una `Semilla` asentada sobre sustrato húmedo e iluminado se abre y su propia
+  agua es la primera savia; y un sustrato húmedo, iluminado y con aire encima brota solo con
+  `planta.germinaPorMil` por visita. **Marchitez**: sin savia N visitas → fibra, y deja abono al
+  sustrato que la sostenía.
+· **Conservación**: beber, subir y transpirar son transferencias; lo único que destruye agua es
+  la savia que se vuelve tallo, y se audita a mano. **Residuo 0** en todos los escenarios.
+· **Cumplen y están medidos**: germinan solas (36 nacidas sin plantar ninguna) · sin luz NO
+  (0 en tres corridas) · sin agua NO (0) · sin savia mueren y dejan fibra (24 muertas → 13
+  fibras) · la fibra seca PRENDE y deja ceniza (fuego → brasa → ceniza 18 → 37) · `LabCampos`
+  0,48-0,50 ms (el criterio pedía < 0,5).
+· **NO cumple**: a los 150 s han muerto todas. No hay régimen estable de vegetación. Tres causas
+  encontradas y corregidas, la cuarta escalada:
+· **(1) El suelo se convertía en cerámica.** La compactación pedía `LabVecinosSolidos(i) >= 3`,
+  un número suelto en el stepper (contra el invariante 5). Pero 3 vecinos sólidos los tiene
+  también la CARA de un suelo (abajo y los dos lados), así que la superficie de cualquier huerto
+  se volvía ARCILLA —que no es sustrato— y las plantas perdían la raíz de golpe: sustrato 254 →
+  54 mientras arcilla 60 → 302 en 100 s. Promovido a `suelo.compactVecinos` = 4 («enterrado de
+  verdad»); la cadena de H3.4 sigue dando 141 celdas de arcilla en un montón enterrado.
+· **(2) Ningún suelo podía tener la cara húmeda.** `suelo.capilarArriba` valía 2/256: un suelo
+  empapado subía UNA unidad por visita a su superficie mientras el secado se llevaba TRES. La
+  cara de cualquier suelo tendía a cero por muy mojado que estuviera por dentro, así que nada
+  podía germinar nunca. Subido a 16: se equilibra alrededor de 100. Era el número que hacía
+  imposible la vegetación y no estaba a la vista de nadie.
+· **(3) Las plantas se apagaban a sí mismas.** `luz.decayPlanta` valía 40 y el claro de la
+  cámara alta da 48-216, así que la segunda celda de tallo ya quedaba a oscuras: ninguna pasaba
+  de 4 de altura con el tope en 14. Bajado a 12; ahora bajo la boca del cielo llegan al tope y
+  en el borde del claro apenas levantan una celda — la vegetación toma la forma de la luz, que
+  es la regla 40 funcionando sola.
+· **(4, escalado Q7)** El piso de la cámara alta es polvo de 2 celdas con un agujero al lado
+  (la boca de la chimenea): el goteo lo erosiona y lo escurre. Sustrato en el claro 74 → 22 en
+  300 s; apagando la erosión, 74 → 65, o sea que la erosión explica dos tercios. Propuesta:
+  tocar el PLANO (lecho de 4-5 celdas sobre solera de arcilla y un labio alrededor de la boca),
+  no la regla de erosión — que la lluvia lave un suelo desnudo es correcto y es una lección.
+· **Mapa de luz de la cámara alta** (medido): 47 de 91 celdas del piso superan el mínimo de 40;
+  el claro es de sobra y `planta.luzMin` se queda en 40. Aviso operativo que costó una tarde: un
+  serpentín de núcleo frío pintado en x104-133 TAPA la boca del cielo y deja la cámara a
+  oscuras; hay que dejar la ventana libre.
+· 90 parámetros. Regresión: residuo 0 con plantas activas, H1 idéntico (poza 136, sumidero 4 819,
+  1,92 ms/tick), H3.4 intacto, 0 errores. Verificado jugando (huerto pintado en el claro: las
+  plantas amarillean al quedarse sin savia y el brote sale más claro que el tallo).
+  Benchmark, CHECKPOINT D22-D25 y §6f, captura `R134_h4_huerto.png`. Sin push (cmd 134).
+
+## Ronda 135 — EL LABORATORIO: CIERRES DE Q6/Q7 Y EL DOMINIO DEL FUEGO (Opus 5, diseño de Fable)
+
+· **Cierre de Q6 (R8).** `LabAire` condensa ahora sobre el vecino condensable MÁS FRÍO, no sobre
+  el primero de la lista. Su criterio de regresión (≥ 93 goteos en `ref_alambique`) NO se cumple
+  —salen 70 con el mismo plano— pero la medida explica por qué y demuestra que el efecto sí: el
+  rocío en la ROCA pasa de repartido por el techo a **CERO**, y el del serpentín a 5 926 u. Los
+  goteos bajan porque el mismo rocío cae desde menos celdas, más concentradas. Y el caso que
+  motivaba el cambio funciona: un serpentín en la PARED, con techo encima, recibe 1 933 u donde
+  antes no recibía nada. Propuesto cambiar la métrica de «cuántas gotas» a «dónde caen».
+· **Cierre de Q7 (R9).** Piso nuevo de la cámara alta: solera de arcilla, lecho de 4 celdas de
+  sedimento y labio de roca a los lados de la boca de la chimenea. Más la regla que Fable añadió:
+  un sedimento con una PLANTA encima no se erosiona (una línea en `LabErosion`), que es lo que da
+  a la vegetación su papel sistémico. **Y un rebosadero que no estaba en la spec y era
+  imprescindible**: el labio una celda por encima del lecho convierte la solera impermeable en
+  una BAÑERA (24 de 48 columnas del claro bajo agua a los 150 s, y bajo el agua no germina nada).
+  A ras del lecho, el sustrato del claro pasa de 28 % a **84 %**. El criterio revisado de H4
+  sigue sin cumplirse, pero por ENCHARCAMIENTO y no por sequía: a los 50 s hay 14 columnas aptas
+  y germinan; a los 150 s las ha tapado el agua. Escalado como Q8: 2 286 goteos en 10 minutos es
+  caudal industrial para un jardín de 48 columnas.
+· **HF1 — EL AIRE DE CONTACTO.** La única regla nueva del fuego: quien arde sin un vecino de aire,
+  o ahogado en su propio humo, arde EN SORDINA (consume a ¼, calienta a ½, sin lengua, humo a ¼),
+  y al agotarse deja CARBÓN (id 79) en vez de brasa. Sin campo de oxígeno: el aire es el vacío que
+  ya existe y el humo es el aire gastado. Seis costuras `(R135)` en `ProcessCombustion`/
+  `ProcessBrasa` (excepción autorizada). Más `fuego.vidaHumo` 400, `luz.decayHumo` 24 y
+  `fuego.hogarRaw` 220 → **170**: el hogar gratuito pasa a ser DOMÉSTICO.
+· **B-F3 la carbonera**: con boca de 1 celda, **100 % de carbón, 0 de ceniza, 0 de llama y 0 de
+  humo**; al abrir la boca aparece lo que se consume del todo (19 % de ceniza con boca 4). Dos
+  hallazgos que no estaban previstos: **una pila maciza es su propia carbonera** aunque esté al
+  aire libre (sus 324 celdas interiores no tienen un vecino de aire), y **un recinto cerrado se
+  enciende solo por acumulación de calor mientras que uno abierto no** — el aislamiento es lo que
+  permite alcanzar la ignición. Coste: **+2,6 %** (1,95 contra 1,90 ms/tick) con 5 000 celdas
+  ardiendo, muy por debajo del +10 % de aceptación. Regresión del agua idéntica (residuo 0).
+· **HF2 — EL HORNO Y EL VIDRIO.** La arena con ceniza al lado (el fundente) acumula su «tiempo al
+  rojo» por encima de `fuego.vidrioRaw` y se vuelve `VidrioVerde`; si se enfría, la cuenta se
+  reinicia. Medido: dentro del recinto de arcilla, **386 °C sostenidos y 29 celdas de vidrio**;
+  el hogar suelto (170 raw) no vidria nada. **Apareció sola una cadena de encendido que nadie
+  escribió**: el hogar no puede prender el carbón (ignición 200 > 170), así que hace falta LLAMA
+  — hogar → yesca de fibra → llama 255 raw → carbón. La curva boca→temperatura sale **PLANA**
+  (228/232/231 raw): con el carbón macizo la boca no regula porque el grueso no respira de todos
+  modos. Escalado como Q9. Y una nota de método: monté mal el banco tres veces, siempre por lo
+  mismo — los polvos se reacomodan y un horno relleno con huecos se vacía hacia el hueco; arrancó
+  cuando puse el fuego POR ABAJO, como un horno de verdad.
+· **HF3 — LA ESTUFA DE TOLVA.** Silo de 360 celdas de fibra sobre un fogón con boca de 3:
+  **324 s de mundo con el fogón por encima de 150 raw y CERO intervenciones** (la aceptación
+  pedía 300 s). La fibra cae por gravedad a medida que la base se consume.
+· **HF4 — EL LIBRO DE ENERGÍA.** `LabCombustibleQuemado` y `LabCalorFuego`. Su razón mide por sí
+  sola cuánto de la quema ocurrió sin respirar: 10,3 frente a los 14 de la fibra al aire → el
+  **53 % de la tolva ardió ahogada**, que es exactamente lo que la hace durar cinco minutos en
+  vez de uno. Deja de ser intuición y pasa a ser un número del panel.
+· **Veredicto §7 del diseño del fuego: 3,5 de 5.** Cumplen la máquina escondida en las leyes
+  (horno → vidrio), la automatización sin jugador (tolva) y el libro de energía; falla el mando
+  monótono tal como está formulado (Q9), y la cadena cruzada queda para H7 jugando.
+· 95 parámetros. Verificado jugando: laboratorio con el hogar a 170 y el piso nuevo (arcilla,
+  sedimento y labio con su rebosadero), y una carbonera de terracota pintada junto al hogar
+  convirtiendo fibra en carbón (243 → 109, solo 7 de ceniza). 0 errores de consola.
+  Benchmark, CHECKPOINT D26-D30 y §6g, buzón R8b-R10b y Q8/Q9, captura `R135_hf1_carbonera.png`.
+  Parado en HF4 por instrucción de Cesar: sin entrar en H5 ni H6. Sin push (cmd 135).

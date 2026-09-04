@@ -52,6 +52,15 @@ namespace Alkahest.Sim
         public long LabDepositado, LabErosionado, LabInfiltrado, LabExudado;
         public long LabCompactado, LabAblandado, LabCocido, LabAbonado;
         public long LabPlantasNacidas, LabPlantasMuertas;
+        /// <summary>(R135, F5) Celdas de arena que llegaron a vidrio: el marcador de que hubo calor INDUSTRIAL sostenido.</summary>
+        public long LabVidrio;
+        /// <summary>(R135, HF4) EL LIBRO DE ENERGÍA. Unidades de reserva de combustible consumidas y
+        /// raw de calor inyectados por esa combustión. La identidad que tiene que cuadrar es
+        /// `LabCalorFuego == Σ (calor por paso)` y, con un solo combustible ardiendo todo al aire,
+        /// `LabCalorFuego == LabCombustibleQuemado × combustCalorRaw`; en sordina el calor va a la
+        /// mitad, así que la razón calor/reserva CAE entre esos dos valores y esa razón es, por sí
+        /// sola, la medida de cuánto de la quema ocurrió sin respirar.</summary>
+        public long LabCombustibleQuemado, LabCalorFuego;
         public long LabPresionMovidas, LabCuerposCaidos, LabFracturas;
         /// <summary>(R131) AUDITORÍA DE CONSERVACIÓN. Suma de TODO lo que este stepper ha creado
         /// (+) o destruido (−) de humedad[] en unidades, contado en los dos únicos sitios que
@@ -76,6 +85,8 @@ namespace Alkahest.Sim
         private const uint SalLabLatente = 617;
         private const uint SalLabPlanta = 619;
         private const uint SalLabCuerpo = 631;
+        private const uint SalLabGermina = 641;   // (R134) germinación espontánea del sustrato
+        private const uint SalLabRama = 643;      // (R134) ¿esta vez la punta se va en diagonal?
 
         private int _labManantialCeldas = -1;
 
@@ -129,6 +140,12 @@ namespace Alkahest.Sim
                 int j = CellGrid.Idx(nx, ny);
                 byte m = _grid.mat[j];
                 if (!LabMateriales.EsErosionable(m)) continue;
+                // (R135, R9 de Fable) UN SUELO CON RAÍCES NO SE LAVA. Es la regla que le da
+                // a la vegetación su papel sistémico y la que cierra el ciclo: más plantas
+                // → menos lavado → más sustrato → más plantas. Sin ella, el goteo que hace
+                // falta para que broten es el mismo que se lleva el suelo donde brotarían
+                // (medido en R134: el sustrato del claro caía de 74 a 22 celdas en 300 s).
+                if (ny < H - 1 && _grid.mat[j + W] == MaterialId.Planta) continue;
                 int pct = m == MaterialId.Arcilla ? LabParams.ErosionArcillaPct : LabParams.ErosionPct;
                 if (!rng.ChancePercent(pct)) continue;
                 LabNacerAgua(j, _grid.temp[idx], 255);
@@ -164,6 +181,7 @@ namespace Alkahest.Sim
                     case MaterialId.Arcilla:
                     case MaterialId.Semilla:
                     case MaterialId.Arenisca: // (R131) roca porosa: percola, exuda limpio y se colmata.
+                    case MaterialId.Carbon:   // (R135) absorbe agua: guardarlo mojado es guardarlo apagado.
                         LabPoroso(x, y, i, m); break;
                     case MaterialId.Stone:
                     case MaterialId.Terracota:
@@ -299,11 +317,18 @@ namespace Alkahest.Sim
             {
                 int t = h - sat;
                 if (t > LabParams.CondensaRate) t = LabParams.CondensaRate;
-                int tgt = -1;
-                if (LabEsSuperficieCondensable(mat[up])) tgt = up;
-                else if (LabEsSuperficieCondensable(mat[left])) tgt = left;
-                else if (LabEsSuperficieCondensable(mat[right])) tgt = right;
-                else if (LabEsSuperficieCondensable(mat[down])) tgt = down;
+                // (R135, R8 de Fable) El vapor sobrante va al vecino condensable MÁS
+                // FRÍO, no al primero de la lista. Antes ganaba siempre el de arriba, así
+                // que un techo caliente sobre el hogar le robaba el rocío al muro frío de
+                // al lado y un serpentín en la PARED no recibía nada si tenía techo
+                // encima. Con esto el jugador ELIGE dónde gotea poniendo un bloque frío,
+                // que es la diferencia entre que la condensación ocurra y que se pueda
+                // usar. Empate → arriba (el orden de comparación es fijo: determinista).
+                int tgt = -1, tempTgt = int.MaxValue;
+                if (LabEsSuperficieCondensable(mat[up])) { tgt = up; tempTgt = _grid.temp[up]; }
+                if (LabEsSuperficieCondensable(mat[left]) && _grid.temp[left] < tempTgt) { tgt = left; tempTgt = _grid.temp[left]; }
+                if (LabEsSuperficieCondensable(mat[right]) && _grid.temp[right] < tempTgt) { tgt = right; tempTgt = _grid.temp[right]; }
+                if (LabEsSuperficieCondensable(mat[down]) && _grid.temp[down] < tempTgt) { tgt = down; tempTgt = _grid.temp[down]; }
                 if (tgt >= 0)
                 {
                     int cabe = 255 - hum[tgt];
@@ -531,9 +556,30 @@ namespace Alkahest.Sim
             // 5) Transformaciones lentas propias de cada material.
             switch (m)
             {
+                case MaterialId.Sand:
+                    // (R135, F5) EL VIDRIO SOLO NACE EN HORNO. La arena con CENIZA al lado
+                    // (el fundente: es la receta real, y la ceniza la deja el propio fuego)
+                    // acumula en `reposo` su «tiempo al rojo». Si la temperatura cae o pierde
+                    // el fundente, la cuenta se REINICIA — un horno que se enfría a ratos no
+                    // vidria nunca. Ninguna llama suelta lo consigue: 255 raw en la lengua
+                    // caen a ~200 a dos celdas al aire libre. Hace falta encerrar el calor,
+                    // y eso es un horno que nadie programó.
+                    if (_grid.temp[i] >= LabParams.VidrioRaw && LabVecinoEs(i, MaterialId.Ash))
+                    {
+                        int r = _grid.reposo[i];
+                        if (r < 255) r++;
+                        _grid.reposo[i] = (byte)r;
+                        if (r >= LabParams.VidrioVisitas)
+                        {
+                            LabTransformar(i, MaterialId.VidrioVerde, 0, 0);
+                            LabVidrio++;
+                        }
+                    }
+                    else _grid.reposo[i] = 0;
+                    return; // la arena gestiona su propio reposo: no lo toca el incremento genérico.
                 case MaterialId.Sedimento:
                     if (h >= LabParams.CompactHumMin && h <= LabParams.CompactHumMax
-                        && _grid.reposo[i] >= LabParams.CompactReposo && LabVecinosSolidos(i) >= 3)
+                        && _grid.reposo[i] >= LabParams.CompactReposo && LabVecinosSolidos(i) >= LabParams.CompactVecinos)
                     {
                         var rng = XorShift.FromCell(_tick, x, y, SalLabCompacta);
                         if (rng.ChancePercent(LabParams.CompactPct))
@@ -595,10 +641,35 @@ namespace Alkahest.Sim
                     }
                     break;
                 case MaterialId.Semilla:
-                    // HITO OPUS (plantas): germinar si está asentada sobre sustrato
-                    // húmedo e iluminado — ver docs/LAB/HANDOFF_OPUS.md, hito H4.
+                    // (R134) GERMINA: una semilla asentada sobre sustrato húmedo e
+                    // iluminado se abre. El agua que traía dentro es su primera savia
+                    // (por eso `h` y no 0: la semilla no crea agua, la gasta).
+                    if (LabMateriales.EsSustrato(md) && _grid.humedad[down] >= LabParams.PlantaHumedadMin
+                        && _grid.luz[i] >= LabParams.PlantaLuzMin)
+                    {
+                        LabNacerPlanta(i, h, 0);
+                        LabPlantasNacidas++;
+                        return;
+                    }
                     break;
             }
+
+            // (R134) GERMINACIÓN ESPONTÁNEA. Un sustrato húmedo, iluminado y con aire
+            // encima brota solo de vez en cuando. Es lo que hace que la cámara alta se
+            // ponga verde sin que nadie plante nada — pero solo si el jugador ha
+            // llevado el agua hasta allí, que es justo la lección.
+            if (LabParams.GerminaPorMil > 0 && h >= LabParams.PlantaHumedadMin
+                && LabMateriales.EsSustrato(m) && mat[i + W] == MaterialId.Empty
+                && _grid.luz[i + W] >= LabParams.PlantaLuzMin)
+            {
+                var rngG = XorShift.FromCell(_tick, x, y, SalLabGermina);
+                if (rngG.Next(1000) < LabParams.GerminaPorMil)
+                {
+                    LabNacerPlanta(i + W, 0, 0);
+                    LabPlantasNacidas++;
+                }
+            }
+
             if (_grid.reposo[i] < 255) _grid.reposo[i]++;
         }
 
@@ -616,14 +687,17 @@ namespace Alkahest.Sim
         }
 
         /// <summary>Seca `h` unidades de la celda `i` hacia el aire `j` si no está saturado. Cuenta como evaporación (con su calor latente).</summary>
-        private int LabSecarHacia(int h, int i, int j)
+        private int LabSecarHacia(int h, int i, int j) => LabSecarHacia(h, i, j, LabParams.Secado);
+
+        /// <summary>(R134) Igual, pero a una tasa dada: la planta TRANSPIRA a su propio ritmo, no al del suelo.</summary>
+        private int LabSecarHacia(int h, int i, int j, int tasa)
         {
-            if (h <= 0 || _grid.mat[j] != MaterialId.Empty) return h;
+            if (h <= 0 || tasa <= 0 || _grid.mat[j] != MaterialId.Empty) return h;
             int sat = LabParams.Saturacion(_grid.temp[j]);
             int deficit = sat - _grid.humedad[j];
             if (deficit <= 0) return h;
             int t = _grid.temp[i] - CellGrid.AmbientRaw; if (t < 0) t = 0;
-            int rate = LabParams.Secado * (16 + t) / 16;
+            int rate = tasa * (16 + t) / 16;
             rate = rate * deficit / sat;
             if (rate < 1) rate = 1;
             if (rate > h) rate = h;
@@ -633,6 +707,10 @@ namespace Alkahest.Sim
             LabLatente(i, rate, -1);
             return h - rate;
         }
+
+        /// <summary>(R135) ¿Alguno de los cuatro vecinos ortogonales es este material?</summary>
+        private bool LabVecinoEs(int i, byte m)
+            => _grid.mat[i - 1] == m || _grid.mat[i + 1] == m || _grid.mat[i - W] == m || _grid.mat[i + W] == m;
 
         private int LabVecinosSolidos(int i)
         {
@@ -666,18 +744,132 @@ namespace Alkahest.Sim
             _grid.humedad[i] = (byte)h;
         }
 
-        // ---- PLANTA (HITO OPUS H4: aquí solo la muerte por desarraigo) -----------
+        // ---- PLANTA (R134, hito H4) ---------------------------------------------
+        // Una planta es una COLUMNA de celdas que se pasan savia hacia arriba. Los
+        // campos que ya existen le bastan: `humedad` es la savia, `aux` la altura
+        // (la planta no se mueve, así que su aux no lo usa nadie más) y `reposo` el
+        // contador de sequía. Cinco cosas por visita, en este orden:
+        //   1) si no tiene raíz ni tallo debajo, se seca en fibra;
+        //   2) la raíz bebe del sustrato (más si es fértil) hasta el punto de marchitez;
+        //   3) la savia sube a la celda de encima;
+        //   4) TRANSPIRA al aire no saturado — el sumidero que la mata si el suelo se
+        //      seca, y de paso lo que convierte un rincón plantado en un humidificador;
+        //   5) la punta crece si tiene savia y LUZ encima, con su tirada de rama.
+        // Conservación: beber, subir y transpirar son transferencias; lo único que
+        // DESTRUYE agua es la savia que se vuelve tallo, y eso se audita a mano.
         private void LabPlanta(int x, int y, int i)
         {
-            byte abajo = _grid.mat[i - W];
-            if (abajo != MaterialId.Planta && !LabMateriales.EsSustrato(abajo))
+            var mat = _grid.mat; var hum = _grid.humedad; var carga = _grid.carga; var luz = _grid.luz;
+            int abajo = i - W, arriba = i + W;
+            byte mAbajo = mat[abajo];
+
+            bool sobreSustrato = LabMateriales.EsSustrato(mAbajo);
+            if (mAbajo != MaterialId.Planta && !sobreSustrato)
             {
                 // Sin raíz ni tallo debajo: se seca en fibra (que cae como polvo).
                 LabTransformar(i, MaterialId.Fibra, 0, 0);
                 LabPlantasMuertas++;
+                return;
             }
-            // TODO (Opus, H4): beber del sustrato, savia hacia arriba, crecer con
-            // luz, ramificar, marchitarse por sequía, fertilidad. Ver HANDOFF §H4.
+
+            int savia = hum[i];
+
+            // 2) LA RAÍZ BEBE. Nunca por debajo de `planta.humedadMin`: ese es el punto
+            //    de marchitez, y es lo que impide que una planta deje el suelo en hueso
+            //    (y lo que hace que muera cuando el suelo baja de ahí).
+            if (sobreSustrato)
+            {
+                int hs = hum[abajo];
+                int margen = hs - LabParams.PlantaHumedadMin;
+                if (margen > 0)
+                {
+                    int bebe = LabParams.PlantaBebe * (100 + LabParams.PlantaFertilidadBonusPct * carga[abajo] / 255) / 100;
+                    if (bebe > margen) bebe = margen;
+                    if (bebe > 255 - savia) bebe = 255 - savia;
+                    if (bebe > 0) { hum[abajo] = (byte)(hs - bebe); savia += bebe; }
+                }
+            }
+
+            // 3) LA SAVIA SUBE (media diferencia, con tope): una columna alta tarda en
+            //    cargar la punta, y por eso una planta crece de abajo arriba y despacio.
+            if (mat[arriba] == MaterialId.Planta)
+            {
+                int sa = hum[arriba];
+                if (sa < savia)
+                {
+                    int t = (savia - sa + 1) / 2;
+                    if (t > LabParams.PlantaPasaSavia) t = LabParams.PlantaPasaSavia;
+                    if (t > 255 - sa) t = 255 - sa;
+                    if (t > savia) t = savia;
+                    if (t > 0) { hum[arriba] = (byte)(sa + t); savia -= t; }
+                }
+            }
+
+            // 4) TRANSPIRACIÓN.
+            int tasa = LabParams.PlantaTranspira;
+            if (savia > 0 && tasa > 0)
+            {
+                savia = LabSecarHacia(savia, i, arriba, tasa);
+                savia = LabSecarHacia(savia, i, i - 1, tasa);
+                savia = LabSecarHacia(savia, i, i + 1, tasa);
+            }
+
+            // 5) LA PUNTA CRECE. Pide savia, sitio y LUZ en el destino: sin luz, una
+            //    planta bebe y transpira pero no levanta un tallo.
+            int altura = _grid.aux[i];
+            if (mat[arriba] != MaterialId.Planta && savia >= LabParams.PlantaCrecerSavia
+                && altura < LabParams.PlantaAltoMax)
+            {
+                int destino = -1;
+                var rng = XorShift.FromCell(_tick, x, y, SalLabRama);
+                if (rng.ChancePercent(LabParams.PlantaRamaPct))
+                {
+                    int a = rng.NextBool() ? arriba - 1 : arriba + 1;
+                    int b = a == arriba - 1 ? arriba + 1 : arriba - 1;
+                    if (mat[a] == MaterialId.Empty && luz[a] >= LabParams.PlantaLuzMin) destino = a;
+                    else if (mat[b] == MaterialId.Empty && luz[b] >= LabParams.PlantaLuzMin) destino = b;
+                }
+                if (destino < 0 && mat[arriba] == MaterialId.Empty && luz[arriba] >= LabParams.PlantaLuzMin)
+                    destino = arriba;
+                if (destino >= 0)
+                {
+                    savia -= LabParams.PlantaCrecerSavia;
+                    LabBalanceU -= LabParams.PlantaCrecerSavia; // la savia que se vuelve TALLO sale del libro.
+                    LabNacerPlanta(destino, 0, altura + 1);
+                    LabPlantasNacidas++;
+                }
+            }
+
+            // 6) MARCHITEZ: sin savia durante `planta.marchitaVisitas` seguidas, se
+            //    seca en fibra y deja abonado el sustrato que la sostenía.
+            if (savia == 0)
+            {
+                int r = _grid.reposo[i];
+                if (r < 255) r++;
+                _grid.reposo[i] = (byte)r;
+                if (r >= LabParams.PlantaMarchitaVisitas)
+                {
+                    if (sobreSustrato)
+                    {
+                        int f = carga[abajo] + LabParams.PlantaAbonoMuerte; if (f > 255) f = 255;
+                        carga[abajo] = (byte)f;
+                    }
+                    hum[i] = 0; // (D18) sincronizar antes de transformar: el auditor lee el array.
+                    LabTransformar(i, MaterialId.Fibra, 0, 0);
+                    LabPlantasMuertas++;
+                    return;
+                }
+            }
+            else _grid.reposo[i] = 0;
+
+            hum[i] = (byte)savia;
+        }
+
+        /// <summary>(R134) Nace una celda de planta: `aux` es su altura sobre la raíz (0 = la raíz).</summary>
+        private void LabNacerPlanta(int idx, int savia, int altura)
+        {
+            LabTransformar(idx, MaterialId.Planta, savia, 0);
+            _grid.aux[idx] = (byte)(altura > 255 ? 255 : altura);
         }
 
         // ---- HOGAR / FRÍO / MANANTIAL / SUMIDERO ---------------------------------
@@ -726,6 +918,38 @@ namespace Alkahest.Sim
             if (m == MaterialId.Water) { LabAguaSumida++; LabAguaSumidaU += _grid.humedad[j]; }
             LabTransformar(j, MaterialId.Empty, 0, 0);
         }
+
+        // =====================================================================
+        // (R135, F1) EL AIRE DE CONTACTO — docs/LAB/DISENO_FUEGO.md §3
+        // =====================================================================
+        // La única regla nueva del dominio del fuego, y de ella salen sin una línea
+        // por aparato: el fogón que arde deprisa, la pila cerrada que arde despacio,
+        // el REGULADOR (el tamaño de la boca), la CARBONERA (lo que no respira deja
+        // carbón), el TIRO (un cuarto sin salida se llena de su propio humo y el
+        // fuego se ahoga solo) y la BRASA BANCADA bajo la ceniza.
+        //
+        // No hace falta un campo de oxígeno: el aire es el vacío que ya existe y el
+        // humo es el aire GASTADO. Un array de oxígeno no daría ninguna consecuencia
+        // que esto no dé, y costaría 221 KB y una pasada.
+        //
+        // Coste: dos conteos de cuatro vecinos por PASO de combustión (cada 8 ticks),
+        // no por tick. Medido en B-F1.
+
+        /// <summary>(R135) ¿Respira esta celda que arde? Al menos un vecino ortogonal de aire (o llama) y como mucho uno de humo.</summary>
+        private bool LabRespira(int x, int y, int idx)
+        {
+            int aire = 0, humo = 0;
+            byte m;
+            if (x > 0)     { m = _grid.mat[idx - 1]; if (m == MaterialId.Empty || m == MaterialId.Fire) aire++; else if (m == MaterialId.Smoke) humo++; }
+            if (x < W - 1) { m = _grid.mat[idx + 1]; if (m == MaterialId.Empty || m == MaterialId.Fire) aire++; else if (m == MaterialId.Smoke) humo++; }
+            if (y > 0)     { m = _grid.mat[idx - W]; if (m == MaterialId.Empty || m == MaterialId.Fire) aire++; else if (m == MaterialId.Smoke) humo++; }
+            if (y < H - 1) { m = _grid.mat[idx + W]; if (m == MaterialId.Empty || m == MaterialId.Fire) aire++; else if (m == MaterialId.Smoke) humo++; }
+            return aire >= 1 && humo <= 1;
+        }
+
+        /// <summary>(R135) En sordina solo actúa uno de cada cuatro pasos: la forma barata y determinista de «consume a un cuarto».</summary>
+        private bool LabPasoSordina(int x, int y, int pasoTicks)
+            => ((((x + y + (int)_tick) / pasoTicks) & 3) == 0);
 
         // =====================================================================
         // 2) PRESIÓN HIDROSTÁTICA POR CUERPOS DE AGUA CONECTADOS
@@ -901,6 +1125,9 @@ namespace Alkahest.Sim
 
         private static int LabLuzDecay(byte m, int dVert, int dAire, int dAgua, int dPlanta)
         {
+            // (R135, F3) El HUMO oscurece. Va antes que la comprobación de gas porque el
+            // vapor sigue siendo transparente: es humo lo que apaga un claro, no niebla.
+            if (m == MaterialId.Smoke) return LabParams.LuzDecayHumo;
             if (m == MaterialId.Empty || LabMateriales.EsGasId(m)) return dVert;
             if (m == MaterialId.Water) return dAgua;
             if (m == MaterialId.Planta) return dPlanta;

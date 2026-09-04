@@ -847,6 +847,13 @@ namespace Alkahest.Sim
             // patrón barato que MaybeReact), NO cada tick (contrato 1a).
             if (((x + y + (int)_tick) & (def.combustPasoTicks - 1)) != 0) return;
 
+            // (R135, F1) EL AIRE DE CONTACTO — la excepción autorizada del HANDOFF §2.
+            // Una celda que arde sin un solo vecino de aire, o ahogada en su propio humo,
+            // arde EN SORDINA: consume a un cuarto, calienta a la mitad, no saca lengua y
+            // apenas humea. Fuera del laboratorio esta línea no existe.
+            bool sordina = LabActivo && !LabRespira(x, y, idx);
+            if (sordina && !LabPasoSordina(x, y, def.combustPasoTicks)) { _grid.WakeChunk(x, y, _tick); return; }
+
             // (fix integración pt39) Una celda ARDIENDO es un proceso vivo:
             // mantiene su chunk despierto ella misma. Sin esto, una racha
             // desafortunada del RNG (sin lengua ni humo ni propagación en ~30
@@ -855,21 +862,23 @@ namespace Alkahest.Sim
             // medio arder como estatua.
             _grid.WakeChunk(x, y, _tick);
 
-            int nt = _grid.temp[idx] + def.combustCalorRaw;
+            int calorPaso = sordina ? (def.combustCalorRaw + 1) / 2 : def.combustCalorRaw; // (R135) sordina = medio calor.
+            int nt = _grid.temp[idx] + calorPaso;
             _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
-            InjectHeat(x, y, def.combustCalorRaw);
+            InjectHeat(x, y, calorPaso);
 
             var rng = XorShift.FromCell(_tick, x, y, SalCombustionPaso);
 
             // Lengua de Fire visible arriba (el Fire de siempre pasa a ser SOLO
             // esto: la parte que se ve, no la que consume el material).
-            if (y < H - 1 && rng.ChancePercent(def.combustLenguaPct))
+            // (R135) Sin aire no hay llama: lo que arde tapado no tiene lengua.
+            if (!sordina && y < H - 1 && rng.ChancePercent(def.combustLenguaPct))
             {
                 int aboveIdx = idx + W;
                 if (_grid.mat[aboveIdx] == MaterialId.Empty) Transform(aboveIdx, MaterialId.Fire);
             }
 
-            if (rng.ChancePercent(def.combustHumoPct)) SpawnSmokeNear(x, y, ref rng);
+            if (rng.ChancePercent(sordina ? (def.combustHumoPct + 3) / 4 : def.combustHumoPct)) SpawnSmokeNear(x, y, ref rng);
 
             if (rng.ChancePercent(def.combustPropagacionPct))
             {
@@ -880,10 +889,15 @@ namespace Alkahest.Sim
             }
 
             reserva--;
+            if (LabActivo) { LabCombustibleQuemado++; LabCalorFuego += calorPaso; } // (R135, HF4) el libro de energía.
             if (reserva <= 0)
             {
                 SetCombustReserva(idx, def.archetype, 0);
-                if (def.combustResiduo == MaterialId.Brasa) ConvertirEnBrasa(x, y, idx);
+                // (R135, F2) LA CARBONERA: lo que se consumió SIN RESPIRAR no deja brasa,
+                // deja CARBÓN. Enterrar una pila, encenderla por una boca y taparla es la
+                // tecnología real, descubierta por geometría y sin una regla dedicada.
+                if (sordina && def.id != MaterialId.Carbon) Transform(idx, MaterialId.Carbon);
+                else if (def.combustResiduo == MaterialId.Brasa) ConvertirEnBrasa(x, y, idx);
                 else Transform(idx, def.combustResiduo);
             }
             else
@@ -969,6 +983,11 @@ namespace Alkahest.Sim
 
             if (((x + y + (int)_tick) & (BrasaLifeUnitTicks - 1)) != 0) return false;
 
+            // (R135, F1) LA BRASA BANCADA: tapada (sin aire, o ahogada en humo) dura cuatro
+            // veces más y calienta la mitad. Taparla con ceniza al irse y encontrarla viva
+            // al volver es lo que esta regla regala sin pedir nada a cambio.
+            bool sordina = LabActivo && !LabRespira(x, y, idx);
+
             // (fix integración pt39) Mismo motivo que en ProcessCombustion:
             // la Brasa no mueve ni transforma nada en la mayoría de sus
             // pasos -- sin despertarse a sí misma, su chunk se dormiría y la
@@ -976,9 +995,10 @@ namespace Alkahest.Sim
             // pasara cerca).
             _grid.WakeChunk(x, y, _tick);
 
-            int nt = _grid.temp[idx] + BrasaCalorRaw;
+            int calorBrasa = sordina ? (BrasaCalorRaw + 1) / 2 : BrasaCalorRaw;
+            int nt = _grid.temp[idx] + calorBrasa;
             _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
-            InjectHeat(x, y, BrasaCalorRaw);
+            InjectHeat(x, y, calorBrasa);
 
             var rng = XorShift.FromCell(_tick, x, y, SalBrasaReencender);
             if (rng.ChancePercent(BrasaReencenderPct))
@@ -990,7 +1010,7 @@ namespace Alkahest.Sim
             }
 
             byte life = _grid.aux[idx];
-            if (life > 0) life--;
+            if (life > 0 && (!sordina || LabPasoSordina(x, y, BrasaLifeUnitTicks))) life--; // (R135) bancada: un descuento de cada cuatro.
             _grid.aux[idx] = life;
             if (life == 0)
             {

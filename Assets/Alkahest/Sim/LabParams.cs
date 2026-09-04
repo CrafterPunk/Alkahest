@@ -79,26 +79,31 @@ namespace Alkahest.Sim
         public static int Infiltracion = 32;
         public static int Percolacion = 24;
         public static int Capilaridad = 4;
-        public static int CapilarArriba = 2;
+        public static int CapilarArriba = 16;
         public static int Secado = 3;
         public static int ColmatacionPct = 100;
         public static int CompactReposo = 200;
         public static int CompactPct = 2;
         public static int CompactHumMin = 100;
         public static int CompactHumMax = 230;
+        public static int CompactVecinos = 4;
         public static int AblandaHum = 250;
         public static int TerracotaRaw = 150;
         public static int TerracotaHumMax = 30;
         public static int AbonoCeniza = 128;
 
         // ---------------- FUEGO / FUENTES ----------------
-        public static int HogarRaw = 220;
+        public static int HogarRaw = 170;
         public static int HogarCalor = 40;
         public static int FrioRaw = 30;
         public static int FrioPotencia = 20;
         public static int FibraMojadaMin = 100;
         public static int Caudal = 24;
         public static int FuenteTempRaw = 70;
+        public static int VidaHumo = 400;
+        public static int PermCarbon = 20;
+        public static int VidrioRaw = 200;
+        public static int VidrioVisitas = 60;
 
         // ---------------- TÉRMICA ----------------
         public static int TermicaPropia = 1;
@@ -119,7 +124,8 @@ namespace Alkahest.Sim
         public static int LuzDecayAire = 8;
         public static int LuzDecayCielo = 1;
         public static int LuzDecayAgua = 20;
-        public static int LuzDecayPlanta = 40;
+        public static int LuzDecayPlanta = 12;
+        public static int LuzDecayHumo = 24;
         /// <summary>Columnas de la boca del cielo (las fija el plano, no el panel).</summary>
         public static int LuzCieloX0 = -1, LuzCieloX1 = -1;
 
@@ -134,6 +140,8 @@ namespace Alkahest.Sim
         public static int PlantaRamaPct = 8;
         public static int PlantaMarchitaVisitas = 40;
         public static int PlantaFertilidadBonusPct = 50;
+        public static int PlantaTranspira = 2;
+        public static int PlantaAbonoMuerte = 40;
 
         // ---------------- CUERPOS ----------------
         public static int CuerposActivos = 1;
@@ -211,8 +219,8 @@ namespace Alkahest.Sim
               "Cuánta agua baja por gravedad de un poroso al poroso de debajo por visita (a permeabilidad máxima).");
             R("suelo.capilaridad", "Capilaridad lateral", "SUELO", "/256", 4, 0, 64, () => Capilaridad, v => Capilaridad = (int)v,
               "Fracción de la diferencia de humedad que se iguala de lado entre porosos vecinos por visita.");
-            R("suelo.capilarArriba", "Capilaridad hacia arriba", "SUELO", "/256", 2, 0, 64, () => CapilarArriba, v => CapilarArriba = (int)v,
-              "Solo en materiales finos (sedimento, arcilla, ceniza): el agua sube un poco contra la gravedad. Es lo que humedece la superficie de un suelo con agua debajo.");
+            R("suelo.capilarArriba", "Capilaridad hacia arriba", "SUELO", "/256", 16, 0, 64, () => CapilarArriba, v => CapilarArriba = (int)v,
+              "Solo en materiales finos (sedimento, arcilla, ceniza): el agua sube un poco contra la gravedad. Es lo que humedece la superficie de un suelo con agua debajo — y por tanto lo que decide si algo puede arraigar. (R134) 2 → 16 tras medir: con 2, un suelo empapado subía 1 unidad por visita a su superficie mientras el aire se llevaba 3, así que la cara de CUALQUIER suelo tendía a cero por muy mojado que estuviera por dentro, y ninguna planta podía germinar. Con 16 la superficie se equilibra alrededor de 100 mientras quede agua abajo: el suelo se comporta como un suelo y no como una piedra mojada.");
             R("suelo.secado", "Secado al aire", "SUELO", "u/visita", 3, 0, 40, () => Secado, v => Secado = (int)v,
               "Cuánta agua pierde un poroso hacia una celda de aire vecina no saturada por visita. Con calor, más.");
             R("suelo.colmatacion", "Colmatación por infiltración", "SUELO", "%", 100, 0, 400, () => ColmatacionPct, v => ColmatacionPct = (int)v,
@@ -223,6 +231,8 @@ namespace Alkahest.Sim
               "Una vez cumplida la quietud, probabilidad por visita de que el sedimento se vuelva arcilla.");
             R("suelo.compactHumMin", "Humedad mínima para compactar", "SUELO", "u", 100, 0, 255, () => CompactHumMin, v => CompactHumMin = (int)v, "El sedimento seco no se compacta: es polvo.");
             R("suelo.compactHumMax", "Humedad máxima para compactar", "SUELO", "u", 230, 0, 255, () => CompactHumMax, v => CompactHumMax = (int)v, "El sedimento empapado tampoco: es barro líquido.");
+            R("suelo.compactVecinos", "Vecinos sólidos para compactar", "SUELO", "de 4", 4, 1, 4, () => CompactVecinos, v => CompactVecinos = (int)v,
+              "Cuántos de los cuatro vecinos tienen que ser materia sólida para que un sedimento pueda compactarse en arcilla: es lo que significa \"enterrado\". (R134) Estaba escrito a mano en 3 dentro del stepper, y 3 los tiene también la CARA de un suelo (abajo y los dos lados), así que la superficie de cualquier huerto se volvía arcilla —que no es sustrato— y las plantas perdían la raíz. Con 4, la arcilla se forma bajo tierra, como en la realidad, y la cara del suelo sigue siendo suelo.");
             R("suelo.ablandaHum", "La arcilla se ablanda a", "SUELO", "u", 250, 0, 255, () => AblandaHum, v => AblandaHum = (int)v, "Si la arcilla se empapa hasta aquí, vuelve a ser sedimento (barro).");
             R("suelo.terracotaRaw", "Cocción de la arcilla", "SUELO", "raw (°C = raw·2−120)", 150, 100, 255, () => TerracotaRaw, v => TerracotaRaw = (int)v,
               "Temperatura a la que la arcilla SECA se vuelve terracota (150 raw = 180 °C). La terracota ya no se ablanda ni se erosiona.");
@@ -230,7 +240,12 @@ namespace Alkahest.Sim
             R("suelo.abonoCeniza", "Abono de la ceniza", "SUELO", "u", 128, 0, 255, () => AbonoCeniza, v => AbonoCeniza = (int)v, "Cuánta fertilidad deja una celda de ceniza mojada en el sustrato vecino al disolverse.");
 
             // FUEGO / FUENTES
-            R("fuego.hogarRaw", "Temperatura del hogar", "FUEGO", "raw", 220, 100, 255, () => HogarRaw, v => HogarRaw = (int)v, "La brasa eterna fija su celda a esta temperatura (220 raw = 320 °C).");
+            R("fuego.hogarRaw", "Temperatura del hogar", "FUEGO", "raw", 170, 100, 255, () => HogarRaw, v => HogarRaw = (int)v,
+              "La brasa eterna fija su celda a esta temperatura. (R135, F4) 220 → 170 raw (320 → 220 °C): el hogar es DOMÉSTICO. Hierve agua, seca, enciende, da luz y cuece la superficie de la arcilla, pero NO llega a la temperatura del vidrio ni cuece una vasija por dentro. Para eso hace falta llama contenida en un recinto — o sea, un horno que tú construyas. Es la frontera entre vivir y fabricar, y cuesta un número.");
+            R("fuego.vidaHumo", "Vida del humo", "FUEGO", "ticks", 400, 20, 255, () => VidaHumo, v => { VidaHumo = (int)v; VaporVidaCambiado = true; },
+              "Cuántos ticks vive una celda de humo antes de disolverse. En el juego son 200 (7 s); súbelo y una bolsa bajo un techo sin salida dura lo bastante para AHOGAR el fuego que la produce (el humo cuenta como aire gastado) y para oscurecer un claro. Es lo que convierte una chimenea en una necesidad en vez de un adorno.");
+            R("suelo.permCarbon", "Permeabilidad del carbón", "FUEGO", "0-255", 20, 0, 255, () => PermCarbon, v => PermCarbon = (int)v,
+              "El carbón absorbe agua, y mojado NO prende (fuego.fibraMojadaMin). Guardar el combustible bajo el agua o en un rincón húmedo es el granero del laboratorio: no hace falta un cofre, hace falta un charco.");
             R("fuego.hogarCalor", "Calor que inyecta el hogar", "FUEGO", "raw/visita", 40, 0, 80, () => HogarCalor, v => HogarCalor = (int)v, "Cuánto calienta a sus cuatro vecinos en cada visita, además de la difusión.");
             R("fuego.frioRaw", "Temperatura del núcleo frío", "FUEGO", "raw", 30, 0, 70, () => FrioRaw, v => FrioRaw = (int)v, "El bloque frío del catálogo fija su celda a esto (30 raw = −60 °C).");
             R("fuego.frioPotencia", "Frío que inyecta", "FUEGO", "raw/visita", 20, 0, 80, () => FrioPotencia, v => FrioPotencia = (int)v, "Cuánto enfría a sus vecinos por visita.");
@@ -239,6 +254,10 @@ namespace Alkahest.Sim
             R("fuente.tempRaw", "Temperatura del manantial", "FUEGO", "raw", 70, 0, 255, () => FuenteTempRaw, v => FuenteTempRaw = (int)v, "A qué temperatura nace el agua del manantial (70 = 20 °C). Prueba agua caliente: evapora sola.");
 
             // TÉRMICA
+            R("fuego.vidrioRaw", "El vidrio pide", "FUEGO", "raw (°C = raw·2−120)", 200, 100, 255, () => VidrioRaw, v => VidrioRaw = (int)v,
+              "Temperatura a la que la ARENA, con ceniza al lado como fundente, empieza a contar su tiempo al rojo. 200 raw = 280 °C. Es la frontera entre el fuego doméstico y el industrial: el hogar gratuito llega a 170 y una llama suelta cae a ~200 a dos celdas al aire libre. Solo un recinto aislado con carbón sostiene esto en un volumen — o sea, un horno que construyas tú.");
+            R("fuego.vidrioVisitas", "Tiempo al rojo para vidriar", "FUEGO", "visitas", 60, 5, 255, () => VidrioVisitas, v => VidrioVisitas = (int)v,
+              "Cuántas visitas seguidas (cada 8 ticks) tiene que aguantar la arena por encima de fuego.vidrioRaw, con ceniza al lado, para volverse vidrio. Si la temperatura cae o pierde el fundente, la cuenta se REINICIA: un horno que se enfría a ratos no vidria nunca, por mucho tiempo que pase.");
             R("termica.propia", "Térmica del laboratorio", "TÉRMICA", "0/1", 1, 0, 1, () => TermicaPropia, v => TermicaPropia = (int)v,
               "1 = difusión con conductividad y capacidad por material y convección del aire (la del laboratorio). 0 = la difusión uniforme del juego (todo conduce igual).");
             R("termica.kAire", "Conductividad del aire", "TÉRMICA", "0-16", 4, 0, 16, () => KAire, v => KAire = (int)v, "Qué tan rápido pasa el calor entre celdas de aire (4 = como el juego).");
@@ -268,7 +287,10 @@ namespace Alkahest.Sim
             R("luz.decayAire", "Caída de la luz en el aire", "LUZ", "u/celda", 8, 1, 64, () => LuzDecayAire, v => LuzDecayAire = (int)v, "Cuánto pierde la luz por celda de aire en cualquier dirección (8 → alcanza ~30 celdas desde una hoguera).");
             R("luz.decayCielo", "Caída de la luz del cielo hacia abajo", "LUZ", "u/celda", 1, 0, 64, () => LuzDecayCielo, v => LuzDecayCielo = (int)v, "La luz que entra por la boca del cielo cae casi sin perder al bajar en vertical.");
             R("luz.decayAgua", "Caída de la luz en el agua", "LUZ", "u/celda", 20, 1, 128, () => LuzDecayAgua, v => LuzDecayAgua = (int)v, "");
-            R("luz.decayPlanta", "Caída de la luz en las plantas", "LUZ", "u/celda", 40, 1, 128, () => LuzDecayPlanta, v => LuzDecayPlanta = (int)v, "Las plantas se dan sombra entre sí.");
+            R("luz.decayHumo", "Caída de la luz en el humo", "LUZ", "u/celda", 24, 1, 128, () => LuzDecayHumo, v => LuzDecayHumo = (int)v,
+              "Cuánta luz se come cada celda de humo. (R135) Un fuego bajo un techo sin salida llena el cuarto de humo, el humo tapa la luz del cielo y las plantas de debajo se marchitan: una consecuencia que castiga y enseña a la vez, sin una sola regla dedicada.");
+            R("luz.decayPlanta", "Caída de la luz en las plantas", "LUZ", "u/celda", 12, 1, 128, () => LuzDecayPlanta, v => LuzDecayPlanta = (int)v,
+              "Las plantas se dan sombra entre sí, y sobre todo A SÍ MISMAS: la luz del cielo baja, así que cada celda de tallo le quita esto a la que tiene debajo. Es el freno del crecimiento (regla 40): una planta deja de subir cuando su propia punta se queda a oscuras. (R134) 40 → 12 tras medir el claro de la cámara alta: con 40 ninguna pasaba de 4 celdas de alto aunque el tope fuese 14. Con 12, bajo la boca del cielo (luz 216) llegan al tope y en el borde del claro (luz 48) apenas levantan una celda: la vegetación toma la forma de la luz.");
 
             // PLANTAS
             R("planta.germinaPorMil", "Germinación espontánea", "PLANTAS", "‰/visita", 2, 0, 100, () => GerminaPorMil, v => GerminaPorMil = (int)v, "Por cada visita, probabilidad por mil de que un sustrato húmedo e iluminado con aire encima brote solo.");
@@ -280,7 +302,12 @@ namespace Alkahest.Sim
             R("planta.altoMax", "Altura máxima", "PLANTAS", "celdas", 14, 1, 60, () => PlantaAltoMax, v => PlantaAltoMax = (int)v, "");
             R("planta.ramaPct", "Probabilidad de ramificar", "PLANTAS", "%", 8, 0, 100, () => PlantaRamaPct, v => PlantaRamaPct = (int)v, "");
             R("planta.marchitaVisitas", "Visitas sin savia para morir", "PLANTAS", "visitas", 40, 1, 255, () => PlantaMarchitaVisitas, v => PlantaMarchitaVisitas = (int)v, "Una celda de planta sin savia durante tantas visitas se seca: se vuelve FIBRA (combustible) y cae.");
-            R("planta.fertilidadBonus", "Bonus de fertilidad", "PLANTAS", "%", 50, 0, 300, () => PlantaFertilidadBonusPct, v => PlantaFertilidadBonusPct = (int)v, "Cuánto más rápido crece una planta sobre sustrato con fertilidad 255 (ceniza, plantas muertas).");
+            R("planta.fertilidadBonus", "Bonus de fertilidad", "PLANTAS", "%", 50, 0, 300, () => PlantaFertilidadBonusPct, v => PlantaFertilidadBonusPct = (int)v,
+              "Cuánto más rápido crece una planta sobre sustrato con fertilidad 255 (ceniza, plantas muertas). (R134) El bonus se aplica a lo que BEBE la raíz, no a un contador de velocidad aparte: es local, es barato y se ve igual (más savia por visita = la punta alcanza antes lo que necesita para crecer).");
+            R("planta.transpira", "Transpiración", "PLANTAS", "u/visita", 2, 0, 40, () => PlantaTranspira, v => PlantaTranspira = (int)v,
+              "Cuánta savia suelta al aire cada celda de planta por visita (solo si el aire no está saturado). Es el SUMIDERO que hace que una planta muera cuando el suelo se seca: sin él, la savia se quedaría dentro para siempre y ninguna planta se marchitaría nunca. Y tiene consecuencia: un rincón plantado HUMEDECE el aire, así que condensa más. Una planta es una bomba que sube agua del suelo al aire.");
+            R("planta.abonoMuerte", "Abono de la planta muerta", "PLANTAS", "u", 40, 0, 255, () => PlantaAbonoMuerte, v => PlantaAbonoMuerte = (int)v,
+              "Cuánta fertilidad deja una planta al sustrato que tenía debajo cuando se marchita. Es lo que hace que un sitio donde ya creció algo sea mejor para lo siguiente.");
 
             // CUERPOS
             R("cuerpo.activo", "Cuerpos cohesionados", "CUERPOS", "0/1", 1, 0, 1, () => CuerposActivos, v => CuerposActivos = (int)v, "1 = la roca suelta cae como bloque entero y se fractura.");
