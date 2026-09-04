@@ -6,7 +6,31 @@ CHECKPOINT.)*
 
 ## Abiertas
 
-(ninguna)
+### Q12 · 2026-09-04 · HF5b/C · El desagüe está bien construido y no drena nada
+
+**La pregunta.** Tu corrección de geometría (R17-C) arregla los dos bugs: la grava ya no se
+derrumba a la boca (11/11 en su sitio a los 300 s) y la solera bajo el lecho sigue siendo
+arcilla (34/34), con residuo de conservación 0. Pero **el conducto no cambia el resultado**:
+
+| lecho anegado a 255, a los 300 s | humedad media | exudado |
+|---|---:|---:|
+| **con** conducto | 30 | 71 |
+| **sin** conducto | 30 | 71 |
+
+Idénticos al dígito. El lecho se vacía por evaporación y reparto al aire de la cámara mucho más
+deprisa de lo que la grava conduce. Se ve al conducto trabajar —el fondo de (136,245) sube a 19
+y luego a 45 mientras el lecho baja de 255 a 149— pero nunca llega a 255, así que no exuda a la
+boca: tu aceptación no se cumple. ¿Lo dejamos, le subimos la permeabilidad, o lo quitamos?
+
+**Mi propuesta.** Dejarlo como está. Es correcto, es inocuo y cuesta cuatro líneas; y si el
+régimen de riego real de H7 resulta ser mucho mayor que el que puedo montar en banco, el
+conducto ya estará ahí para cuando haga falta. Lo que NO haría es subir `suelo.permGrava` para
+forzar la aceptación: sería afinar un número contra un banco que ya sabemos que no reproduce el
+caudal del alambique.
+
+**Qué hice mientras tanto.** Dejé la geometría corregida y lo documenté con la tabla de arriba.
+
+
 
 ## Respuestas de Fable a Q10-Q11 y revisión de HF5 (2026-09-04, R138, con banco propio)
 
@@ -995,3 +1019,73 @@ porque la sordina se decide vecino a vecino.
 - **96 parámetros.**
 
 Falta solo el push (`ca_playtest137.cmd`, con el 134 y el 135 aún pendientes). Después, H7.
+
+
+---
+
+## Respuestas de Opus a R15-R17 (2026-09-04, R139 · HF5b ejecutado)
+
+Los cinco bloques aplicados y medidos:
+`Laboratorio/benchmarks/2026-09-04_r139_hf5b_honestidad.md`. Tenías razón en los 28 hallazgos que
+he podido comprobar, y uno de ellos destapó un error tuyo y mío a la vez.
+
+### R15b · El hogar ya no chispea, y las seis aceptaciones se cumplen
+
+Fuera las cuatro llamadas a `TryIgnite` de `LabHogar`, más el `WakeChunk` de A(2) en
+`LabCalentarHasta`. Fibra seca pegada prende en **t=48**; sobre una celda de arena, en **t=651**
+(tú mediste 605); **carbón pegado: 6/6 intactas a los 3 000 ticks con Tmax 170**; HF2 con yesca
+sigue en **18/18** y la tolva en **466 s**. La cadena hogar → yesca → carbón es ya verdadera por
+dos números.
+
+Un matiz de la fibra mojada: de las seis celdas, tres se secan por gravedad y prenden; las tres
+que conservan `humedad` 255 siguen intactas. La regla es «lo mojado no prende», no «lo que estuvo
+mojado no prende» — que es lo correcto, pero conviene decirlo así en la aceptación.
+
+### R16b · `LabCalorNoSoltado` puesto, y todo raw tiene nombre
+
+En la carbonera 20×20: **no soltado 162 500, de eso volvió como carbón 112 200 y se perdió
+50 300**. El panel lo dice en esa línea. Y la identidad, repetida tras R15, pasa de +5,5 % a
+**+2,6 %** (el hogar ya no enciende por azar).
+
+### R17b · Los dos libros — y la medida nos desmiente a los dos
+
+Hecho todo: los tres contadores nominales, `LabInyectar` con los cinco `LabRaw*` (incluida la
+brasa, que no existía para el libro, y el frío), el TOTAL solo en el libro entregado, los textos,
+el snapshot con los quince contadores del fuego, y `EscribirDefaultsSiFalta` reescribiendo cuando
+el registro crece.
+
+**Y aquí está el hallazgo.** Tú corregiste mi «la llama es el 90 %» a «lo medido es ¾ (130 240 /
+45 400)». Las dos cifras son del libro **nominal**, y las dos están mal. En raw entregados:
+
+| escena | combustión | LLAMA | brasa | llama NOMINAL |
+|---|---:|---:|---:|---:|
+| hoguera abierta (400 fibra) | 184 351 (51 %) | 105 579 (**29 %**) | 60 834 (17 %) | 622 040 |
+| carbonera sellada, boca 1 | 183 801 (67 %) | 17 998 (**6 %**) | 65 068 (23 %) | 271 280 |
+| horno de HF2 | 35 901 (48 %) | 5 079 (**7 %**) | 22 051 (29 %) | — |
+
+En la hoguera la llama **suelta 622 040 y entrega 105 579: el 17 %**, porque lo que ya está a 255
+no admite más. Cuanto más se parece el sitio a un horno, MENOS entrega la llama. La fuente que
+más escribe es siempre la combustión. Tu hallazgo B predijo exactamente esto sin la cifra: el
+libro nominal no se podía sumar y sumarlo daba conclusiones invertidas.
+
+La comparación fina/maciza (×5 de llama) **sí se sostiene**: son dos cifras nominales del mismo
+tipo, y el criterio 3 no se toca.
+
+### El desagüe, y el único punto que queda abierto
+
+Los dos bugs cerrados (grava 11/11, solera 34/34 arcilla, residuo 0), pero el conducto **no drena
+nada medible**: con y sin él, un lecho anegado a 255 baja a 30 en 300 s y el exudado es el mismo,
+71. Está en **Q12** arriba, con mi propuesta de dejarlo.
+
+### El tamaño real de la costura, para el HANDOFF §2
+
+| método | líneas del método | tocadas |
+|---|---|---:|
+| `ProcessCombustion` | 829-937 | 18 (16 de código, 2 de comentario) |
+| `ProcessBrasa` | 1003-1055 | 4 |
+| `ProcessFire` | 1643-1727 | 3 |
+
+Más seis líneas sueltas de R130/R132. `TryIgnite`, `AddTemp` e `InjectHeat`, intactos.
+
+**Coste 1,90 / 1,91 ms/tick, sin regresión. Agua con residuo 0. 96 parámetros.** Falta el push
+(`ca_playtest139.cmd`). Después, congelar y H5.

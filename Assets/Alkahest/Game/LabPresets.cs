@@ -105,17 +105,35 @@ namespace Alkahest.Game
             return ruta;
         }
 
-        /// <summary>Escribe `_defaults.json` con los valores de FÁBRICA (no los actuales) si aún no existe.</summary>
+        /// <summary>
+        /// Escribe `_defaults.json` con los valores de FÁBRICA (no los actuales) si aún no existe
+        /// —o si el registro ha crecido desde la última vez.
+        /// (R138, R17) Antes solo miraba si el archivo existía, así que un `_defaults.json` viejo
+        /// se quedaba para siempre: seguía diciendo `vidaHumo` 400 y no conocía
+        /// `fuego.rendimientoCarbonPct`. El archivo que dice cuáles son los valores de fábrica no
+        /// puede ser el único que no se entera de que la fábrica cambió.
+        /// </summary>
         public static void EscribirDefaultsSiFalta()
         {
             string ruta = Ruta(NombreDefaults);
-            if (File.Exists(ruta)) return;
+            if (File.Exists(ruta) && ContarClaves(ruta) >= LabParams.Registro.Count) return;
             var reg = LabParams.Registro;
             var actuales = new float[reg.Count];
             for (int i = 0; i < reg.Count; i++) { actuales[i] = reg[i].Leer(); reg[i].Escribir(reg[i].Def); }
             Guardar(NombreDefaults, "valores de fábrica del laboratorio (los escribe el panel al arrancar; no lo edites a mano)");
             for (int i = 0; i < reg.Count; i++) reg[i].Escribir(actuales[i]); // no tocar la sesión en curso.
             UltimoMensaje = "escrito _defaults.json";
+        }
+
+        /// <summary>(R138) Cuántos parámetros trae ya un archivo de preset. −1 si no se puede leer.</summary>
+        private static int ContarClaves(string ruta)
+        {
+            try
+            {
+                var d = Parsear(File.ReadAllText(ruta));
+                return d == null ? -1 : d.Count;
+            }
+            catch { return -1; }
         }
 
         // =================================================================
@@ -258,6 +276,23 @@ namespace Alkahest.Game
             Num(sb, "presionMovidas", st.LabPresionMovidas, true);
             Num(sb, "cuerposCaidos", st.LabCuerposCaidos, true);
             Num(sb, "fracturas", st.LabFracturas, true);
+            Num(sb, "vidrio", st.LabVidrio, true);
+            // (R138, R17) El fuego también va al snapshot: sin esto, un banco guardado no podía
+            // reproducir ni la identidad de la carbonera ni el calor entregado.
+            Num(sb, "combustibleQuemado", st.LabCombustibleQuemado, true);
+            Num(sb, "combustibleCarbon", st.LabCombustibleCarbon, true);
+            Num(sb, "unidadesRespiradas", st.LabUnidadesRespiradas, true);
+            Num(sb, "calorFuego", st.LabCalorFuego, true);
+            Num(sb, "calorCarbon", st.LabCalorCarbon, true);
+            Num(sb, "calorLlamaNominal", st.LabCalorLlama, true);
+            Num(sb, "calorNoSoltado", st.LabCalorNoSoltado, true);
+            Num(sb, "carbonizado", st.LabCarbonizado, true);
+            Num(sb, "energiaCarbon", st.LabEnergiaCarbon, true);
+            Num(sb, "rawFuego", st.LabRawFuego, true);
+            Num(sb, "rawLlama", st.LabRawLlama, true);
+            Num(sb, "rawBrasa", st.LabRawBrasa, true);
+            Num(sb, "rawHogar", st.LabRawHogar, true);
+            Num(sb, "rawFrio", st.LabRawFrio, true);
             Num(sb, "balanceU", st.LabBalanceU, false);
             sb.Append("  },\n");
             sb.Append("  \"inventarioU\": { \"agua\": ").Append(invAgua)

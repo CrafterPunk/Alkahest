@@ -50,6 +50,10 @@ Carbonera de 400 celdas de fibra en recinto de roca, boca de 1, piloto pegado:
 | **t=3 250 (la fibra se agota)** | **0** | **100 = 25,0 %** | 298 |
 | t=5 000 | 0 | 0 | 329 |
 
+**(Corregido en R139.)** A la tabla le faltan las celdas de **brasa**: el carbón agotado no va
+a ceniza directamente, va a brasa —bancada ×4 si está tapada— y de ahí a ceniza. En t=5 000
+faltan del recuento unas 70 celdas que están en ese estado intermedio.
+
 **El pico de carbón cae exactamente en el 25,0 %**, y `LabCarbonizado` da 102 de 400 (25,5 %).
 El criterio «25 % ± 5» se cumple sin margen de duda.
 
@@ -76,8 +80,14 @@ se puede escribir sin contar nada dos veces:
 | fina 100×4 (400) | 19,5 % | **+0,8 %** |
 | **maciza 30×30 (900)** | **25,1 %** | **+1,0 %** |
 
-El +5,5 % de la primera es ruido del sorteo con n=400 (27 % en vez de 25 % son 8 celdas de más,
-8 800 raw ≈ 3,9 % del ideal). Con 900 celdas cae a **+1,0 %**. **La identidad cuadra.**
+El +5,5 % de la primera baja a **+1,0 %** con 900 celdas. **La identidad cuadra.**
+
+**(Precisado en R139.)** Dos cosas: por celda ahogada el código da **555** raw, no 560
+(40×7 + 0,25×50×22), y la identidad es **ESTADÍSTICA, no por construcción** — la carbonización
+se decide con la sordina del ÚLTIMO paso y sin memoria por celda, así que el +5,5 % no era solo
+ruido del sorteo: eran celdas que respiraron parte de su vida antes de acabar tapadas. Con
+n ≥ 900 cuadra a ±1 %. Repetida tras R15 (el hogar ya no enciende por azar), la 20×20 da
+**+2,6 %**.
 
 Y el número que explica por qué el 25 y el 50 son los correctos: de los 224 000 raw de la fibra,
 la combustión ahogada suelta 112 000 y el carbón que nace guarda **112 200**. Media y media, con
@@ -89,10 +99,17 @@ un 0,2 % de diferencia. No es una calibración aproximada: es la mitad justa.
 toca), `LabCalorHogar` y `LabCalorCarbon`, más `LabCarbonizado` y `LabEnergiaCarbon`. El panel
 los muestra con la identidad de la carbonera.
 
-Lo que se ve al contarlos, y que antes no se veía: **la llama es la fuente dominante**. En el
-horno de HF2, 130 240 raw de llama contra 45 400 de brasa — la brasa que se ve por la boca es
-la cuarta parte del calor. Y en la carbonera fina, 1 333 200 de llama contra 267 560 de la
-maciza a igual masa: **cinco veces más**.
+Lo que se ve al contarlos: en el horno de HF2, 130 240 de llama contra 45 400 de brasa. Y en la
+carbonera fina, 1 333 200 de llama contra 267 560 de la maciza a igual masa: **cinco veces más**.
+
+**(Corregido en R139, y es el error más interesante de esta ronda.)** De ahí concluí que «la
+llama es la fuente dominante». Es falso, y Fable lo corrigió a «¾» con la misma cifra, que
+también lo es: **las dos son del libro NOMINAL**. Contando los raw que de verdad se escriben en
+la grilla, la llama pone entre el **6 %** (carbonera sellada) y el **29 %** (hoguera al aire), y
+la fuente que más escribe es siempre la combustión. La causa: en la hoguera la llama suelta
+622 040 nominales y entrega 105 579 —el 17 %—, porque lo que ya está a 255 no admite más. Cuanto
+más se parece el sitio a un horno, MENOS entrega la llama. La comparación fina/maciza sí se
+sostiene: es entre dos cifras nominales del mismo tipo.
 
 ## C4 · `fuego.vidaHumo` 400 → 255
 
@@ -151,9 +168,15 @@ completa. Y el hogar suelto al aire, cero.
 ### La tolva
 
 360 celdas de fibra sobre un fogón con boca de 3, cero intervenciones: **13 989 ticks (466 s)**
-por encima de 150 raw, y seguía caliente al cortar el banco a los 14 000. Sube desde los 324 s
-de R135 porque el hogar ya no puede sobrecalentar la base: la razón calor/reserva baja de 10,3
-a **8,3 raw/u**, o sea que ahora arde MÁS ahogada, y por eso dura más.
+por encima de 150 raw, y seguía caliente al cortar el banco a los 14 000, contra los 324 s de
+R135.
+
+**(Corregido en R139.)** Escribí que subía «porque el hogar ya no sobrecalienta la base y arde
+más ahogada». El código no lo respalda: el consumo no depende de la temperatura. La razón
+calor/reserva cae de 10,3 a 8,3 por el cambio del carbón en C2, no por C1, y además esa razón
+mezclaba los 22 del carbón con los 14 de la fibra. Medido bien en R139: **7,3 raw/u de fibra
+sola y 3 % de unidades respiradas**. Los 466 s son la medida; la causa se queda sin atribuir
+hasta separar C1 de C2.
 
 ### Coste
 
@@ -214,3 +237,10 @@ Dos afirmaciones de aquel benchmark quedan desmentidas por estas medidas:
 | `fuego.rendimientoCarbonPct` | **25** (nuevo) | lo que impide que carbonizar cree energía (C2) |
 | `fuego.vidaHumo` | 400 → **255** | era un byte y el exceso se recortaba en silencio (C4) |
 | `Carbon.combustReserva` | 160 → **50** | 25 % × 50 × 22 = 275 ≈ media fibra (C2) |
+
+
+---
+
+*(R139) Este benchmark fue revisado por Fable con cinco lectores independientes: 28 hallazgos
+confirmados. Las correcciones marcadas arriba vienen de ahí; el resto de la lista se aplicó en
+`2026-09-04_r139_hf5b_honestidad.md`.*

@@ -147,17 +147,24 @@ namespace Alkahest.Sim
             // porque a su altura tiene roca al lado, no hueco.
             Bloque(136, 246, 136, 249, MaterialId.Stone);     // labio oeste de la boca (a ras del lecho)
             Bloque(153, 246, 153, 249, MaterialId.Stone);     // labio este
-            // (R136, R11 de Fable) EL DESAGÜE. Un lecho sobre solera impermeable y con labio se
-            // encharca: el goteo del alambique no tiene por dónde irse y a los 150 s la mitad de
-            // las columnas del claro están BAJO AGUA, donde no germina nada. Dos columnas de
-            // grava (permeabilidad 90) junto a cada labio conducen el agua al fondo, y la mitad
-            // baja del propio labio, también de grava, la deja salir a la boca de la chimenea.
-            // El nivel se queda por DEBAJO de la superficie: la tierra se moja, no se inunda.
-            // Es geometría del nivel, no una regla: un jardinero pondría exactamente esto.
+            // (R136/R138, R11 y R17 de Fable) EL DESAGÜE. Un lecho sobre solera impermeable y con
+            // labio se encharca: el goteo del alambique no tiene por dónde irse y no germina nada
+            // bajo el agua. Dos columnas de grava (permeabilidad 90) junto a cada labio conducen
+            // el agua al fondo, y el conducto ATRAVIESA LA SOLERA hasta asomar a la boca de la
+            // chimenea, que es donde exuda al saturar. El nivel se queda por DEBAJO de la
+            // superficie: la tierra se moja, no se inunda. Geometría del nivel, no una regla.
+            //
+            // El primer intento (R136) puso la salida en la mitad baja del LABIO, y estaba mal por
+            // dos motivos que midió Fable: un poroso solo suelta agua a un VACÍO al saturar, y al
+            // labio el agua solo le llega por capilaridad lateral, que no basta; y además la grava
+            // es polvo, así que `ProcessPowder` la deslizaba en diagonal al aire de (137,245) y el
+            // labio se derrumbaba en la boca en el primer tick. Por eso el labio vuelve a ser roca
+            // ENTERA y el conducto baja hasta y245: ahí tiene roca debajo, sedimento al lado y el
+            // aire de la boca justo al costado, sin diagonal por la que escurrirse.
             Bloque(134, 246, 135, 249, MaterialId.Grava);     // conductos del lecho oeste
             Bloque(154, 246, 155, 249, MaterialId.Grava);     // conductos del lecho este
-            Bloque(136, 246, 136, 247, MaterialId.Grava);     // salida por la mitad baja del labio
-            Bloque(153, 246, 153, 247, MaterialId.Grava);
+            Bloque(134, 245, 136, 245, MaterialId.Grava);     // y a través de la solera, hasta la boca
+            Bloque(153, 245, 155, 245, MaterialId.Grava);
             Aire(118, 273, 124, 286);
             LabParams.LuzCieloX0 = 118; LabParams.LuzCieloX1 = 124;
 

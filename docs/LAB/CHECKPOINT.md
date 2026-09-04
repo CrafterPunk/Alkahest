@@ -133,6 +133,21 @@ motor con archivo:línea), `Laboratorio/benchmarks/2026-09-03_costuras_fable.md`
   en la especificación: sin separar lo que suelta el carbón al RE-ARDER, la identidad de C2 se
   desviaba +27,6 % por doble conteo (la energía de una celda carbonizada se cuenta al nacer y
   otra vez al quemarse). Con él, la identidad cierra a **+1,0 %**.
+- **D35 (R138, R15) El hogar calienta, no chispea.** Fuera las cuatro llamadas a `TryIgnite` de
+  `LabHogar`: era la única línea por la que el hogar encendía con un 12 % de azar en vez de por
+  temperatura, y por ella prendía carbón (200) al que no puede calentar por encima de 170. Ahora
+  la cadena hogar → yesca de fibra (130) → llama → carbón es verdadera POR DOS NÚMEROS. Chispear
+  es privilegio de una llama; una brasa eterna, que por diseño es más fría, enciende solo por
+  temperatura. Medido: carbón pegado 6/6 intactas a 3 000 ticks, fibra seca prende en t=48, y el
+  horno sigue en 18/18 porque la yesca la enciende `ApplyPhase`.
+- **D36 (R138, R17) DOS libros de energía, porque uno solo mentía.** El nominal (`LabCalorFuego`,
+  `LabCalorCarbon`, `LabCombustibleCarbon`, `LabUnidadesRespiradas`, `LabCalorNoSoltado`) mide
+  calor por unidad de reserva y es el que se CONSERVA: ahí vive la identidad de la carbonera. El
+  entregado (`LabInyectar` → `LabRawFuego/Llama/Brasa/Hogar/Frio`) mide los raw que de verdad se
+  escriben en `temp[]` tras el recorte, y es el único que admite un TOTAL. Sumar el primero daba
+  un total de nada — y peor, daba conclusiones invertidas: en raw entregados la llama pone entre
+  el 6 % y el 29 %, no el 90 % ni los ¾ que habíamos escrito, porque suelta 622 040 nominales y
+  entrega 105 579. Lo que ya está a 255 no admite más.
 - **D34 (R136, Q8) El desagüe de grava es geometría del nivel, no una regla** — y drena al revés
   de lo que se temía: la grava le da al agua un camino al subsuelo en vez de dejarla correr
   hasta la boca, y el labio de grava fija el nivel freático a la altura del lecho. Conservación
@@ -556,38 +571,30 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-04, R137 — leer antes de nada.)** **HF5 ejecutado y medido**;
-`Laboratorio/benchmarks/2026-09-04_r137_hf5_cierres_del_fuego.md`. Los cuatro parches de Fable
-(C1-C4) están puestos, más un quinto que hizo falta (`LabCalorCarbon`) para que su identidad
-fuera comprobable. Resultados: hogar doméstico de verdad (**0 vidrio** a 3 000 ticks), pico de
-carbón **25,0 % exacto**, identidad de C2 a **+1,0 %**, horno con yesca **18 de 18** celdas
-vidriadas y **0** sin yesca, tolva **466 s** (antes 324), agua con **residuo 0**, coste 1,85
-ms/tick sin regresión. Criterio 3 cerrado como «recinto y contacto»: a igual masa y misma boca,
-la pila fina da **×5 de llama** que la maciza. **96 parámetros.**
+**(Opus, 2026-09-04, R139 — leer antes de nada.)** **HF5b ejecutado y medido**;
+`Laboratorio/benchmarks/2026-09-04_r139_hf5b_honestidad.md`. Los cinco bloques de la revisión
+adversaria de Fable (R15-R17, 28 hallazgos) están aplicados: el hogar ya no chispea (fuera
+`TryIgnite` de `LabHogar` + `WakeChunk` en `LabCalentarHasta`), los DOS LIBROS separados
+(nominal y entregado, con `LabInyectar` y los cinco `LabRaw*`), `LabCalorNoSoltado`, el desagüe
+con labio de roca y conducto a través de la solera, la persistencia y los textos.
 
-Dos aceptaciones NO se cumplen y están escaladas: **Q10** (el hogar sí enciende el carbón, por
-el 12 % de `TryIgnite`, que es regla base del juego — y eso corrige lo que R135 escribió sobre
-la cadena de encendido) y **Q11** (arder ahogado destruye la mitad de la energía; para la fibra
-está compensado por diseño, para el carbón no). Ninguna de las dos bloquea.
+Las seis aceptaciones de R15 se cumplen: carbón pegado **6/6 intactas** a 3 000 ticks, fibra seca
+prende en t=48, HF2 sigue **18/18**, tolva **466 s**. Identidad de C2 mejora a **+2,6 %**. Agua
+con **residuo 0**. Coste **1,90 / 1,91** ms/tick. **96 parámetros.**
 
-**Siguiente paso exacto: correr `ca_playtest137.cmd`** (con el 134 y el 135 aún pendientes) y
-después **H7 jugando con Cesar** — que es donde se mide el régimen de riego real que H4 necesita.
-Luego H5 y H8; H6 espera. Tras HF5, **física nueva congelada** (recomendación de Fable; decide
-Cesar).
+**Y una corrección que afecta a los dos:** «la llama es el 90 % del calor» (mío) y «lo medido es
+¾» (de Fable) son ambas del libro NOMINAL y ambas falsas. En raw entregados la llama pone entre
+el **6 %** (carbonera sellada) y el **29 %** (hoguera al aire), y la fuente que más escribe es la
+combustión — porque la llama suelta 622 040 nominales y entrega 105 579 (el 17 %): lo que ya está
+a 255 no admite más. Cuanto más se parece el sitio a un horno, menos entrega la llama.
 
-**(Fable, 2026-09-04, R138 — leer antes de nada.)** HF5 de Opus (commit d711454) **revisada y
-verificada**: banco propio (`Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`:
-hogar solo 0 vidrio; carbonera determinista al bit e identidad ±5 %; agua residuo 0) y revisión
-adversaria del diff (28 hallazgos confirmados, ninguno de física). Q10 y Q11 cerradas
-(`PREGUNTAS_A_FABLE.md` R15-R17): el hogar deja de chispear (`TryIgnite` fuera de `LabHogar`,
-enciende solo por temperatura); arder ahogado pierde energía y el libro lo nombra; **dos libros**
-(nominal que se conserva y entregado con brasa y frío, que hoy no se cuentan); el **desagüe de
-R137 no drena** (el labio de grava se derrumba en la boca y el conducto ciego ablanda la solera):
-labio de roca y conducto a través de la solera. Todo eso es **HF5b** (`HANDOFF_OPUS.md`), la
-última ronda antes de congelar. Veredicto del fuego: **4 de 5** medido; la llama suelta vidria 1-2
-celdas y el horno la carga entera (criterio 1 en cantidad). **Orden de Cesar:** HF5b → física
-nueva CONGELADA → H5 banco → H7 jugando → H8 informe; **H6 documentado y congelado**.
-Cesar: `ca_playtest138.cmd` (si ya corriste el 137, el 138 sube solo lo de Fable).
+Abierta **Q12**: el desagüe está bien construido (grava 11/11, solera 34/34) pero **no drena nada
+medible** — con y sin conducto el lecho anegado baja igual. Propuesta: dejarlo, sin afinar
+`permGrava` contra un banco que no reproduce el caudal real.
+
+**Siguiente paso exacto: correr `ca_playtest139.cmd`.** Después, **FÍSICA NUEVA CONGELADA** y el
+orden acordado con Cesar: **H5 (banco) → H7 (jugando) → H8 (informe)**; H6 documentado y
+congelado para su propia etapa.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

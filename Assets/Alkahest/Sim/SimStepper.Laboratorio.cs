@@ -60,14 +60,36 @@ namespace Alkahest.Sim
         /// `LabCalorFuego == LabCombustibleQuemado × combustCalorRaw`; en sordina el calor va a la
         /// mitad, así que la razón calor/reserva CAE entre esos dos valores y esa razón es, por sí
         /// sola, la medida de cuánto de la quema ocurrió sin respirar.</summary>
+        // ---- LIBRO DEL COMBUSTIBLE (NOMINAL): es el que se CONSERVA, y donde vive la identidad de C2 ----
         public long LabCombustibleQuemado, LabCalorFuego;
-        /// <summary>(R136, C3) Los otros dos calores, que antes no contaba nadie: la LLAMA (40 raw por
-        /// tick y celda, sin gastar reserva — en un horno es el 90 % del calor) y el HOGAR. Con los
-        /// tres, el libro de energía dice la verdad en vez de contar solo la fuente pequeña.</summary>
-        public long LabCalorLlama, LabCalorHogar;
+        /// <summary>(R138, B) Unidades de reserva que puso el CARBÓN, aparte. Sin separarlas, la razón
+        /// raw/u mezcla los 22 del carbón con los 14 de la fibra y deja de significar nada.</summary>
+        public long LabCombustibleCarbon;
+        /// <summary>(R138, B) Unidades que se quemaron RESPIRANDO. Con `LabCombustibleQuemado` da
+        /// directamente qué fracción de una pila ardió ahogada, sin inferirlo de una razón.</summary>
+        public long LabUnidadesRespiradas;
+        /// <summary>(R138, R16) Lo que la sordina NO suelta: la otra mitad de cada paso ahogado. De aquí
+        /// sale el carbón (`LabEnergiaCarbon`) y el resto se pierde como gas sin quemar, que es lo que
+        /// hace una combustión incompleta de verdad. Con esto, todo raw tiene nombre.</summary>
+        public long LabCalorNoSoltado;
+        /// <summary>(R136, C3) La LLAMA en unidades NOMINALES: 40 por celda y tick, sin gastar reserva.
+        /// Es un índice de cuánta llama hubo, no energía comparable con la del combustible — para eso
+        /// está `LabRawLlama`, y la diferencia es enorme: en una hoguera al aire, 622 040 nominales
+        /// entregan 105 579 raw (el 17 %), porque lo que ya está a 255 no admite más.</summary>
+        public long LabCalorLlama;
+
+        // ---- LIBRO DEL CALOR ENTREGADO: raw ESCRITOS de verdad en la grilla, tras el recorte ----
+        /// <summary>(R138, B) Lo que cada fuente escribió realmente en `temp[]` (celda propia + vecinos),
+        /// medido con `LabInyectar`. Este libro sí admite un TOTAL, porque todos sus sumandos son la
+        /// misma cosa. `LabRawFrio` es negativo. `LabRawBrasa` no existía: la brasa emite más calor
+        /// nominal que la combustión que sí se contaba, y era el agujero más grande del libro.</summary>
+        public long LabRawFuego, LabRawLlama, LabRawBrasa, LabRawHogar, LabRawFrio;
         /// <summary>(R136, C2) Celdas que la carbonera convirtió en carbón, y la energía que ese carbón
-        /// lleva dentro (reserva × calor, leídos de su MaterialDef). La identidad que tiene que cuadrar:
-        /// `LabCalorFuego + LabEnergiaCarbon ≈ celdas de combustible × su reserva × su calor`.</summary>
+        /// lleva dentro (reserva × calor, leídos de su MaterialDef). La identidad que tiene que cuadrar,
+        /// con el carbón descontado para no contarlo dos veces (R136, C3):
+        /// `(LabCalorFuego − LabCalorCarbon) + LabEnergiaCarbon ≈ celdas × reserva × calor`.
+        /// Es ESTADÍSTICA, no exacta: la carbonización se decide con la sordina del último paso y sin
+        /// memoria por celda, así que cuadra a ±1 % con n ≥ 900 y baila unos puntos con n pequeña.</summary>
         public long LabCarbonizado, LabEnergiaCarbon;
         /// <summary>(R136, C3) De `LabCalorFuego`, la parte que soltó el CARBÓN al volver a arder.
         /// Restándola queda el calor del combustible ORIGINAL, y solo entonces se puede escribir la
@@ -897,12 +919,20 @@ namespace Alkahest.Sim
             // Con tope: hierve agua (110), seca, cuece la cara de la arcilla (150) y prende
             // fibra (130), pero NO vidria (200) ni prende carbón (200). Para eso hace falta
             // LLAMA, y la llama pide combustible y recinto.
+            //
+            // (R138, R15) Y CALIENTA, PERO NO CHISPEA. Antes llamaba aquí a `TryIgnite`, que
+            // enciende con un 12 % por visita SIN mirar la temperatura de ignición: por esa
+            // línea —y solo por esa— el hogar acababa prendiendo carbón (200) al que no puede
+            // calentar por encima de 170. Chispear es privilegio de una LLAMA; una brasa eterna
+            // que por diseño es más fría enciende solo por temperatura, y así la cadena
+            // hogar → yesca de fibra (130) → llama → carbón (200) es verdadera POR DOS NÚMEROS
+            // en vez de por azar. La autoignición de `ApplyPhase` siembra la reserva igual de
+            // bien, y respeta la fibra mojada. `ProcessFire` y `ProcessBrasa` no se tocan.
             LabCalentarHasta(x - 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
             LabCalentarHasta(x + 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
             LabCalentarHasta(x, y - 1, LabParams.HogarCalor, LabParams.HogarRaw);
             LabCalentarHasta(x, y + 1, LabParams.HogarCalor, LabParams.HogarRaw);
             _grid.WakeChunk(x, y, _tick); // R55: la brasa eterna mantiene vivo su chunk (si no, lo que le acercan nunca prende).
-            TryIgnite(x - 1, y); TryIgnite(x + 1, y); TryIgnite(x, y - 1); TryIgnite(x, y + 1);
         }
 
         /// <summary>(R136, C1) Suma calor a (x,y) sin pasar de `tope`. Lo que ya está a tope no recibe nada. Mismo clamp que AddTemp.</summary>
@@ -915,14 +945,46 @@ namespace Alkahest.Sim
             int nuevo = t + cuanto;
             if (nuevo > tope) nuevo = tope;
             if (nuevo > 255) nuevo = 255;
-            LabCalorHogar += nuevo - t; // (C3) el libro también lo cuenta.
+            if (nuevo == t) return;
+            LabRawHogar += nuevo - t; // raw ENTREGADOS (este contador sí es calor real escrito).
             _grid.temp[j] = (byte)nuevo;
+            // (R138, A2) Despertar al que acaba de calentarse. `AddTemp` no lo hace, y sin
+            // esto una celda en el borde de un chunk dormido se queda a 170 sin que nadie la
+            // procese: la yesca que ahora depende de la autoignición no prendería nunca.
+            _grid.WakeChunk(x, y, _tick);
+        }
+
+        /// <summary>
+        /// (R138, B) Inyecta `cuanto` a los cuatro vecinos ortogonales y devuelve LOS RAW QUE DE
+        /// VERDAD SE ESCRIBIERON, tras el recorte a 0..255. Es idéntico a `InjectHeat`/`InjectCold`
+        /// salvo por el retorno, así que la simulación no cambia — pero sin él no hay libro de
+        /// calor ENTREGADO: `InjectHeat` suma a ciegas y lo que pasa de 255 se pierde sin que
+        /// nadie se entere, de modo que sumar valores nominales daba un «total» de nada.
+        /// </summary>
+        private int LabInyectar(int x, int y, int cuanto)
+        {
+            return LabSumarTemp(x - 1, y, cuanto) + LabSumarTemp(x + 1, y, cuanto)
+                 + LabSumarTemp(x, y - 1, cuanto) + LabSumarTemp(x, y + 1, cuanto);
+        }
+
+        /// <summary>(R138) Mismo cuerpo que `AddTemp`, devolviendo el delta real.</summary>
+        private int LabSumarTemp(int x, int y, int cuanto)
+        {
+            if (!CellGrid.InBounds(x, y)) return 0;
+            int j = CellGrid.Idx(x, y);
+            int t = _grid.temp[j];
+            int v = t + cuanto;
+            if (v < 0) v = 0; else if (v > 255) v = 255;
+            _grid.temp[j] = (byte)v;
+            return v - t;
         }
 
         private void LabFrio(int x, int y, int i)
         {
             _grid.temp[i] = (byte)LabParams.FrioRaw;
-            InjectCold(x, y, LabParams.FrioPotencia);
+            // (R138, B) El frío es la única fuente NEGATIVA, y sin contarla el libro entregado
+            // solo sabría sumar. `LabInyectar` con signo hace lo mismo que `InjectCold`.
+            LabRawFrio += LabInyectar(x, y, -LabParams.FrioPotencia);
             _grid.WakeChunk(x, y, _tick);
         }
 

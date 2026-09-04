@@ -7239,3 +7239,67 @@ propia etapa. Veredicto del fuego: 4 de 5 medido.
 Archivos: `Laboratorio/benchmarks/2026-09-04_r138_fable_verificacion_hf5.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R15-R17), `docs/LAB/HANDOFF_OPUS.md` (HF5b, H5/H6, §8),
 `docs/LAB/CHECKPOINT.md` (fase y §9), `docs/LAB/DISENO_FUEGO.md` §10 ampliado. Sin código.
+
+## Ronda 139 — EL LABORATORIO: HF5b, LA HONESTIDAD DEL FUEGO (Opus 5, revisión de Fable)
+
+· **El punto de partida es una revisión adversaria de Fable sobre el commit de HF5**, con cinco
+  lectores independientes y dos refutadores por hallazgo: **28 confirmados, 1 refutado**. Ninguno
+  era de física; eran de contabilidad, de geometría del nivel y de texto. HF5b los cierra.
+· **EL HOGAR CALIENTA, NO CHISPEA (R15).** Fuera las cuatro llamadas a `TryIgnite` de `LabHogar`:
+  era la única línea por la que el hogar encendía con un 12 % de azar en vez de por temperatura, y
+  por ella prendía carbón (200) al que no puede calentar por encima de 170. Ahora la cadena
+  hogar → yesca de fibra (130) → llama → carbón es verdadera POR DOS NÚMEROS, que era el mecanismo
+  bueno desde el principio. Medido: **carbón pegado 6/6 intactas a los 3 000 ticks con Tmax 170**,
+  fibra seca pegada prende en t=48, fibra sobre una celda de arena en t=651, y la fibra que
+  conserva su humedad no prende. El horno sigue en **18/18** porque la yesca la enciende
+  `ApplyPhase`, y la tolva en **466 s**. Más `WakeChunk` en `LabCalentarHasta`: `AddTemp` no
+  despierta a nadie, y sin eso una celda en el borde de un chunk dormido se quedaba a 170 sin que
+  nadie la procesara.
+· **DOS LIBROS DE ENERGÍA, PORQUE UNO SOLO MENTÍA (R17-B).** El nominal mide calor por unidad de
+  reserva y es el que se CONSERVA: ahí vive la identidad de la carbonera, y ahí van los tres
+  contadores nuevos (`LabCombustibleCarbon`, `LabUnidadesRespiradas` y `LabCalorNoSoltado`). El
+  entregado —helper `LabInyectar`, que hace los mismos `AddTemp` y devuelve la suma de deltas
+  reales— mide los raw que de verdad se escriben en `temp[]` tras el recorte, con
+  `LabRawFuego/Llama/Brasa/Hogar/Frio`. La brasa **no existía para el libro** y emite más calor
+  nominal que la combustión que sí se contaba: era el agujero más grande.
+· **Y LA MEDIDA NOS DESMIENTE A LOS DOS.** Yo escribí «la llama es el 90 % del calor»; Fable lo
+  corrigió a «lo medido es ¾». **Las dos cifras son del libro nominal y las dos están mal.** En
+  raw entregados, la llama pone el **29 %** en una hoguera al aire, el **7 %** en el horno y el
+  **6 %** en una carbonera sellada, y la fuente que más escribe es siempre la COMBUSTIÓN
+  (48-67 %). La causa cabe en una frase: en la hoguera la llama suelta **622 040 nominales y
+  entrega 105 579**, el 17 %, porque lo que ya está a 255 no admite más. Cuanto más se parece el
+  sitio a un horno, MENOS entrega la llama. El hallazgo B de Fable predijo exactamente esto sin
+  saber la cifra: sumar el libro nominal daba conclusiones invertidas.
+· **TODO RAW TIENE NOMBRE (R16).** `LabCalorNoSoltado` cuenta la mitad que la sordina no suelta.
+  En la carbonera 20×20: **no soltado 162 500, de eso volvió como carbón 112 200 y se perdió
+  50 300** como gas sin quemar, que es lo que hace una combustión incompleta de verdad.
+· **EL DESAGÜE: LOS DOS BUGS CERRADOS Y UN VEREDICTO INCÓMODO.** La «salida por la mitad baja del
+  labio» de R137 no podía drenar (un poroso solo suelta agua a un vacío al saturar, y al labio
+  solo le llega capilaridad lateral) y además se derrumbaba: la grava es polvo y `ProcessPowder`
+  la deslizaba en diagonal al aire de la boca. Corregido con labio entero de roca y el conducto
+  ATRAVESANDO la solera hasta asomar a la boca: **grava 11/11 en su sitio a los 300 s** y
+  **solera 34/34 arcilla** (antes el conducto ciego la ablandaba). Pero medido con y sin
+  conducto, un lecho anegado a 255 baja a 30 en 300 s **exactamente igual** y el exudado es el
+  mismo: el lecho se vacía por el aire mucho más deprisa de lo que la grava conduce. El conducto
+  es correcto, inocuo y **decorativo**. Escalado como Q12 con mi propuesta de dejarlo, sin afinar
+  `permGrava` contra un banco que no reproduce el caudal del alambique.
+· **Textos que el código desmentía**, corregidos en el benchmark de R137: la causa inventada de
+  los 466 s de la tolva (el consumo no depende de la temperatura), el carbón agotado que va a
+  BRASA y no a ceniza, la identidad que da **555** raw por celda ahogada y no 560 y que es
+  ESTADÍSTICA y no por construcción, y el comentario de `Grava` («no desliza de lado») que era
+  una promesa sin línea que la cumpliera — `ProcessPowder` prueba la diagonal sin mirar
+  `fluidity`, que solo leen los líquidos.
+· **Persistencia**: `_libro.json` guarda ahora los quince contadores del fuego, y
+  `EscribirDefaultsSiFalta` reescribe cuando el registro tiene más claves que el archivo (antes
+  un `_defaults.json` viejo seguía diciendo `vidaHumo` 400 para siempre — el archivo que dice
+  cuáles son los valores de fábrica era el único que no se enteraba de que la fábrica cambió).
+· **B-F3 repetida**: pico de carbón **25,0 %** y la identidad de **+5,5 % a +2,6 %**, porque el
+  hogar ya no enciende por azar. Agua con **residuo 0** a los 50, 150, 300 y 600 s. Coste
+  **1,90 / 1,91 ms/tick**, sin regresión. 96 parámetros.
+· **El tamaño real de la costura, contado y puesto en el HANDOFF §2**: 18 líneas en
+  `ProcessCombustion`, 4 en `ProcessBrasa`, 3 en `ProcessFire` (el «6 líneas» original se quedó
+  corto tres rondas seguidas). `TryIgnite`, `AddTemp` e `InjectHeat` intactos.
+· Benchmark `2026-09-04_r139_hf5b_honestidad.md`, CHECKPOINT D35-D36 y §9, buzón R15b-R17b y Q12,
+  HANDOFF HF5b y §2. Verificado en banco headless, sin Play. **Después de esto, física nueva
+  CONGELADA**: sigue H5 (banco) → H7 (jugando) → H8 (informe); H6 documentado y congelado para su
+  propia etapa. Sin push (cmd 139).

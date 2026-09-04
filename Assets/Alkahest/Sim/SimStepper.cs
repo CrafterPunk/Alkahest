@@ -863,9 +863,12 @@ namespace Alkahest.Sim
             _grid.WakeChunk(x, y, _tick);
 
             int calorPaso = sordina ? (def.combustCalorRaw + 1) / 2 : def.combustCalorRaw; // (R135) sordina = medio calor.
-            int nt = _grid.temp[idx] + calorPaso;
+            int antesComb = _grid.temp[idx];
+            int nt = antesComb + calorPaso;
             _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
-            InjectHeat(x, y, calorPaso);
+            // (R138, B) Mismo efecto que InjectHeat; solo que en el laboratorio se apunta cuánto entró de verdad.
+            if (LabActivo) LabRawFuego += (_grid.temp[idx] - antesComb) + LabInyectar(x, y, calorPaso);
+            else InjectHeat(x, y, calorPaso);
 
             var rng = XorShift.FromCell(_tick, x, y, SalCombustionPaso);
 
@@ -895,7 +898,12 @@ namespace Alkahest.Sim
                 // (R136, C3) El calor del CARBÓN, aparte. Sin separarlo la identidad de C2 no se
                 // puede comprobar: la energía de una celda carbonizada se cuenta al nacer
                 // (LabEnergiaCarbon) y otra vez cuando ese mismo carbón vuelve a arder.
-                if (def.id == MaterialId.Carbon) LabCalorCarbon += calorPaso;
+                if (def.id == MaterialId.Carbon) { LabCalorCarbon += calorPaso; LabCombustibleCarbon++; }
+                // (R138, B) Cuánto ardió respirando, contado en vez de inferido de una razón.
+                if (!sordina) LabUnidadesRespiradas++;
+                // (R138, R16) Lo que la sordina NO suelta. De aquí sale el carbón y el resto se
+                // pierde como gas sin quemar: así todo raw tiene nombre, que es lo que pide el criterio 5.
+                else LabCalorNoSoltado += def.combustCalorRaw - calorPaso;
             }
             if (reserva <= 0)
             {
@@ -1018,9 +1026,13 @@ namespace Alkahest.Sim
             _grid.WakeChunk(x, y, _tick);
 
             int calorBrasa = sordina ? (BrasaCalorRaw + 1) / 2 : BrasaCalorRaw;
-            int nt = _grid.temp[idx] + calorBrasa;
+            int antesBrasa = _grid.temp[idx];
+            int nt = antesBrasa + calorBrasa;
             _grid.temp[idx] = (byte)(nt > 255 ? 255 : nt);
-            InjectHeat(x, y, calorBrasa);
+            // (R138, B) La brasa no existía para el libro, y emite MÁS calor nominal que la
+            // combustión que sí se contaba: era el agujero más grande de la contabilidad.
+            if (LabActivo) LabRawBrasa += (_grid.temp[idx] - antesBrasa) + LabInyectar(x, y, calorBrasa);
+            else InjectHeat(x, y, calorBrasa);
 
             var rng = XorShift.FromCell(_tick, x, y, SalBrasaReencender);
             if (rng.ChancePercent(BrasaReencenderPct))
@@ -1684,9 +1696,14 @@ namespace Alkahest.Sim
             }
 
             // El fuego calienta fuertemente su propia celda (fuente de calor para la difusión).
+            int antesLlama = _grid.temp[idx];
             _grid.temp[idx] = 255;
-            if (LabActivo) LabCalorLlama += 40; // (R136, C3) la fuente DOMINANTE del calor de un horno, al libro.
-            InjectHeat(x, y, 40);
+            if (LabActivo)
+            {
+                LabCalorLlama += 40;                                             // (R136, C3) índice nominal.
+                LabRawLlama += (255 - antesLlama) + LabInyectar(x, y, 40);        // (R138, B) lo entregado, con el pin a 255 incluido.
+            }
+            else InjectHeat(x, y, 40);
 
             // Intenta encender vecinos inflamables (cada vecino tira su propio dado,
             // sembrado por sus propias coordenadas, para no repetir el mismo resultado 4 veces).

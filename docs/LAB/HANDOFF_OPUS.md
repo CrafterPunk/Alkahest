@@ -245,8 +245,37 @@ poza, y se fractura si cae ≥ 6 celdas; coste < 0,3 ms con 20 cuerpos.
 Diseño completo, reglas mínimas, cadenas esperadas, benchmarks y criterio en
 `docs/LAB/DISENO_FUEGO.md` (§8 tiene los hitos HF1-HF4 con sus aceptaciones). Una regla nueva
 (el aire de contacto), un material (`Carbon`), tres parámetros, el vidrio como marcador de
-calor industrial y el hogar como fuente doméstica. Excepción autorizada: 6 líneas gateadas por
-`LabActivo` en `ProcessCombustion`/`ProcessBrasa` de `SimStepper.cs`, marcadas `(R135)`.
+calor industrial y el hogar como fuente doméstica. Excepción autorizada en `SimStepper.cs`,
+toda gateada por `LabActivo` y marcada `(R135)`/`(R136)`/`(R138)`. **Tamaño real medido en R139**
+(el «6 líneas» original se quedó corto tres rondas seguidas):
+
+| método | líneas del método | tocadas |
+|---|---|---:|
+| `ProcessCombustion` | 829-937 | 18 (16 de código, 2 de comentario) |
+| `ProcessBrasa` | 1003-1055 | 4 |
+| `ProcessFire` | 1643-1727 | 3 |
+
+Más seis líneas sueltas de R130/R132 (erosión al mover agua, condensado del gas, fibra mojada).
+`TryIgnite`, `AddTemp` e `InjectHeat` siguen **intactos**: fuera del laboratorio el diff es
+inerte. Antes de ampliarla otra vez, actualizar esta tabla.
+
+### HF5b · LA HONESTIDAD DEL FUEGO — **HECHO (R139)**
+
+Los cinco bloques de la revisión adversaria de Fable (R15-R17, 28 hallazgos):
+`Laboratorio/benchmarks/2026-09-04_r139_hf5b_honestidad.md`. El hogar ya no chispea (fuera
+`TryIgnite` de `LabHogar`, más `WakeChunk` en `LabCalentarHasta`), DOS libros separados —nominal
+y entregado, con `LabInyectar` y los cinco `LabRaw*`—, `LabCalorNoSoltado`, el desagüe con labio
+de roca y conducto a través de la solera, la persistencia y los textos. Las seis aceptaciones de
+R15 se cumplen (carbón pegado **6/6 intactas**, HF2 **18/18**, tolva **466 s**), identidad de C2
+a **+2,6 %**, agua con **residuo 0**, coste **1,90 / 1,91** ms/tick.
+
+Y una corrección que nos alcanza a los dos: «la llama es el 90 %» (Opus) y «lo medido es ¾»
+(Fable) salen ambas del libro NOMINAL y son falsas. En raw **entregados** la llama pone entre el
+**6 %** y el **29 %**, y la fuente que más escribe es la combustión — la llama suelta 622 040
+nominales y entrega 105 579, porque lo que ya está a 255 no admite más.
+
+Abierta **Q12**: el desagüe está bien construido pero no drena nada medible. Siguiente: correr
+`ca_playtest139.cmd`, **congelar la física** y seguir con **H5 → H7 → H8**.
 
 ### HF5 · LOS CIERRES DEL FUEGO — **HECHO (R137)**
 

@@ -51,7 +51,12 @@ namespace Alkahest.Sim
                 baseColor = new Color32(140, 136, 130, 255),
                 colorJitter = 22,
                 density = 200,
-                fluidity = 0, // grueso: no desliza de lado, solo cae.
+                // (R138, R17) fluidity 0 NO impide el deslizamiento: `ProcessPowder` prueba la
+                // diagonal sin consultar este campo, asi que la grava resbala a cualquier hueco
+                // de abajo igual que la arena. `fluidity` solo lo leen los liquidos. Lo que la
+                // distingue es la PERMEABILIDAD (suelo.permGrava, 90): conduce agua. Al colocarla
+                // en un nivel hay que darle roca debajo y nada abierto en diagonal, o se derrama.
+                fluidity = 0,
             };
             mats[MaterialId.Planta] = new MaterialDef
             {

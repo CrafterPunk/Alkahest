@@ -368,12 +368,21 @@ namespace Alkahest.Game
             GUILayout.Label($"compactado {st.LabCompactado} · ablandado {st.LabAblandado} · cocido {st.LabCocido} · abonado {st.LabAbonado}", _estiloPie);
             GUILayout.Label($"plantas nacidas {st.LabPlantasNacidas} · muertas {st.LabPlantasMuertas} · presión movió {st.LabPresionMovidas} · cuerpos caídos {st.LabCuerposCaidos} · fracturas {st.LabFracturas}", _estiloPie);
             GUILayout.Space(6f);
-            GUILayout.Label("LIBRO DE ENERGÍA (raw inyectados)", _estiloTitulo);
-            long total = st.LabCalorFuego + st.LabCalorLlama + st.LabCalorHogar;
-            GUILayout.Label($"combustible {st.LabCombustibleQuemado} u · brasa {st.LabCalorFuego} · LLAMA {st.LabCalorLlama} · hogar {st.LabCalorHogar} · TOTAL {total}", _estiloPie);
-            GUILayout.Label($"carbonizadas {st.LabCarbonizado} celdas, con {st.LabEnergiaCarbon} raw guardados dentro · de la brasa, {st.LabCalorCarbon} los soltó el propio carbón al re-arder", _estiloPie);
-            GUILayout.Label($"identidad de la carbonera: combustible original {st.LabCalorFuego - st.LabCalorCarbon} + carbón {st.LabEnergiaCarbon} = {st.LabCalorFuego - st.LabCalorCarbon + st.LabEnergiaCarbon} raw · quema ahogada {(st.LabCombustibleQuemado > 0 ? (st.LabCalorFuego / (float)st.LabCombustibleQuemado).ToString("F1") : "—")} raw/u", _estiloPie);
-            GUILayout.Label("(R136, C3) Los TRES calores, porque contar solo la brasa mentía: en un horno la LLAMA es el 90 % del calor, y la brasa que se ve por la boca, la parte pequeña. El raw/u de la última línea mide por sí solo cuánto de la quema ocurrió SIN RESPIRAR: la fibra al aire da 14 y en sordina 7, así que 10 quiere decir «la mitad de esta pila ardió ahogada» — que es justo lo que hace durar una tolva cinco minutos en vez de uno. Y el carbón no es energía gratis: solo el 25 % de lo que se ahoga lo deja (fuego.rendimientoCarbonPct), de modo que lo que guarda es la MITAD de lo que la fibra no llegó a soltar. Una carbonera cambia cantidad por calidad y pierde por el camino.", _estiloAyuda);
+            GUILayout.Label("LIBRO DEL COMBUSTIBLE (nominal: es lo que se conserva)", _estiloTitulo);
+            long uFibra = st.LabCombustibleQuemado - st.LabCombustibleCarbon;
+            long calFibra = st.LabCalorFuego - st.LabCalorCarbon;
+            GUILayout.Label($"quemado {st.LabCombustibleQuemado} u ({uFibra} de combustible, {st.LabCombustibleCarbon} de carbón) · de ellas RESPIRANDO {st.LabUnidadesRespiradas}" +
+                            (st.LabCombustibleQuemado > 0 ? $" ({100 * st.LabUnidadesRespiradas / st.LabCombustibleQuemado} %)" : ""), _estiloPie);
+            GUILayout.Label($"calor nominal {st.LabCalorFuego} (de ellos {st.LabCalorCarbon} los puso el carbón al re-arder) · NO SOLTADO en sordina {st.LabCalorNoSoltado}, de eso volvió como carbón {st.LabEnergiaCarbon} y se perdió {st.LabCalorNoSoltado - st.LabEnergiaCarbon}", _estiloPie);
+            GUILayout.Label($"identidad de la carbonera: combustible {calFibra} + carbón {st.LabEnergiaCarbon} = {calFibra + st.LabEnergiaCarbon} raw · " +
+                            (uFibra > 0 ? $"{(calFibra / (float)uFibra):F1} raw/u solo del combustible original" : "—"), _estiloPie);
+            GUILayout.Label("(R136 C2/C3, R138) Este libro cuenta calor NOMINAL por unidad de reserva, que es la magnitud que se conserva: de aquí sale la identidad de la carbonera, y por eso el carbón se descuenta — su energía se cuenta al nacer y otra vez al arder. El raw/u de la última línea es solo del combustible original, sin mezclar los 22 del carbón con los 14 de la fibra: al aire da 14 y en sordina 7, así que 10 quiere decir «la mitad ardió ahogada». Lo NO SOLTADO es real: una combustión incompleta pierde energía en gases sin quemar, y solo una parte vuelve como carbón. Una carbonera cambia cantidad por calidad y pierde por el camino.", _estiloAyuda);
+            GUILayout.Space(6f);
+            GUILayout.Label("LIBRO DEL CALOR ENTREGADO (raw escritos de verdad en la grilla)", _estiloTitulo);
+            long entregado = st.LabRawFuego + st.LabRawLlama + st.LabRawBrasa + st.LabRawHogar + st.LabRawFrio;
+            GUILayout.Label($"combustión {st.LabRawFuego} · LLAMA {st.LabRawLlama} · brasa {st.LabRawBrasa} · hogar {st.LabRawHogar} · frío {st.LabRawFrio} · TOTAL {entregado}", _estiloPie);
+            GUILayout.Label($"(índice de llama: {st.LabCalorLlama} nominales, 40 por celda y tick)", _estiloPie);
+            GUILayout.Label("(R138, B) Este es el único libro que admite un TOTAL, porque todos sus sumandos son la misma cosa: raw que acabaron escritos en temp[] después del recorte a 0-255. El de arriba NO se puede sumar — mezcla calor nominal por unidad de reserva con un índice de llama — y sumarlo daba un total de nada. Y la diferencia entre los dos libros no es un detalle: en una hoguera al aire la llama SUELTA 622 040 nominales y ENTREGA 105 579, el 17 %, porque lo que ya está a 255 no admite más. Cuanto más caliente el sitio, menos entrega la llama, y por eso la fuente que más escribe es siempre la combustión (medido: 51 % al aire, 67 % en carbonera sellada, 48 % en el horno) con la llama entre el 6 y el 29 %. El frío resta, que es lo que hace un núcleo frío.", _estiloAyuda);
             GUILayout.Space(6f);
             GUILayout.Label("BALANCE DE AGUA", _estiloTitulo);
             GUILayout.Label($"el laboratorio ha creado/destruido {st.LabBalanceU / 255f:F1} celdas netas de agua (LabBalanceU = {st.LabBalanceU} u).", _estiloPie);
