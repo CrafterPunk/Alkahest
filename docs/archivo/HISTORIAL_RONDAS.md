@@ -7098,3 +7098,35 @@ ca_playtest84.cmd barre la ronda.
   convirtiendo fibra en carbón (243 → 109, solo 7 de ceniza). 0 errores de consola.
   Benchmark, CHECKPOINT D26-D30 y §6g, buzón R8b-R10b y Q8/Q9, captura `R135_hf1_carbonera.png`.
   Parado en HF4 por instrucción de Cesar: sin entrar en H5 ni H6. Sin push (cmd 135).
+
+
+## Ronda 136 — EL LABORATORIO: EL TIRO QUE NO EXISTE Y EL HOGAR QUE NO ERA DOMÉSTICO (Fable 5.1, solo medidas y decisiones)
+
+Cesar pidió decidir si los 1,5 puntos que le faltaban al fuego (veredicto 3,5/5 de Opus en la
+R135) se cerraban con correcciones conceptuales pequeñas, antes de tocar H5/H6. Fable no tocó
+código: midió la build R135 en banco headless por RunCommand (caja de piedra 20×12, hogar +
+yesca + carbón, chimenea de 0-8 celdas) y respondió Q8 y Q9.
+
+**Lo medido.** (1) Subir el humo del carbón de 4 % a 40 % da una simulación **idéntica al bit**:
+el humo no nace porque la llama sobre combustible es inmortal (`life = 30` mientras toque
+combustible), F1 la cuenta como aire y ocupa la única celda vacía por donde saldría el humo.
+(2) La llama inyecta 40 raw/tick sin gastar reserva: 15 veces el carbón que la sostiene; el
+calor del horno es de llama. (3) El aire no se gasta: no hay tiro que regular. Emulando «la
+llama es el sensor», la pila fina da 245/235/228 raw con chimenea 0/2/8 —monótona al revés, la
+chimenea es una fuga— y el ahogo baja el consumo un 4 %. (4) **El hogar no es doméstico**:
+`InjectHeat(40)` sin tope deja a 255 raw la celda de encima; arena + ceniza sobre el hogar →
+VidrioVerde a los 800 ticks sin horno. (5) Carbonizar multiplica la energía ×6,3 (fibra 560
+raw/celda → carbón 3 520). (6) `vidaHumo` 400 es 255 (byte).
+
+**Decisiones (R11-R14).** Q8: sin regla; la válvula del riego es la caldera, no el serpentín
+(tras R8 el serpentín recibe todo el rocío); desagüe de grava en el nivel, geometría. Q9:
+criterio 3 reformulado como dos mandos que sí existen (recinto y contacto), medio punto; el
+tiro se declara inexistente y su paquete de tres reglas queda archivado, no autorizado. HF5:
+cuatro parches de honestidad —C1 tope del hogar (`LabCalentarHasta`), C2 rendimiento del
+carbón 25 % con reserva 50 (identidad energética), C3 contadores de llama/hogar/carbón, C4
+vidaHumo 255— con aceptaciones. Veredicto: 3,5 → 2,5 medido → 4 tras HF5 (4,5 con la cadena
+en H7). Recomendación: **congelar física nueva** tras HF5; H7 jugando; H6 espera.
+
+Archivos: `Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`,
+`docs/LAB/PREGUNTAS_A_FABLE.md` (R11-R14), `docs/LAB/DISENO_FUEGO.md` §10,
+`docs/LAB/HANDOFF_OPUS.md` HF5, `docs/LAB/CHECKPOINT.md` §9. Sin cambios de código.

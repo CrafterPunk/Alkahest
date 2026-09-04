@@ -211,3 +211,42 @@ doméstico y fuego industrial no necesite un sistema: basta con que la fuente gr
 más fría que una llama y con que el único producto industrial (el vidrio) exija una
 temperatura que solo un recinto sostiene. El jugador no descubre «el horno»: descubre que el
 calor se escapa, y lo encierra. Eso es controlar energía.
+
+
+## 10. VEREDICTO DEL ARQUITECTO (R136): lo que el banco desmintió
+
+Opus implementó HF1-HF4 y dio 3,5 de 5 (`Laboratorio/benchmarks/2026-09-04_r135_cierres_y_fuego.md`).
+Antes de aceptar la nota medí yo, en banco headless y sin tocar código
+(`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`). Tres cosas de este diseño
+eran falsas en la build, y las tres son mías:
+
+| lo que decía el diseño | lo que mide el banco | qué se hace |
+|---|---|---|
+| F4: el hogar a 170 raw es doméstico | la celda sobre el hogar está a **255** (`InjectHeat` sin tope); arena + ceniza sobre el hogar → **vidrio en 27 s** sin horno | **C1**: el hogar no calienta a nadie por encima de su temperatura (`LabHogar`, tope) |
+| F2: carbón = combustible concentrado (×4, ×1,6) | fibra 560 raw/celda → carbón 3 520 raw/celda: **×6,3**, con B-F3 al 100 % de celdas | **C2**: rendimiento 25 % y reserva 50; identidad `rend × reservaC × calorC ≈ ½ × reservaP × calorP` |
+| §7.5: libro mayor que cuadra | `LabCalorFuego` cuenta el combustible; la **llama mete 40 raw/tick** sin gastar reserva (×15 el carbón que la sostiene) y no se cuenta | **C3**: `LabCalorLlama`, `LabCalorHogar`, `LabEnergiaCarbon` |
+| F3: `vidaHumo` 400 | `gasLifetime` es un byte: 255 (510 bajo techo) | **C4**: default 255 y ayuda honesta |
+
+Y la respuesta a Q9 (la boca del horno no regula): **el tiro no existe en este motor porque el
+aire no se gasta**. La llama sobre combustible es inmortal, F1 la cuenta como aire y ocupa la
+única celda por donde saldría el humo: subir el humo del carbón de 4 a 40 % da una simulación
+idéntica al bit. Emulé «la llama es el sensor» (muere sin vecino vacío; humea por la punta): con
+pila fina la curva sale monótona **al revés** (245 / 235 / 228 raw con chimenea 0 / 2 / 8: la
+chimenea es una fuga de calor) y el ahogo baja el consumo un 4 %. Hacer del tiro una válvula
+pediría tres reglas más y humo inmortal bajo techo: física nueva por medio punto. **No.**
+
+**Criterio 3 reformulado:** dos mandos de geometría, medidos y monótonos por tramos —el
+**recinto** (retención) y el **contacto** (qué parte del combustible toca el aire)— y ninguno es
+una válvula continua. Medio punto. **Criterio 5 reformulado:** todo raw inyectado está contado
+y la energía del combustible se conserva al carbonizar.
+
+**Veredicto:** 3,5 (Opus) → **2,5 medido** → **4 tras HF5** (4,5 cuando la cadena cruzada
+aparezca jugando). Recomendación a Cesar: congelar física nueva; HF5 son correcciones de
+honestidad, no física; después, H7. Detalle y parches exactos: `PREGUNTAS_A_FABLE.md` R11-R14
+y `HANDOFF_OPUS.md` HF5.
+
+**Lo que me sorprendió esta vez:** que el horno de Opus funcionara por la razón equivocada. El
+calor de un horno en este motor es calor de **llama** (40 raw por tick y celda, gratis), no de
+combustible; el combustible solo decide cuánto dura la llama. Eso no invalida el horno como
+máquina —sigue siendo geometría que encierra calor— pero cambia lo que enseña: el jugador no
+domina el carbón, domina la llama. Conviene decirlo así en el informe.

@@ -240,6 +240,42 @@ Diseño completo, reglas mínimas, cadenas esperadas, benchmarks y criterio en
 calor industrial y el hogar como fuente doméstica. Excepción autorizada: 6 líneas gateadas por
 `LabActivo` en `ProcessCombustion`/`ProcessBrasa` de `SimStepper.cs`, marcadas `(R135)`.
 
+### HF5 · LOS CIERRES DEL FUEGO (R136 de Fable; UNA ronda; va antes de H7, y H5/H6 esperan)
+Fable midió la build R135 en banco headless (`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`)
+y encontró tres cosas falsas de su propio diseño: el hogar calienta a 255 raw a sus vecinos
+(arena + ceniza sobre el hogar vidria sin horno), carbonizar multiplica la energía ×6,3, y el
+libro de energía no cuenta la llama (40 raw/tick por celda, la fuente dominante). Los parches
+exactos, con código, están en `PREGUNTAS_A_FABLE.md` R13; el porqué del tiro que no existe, en
+R12; el veredicto y el orden, en R14. Resumen operativo:
+
+- **C1** `LabHogar` con tope (`LabCalentarHasta`): el hogar no empuja a nadie por encima de
+  `fuego.hogarRaw`. Archivo del laboratorio, sin excepción. Si `suelo.terracotaRaw` > 170,
+  bajarlo a ≤ 170.
+- **C2** Rama F2 de `ProcessCombustion` (+3 líneas en la costura ya autorizada, marca `(R136)`):
+  `fuego.rendimientoCarbonPct` = 25 (nuevo), sal `SalLabCarboniza` = 632, resto → `Ash`;
+  `Carbon.combustReserva` 160 → 50. Identidad: `rend × reservaC × calorC ≈ ½ × reservaP × calorP`.
+- **C3** Contadores `LabCalorLlama` (una línea gateada por `LabActivo` junto al
+  `InjectHeat(x, y, 40)` de `ProcessFire` — **excepción autorizada (R136), una línea, la lengua
+  no se toca**), `LabCalorHogar`, `LabEnergiaCarbon`, `LabCarbonizado`. Panel: los tres calores.
+- **C4** `fuego.vidaHumo` default 255 y ayuda «tope 255 (byte); bajo techo cuenta doble».
+- **Q8** Desagüe de grava en el nivel de referencia si cabe en ≤ 30 líneas (R11); si no, H7.
+
+**Aceptación (todo en banco, sin Play, con tabla en `Laboratorio/benchmarks/`):**
+1. Hogar + arena + ceniza → 0 vidrio a 3 000 ticks; agua sobre el hogar hierve; fibra pegada
+   prende; carbón pegado NO prende.
+2. HF2 repetido con yesca: el horno sigue vidriando (≥ 10 celdas); el hogar suelto, 0.
+3. B-F3 con boca 1: 25 % ± 5 de carbón, el resto ceniza; `LabCalorFuego` + `LabEnergiaCarbon`
+   ≈ celdas de fibra × 560 (± 5 %).
+4. HF3 (tolva) sin cambios; regresión del agua idéntica (residuo 0).
+5. Criterio 3 cerrado como «recinto y contacto» con B-F3 más pila fina contra maciza a igual
+   masa; criterio 5 como «todo raw contado + identidad C2».
+6. Opcional si sobra tiempo: banco humo × luz (fuego de fibra bajo el techo de la cámara alta →
+   `luz` en el lecho por debajo de `planta.luzMin`), que deja el criterio 4 a medio camino.
+
+**Después de HF5: física nueva CONGELADA** (recomendación de Fable, decide Cesar). Sigue H7
+(jugar con Cesar), luego H5 (herramienta) y H8. H6 espera. Escala si C1 deja al horno sin
+vidrio con yesca o si la identidad de C2 no cuadra.
+
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es

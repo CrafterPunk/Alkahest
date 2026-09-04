@@ -6,6 +6,10 @@ CHECKPOINT.)*
 
 ## Abiertas
 
+(ninguna)
+
+## Respuestas de Fable a Q8-Q9 (2026-09-04, R136 — con banco propio, sin tocar código)
+
 ### Q8 · 2026-09-04 · H4/R9 · El mismo alambique que trae el agua AHOGA el huerto
 
 **La pregunta.** Tu plano está aplicado (con un rebosadero que hizo falta añadir, abajo) y el
@@ -30,6 +34,29 @@ drene) — geometría, no física. Puedo probarlo en H7 jugando.
 
 ---
 
+### R11 · Q8 · Sin regla. La válvula está aguas arriba, y el desagüe es geometría del nivel
+
+**Decisión.** No se regula el riego con una regla. Es la lección más limpia que ha dado el
+laboratorio hasta ahora («el mismo aparato que trae el agua ahoga el huerto») y va tal cual al
+informe, sección B.
+
+**Corrección a tu lectura.** Después de R8 el tamaño del serpentín **no es el caudal**. El
+serpentín recibe TODO el rocío (tus 5 926 u con cero en la roca), así que 6 celdas y 33 celdas
+condensan lo mismo; tu propio dato lo dice (serpentín de 6 → 20 columnas bajo agua igualmente).
+El caudal lo manda la **caldera**: cuánta agua toca el hogar y a qué temperatura. Esa es la
+válvula que el jugador tiene, y conviene que el panel la muestre (agua hervida/s) para que la
+descubra. El serpentín decide DÓNDE cae; la caldera decide CUÁNTO.
+
+**Nivel de referencia.** Un desagüe de grava atravesando la solera: dos columnas en el extremo
+del lecho opuesto al hogar, que caigan a la boca de la chimenea. Geometría, no física, y tú
+decides las celdas exactas (regla del HANDOFF §7). Hazlo en HF5 si cabe en ≤ 30 líneas de
+`SimLevelBuilder.Laboratorio.cs`; si no, en H7 jugando, como propones.
+
+**Aceptación de H4, tercera versión.** Con el alambique de referencia y sin tocar nada: a los
+300 s ≤ 8 de 48 columnas bajo agua y sustrato ≥ 60 %; a los 10 min ≥ 1 planta viva. Si con el
+desagüe siguen 0 plantas, la pregunta ya no es de riego y vuelve aquí con la humedad y la luz de
+las columnas aptas.
+
 ### Q9 · 2026-09-04 · HF2 · La boca del horno no regula con el combustible macizo
 
 **La pregunta.** El criterio de B-F2 pide una curva monótona boca→temperatura. Sale **plana**:
@@ -51,6 +78,146 @@ el aire de contacto se agote y se reponga por la boca), y no la tocaría sin tu 
 **Qué hice mientras tanto.** Cerrar HF2 con el resultado positivo que sí se cumple —el horno hace
 vidrio y el hogar suelto no— y anotar el negativo con sus números.
 
+### R12 · Q9 · Tenías razón, y la causa está una capa más abajo: no hay tiro porque el aire no se gasta y la llama es inmortal
+
+Lo medí en banco headless antes de contestar (tabla completa en
+`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`). Cuatro hechos, en cadena:
+
+1. **La llama sobre combustible no muere** (`ProcessFire`: `life = 30` mientras toque
+   combustible). En cada banco `llamas máx` = 20 = la fila superior del carbón, exacta.
+2. **F1 cuenta la llama como aire**, así que la fila superior «respira» a través de una llama
+   que le tapa la única celda vacía; y `SpawnSmokeNear` solo suelta humo en vacío. Resultado:
+   subir el humo del carbón de 4 % a 40 % da una simulación **idéntica al bit** (humo 0,
+   quemado 17 200 en los dos casos).
+3. **La llama inyecta 40 raw por tick** sin gastar reserva: 15 veces el calor del carbón que la
+   sostiene. El calor del horno es de llama, no de combustible.
+4. **El aire nunca se gasta.** Sin oxígeno y sin humo que lo desplace, la caja sellada tiene el
+   mismo aire a los 9 000 ticks que al principio.
+
+Probé la corrección conceptual emulándola sin tocar código («la llama es el sensor»: muere sin
+vecino vacío, y suelta humo por la punta). Con pila maciza: plana (252 raw con chimenea 0/1/2:
+la pila arde por dentro en sordina, como decías, y el termómetro está en el tope del byte). Con
+**pila fina** de 20 celdas, en plena fase activa: 245 / 235 / 228 raw con chimenea 0 / 2 / 8.
+Monótona, **al revés**: la chimenea es una fuga de calor. El ahogo bajó el consumo un 4 %.
+Para que el tiro fuera una válvula harían falta tres reglas (llama-sensor, humo de la punta,
+humo inmortal bajo techo) más un retoque de retención térmica, y aun así el efecto medido es
+pequeño. No lo autorizo: es física nueva y no cambia la tesis.
+
+**Decisión sobre el criterio 3.** Se reformula como propones, con precisión: «*mando de
+geometría*» son dos mandos que sí existen y se han medido —el **recinto** (retención: hogar al
+aire contra caja) y el **contacto** (qué parte del combustible toca el aire: boca de la
+carbonera, pila fina contra maciza)— y ninguno es una válvula continua. El «tiro» se declara
+inexistente en este motor **porque el aire no se gasta**, y eso se escribe en el informe con
+estas medidas. Vale medio punto, no uno, y no lleva código. Tu B-F3 (0 % → 19 % de ceniza) es
+la medida del mando de contacto; añade la pila fina contra maciza con la misma masa y queda
+cerrado.
+
+### R13 · Lo que el banco desmintió de MI diseño, y los cuatro parches de HF5
+
+Estos no son nuevas reglas: son las que ya están, hechas honestas. Tres salieron de leer el
+código con el banco delante; el cuarto es un byte.
+
+**C1 · El hogar no era doméstico (F4).** `LabHogar` fija su celda a 170 pero `InjectHeat(40)`
+empuja a los vecinos sin tope: la celda sobre el hogar está a **255 raw** (390 °C), con caja o
+al aire. Medido: arena sobre el hogar con ceniza al lado → **VidrioVerde a los 800 ticks, sin
+horno**. Parche en `SimStepper.Laboratorio.cs` (archivo del laboratorio, sin excepción):
+
+```csharp
+private void LabHogar(int x, int y, int i)
+{
+    _grid.temp[i] = (byte)LabParams.HogarRaw;
+    // (R136, C1) SEGUNDA LEY: el hogar no calienta a nadie por encima de su propia temperatura.
+    // Es lo que hace verdad «doméstico»: hierve, seca y prende fibra (130), pero no vidria (200)
+    // ni prende carbón (200). Para eso hace falta LLAMA, y la llama pide recinto.
+    LabCalentarHasta(x - 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
+    LabCalentarHasta(x + 1, y, LabParams.HogarCalor, LabParams.HogarRaw);
+    LabCalentarHasta(x, y - 1, LabParams.HogarCalor, LabParams.HogarRaw);
+    LabCalentarHasta(x, y + 1, LabParams.HogarCalor, LabParams.HogarRaw);
+    _grid.WakeChunk(x, y, _tick);
+    TryIgnite(x - 1, y); TryIgnite(x + 1, y); TryIgnite(x, y - 1); TryIgnite(x, y + 1);
+}
+
+/// <summary>(R136) Suma calor a (x,y) sin pasar de `tope`. Lo que ya está a tope no recibe nada.</summary>
+private void LabCalentarHasta(int x, int y, int cuanto, int tope)
+{
+    if (!CellGrid.InBounds(x, y)) return;
+    int j = CellGrid.Idx(x, y);
+    int t = _grid.temp[j];
+    if (t >= tope) return;
+    t += cuanto; if (t > tope) t = tope;
+    LabCalorHogar += t - _grid.temp[j]; // C3: el libro también lo cuenta.
+    _grid.temp[j] = (byte)t;
+}
+```
+Mira `AddTemp` por si despierta chunk o clampa algo más y copia eso. Si `suelo.terracotaRaw`
+está por encima de 170, bájalo a ≤ 170: cocer la superficie de la arcilla es doméstico según
+el propio texto de ayuda de `fuego.hogarRaw`. **Aceptación:** hogar + arena + ceniza → 0
+vidrio a los 3 000 ticks; agua sobre el hogar hierve; fibra pegada prende; carbón pegado NO
+prende; y el horno HF2 repetido **con yesca** sigue vidriando (mis cajas selladas con carbón
+ardiendo llegan a 240-252 raw sin ayuda del hogar, pero es una medida, no una deducción).
+
+**C2 · Carbonizar creaba energía (F2, números míos).** Fibra 40 u × 14 = 560 raw por celda;
+carbón 160 u × 22 = 3 520: ×6,3, y con B-F3 al 100 % de celdas. Parche en la rama F2 de
+`ProcessCombustion` (la costura ya autorizada, +3 líneas, marca `(R136)`):
+
+```csharp
+if (sordina && def.id != MaterialId.Carbon)
+{
+    // (R136, C2) RENDIMIENTO. No toda celda ahogada se vuelve carbón: el resto es ceniza.
+    // Con reserva 50 y rendimiento 25 %, la energía del carbón nacido es la MITAD que la
+    // fibra no soltó en sordina: 0,25 × 50 × 22 = 275 ≈ ½ × 40 × 14 = 280. Cuadra.
+    var rc = XorShift.FromCell(_tick, x, y, SalLabCarboniza); // sal nueva, 632
+    if (rc.ChancePercent(LabParams.RendimientoCarbonPct)) { Transform(idx, MaterialId.Carbon); LabCarbonizado++; LabEnergiaCarbon += 50L * 22; }
+    else Transform(idx, MaterialId.Ash);
+}
+```
+Con `fuego.rendimientoCarbonPct` = 25 (nuevo, FUEGO, 0-100) y `Carbon.combustReserva` 160 →
+**50** (reserva y calor del carbón, léelos de la def, no los pongas a mano). Los dos números son
+tuyos mientras respeten la identidad `rendimiento × reservaCarbón × calorCarbón ≈ ½ ×
+reservaPadre × calorPadre`. Un carbón de 50 arde 13 s respirando y 53 s en sordina: el horno
+sigue trabajando minutos porque la pila es maciza, no porque la celda sea eterna. **Aceptación:**
+B-F3 con boca 1 → 25 % ± 5 de carbón y el resto ceniza; y la identidad medida: `LabCalorFuego`
+de la carbonera + `LabEnergiaCarbon` ≈ (celdas de fibra × 560) ± 5 %.
+
+**C3 · El libro de energía contaba la fuente pequeña (HF4).** `LabCalorFuego` suma solo el
+`calorPaso` del combustible; la llama mete 40 raw/tick por celda sin gastar nada, y el hogar
+40/visita. Añade `LabCalorLlama` (una línea gateada por `LabActivo` junto al `InjectHeat(x, y,
+40)` de `ProcessFire`: excepción autorizada `(R136)`, una línea, y **la lengua no se toca**),
+`LabCalorHogar` (C1) y `LabEnergiaCarbon` (C2). El panel muestra los tres calores y el informe
+dice la verdad: en un horno el 90 % del calor es de llama. **Criterio 5 reformulado:** «todo
+raw inyectado está contado (combustible, llama, hogar) y la energía del combustible se conserva
+al carbonizar (identidad de C2)».
+
+**C4 · `fuego.vidaHumo` = 400 es 255.** `gasLifetime` es un byte y `ReaplicarVapor` recorta.
+Default 255 y ayuda: «tope 255 (byte); bajo techo cuenta doble, 510 ticks». Nada más.
+
+Y una nota sobre Q9 que no lleva código: el carbón puede quedarse con humo 4 %. No hace
+diferencia y el carbón real humea poco.
+
+### R14 · Veredicto del arquitecto y recomendación a Cesar
+
+| criterio §7 | Opus R135 | medido hoy (build R135) | tras HF5 (previsto) |
+|---|---|---|---|
+| 1. Máquina escondida (horno → vidrio; hogar suelto no) | ✔ | **✘** el hogar suelto vidria en 27 s | ✔ si C1 pasa su aceptación |
+| 2. Automatización ≥ 5 min | ✔ | ✔ (324 s, fibra al aire, no depende del hogar) | ✔ |
+| 3. Mando de geometría monótono | ✘ | **½** recinto y contacto; el tiro no existe | ½ |
+| 4. Cadena cruzada no guionizada | pendiente | pendiente | ½ en banco (humo × luz), el resto en H7 |
+| 5. Libro mayor que cuadra | ✔ | **✘** carbón ×6,3; la llama no se cuenta | ✔ con C2 y C3 |
+
+**3,5 → 2,5 medido → 4 tras HF5** (4,5 cuando la cadena aparezca jugando en H7). No llega a 5:
+el medio punto del criterio 3 no es una corrección pequeña sino física nueva, y no la recomiendo.
+
+**Recomendación: congelar física nueva ahora, con una excepción acotada.** HF5 no es física
+nueva: es un tope, un porcentaje, tres contadores y un byte, y sin ellos el informe diría cosas
+falsas (el hogar doméstico, el libro que cuadra). Después de HF5 lo que falta no es física:
+es **jugar** (H7, con Cesar) para ver si alguien encuentra el horno, la carbonera y la tolva
+sin que nadie se lo diga, y el banco (H5) como herramienta. H6 (cuerpos cohesionados) queda
+congelado salvo decisión de Cesar. El paquete «la llama es el sensor» queda archivado en
+`DISENO_FUEGO.md` §10 por si algún día el tiro importa.
+
+**Orden para Opus:** HF5 (C1-C4, B-F3 y HF2 repetidos, Q8 si cabe) → regresión del agua →
+`ca_playtest137.cmd` → H7 con Cesar → H5 → H8. Escala si C1 deja al horno sin vidrio con yesca
+o si la identidad de C2 no cuadra a ±5 %.
 
 ## Respuestas de Opus a R8-R10 (2026-09-04, R135)
 

@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; siguen H5 (banco) y H6 (cuerpos).** El laboratorio existe, compila sin errores, entra desde
+**Fase: 9 — AGUA (H1-H4) y FUEGO (HF1-HF4) hechos; sigue HF5 (los cierres del fuego, R136 de Fable) y después H7; H5 es herramienta y H6 queda congelado salvo decisión de Cesar.** El laboratorio existe, compila sin errores, entra desde
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -530,6 +530,18 @@ headless de H5 y elimina el riesgo de romper la sesión de Play editando `.cs`. 
 solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `BindingFlags`
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
+
+**(Fable, 2026-09-04, R136 — leer antes de nada.)** Q8 y Q9 cerradas en
+`PREGUNTAS_A_FABLE.md` (R11-R14) con banco propio
+(`Laboratorio/benchmarks/2026-09-04_r136_fable_tiro_y_hogar.md`). Lo medido en la build R135:
+el hogar calienta a **255 raw** a sus vecinos (arena + ceniza sobre el hogar → vidrio en 27 s,
+sin horno), carbonizar crea energía **×6,3**, el libro no cuenta la llama (40 raw/tick, la
+fuente dominante), `vidaHumo` 400 es 255, y el tiro no existe porque el aire no se gasta y la
+llama sobre combustible es inmortal (humo del carbón 4 % → 40 %: simulación idéntica al bit).
+Veredicto del fuego: 3,5 → **2,5 medido → 4 tras HF5**. Siguiente paso exacto: **HF5** (los
+cuatro parches C1-C4 de R13 + repetir B-F3 y HF2 + Q8 si cabe; `HANDOFF_OPUS.md` HF5). Después
+de HF5, **física nueva congelada** (recomendación; decide Cesar): H7 jugando, luego H5 y H8; H6
+espera. Lo de abajo queda como historia.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 
