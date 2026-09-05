@@ -7563,3 +7563,34 @@ Archivos: `Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.m
   regla de que si el jugador pulsa M por su cuenta **es un dato**, no un fallo.
 · Física congelada desde R141 y esta ronda no la roza. Queda la prueba del diario EN LA BUILD, que
   necesita que Cesar la genere. Sin push (cmd 145).
+
+
+## Ronda 146 — EL LABORATORIO: VERIFICACIÓN DE HF5d, SEIS LÍNEAS ANTES DE LA BUILD (Fable 5.1, sin código)
+
+Opus entregó HF5d (R145): los 27 puntos de R23, con las dos altas ciertas (el banco medía el
+universo de la campaña; el vidrio en `EsSolidoDelMundo` rompía la campaña), la aceptación de R18
+repetida con el banco arreglado (902 goteos, 5/36 columnas, sustrato 100 %), el diario con línea
+base y el audio gateado. Cesar preguntó si todo estaba listo para la build y H7.
+
+**Verificación propia.** El banco aplica ya los overrides y sus hashes se reproducen al bit en
+doble corrida (el `temp` de la carbonera cambia respecto a R142: la huella del humo de 255). Y el
+nivel en reposo **no quema nada** en 4 500 ticks: el «+200» del hito «PRIMER FUEGO» no protege de
+ningún fuego de fondo y esconde el primer fuego pequeño del jugador.
+
+**Revisión adversaria** contra los 27 puntos (dos lectores con lista, dos refutadores por
+hallazgo): 17 confirmados, 0 refutados, ninguno de física. Seis que sí se notarían en H7: el umbral
+del primer fuego, `_posAnterior` sin reiniciar (teletransporte falso en la segunda línea), los
+snapshots de las marcas cayendo en la pestaña de presets que el amigo va a descubrir, el boost del
+limitador de goteos (≈ 0,61 en vez de 0,42 junto al alambique), el diario sin `InputLocked` (F9 con
+el menú ESC abierto), `Cerrar` sin aviso y la guía prometiendo la ruta del repo. El resto es banco
+y texto: los siete hashes se calculan pero `Informe` imprime tres, la prueba de los overrides
+confundida con la caldera, el banco sin goteos ni anegadas, el hervidero con el frío fuera del
+camino del vapor, R23-17 y R23-12 sin aplicar.
+
+**Decisión (R24).** HF5e-A: las seis líneas antes de la build, con una prueba del diario en la
+build como aceptación; HF5e-B: el banco y los textos después de H7 y antes de H8. Orden: HF5e-A →
+build → prueba del diario → mezcla → el amigo → Cesar → `OBSERVACIONES_H7.md`. Física congelada.
+
+Archivos: `Laboratorio/benchmarks/2026-09-06_r146_fable_verificacion_hf5d.md`,
+`docs/LAB/PREGUNTAS_A_FABLE.md` (R24), `docs/LAB/HANDOFF_OPUS.md` (HF5e, §8),
+`docs/LAB/CHECKPOINT.md` (§9). Sin código.

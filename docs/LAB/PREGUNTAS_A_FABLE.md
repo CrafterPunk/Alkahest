@@ -8,6 +8,75 @@ CHECKPOINT.)*
 
 (ninguna)
 
+## Revisión de Fable de HF5d (2026-09-06, R146, con banco propio)
+
+### R24 · Revisión de HF5d (b4d2413): las dos altas cerradas de verdad; seis correcciones de una línea antes de sentar al amigo, y el resto del banco después de H7
+
+Verificación adversaria del commit contra los 27 puntos de R23 (dos lectores con lista de
+comprobación, dos refutadores por hallazgo): **17 hallazgos confirmados, 0 refutados, ninguno de
+física.** Y mi banco (`Laboratorio/benchmarks/2026-09-06_r146_fable_verificacion_hf5d.md`): el
+banco ya aplica los overrides, los hashes se reproducen al bit en doble corrida, y **el nivel en
+reposo no quema nada** (0 unidades en 4 500 ticks): el fuego de fondo que motivó el «+200» no existe
+en el plano; las 313 u de tu sesión de prueba las encendió alguien.
+
+**Cerrado y bien:** overrides en `Correr` antes de montar (1); vidrio fuera de la tabla con la
+lección escrita (2); pines del hogar y del frío; `LabReservaApagada` en el snapshot (10); «muy
+turbia» a 128 y la tupla del lector con los dos parámetros (11); defaults y cielo a −1 con `finally`
+(13); caldera incondicional (15); `LabInit` solo en el laboratorio (4); goteos por limitador (5);
+línea base de los hitos (3, salvo el umbral); segundos y sufijo en el nombre del diario y aviso
+en `Abrir` (6, en parte); snapshot en las marcas (7, en parte); teletransportes aparte (8, en
+parte); textos del 17 %, catorce contadores, rocío y tabla de la costura (9, en parte). La
+aceptación de R18 sale entera: 902 goteos, 5/36, sustrato 100 %.
+
+**HF5e-A · antes de la build (seis líneas; sin esto las sesiones dan datos falsos):**
+1. `LabDiario.cs:274`: el «+200» exige cinco celdas de fibra consumidas enteras antes de anotar
+   «PRIMER FUEGO»; un amigo que enciende tres celdas y no propaga no cuenta nunca. Como el nivel
+   en reposo quema cero, el umbral sobra: `> _baseQuemado` a secas.
+2. `Abrir()` no reinicia `_posAnterior`: la segunda línea del diario puede ser un «teletransporte»
+   falso si el jugador anduvo antes de F9 o cambió de sala entre sesiones. Una asignación.
+3. Los snapshots de las marcas caen en `Laboratorio/presets/` y **aparecen en la pestaña de presets
+   del panel que el amigo va a descubrir** (`h7_01_S_0312`…): contaminan justo lo que medimos.
+   Carpeta propia (`h7/`) o filtro en `Listar()`, y snapshot solo en S y C, no en las notas F4.
+4. El limitador de goteos aplica un «boost» por eventos suprimidos: junto al alambique cada ploc
+   suena a ≈ 0,61 en vez de 0,42, y los cuatro criterios de R22 pierden su constante. Para el goteo,
+   permiso a mano sin boost (o `suprimidos = 0` antes de disparar).
+5. `LabDiario.Update` no respeta `DayCycle.InputLocked`: F9 abre la claqueta con el menú ESC
+   abierto y F1/F2 marcan con una captura del menú. Una condición más en el gate, como `LabPanel`.
+6. `Cerrar()` escribe sin `try/catch` y los fallos de `Anotar`/`Marcar` solo van a `Player.log`: una
+   sesión puede perder marcas sin aviso y no poder cerrarse. Mismo aviso en pantalla que `Abrir`, y
+   `_abierta = false` en `finally`. Y `GUIA_H7.md` **sigue prometiendo** `Laboratorio/h7/` y `HHMM`
+   (la respuesta R23b «la guía dice la ruta real» no es cierta): en la build es
+   `Builds/<juego>/Laboratorio/h7/` y el snapshot donde decida el punto 3.
+
+**HF5e-B · después de H7 y antes de H8 (banco y textos; no afectan a las sesiones):**
+7. Los siete hashes se calculan pero `Informe()` imprime tres y la tabla de r145 dos: nadie puede
+   comparar cinco de los siete la próxima vez. Cuatro columnas en `Informe`, docblocks al día, tabla
+   regenerada desde `Informe` con dos corridas. (Era la aceptación literal de R23-14.)
+8. La prueba del efecto de los overrides está confundida: el único hash que cambió (alambique)
+   cambió a la vez por la caldera incondicional, y los cinco escenarios sin agua conservan el hash
+   de R142. Separa las dos causas con una corrida cada una, y reescribe la frase de la carbonera.
+9. El banco no mide goteos, columnas anegadas ni sustrato: R18 se cumplió pero no se puede repetir
+   desde el repo. Tres campos más en `Resultado` para el escenario del alambique.
+10. Hervidero: el tiro está libre, pero el núcleo frío quedó a los lados y 30 filas por debajo de la
+    salida: el vapor no cruza nunca una celda fría. Barra fría encima de la salida, o renombrarlo.
+11. R23-17 entero sigue sin aplicar (hora en el nombre del menú, docblock «C# puro», luz por pasada
+    y por tick en el informe, ×13 medido en Play). R23-12 también: la ayuda del carbón es un
+    comentario de C#, invisible.
+12. Menores: `RestaurarDefaults` duplicada en línea y `VaporVidaCambiado` armado tras el `finally`;
+    la brasa apagada por agua sigue sin decirse en el docblock; la tabla de la costura da +50 en
+    `ProcessCombustion` con la convención escrita, no +49; el `WakeChunk` sigue enumerado en el
+    HANDOFF como parte del arreglo.
+
+**Aceptación de HF5e-A:** una sesión de prueba del diario **en la build** (F9, andar, encender
+tres celdas de fibra con el hogar, F1, F2, F9) que deje `.md`, PNG y snapshot donde diga la guía,
+con «PRIMER FUEGO» en el minuto en que se encendieron las tres celdas, sin «teletransporte» en la
+segunda línea y sin entradas `h7_*` en la pestaña de presets; junto al alambique, goteos ≤ 6/s al
+volumen de la constante. Luego la mezcla (R22) y el amigo (R21). `ca_playtest147.cmd`.
+
+**Veredicto.** HF5d cumplió lo que bloqueaba: el banco mide ya el laboratorio, la campaña está
+intacta, el diario tiene línea base. Lo que queda son detalles que en H7 sí se notarían (el primer
+fuego del amigo, los presets contaminados, el volumen del goteo). Una hora de Opus, y a jugar.
+
 ## Respuestas de Fable a Q13-Q15 y revisión de R142/R143 (2026-09-06, R144, con banco propio)
 
 ### Q13 · 2026-09-05 · H7 · Las tres sesiones con sonido: nos quedamos sin línea base

@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 10 — AGUA (H1-H4) y FUEGO (HF1-HF5c) hechos y revisados; H5 hecho (banco por regenerar con overrides); R140/R143 (nombres, panel, sonido, diario) hechos. FÍSICA CONGELADA desde R141. Orden: HF5d (R144) → build → H7 (amigo, luego Cesar) → OBSERVACIONES_H7 → H8 → diseño comercial; H6 documentado y congelado.**
+**Fase: 10 — AGUA y FUEGO hechos y revisados; H5 hecho y verificado (banco con overrides); R140/R143/R145 (nombres, panel, sonido, diario, HF5d) hechos. FÍSICA CONGELADA desde R141. Orden: HF5e-A (R146) → build → prueba del diario → H7 (amigo, luego Cesar) → HF5e-B → H8 → diseño comercial; H6 documentado y congelado.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -592,6 +592,19 @@ segundos en el nombre, snapshot en cada marca y teletransportes fuera de la dist
 ella** (F9/F1/F2/F4 dejando archivo, PNG y snapshot en `Builds/…/Laboratorio/h7/`). Después: **el
 amigo primero** (medida de onboarding, una sesión), luego Cesar (profundidad, dos sesiones), y
 `OBSERVACIONES_H7.md`. Protocolo y reglas en `docs/LAB/GUIA_H7.md`.
+
+**(Fable, 2026-09-06, R146 — leer antes de nada.)** HF5d (b4d2413) **verificada**: las dos altas
+cerradas de verdad (banco con overrides y hashes reproducibles en doble corrida; campaña intacta),
+línea base de los hitos, `LabInit` gateado, limitador de goteos. Revisión adversaria contra los 27
+puntos de R23: 17 hallazgos, ninguno de física. **No está listo para el amigo todavía:** seis
+correcciones de una línea (`PREGUNTAS_A_FABLE.md` R24, HF5e-A): el «+200» del primer fuego esconde
+el primer fuego pequeño (medido: el nivel en reposo quema cero), `_posAnterior` sin reiniciar,
+snapshots de las marcas contaminando la pestaña de presets, boost del limitador de goteos (≈ 0,61
+en vez de 0,42), `InputLocked` ausente en el diario, `Cerrar` sin aviso y la guía con la ruta
+vieja. El banco (siete hashes en `Informe`, causas separadas, goteos en `Resultado`, hervidero,
+R23-17, R23-12) va después de H7 (HF5e-B). **Siguiente paso exacto:** HF5e-A (Opus) → build → la
+prueba del diario en la build (aceptación de R24) → mezcla (R22) → el amigo (R21) → Cesar →
+`OBSERVACIONES_H7.md`. Física congelada. Cesar: `ca_playtest146.cmd`.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

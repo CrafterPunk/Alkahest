@@ -390,6 +390,18 @@ caldera incondicional, hervidero con cámara, informe con unidades y hora.
 **Aceptación:** la de R23. `ca_playtest145.cmd`. Después: build → el amigo (R21) → Cesar →
 `OBSERVACIONES_H7.md` → Fable.
 
+### HF5e · SEIS LÍNEAS ANTES DE LA BUILD, Y EL BANCO DESPUÉS DE H7 (R146 de Fable)
+**A · antes de la build (una hora):** «PRIMER FUEGO» con `> _baseQuemado` a secas (el nivel en
+reposo quema cero); `_posAnterior` reiniciada en `Abrir`; snapshots de las marcas fuera de la
+pestaña de presets (carpeta `h7/` o filtro) y solo en S y C; goteo sin el boost del limitador;
+`DayCycle.InputLocked` en el gate del diario; `Cerrar` con `try/catch` y aviso, y `GUIA_H7.md` con
+la ruta real de la build. Aceptación: la sesión de prueba del diario en la build descrita en R24.
+`ca_playtest147.cmd` → mezcla (R22) → el amigo (R21) → Cesar.
+**B · después de H7, antes de H8:** los siete hashes en `Informe` y la tabla regenerada en doble
+corrida; las dos causas del cambio de hash del alambique separadas; goteos/anegadas/sustrato en el
+`Resultado` del alambique; hervidero con el frío en el camino del vapor; R23-17 y R23-12 enteros;
+menores de R24-12. Detalle: `PREGUNTAS_A_FABLE.md` R24.
+
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es
@@ -461,12 +473,11 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-**(Actualizado por Fable, 2026-09-06, R144.)**
+**(Actualizado por Fable, 2026-09-06, R146.)**
 
-1. **HF5d** (media ronda, Opus): R23. `ca_playtest145.cmd`.
-2. **Build** de un jugador y comprobación de la mezcla por Cesar (R22, cuatro criterios).
-3. **H7**: el amigo primero (R21, entrevista de tres preguntas), después Cesar (dos sesiones);
-   protocolo en `HANDOFF_SABADO.md` §2 y `GUIA_H7.md`; las tres sesiones con sonido (R20).
-4. `docs/LAB/OBSERVACIONES_H7.md` (Opus) → Fable puntúa el criterio 4 del fuego y revisa.
-5. **H8** informe; luego el diseño de la experiencia comercial (Fable, desde las observaciones).
+1. **HF5e-A** (una hora, Opus): las seis líneas de R24 y `GUIA_H7.md` con la ruta real. `ca_playtest147.cmd`.
+2. **Build** de un jugador; **prueba del diario en la build** (aceptación de R24); mezcla (R22).
+3. **H7**: el amigo primero (R21), después Cesar; `OBSERVACIONES_H7.md` (Opus).
+4. **HF5e-B** (banco y textos, R24-7..12) antes de H8.
+5. Fable puntúa el criterio 4, revisa, y empieza el diseño de la experiencia comercial. **H8** informe.
 6. **Física CONGELADA** (§2); **H6** documentado y congelado.
