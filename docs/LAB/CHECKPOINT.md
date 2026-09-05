@@ -571,30 +571,28 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-06, R148 — leer antes de nada.)** **HF5e-B y H7s hechos**;
-`Laboratorio/benchmarks/2026-09-06_r148_h7s_arco_largo.md`. Alcance vigente en
-`docs/LAB/ALCANCE.md`; H7 con jugador **deferido** (R25) y HF5e-A con él.
+**(Opus, 2026-09-06, R149 — leer antes de nada.)** **H8 ESCRITO**:
+`docs/LAB/INFORME_FINAL.md`, secciones A-F, borrador para que Fable revise. Con eso quedan hechos
+**todos los hitos que no dependen de un jugador**: H1-H5, HF1-HF5e-B, H7s y H8. H6 congelado; H7
+con jugador y HF5e-A, deferidos (R25).
 
-**El arco largo autónomo responde las dos preguntas que no necesitaban jugador:**
-- **H4 no se cumple, y la causa está aislada por fin: es la LUZ, no el agua.** Con el alambique
-  de r141, sustrato al **100 %** y **0 de 36 columnas anegadas** desde el minuto 15 — el agua
-  está resuelta. Pero la luz del lecho es **0** los treinta minutos, y en el nivel limpio solo
-  **7 de 73 celdas** de cara pasan de `planta.luzMin`: las siete bajo la boca del cielo. El 93 %
-  del huerto está en sombra permanente. Escalado como **Q16** (geometría del nivel, no física).
-- **Criterio 4 del fuego: cadena cruzada SÍ, observada y medida**, aunque no la prevista. No es el
-  humo: es **la sombra del propio alambique**, cuyas 31 celdas en y272 tapan la boca del cielo y
-  hunden la luz de 245 a 0. Control: corrido a x140-170, la luz sube a 17 y germinan cinco veces
-  más plantas. En el informe: «observado en simulación autónoma: sí · con jugador: no evaluado».
+**Lo que el informe sostiene**, y donde está el debate:
+- La mitad medible de la apuesta **se cumple**: diez cadenas observables, **nueve no programadas**,
+  a 1,6 ms/tick (peor caso 3,1).
+- La otra mitad —que el conocimiento sustituya el trabajo manual— **está a medias**: el único
+  proceso que corre solo durante minutos es la tolva (466 s). Falta una máquina que produzca sin
+  volver a tocarla.
+- Fuego **4 de 5** medidos; el criterio 4 como «observado en simulación autónoma · con jugador no
+  evaluado».
+- Estimación para llevarlo al juego: **3-4 meses** de una persona, sin H6 — marcada **[FABLE]**
+  junto con la valoración, que son las dos que piden segunda opinión.
 
-HF5e-B: `Informe()` con los siete hashes, el banco midiendo goteos/anegadas/sustrato (para que la
-aceptación de R18 se repita desde el repo), hervidero con la barra fría encima del tiro,
-`RestaurarDefaults` con `VaporVidaCambiado` restaurado, hora en el informe y la ayuda del carbón
-visible en el panel.
+Todo lo que dependía de una persona delante va marcado **«no evaluado — ni aprobado ni refutado»**,
+con una sección (A.4) dedicada a decirlo.
 
-**Siguiente paso exacto: correr `ca_playtest148.cmd` y escribir H8** —
-`docs/LAB/INFORME_FINAL.md`, secciones A-F, con «no evaluado — ni aprobado ni refutado» en todo lo
-que dependía de un jugador y «[FABLE]» en la valoración C y la estimación E. Después, revisión
-conjunta.
+**Siguiente paso exacto: correr `ca_playtest149.cmd`.** Después lo deciden Cesar y Fable: **Q16**
+(la luz del huerto, lo único abierto), la revisión conjunta del informe, y el diseño de la
+experiencia — a partir de `HANDOFF_SABADO.md` §3, ya sin observaciones de jugador.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

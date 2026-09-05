@@ -1777,3 +1777,46 @@ Para el informe, el criterio 4 queda como pediste: **«observado en simulación 
 
 **Siguiente: H8, el borrador honesto.** Con «no evaluado — ni aprobado ni refutado» en todo lo que
 dependía de un jugador, y «[FABLE]» en la valoración C y la estimación E.
+
+
+---
+
+## H8 · El informe está en la mesa (2026-09-06, R149)
+
+`docs/LAB/INFORME_FINAL.md`, secciones A-F, borrador para tu revisión.
+
+**Cómo lo estructuré** (las secciones A-F no estaban enumeradas en ningún sitio del repo; las
+derivé de los diez entregables del encargo, dilo si quieres otro corte):
+A lo construido y las cadenas · B emergente contra ruido · C valoración **[FABLE]** ·
+D multiplayer (tu análisis) · E estimación **[FABLE]** · F lo que se sabe y lo que no.
+
+**La regla que ordena el documento**, como pediste: lo medido lleva su benchmark; lo que dependía
+de una persona va marcado «no evaluado — ni aprobado ni refutado». Ninguna de las dos se disfraza
+de la otra, y hay una sección entera (A.4) dedicada a decir qué NO se puede afirmar.
+
+**Lo que sostengo en el borrador:**
+
+- **La mitad medible de la apuesta se cumple**: diez cadenas observables, **nueve no programadas**,
+  a 1,6 ms/tick con el peor caso en 3,1.
+- **La otra mitad está a medias, y con un número**: el único proceso que corre solo durante minutos
+  es la tolva (466 s). No hay todavía una máquina que produzca **sin volver a tocarla**, que es lo
+  que la tesis promete. Me parece el hallazgo más importante del informe y el que más nos falta.
+- **Y la lección que vale más que cualquier máquina**: dos veces, con mecanismos distintos, el
+  aparato que resuelve un problema crea el siguiente. El alambique que riega, ahoga (R135); el
+  alambique que riega, ensombrece (R148). Si el juego tiene algo, está ahí.
+- Fuego: **4 de 5 medidos**, con el criterio 4 «observado en simulación autónoma · con jugador no
+  evaluado». [FABLE: ¿4/5, o «4 medidos + 1 diferido»?]
+
+**Las dos que más necesitan tu segunda opinión:**
+
+1. **La valoración (C).** La mía es la de quien lo ha construido, y eso sesga.
+2. **La estimación (E): 3-4 meses** de una persona sin H6 ni lo que la prueba con jugador destape.
+   Es una estimación de implementador y sospecho que se queda corta en presentación, que es la
+   partida más grande (1-1,5 meses de mis seis). Es la cifra que más se beneficia de que la mires.
+
+Y un detalle que corregí de tu R24-11: el **×13** de multiplicador aparece marcado como
+**deducido** del presupuesto de 20 ms, no medido en Play. No lo he podido medir jugando.
+
+Con esto quedan hechos todos los hitos que no dependen de un jugador. Lo que sigue lo decidís
+Cesar y tú: la geometría de la luz (**Q16**, lo único abierto), la revisión conjunta del informe,
+y el diseño de la experiencia.

@@ -426,6 +426,8 @@ Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es
 la sección A del informe. No fuerces ninguna cadena.
 
+### H8 · Informe final — **HECHO (R149)**: `docs/LAB/INFORME_FINAL.md`, secciones A-F, con lo medido separado de lo «no evaluado» y [FABLE] en la valoración C y la estimación E. Especificación original abajo.
+
 ### H8 · Informe final (1 día)
 `docs/LAB/INFORME_FINAL.md` con las secciones A-F del encargo de Cesar, usando:
 `Laboratorio/benchmarks/*`, los presets `ref_*`, las capturas, `docs/LAB/MULTIPLAYER.md`

@@ -7663,3 +7663,37 @@ de H7 que no necesitaban a nadie delante. Las dos tienen respuesta.
   desde el menú del editor corre entero.
 · Física congelada; H6 congelado. Siguiente: **H8, el borrador honesto del informe**, con «no
   evaluado — ni aprobado ni refutado» en todo lo que dependía de un jugador. Sin push (cmd 148).
+
+## Ronda 149 — H8: EL INFORME FINAL (Opus 5, borrador para Fable)
+
+`docs/LAB/INFORME_FINAL.md`. Con esto quedan hechos todos los hitos que no dependen de un jugador.
+
+· **La regla que ordena el documento**: lo medido lleva su benchmark; lo que dependía de una
+  persona delante va marcado **«no evaluado — ni aprobado ni refutado»**, con una sección entera
+  (A.4) dedicada a decir qué NO se puede afirmar. Nadie ha jugado la build nueva y el informe no
+  finge lo contrario.
+· **Secciones A-F**, derivadas de los diez entregables del encargo porque no estaban enumeradas en
+  ningún sitio: A lo construido y las cadenas · B emergente contra ruido · C valoración [FABLE] ·
+  D multiplayer (análisis de Fable) · E estimación [FABLE] · F lo que se sabe y lo que no.
+· **Lo que sostiene.** La mitad medible de la apuesta se cumple: **diez cadenas observables, nueve
+  de ellas NO programadas** —salen de que dos números y una geometría se encuentren—, con el
+  laboratorio a 1,6 ms/tick y el peor caso en 3,1 contra los 12 de aceptación. La otra mitad —que
+  el conocimiento sustituya el trabajo manual— **está a medias y con un número**: el único proceso
+  que corre solo durante minutos es la tolva (466 s), y no hay todavía una máquina que produzca
+  SIN VOLVER A TOCARLA, que es lo que la tesis promete.
+· **La lección que el informe pone por encima de cualquier máquina**: dos veces, con mecanismos
+  distintos, el aparato que resuelve un problema crea el siguiente. El alambique que riega, ahoga
+  (R135); el alambique que riega, ensombrece (R148). Eso no se diseñó: salió de que las reglas se
+  cruzaran, y si el juego tiene algo, está ahí.
+· **La sección B guarda lo que se CAYÓ al medirlo**, que es la parte útil: el tiro de chimenea (no
+  existe — subir el humo del carbón del 4 al 40 % da una simulación idéntica al bit), el desagüe
+  de grava (encharcaba más), y el churn erosión-depósito (6 279 eventos para el mismo neto). Más
+  un apartado B.1 con las tres veces que el propio banco dijo algo falso, incluida la peor: medía
+  otro universo, y los hashes de Fable y los míos coincidían porque los dos medíamos lo mismo mal.
+· **Fuego 4 de 5** medidos, con el criterio 4 como «observado en simulación autónoma: sí · con
+  jugador: no evaluado». **Estimación: 3-4 meses** de una persona sin H6, marcada [FABLE] junto con
+  la valoración — las dos que piden segunda opinión, porque la mía es la de quien lo construyó.
+· Y una corrección de método: el **×13** de multiplicador queda marcado como DEDUCIDO del
+  presupuesto de 20 ms, no medido en Play, como señaló Fable en R24-11.
+· Lo único abierto es **Q16** (la luz del huerto: 7 de 73 celdas de cara pasan del mínimo, y es
+  geometría del nivel, no física). Sin push (cmd 149).
