@@ -30,6 +30,13 @@ namespace Alkahest.Game
         public static bool Abierto => _instancia != null && _instancia._abierto;
         public static bool RatonSobrePanel { get; private set; }
         /// <summary>(R131) El pincel está armado: el clic es del pincel, no del cincel/frasco.</summary>
+        /// <summary>(R143, H7) Qué pestaña mira el jugador, para que el diario de sesión pueda anotarlo. Vacío si el panel está cerrado.</summary>
+        public static string PestanaAbierta { get; private set; } = "";
+        /// <summary>(R143, H7) Índice del pincel armado, o −1. Lo lee el diario: lo que alguien PINTA dice qué le falta como herramienta.</summary>
+        public static int PincelSeleccionado { get; private set; } = -1;
+        /// <summary>(R143, H7) Nombre legible de un pincel del catálogo.</summary>
+        public static string NombrePincel(int i) => i >= 0 && i < Catalogo.Length ? Catalogo[i].Nombre : "?";
+
         public static bool PincelActivo { get; private set; }
         /// <summary>Guarda para Flask/Cincel/Termometro: el panel captura el ratón mientras está encima de él o mientras el pincel está armado.</summary>
         public static bool BloqueaHerramientas => Abierto && (RatonSobrePanel || PincelActivo);
@@ -158,6 +165,10 @@ namespace Alkahest.Game
             else RatonSobrePanel = false;
 
             PincelActivo = _abierto && _pincelSel >= 0;
+            // (R143, H7) Espejo público para el diario de sesión: es la única forma de que el
+            // registro sepa qué mira y qué pinta el jugador sin que el diario hurgue aquí dentro.
+            PincelSeleccionado = _abierto ? _pincelSel : -1;
+            PestanaAbierta = _abierto && _pestanas != null && _pestana >= 0 && _pestana < _pestanas.Length ? _pestanas[_pestana] : "";
 
             bool tecladoLibre = !UiStyles.EscribiendoTexto && !JournalHud.Abierto && !AlbumReal.Abierto && !DayCycle.InputLocked;
             if (tecladoLibre)

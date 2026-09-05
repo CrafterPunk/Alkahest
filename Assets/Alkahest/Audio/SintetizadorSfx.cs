@@ -58,6 +58,7 @@ namespace Alkahest.Audio
         private static AudioClip _vozDelMaestro;    // (ronda 73) la presencia del Maestro al "hablar" en el prólogo.
         private static AudioClip _subGrave;         // (R88) el peso de la palabra ORDEN.
         private static AudioClip _clank;            // (R88) el encaje del tubo de cobre.
+        private static AudioClip _goteo;            // (R143) la gota que cae en el laboratorio.
         private static AudioClip _derrumbe;         // (ronda 73) el techo que se abre en el beat del lodo.
         private static AudioClip _tutorialConfirma; // (ronda 73) "sí, eso era": confirmación suave del tutorial contextual.
 
@@ -79,6 +80,8 @@ namespace Alkahest.Audio
         public static AudioClip SubGrave => _subGrave ??= ConstruirSubGrave();
         /// <summary>(R88) El CLANK del tubo al encajar: dos parciales metálicos inarmónicos + golpe seco.</summary>
         public static AudioClip Clank => _clank ??= ConstruirClank();
+        /// <summary>(R143) El goteo del laboratorio. Ver ConstruirGoteo.</summary>
+        public static AudioClip Goteo => _goteo ??= ConstruirGoteo();
         public static AudioClip Derrumbe => _derrumbe ??= ConstruirDerrumbe();
         public static AudioClip TutorialConfirma => _tutorialConfirma ??= ConstruirTutorialConfirma();
 
@@ -765,6 +768,46 @@ namespace Alkahest.Audio
         /// industrial, no nota musical) sobre un golpe granular seco. UN solo
         /// sonido para los dos tubos: es un acto, no dos piezas.
         /// </summary>
+        /// <summary>
+        /// (R143) EL GOTEO. La voz que le faltaba al laboratorio: allí el agua no sale de un
+        /// grifo, se condensa en un techo frío y CAE, y ese sonido es la señal de que el
+        /// alambique funciona — el jugador la oye antes de ver la gota.
+        ///
+        /// Un goteo real son dos cosas pegadas: el «tic» del impacto (ruido muy corto y agudo) y
+        /// el «plop» de la burbuja que se cierra bajo la superficie, que es un seno que SUBE de
+        /// tono en unos 40 ms. Lo segundo es lo que hace que se reconozca como agua y no como un
+        /// chasquido cualquiera. Se le da poca amplitud a propósito: en una cueva silenciosa un
+        /// goteo se oye aunque sea flojo, y va a repetirse cientos de veces.
+        /// </summary>
+        private static AudioClip ConstruirGoteo()
+        {
+            const float dur = 0.20f;
+            var buf = NuevoBuffer(dur, SR_ONESHOT);
+
+            // El impacto: un puñado de gránulos filtrados, casi un chasquido.
+            var tic = NuevoBuffer(dur, SR_ONESHOT);
+            AnadirGranulos(tic, SR_ONESHOT, 4, 0.004f, 1f);
+            PasoBajo(tic, SR_ONESHOT, 5200f);
+            AplicarEnvolvente(tic, SR_ONESHOT, 0.001f, 0.02f);
+            Sumar(buf, tic, 0.5f);
+
+            // El «plop»: la burbuja cerrándose, tono ASCENDENTE. Es la firma del agua.
+            var plop = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(plop, SR_ONESHOT, 620f, 1180f, 1f);
+            AplicarEnvolvente(plop, SR_ONESHOT, 0.003f, 0.05f);
+            Sumar(buf, plop, 0.62f);
+
+            // Un armónico grave muy corto: le da cuerpo, evita que suene a juguete.
+            var cuerpo = NuevoBuffer(dur, SR_ONESHOT);
+            SenoDeslizante(cuerpo, SR_ONESHOT, 300f, 380f, 1f);
+            AplicarEnvolvente(cuerpo, SR_ONESHOT, 0.004f, 0.04f);
+            Sumar(buf, cuerpo, 0.28f);
+
+            Normalizar(buf, 0.34f); // flojo a propósito: se repite mucho y la cueva está callada.
+            Clamp(buf);
+            return CrearClip("TenThousandYears_Goteo", buf, SR_ONESHOT);
+        }
+
         private static AudioClip ConstruirClank()
         {
             const float dur = 0.38f;

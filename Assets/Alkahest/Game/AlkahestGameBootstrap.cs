@@ -1044,6 +1044,15 @@ namespace Alkahest.Game
             SpawnDayCycle(orderSystem, knowledge, null, null);
 
             LabPanel.Crear(_sim, apprentice.GetComponent<ApprenticeController>());
+            LabDiario.Crear(_sim, apprentice.transform); // (R143, H7) el registro de sesion: F9 abre/cierra, F1/F2/F4 marcan.
+
+            // (R143) EL LABORATORIO SUENA. Esta llamada faltaba desde R130: TrySpawn (el taller)
+            // creaba el director al final, pero esta rama sale antes de llegar ahi, asi que el
+            // laboratorio ha estado MUDO desde que existe — y como el modo se entra desde el
+            // titulo, que recarga la escena, tampoco quedaba el director del arranque anterior.
+            // El director tolera dispensers y encargos nulos; las voces propias del laboratorio
+            // (agua, goteo, vapor, el fuego de los hogares) estan en Audio/DirectorDeAudio.Laboratorio.cs.
+            SpawnDirectorDeAudio(orderSystem, knowledge, apprentice.GetComponent<Flask>(), apprentice.transform);
 
             _spawned = true;
             Debug.Log("[TenThousandYears] LABORATORIO DE LEYES (R130): panel F8, teletransportes Ctrl+1..6, tiempo 1x-100x. docs/LAB/.");

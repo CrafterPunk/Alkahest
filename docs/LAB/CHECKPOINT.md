@@ -586,7 +586,13 @@ desagüe retirado (R18), y H5 con su banco y su luz. **La física está CONGELAD
 - El «17 %» de la llama era mío y estaba mal (comparaba nominal con entregado): el cociente
   honesto es **≈ 4 %**. La conclusión de fondo no cambia.
 
-**Siguiente paso exacto: correr `ca_playtest142.cmd`, y después H7 JUGANDO CON CESAR** con el
+**(R143)** El laboratorio ya SUENA —faltaba una línea desde R130: `SpawnLaboratorio` nunca
+creaba el `DirectorDeAudio`, y las voces del taller estaban atadas a cosas que aquí no existen—
+y ya SE OBSERVA SOLO: `Game/LabDiario.cs` anota hitos, velocidad, panel, pincel y distancia con
+tick y reloj, con claqueta (F9) para alinear el vídeo y marcas F1/F2/F4 con captura. Guía de la
+sesión en `docs/LAB/GUIA_H7.md`.
+
+**Siguiente paso exacto: correr `ca_playtest143.cmd`, generar la build y jugar H7** con el
 protocolo de `docs/LAB/HANDOFF_SABADO.md` §2 (tres sesiones de 30-40 min, registro en
 `Laboratorio/h7/sesion_NN.md`, capturas y snapshots en cada sorpresa y cada confusión, y las
 observaciones para el diseño comercial en §3). Luego H8. Fable vuelve el sábado.

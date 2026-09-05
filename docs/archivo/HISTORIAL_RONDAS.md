@@ -7432,3 +7432,53 @@ Cesar. Esta ronda es contabilidad, geometría del nivel, herramienta y rendimien
 · 96 parámetros. Benchmark `2026-09-04_r142_hf5c_y_h5.md`, CHECKPOINT §9, buzón R18b-R19b (y
   «Abiertas» vacía), HANDOFF HF5c marcado. **Siguiente: H7 JUGANDO CON CESAR** con el protocolo de
   `HANDOFF_SABADO.md` §2, luego H8. Fable revisa el sábado. Sin push (cmd 142).
+
+## Ronda 143 — EL LABORATORIO SUENA, Y SE OBSERVA SOLO (Opus 5, pedido de Cesar para H7)
+
+Preparación de H7: Cesar va a jugar y a pasarle la build a un amigo que no ha visto nada de lo
+nuevo, y no hay forma de que un agente vea ni oiga en tiempo real. Dos herramientas para que la
+sesión se registre igual, y el sonido que faltaba.
+
+· **EL LABORATORIO NUNCA HABÍA TENIDO SONIDO, y la causa era UNA LÍNEA.** El sistema de audio
+  existe entero desde M5 —`DirectorDeAudio` (1 356 líneas) y `SintetizadorSfx` (978), que
+  sintetiza dieciocho timbres POR CÓDIGO sin un solo archivo de audio— y está afinado con notas
+  de mezcla de playtests viejos. Pero `SpawnDirectorDeAudio` se llama al final de `TrySpawn`, que
+  es la rama del TALLER, y `SpawnLaboratorio` sale antes de llegar ahí: el director nunca se
+  creaba. Medido en vivo antes del arreglo: **0 AudioSources en la escena del laboratorio**. Y
+  como al modo se entra desde el título, que recarga la escena, tampoco quedaba el del arranque.
+  Una línea en `SpawnLaboratorio` y el mundo tiene voz.
+· **Y LE FALTABAN SUS PROPIAS VOCES.** Las del taller están atadas a grifos, lecho y tolva, que
+  aquí no existen: con el director puesto, los cuatro bucles arrancaban correctos y **todos a
+  volumen 0,00**. `Audio/DirectorDeAudio.Laboratorio.cs` (partial, todo gateado por `LabActivo`,
+  cero cambios en el taller) le da cuatro: **el agua corriente** y **el vapor** por sondeo
+  alrededor del jugador —para que pueda ALEJARSE del agua y dejar de oírla, que es la mitad de
+  para qué sirve—, **el fuego** contando también hogar y brasa (en el taller solo cuenta `Fire`,
+  y aquí eso dejaba mudo lo que más arde: un hogar calienta toda la partida sin una sola llama, y
+  una carbonera arde en sordina —por definición SIN lengua— durante minutos), y **el goteo**, un
+  timbre nuevo. Medido junto a la poza: agua 0,098, ambiente 0,150, y el fuego respondiendo a los
+  hogares.
+· **EL GOTEO, sintetizado.** Un goteo real son dos cosas pegadas: el «tic» del impacto y el
+  «plop» de la burbuja que se cierra, que es un tono que SUBE en unos 40 ms — lo segundo es lo
+  que hace que se reconozca como agua y no como un chasquido. Va flojo a propósito: en una cueva
+  callada se oye igual y va a repetirse cientos de veces. Es LA señal de que el alambique
+  funciona, y llega antes que la vista porque el techo suele estar fuera de plano.
+· **EL DIARIO DE SESIÓN (`Game/LabDiario.cs`), porque no puedo mirar.** El reparto es: la máquina
+  mide, la persona interpreta. Anota solo, con tick y reloj: el tiempo hasta el primer goteo,
+  fuego, arcilla cocida, carbón, vidrio y planta —el «tiempo hasta descubrir cada máquina» que
+  pide el protocolo deja de ser una impresión y pasa a ser el tick en que ese contador se movió
+  por primera vez, usando el libro que ya se llevaba desde R131—, cada cambio de velocidad, qué
+  pestaña abre, qué pincel arma, y la distancia recorrida. Al cerrar escribe el resumen con el
+  libro entero.
+· **Y LA CLAQUETA.** F9 abre y cierra sesión, y al abrir saca un rótulo con la hora y el tick:
+  con eso el vídeo y el diario se alinean sin que nadie tenga que empezar a grabar en un instante
+  exacto. F1 «¡anda!», F2 «¿por qué?», F4 nota — cada marca guarda tick, posición y CAPTURA, con
+  nombre único (dos marcas en el mismo segundo se pisaban el PNG, y eso pasa justo en los
+  momentos intensos, que son los que se marcan). M y N estaban ocupadas: M es el silencio del
+  audio desde M5, que es la excepción de R12.
+· **Probado de punta a punta**: sesión abierta, hito «PRIMER FUEGO» anotado solo en el tick 34,
+  dos marcas con su captura, resumen completo al cerrar. `docs/LAB/GUIA_H7.md` con las teclas, lo
+  que anota la máquina, lo que hay que apuntar a mano, las reglas del observador (no explicar
+  nada; si ayudas, F4) y las TRES FRASES que es todo lo que se le dice al jugador antes de
+  empezar — lo que no descubra solo es exactamente lo que hay que arreglar.
+· Sin tocar física (congelada en R141): el audio y el diario solo LEEN el mundo. 0 errores de
+  consola. Decisión de Cesar: las tres sesiones con sonido. Sin push (cmd 143).

@@ -145,7 +145,7 @@ namespace Alkahest.Audio
     /// se lee como "avalancha" (un puñado de campanillas algo más
     /// presentes), no como una ametralladora de 200 disparos/s.
     /// </summary>
-    public sealed class DirectorDeAudio : MonoBehaviour
+    public sealed partial class DirectorDeAudio : MonoBehaviour
     {
         // === INTERRUPTOR MAESTRO — ver doc de la clase. ===
         private const bool SistemaActivo = true;
@@ -515,6 +515,7 @@ namespace Alkahest.Audio
             ConstruirVocesBucle();
             ConstruirVocesGrifo(dispensers);
             ConstruirSondasFuego();
+            LabInit(); // (R143) las voces del laboratorio: agua, goteo, vapor y el fuego de sus hogares.
 
             // (playtest 43, MODO ESPEJO) Gate único: Stepper == null SOLO es
             // true en el invitado de la escena MULTI (Net/SimSync.cs ya lo
@@ -668,6 +669,7 @@ namespace Alkahest.Audio
         private void Update()
         {
             ManejarTeclaSilencio();
+            LabUpdate(); // (R143) el laboratorio tiene su propio mundo sonoro; en el taller es un no-op.
 
             // (M5 audio) Igual que Flask/Dispenser/HeatPlate/ChillStone: título,
             // intro de jornada, fin de día y pantalla final congelan la sim
@@ -887,6 +889,7 @@ namespace Alkahest.Audio
 
         private void ActualizarBucleFuego()
         {
+            LabAportarFuego(); // (R143) en el laboratorio el fuego también son hogares y brasas, no solo llama.
             if (_fuenteFuego == null) return;
             _intensidadFuegoSuavizada = Mathf.MoveTowards(_intensidadFuegoSuavizada, _intensidadFuegoObjetivo, Time.deltaTime * 0.9f);
             _fuenteFuego.volume = VolFuegoMax * _intensidadFuegoSuavizada * FactorBucles;
