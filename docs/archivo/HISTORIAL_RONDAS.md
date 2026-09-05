@@ -7620,3 +7620,46 @@ comercial. Física congelada; H6 congelado.
 
 Archivos: `docs/LAB/ALCANCE.md` (nuevo), `docs/LAB/PREGUNTAS_A_FABLE.md` (R25), `docs/LAB/HANDOFF_OPUS.md`
 (§0, HF5e, H7/H7s, §8), `docs/LAB/HANDOFF_SABADO.md` (cabecera), `docs/LAB/CHECKPOINT.md` (fase 11 y §9).
+
+## Ronda 148 — HF5e-B Y H7s: EL ARCO LARGO, Y POR QUÉ EL HUERTO NO VIVE (Opus 5)
+
+Con el alcance ya asentado (`ALCANCE.md`) y H7 con jugador deferido, quedaban las dos preguntas
+de H7 que no necesitaban a nadie delante. Las dos tienen respuesta.
+
+· **EL HUERTO NO VIVE POR LUZ, NO POR AGUA — y por fin está aislado.** El arco largo (nivel de
+  referencia + el alambique de r141 + un fuego bajo la chimenea + una carbonera), treinta minutos
+  de mundo: el sustrato llega al **100 %** y las columnas anegadas caen a **0 de 36** desde el
+  minuto 15, o sea que el agua está resuelta — pero la **luz del lecho es 0 los treinta minutos**
+  y solo nacen dos plantas, que mueren. En el nivel LIMPIO, la cara del lecho son **73 celdas y
+  solo 7 pasan de `planta.luzMin`**: exactamente las siete que caen bajo la boca del cielo
+  (x118-124). El 93 % del huerto está en sombra permanente. El mecanismo, leído del código: la luz
+  del cielo baja casi sin perder pero solo por la vertical de la boca, de lado pierde 8 por celda
+  y **no viaja por dentro del suelo** (`LabLuzDesde` da 0 para los sólidos), así que la cara del
+  lecho solo se ilumina desde el aire que tiene encima. Escalado como Q16: es geometría del nivel
+  y no física, que sigue congelada.
+· **CADENA CRUZADA: SÍ, MEDIDA — PERO NO LA QUE BUSCÁBAMOS.** La prevista era el humo oscureciendo
+  el lecho; el humo llegó a 15 celdas en el minuto 5 y a 0 después, porque el fuego de la sala se
+  consume pronto y nadie lo realimenta. La que ocurre de verdad es **la sombra del alambique**:
+  sus 31 celdas de núcleo frío en y272 tapan la boca del cielo, y la luz cae de 245 a **0 justo
+  debajo de esa fila**. El jugador que monta la máquina de regar mata el huerto que riega, y el
+  arreglo es MOVERLA, no cambiar ninguna regla. Lo confirma el control: corrido a x140-170, la luz
+  sube de 0 a 17 y germinan cinco veces más plantas (11 contra 2) — aunque mueren igual, porque 17
+  sigue por debajo de los 40 que pide germinar. Es la misma lección de Q8 con otro mecanismo: en
+  R135 el alambique AHOGABA el huerto; ahora que el agua está resuelta, lo que hace es taparle el
+  sol. Y yo mismo lo había avisado en R134 sin sacar la consecuencia.
+· **HF5e-B** (los seis del banco y los textos de R24): `Informe()` imprime **los siete hashes**
+  —era la aceptación literal de R23-14 y solo sacaba tres, así que cinco no se podían comparar la
+  vez siguiente—; tres campos nuevos en `Resultado` (goteos, columnas anegadas, sustrato) para que
+  **la aceptación de R18 se pueda repetir desde el repo** en vez de a mano en un RunCommand que ya
+  no existe; el hervidero con la barra fría ENCIMA de la salida del tiro (estaba a los lados y
+  treinta filas por debajo: el vapor no cruzaba una sola celda fría, así que el escenario no medía
+  condensación); `LabParams.RestaurarDefaults()` en vez de repetir su bucle, con
+  `VaporVidaCambiado` restaurado —lo arman los propios setters al escribir los parámetros, así que
+  el banco dejaba pidiendo una reaplicación que nadie había pedido—; hora en el nombre del informe;
+  docblock «C# puro» matizado (`Universe.Create` usa `Mathf` y `Color32`); y la ayuda del carbón
+  **visible en el panel**, que llevaba dos rondas siendo un comentario de C#.
+· Y el escenario «arco largo (H7s)» queda en `Sim/LabBench.cs` con su hash y con soporte para
+  correrlo por tramos: 72 000 ticks no caben en una sonda MCP (se corta a los dos minutos), pero
+  desde el menú del editor corre entero.
+· Física congelada; H6 congelado. Siguiente: **H8, el borrador honesto del informe**, con «no
+  evaluado — ni aprobado ni refutado» en todo lo que dependía de un jugador. Sin push (cmd 148).

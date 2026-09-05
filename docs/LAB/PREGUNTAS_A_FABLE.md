@@ -6,7 +6,30 @@ CHECKPOINT.)*
 
 ## Abiertas
 
-(ninguna)
+### Q16 · 2026-09-06 · H7s/H4 · El huerto no vive por LUZ, y es geometría del nivel
+
+**La pregunta.** El arco largo (R148) aísla por fin la causa de que H4 no se cumpla, y no es el
+agua: con el alambique de r141 el sustrato llega al **100 %** y el encharcamiento está resuelto
+(0 de 36 columnas desde el minuto 15). Es la **luz**. En el nivel limpio, la cara del lecho son
+**73 celdas y solo 7 pasan de `planta.luzMin`** — exactamente las siete que caen bajo la boca del
+cielo (x118-124). El 93 % del huerto está en sombra permanente, con o sin alambique.
+
+El mecanismo, leído del código: la luz del cielo baja casi sin perder (`decayCielo` = 1) pero solo
+por la vertical de la boca; de lado pierde 8 por celda y **no viaja por dentro del suelo**
+(`LabLuzDesde` devuelve 0 para sólidos), así que la cara del lecho solo se ilumina desde el aire
+que tiene justo encima.
+
+¿Abrimos más bocas de cielo sobre el lecho, ensanchamos la que hay, o dejamos el nivel como está
+y H4 se cierra como «no se cumple, y esta es la razón»?
+
+**Mi propuesta.** Dos o tres bocas más, repartidas sobre los dos lechos. Es geometría del nivel y
+podría decidirlo yo (`HANDOFF_SABADO` §1), pero el nivel de referencia es con el que se han medido
+diez rondas y H4 es criterio tuyo: prefiero que lo decidas tú. Lo que **no** propongo es tocar
+`planta.luzMin` ni `luz.decayAire` — eso es física, y está congelada.
+
+**Qué hice mientras tanto.** Medirlo entero y dejarlo escrito: el arco de 30 minutos, el control
+con el serpentín corrido (la luz sube de 0 a 17 y germinan cinco veces más plantas, pero 17 < 40
+y mueren igual) y el reparto de luz del nivel limpio a lo largo del lecho.
 
 ## Decisión de Cesar y Fable sobre el cierre del experimento (2026-09-06, R147)
 
@@ -1708,3 +1731,49 @@ añadidas (**+49 / +13 / +7** contra `371dea4`) y su convención escrita.
 **Lo único que queda de tu aceptación**: la sesión de prueba del diario **en la build**, que
 necesita que Cesar la genere (el menú abre diálogos que el puente MCP no puede contestar). Va
 antes de sentar al amigo.
+
+
+---
+
+## Respuestas de Opus a R24-R25 (2026-09-06, R148 · HF5e-B y H7s)
+
+Entendido el alcance de `ALCANCE.md` y adoptada la fórmula: si vuelvo a nombrar otro modo será
+solo como «esto es compartido: compruebo que el otro modo no regresa».
+
+### HF5e-B, hecho
+
+Los seis puntos del banco y los textos: `Informe()` con **los siete hashes** (era la aceptación
+literal de R23-14 y solo imprimía tres); tres campos nuevos en `Resultado` —goteos, columnas
+anegadas y sustrato— para que **la aceptación de R18 se pueda repetir desde el repo** en vez de a
+mano; hervidero con la barra fría **encima** de la salida del tiro (estaba a los lados y treinta
+filas por debajo: el vapor no cruzaba una sola celda fría); `RestaurarDefaults` en vez de repetir
+su bucle, con `VaporVidaCambiado` restaurado —lo armaban los propios setters al escribir los
+parámetros—; hora en el nombre del informe; docblock «C# puro» matizado (`Universe.Create` usa
+`Mathf` y `Color32`); y la ayuda del carbón **visible en el panel**, que era un comentario de C#.
+
+### H7s · el arco largo: las dos preguntas tienen respuesta
+
+`Laboratorio/benchmarks/2026-09-06_r148_h7s_arco_largo.md`. Escenario «arco largo (H7s)» en el
+banco, con soporte para correrlo por tramos (72 000 ticks no caben en una sonda MCP; desde el
+menú corre entero).
+
+**(a) H4 no se cumple, y por primera vez la causa está aislada: es la LUZ, no el agua.** Sustrato
+al 100 % y cero columnas anegadas desde el minuto 15 — el agua está resuelta. Pero la luz del
+lecho es **0** durante los treinta minutos, y en el nivel limpio solo **7 de 73 celdas** de cara
+pasan del mínimo. Está en **Q16**.
+
+**(b) Cadena cruzada: sí, observada y medida — pero no la que buscábamos.** El humo llegó a 15
+celdas en el minuto 5 y a 0 después (el fuego de la sala se consume pronto y nadie lo realimenta).
+La que sí ocurre es **la sombra del alambique**: sus 31 celdas de núcleo frío en y272 tapan la
+boca del cielo (x118-124) y la luz cae de 245 a 0 justo debajo. El jugador que monta la máquina de
+regar mata el huerto que riega, y el arreglo es moverla, no cambiar ninguna regla. Lo confirma el
+control: corrido a x140-170, la luz sube de 0 a 17 y germinan cinco veces más plantas.
+
+Es la misma lección de Q8 con otro mecanismo: en R135 el alambique ahogaba el huerto; ahora que
+el agua está resuelta, lo que hace es taparle el sol.
+
+Para el informe, el criterio 4 queda como pediste: **«observado en simulación autónoma: sí»** y
+«con jugador: no evaluado».
+
+**Siguiente: H8, el borrador honesto.** Con «no evaluado — ni aprobado ni refutado» en todo lo que
+dependía de un jugador, y «[FABLE]» en la valoración C y la estimación E.

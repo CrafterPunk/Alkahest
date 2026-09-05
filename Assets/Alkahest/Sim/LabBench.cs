@@ -18,7 +18,9 @@ namespace Alkahest.Sim
     /// rendimiento que deje los ocho hashes intactos no ha tocado la física, y uno que mueva un
     /// solo hash es un cambio de física disfrazado (regla acordada con Fable, R141 §1).
     ///
-    /// C# puro, sin API de Unity: corre en el editor, en una build o en un banco headless.
+    /// Este archivo no usa API de Unity; `Universe.Create`, al que llama, sí (`Mathf`, `Color32`),
+    /// así que el banco necesita el runtime de Unity cargado aunque no necesite una escena, una
+    /// cámara ni el modo Play. Corre en el editor, en una build o desde un RunCommand.
     /// </summary>
     public static class LabBench
     {
@@ -36,6 +38,13 @@ namespace Alkahest.Sim
             public uint HashMat, HashTemp, HashAux;
             /// <summary>(R145) Los cuatro campos del laboratorio: sin ellos el hash no ve el agua.</summary>
             public uint HashHumedad, HashCarga, HashReposo, HashLuz;
+            /// <summary>
+            /// (R148, R24-9) Lo que hacía falta para que la aceptación de R18 se pueda REPETIR desde
+            /// el repo: se cumplió en R145, pero midiéndola a mano en un RunCommand que ya no existe.
+            /// Solo tienen sentido en el escenario del alambique; en los demás quedan a −1.
+            /// </summary>
+            public long Goteos;
+            public int ColumnasAnegadas, SustratoPct, HumedadMediaLecho;
             public double TicksPorSegundo => MsMedia > 0 ? 1000.0 / MsMedia : 0;
         }
 
@@ -60,18 +69,24 @@ namespace Alkahest.Sim
 
         public delegate void Montaje(CellGrid g);
 
+        /// <summary>(R145, R23-1) La química del laboratorio. Sin esto el banco mide la de la campaña.</summary>
+        static void AplicarOverrides(Universe u) => Universe.AplicarOverridesLaboratorio(u);
+
         /// <summary>Nombre, ticks y montaje de cada escenario del banco.</summary>
         public static readonly (string Nombre, int Ticks, Montaje Montar)[] Escenarios =
         {
             ("laboratorio base",        3000,  MontarLaboratorio),
-            ("alambique de r141",       9000,  MontarAlambique),
+            (NombreAlambique,           9000,  MontarAlambique),
             ("horno con yesca",         9000,  MontarHorno),
             ("carbonera 20x20 boca 1",  9000,  MontarCarbonera),
             ("tolva de fibra",         14000,  MontarTolva),
             ("diluvio turbio",          3000,  MontarDiluvio),
             ("hervidero",               9000,  MontarHervidero),
             ("mundo entero despierto",  2000,  MontarMundoDespierto),
+            (NombreArcoLargo,          72000,  MontarArcoLargo),
         };
+
+        public const string NombreArcoLargo = "arco largo (H7s)";
 
         static void Bloque(CellGrid g, int x0, int y0, int x1, int y1, byte m)
         {
@@ -172,8 +187,54 @@ namespace Alkahest.Sim
             Bloque(g, 190, 120, 209, 120, MaterialId.Empty);      // la boca de la chimenea
             Bloque(g, 189, 121, 189, 150, MaterialId.Stone);      // el tiro
             Bloque(g, 210, 121, 210, 150, MaterialId.Stone);
-            Bloque(g, 150, 121, 188, 121, MaterialId.NucleoFrio); // la cámara fría, a los lados del tiro
-            Bloque(g, 211, 121, 250, 121, MaterialId.NucleoFrio);
+            // (R148, R24-10) La barra fría va ENCIMA de la salida del tiro, cruzándolo. Antes quedó
+            // a los lados y treinta filas por debajo: el vapor subía por el tiro y no cruzaba una
+            // sola celda fría, así que el escenario no medía condensación ninguna.
+            Bloque(g, 190, 151, 209, 151, MaterialId.NucleoFrio);
+        }
+
+        /// <summary>
+        /// (H7s, R148) EL ARCO LARGO, montado por código y sin nadie delante.
+        ///
+        /// De las cinco preguntas de H7, dos no necesitaban jugador y son las únicas que hoy se
+        /// pueden contestar sin mentir: **¿el huerto se mantiene bajo un riego sostenido?** (la
+        /// aceptación de H4, abierta desde R134) y **¿aparece una cadena cruzada que nadie
+        /// guionizó?** (el criterio 4 del fuego, lo único que le falta al dominio). Las otras tres
+        /// —descubrimiento sin ayuda, tedio, diversión— piden una persona y una presentación que
+        /// todavía no existe, y se difirieron.
+        ///
+        /// Tres geometrías sobre el nivel de referencia, ninguna es una máquina heredada:
+        ///  · EL ALAMBIQUE de r141: serpentín de 31 celdas de núcleo frío en el techo de la cámara
+        ///    alta y una caldera de siete celdas sobre el hogar, repuesta cada 8 ticks. Riega el
+        ///    lecho oeste con ~900 goteos cada 300 s.
+        ///  · EL FUEGO DE LA SALA: una pila de fibra junto al hogar cuya única salida de humo es
+        ///    la chimenea, que desemboca en la boca de la cámara alta (x137-152) — justo encima
+        ///    del huerto.
+        ///  · LA CARBONERA: 20×20 de fibra con boca de 1 en un rincón, encendida por yesca.
+        ///
+        /// La cadena cruzada que esperamos ver, y que nadie escribió en ninguna regla: el humo del
+        /// fuego sube por la chimenea, sale a la cámara alta, OSCURECE el lecho por debajo de
+        /// `planta.luzMin` y las plantas se marchitan **mientras el alambique las riega**. Agua,
+        /// fuego, luz y vida en una sola frase. Si no pasa, el banco tiene que decir por qué.
+        /// </summary>
+        public static void MontarArcoLargo(CellGrid g)
+        {
+            SimLevelBuilder.BuildLaboratorioDeLeyes(g);
+
+            // 1 · el alambique (la caldera la repone Correr, como en «alambique de r141»)
+            for (int x = 105; x <= 135; x++) g.SetCell(x, 272, MaterialId.NucleoFrio);
+
+            // 2 · el fuego de la sala, bajo la chimenea. La sala tiene su hogar en y176-179;
+            //     la fibra se apila encima para que prenda por temperatura, no por azar.
+            Bloque(g, 141, 180, 148, 189, MaterialId.Fibra);
+
+            // 3 · la carbonera, en el suelo de la sala y lejos del alambique: recinto de roca con
+            //     una sola boca, y una lengua de yesca que la une al hogar.
+            Bloque(g, 100, 176, 121, 199, MaterialId.Stone);
+            Bloque(g, 101, 177, 120, 198, MaterialId.Empty);
+            Bloque(g, 101, 177, 120, 196, MaterialId.Fibra);
+            g.SetCell(101, 199, MaterialId.Empty);            // la boca, de una celda
+            Bloque(g, 122, 176, 149, 176, MaterialId.Fibra);  // la yesca, del hogar a la carbonera
         }
 
         /// <summary>
@@ -211,12 +272,10 @@ namespace Alkahest.Sim
             // el hash deja de significar «esta física» para significar «esta física y lo que
             // hubiera tocado alguien». Se restaura al terminar para no pisar un laboratorio abierto.
             var guardados = new float[LabParams.Registro.Count];
-            for (int i = 0; i < guardados.Length; i++)
-            {
-                guardados[i] = LabParams.Registro[i].Leer();
-                LabParams.Registro[i].Escribir(LabParams.Registro[i].Def);
-            }
+            for (int i = 0; i < guardados.Length; i++) guardados[i] = LabParams.Registro[i].Leer();
+            LabParams.RestaurarDefaults();   // (R148) la función que ya existía, en vez de repetir su bucle aquí.
             int cieloX0 = LabParams.LuzCieloX0, cieloX1 = LabParams.LuzCieloX1;
+            bool vaporTocado = LabParams.VaporVidaCambiado;
             LabParams.LuzCieloX0 = -1; LabParams.LuzCieloX1 = -1;
             try
             {
@@ -228,12 +287,13 @@ namespace Alkahest.Sim
             // que rompía la cadena del agua y que R133 promovió a parámetro. Con eso, el alambique
             // del banco no destilaba y la carbonera no se ahogaba igual, y los hashes «cuadraban»
             // entre Fable y yo porque los dos medíamos lo mismo mal. Misma línea que AlkahestSim.cs:222.
-            Universe.AplicarOverridesLaboratorio(u);
+            AplicarOverrides(u);
             var g = new CellGrid();
             montar(g);
             var st = new SimStepper(u, g) { LabActivo = true };
 
-            bool esAlambique = nombre == "alambique de r141";
+            bool esAlambique = nombre == NombreAlambique || nombre == NombreArcoLargo;
+            r.Goteos = -1; r.ColumnasAnegadas = -1; r.SustratoPct = -1; r.HumedadMediaLecho = -1;
             double suma = 0, pico = 0;
             double dif = 0, bar = 0, cam = 0, pre = 0, luz = 0, cue = 0;
             for (int t = 1; t <= ticks; t++)
@@ -262,6 +322,7 @@ namespace Alkahest.Sim
             r.MsDifusion = dif / ticks; r.MsBarrido = bar / ticks; r.MsCampos = cam / ticks;
             r.MsPresion = pre / ticks; r.MsLuz = luz / ticks; r.MsCuerpos = cue / ticks;
             r.ChunksActivos = st.ActiveChunks; r.CeldasActivas = st.ActiveCells;
+            if (esAlambique) MedirLecho(g, st, ref r);
             r.HashMat = Hash(g.mat); r.HashTemp = Hash(g.temp); r.HashAux = Hash(g.aux);
             // (R145, R23-14) Los cuatro campos del laboratorio también entran al hash. Sin ellos un
             // cambio en la física del AGUA —que vive entera en `humedad`— pasaba sin mover un solo
@@ -275,8 +336,126 @@ namespace Alkahest.Sim
             {
                 for (int i = 0; i < guardados.Length; i++) LabParams.Registro[i].Escribir(guardados[i]);
                 LabParams.LuzCieloX0 = cieloX0; LabParams.LuzCieloX1 = cieloX1;
+                // (R148) Y el flag del vapor como estaba: escribir los parámetros lo ARMA (sus
+                // setters lo ponen a true), así que sin esto el banco dejaba pidiendo una
+                // reaplicación de overrides que nadie había pedido.
+                LabParams.VaporVidaCambiado = vaporTocado;
             }
         }
+
+        public const string NombreAlambique = "alambique de r141";
+
+        /// <summary>
+        /// (R148, R24-9) El estado del huerto: columnas del lecho oeste con agua encima, cuánto de
+        /// su sedimento llega al mínimo de germinación, y la humedad media. Es la aceptación de H4
+        /// de R11, medida por el banco en vez de a mano.
+        /// </summary>
+        static void MedirLecho(CellGrid g, SimStepper st, ref Resultado r)
+        {
+            int anegadas = 0, aptas = 0, total = 0, suma = 0;
+            for (int x = 100; x <= 135; x++)
+            {
+                bool agua = false;
+                for (int y = 250; y <= 256; y++) if (g.mat[CellGrid.Idx(x, y)] == MaterialId.Water) agua = true;
+                if (agua) anegadas++;
+                for (int y = 246; y <= 249; y++)
+                {
+                    int i = CellGrid.Idx(x, y);
+                    if (g.mat[i] != MaterialId.Sedimento) continue;
+                    total++; suma += g.humedad[i];
+                    if (g.humedad[i] >= LabParams.PlantaHumedadMin) aptas++;
+                }
+            }
+            r.Goteos = st.LabGoteos;
+            r.ColumnasAnegadas = anegadas;
+            r.SustratoPct = total > 0 ? aptas * 100 / total : 0;
+            r.HumedadMediaLecho = total > 0 ? suma / total : 0;
+        }
+
+        // =====================================================================
+        // EL ARCO LARGO, POR TRAMOS
+        // =====================================================================
+        //
+        // (H7s, R148) 72 000 ticks son ~3 minutos de banco, y una sonda por MCP se corta a los dos.
+        // Desde el menú del editor el escenario corre entero sin esto; esto es para poder medirlo
+        // también desde fuera, en tramos, sin perder el estado entre llamadas. El mundo vive en
+        // campos estáticos: sobrevive entre sondas mientras no se recompile.
+
+        private static CellGrid _arcoGrid;
+        private static SimStepper _arcoStepper;
+        private static int _arcoTick;
+        private static long _arcoHumedadInicial;
+
+        /// <summary>Monta el arco largo y lo deja en el tick 0.</summary>
+        public static void ArcoIniciar()
+        {
+            var u = Universe.Create(SeedLaboratorio);
+            AplicarOverrides(u);
+            _arcoGrid = new CellGrid();
+            MontarArcoLargo(_arcoGrid);
+            _arcoHumedadInicial = 0;
+            for (int i = 0; i < _arcoGrid.humedad.Length; i++) _arcoHumedadInicial += _arcoGrid.humedad[i];
+            _arcoStepper = new SimStepper(u, _arcoGrid) { LabActivo = true };
+            _arcoTick = 0;
+        }
+
+        /// <summary>Avanza `ticks` reponiendo la caldera, como hace `Correr` con el alambique.</summary>
+        public static void ArcoAvanzar(int ticks)
+        {
+            for (int k = 0; k < ticks; k++)
+            {
+                _arcoTick++;
+                if (_arcoTick % 8 == 0)
+                    for (int x = 151; x <= 157; x++)
+                    {
+                        int i = CellGrid.Idx(x, 180);
+                        _arcoGrid.SetCell(x, 180, MaterialId.Water);
+                        _arcoGrid.humedad[i] = 255;
+                        _arcoGrid.WakeChunk(x, 180, (uint)_arcoTick);
+                    }
+                _arcoStepper.Step();
+            }
+        }
+
+        /// <summary>Una fila de la tabla de H7s: el huerto, la luz, el humo y el libro.</summary>
+        public static string ArcoMuestra()
+        {
+            var g = _arcoGrid; var st = _arcoStepper;
+            int plantas = 0, anegadas = 0, aptas = 0, sedTot = 0, humSum = 0, luzSum = 0;
+            for (int x = 100; x <= 135; x++)
+            {
+                bool agua = false;
+                for (int y = 250; y <= 256; y++) if (g.mat[CellGrid.Idx(x, y)] == MaterialId.Water) agua = true;
+                if (agua) anegadas++;
+                for (int y = 246; y <= 262; y++)
+                {
+                    int i = CellGrid.Idx(x, y);
+                    if (g.mat[i] == MaterialId.Planta) plantas++;
+                    if (g.mat[i] != MaterialId.Sedimento) continue;
+                    sedTot++; humSum += g.humedad[i]; luzSum += g.luz[i];
+                    if (g.humedad[i] >= LabParams.PlantaHumedadMin) aptas++;
+                }
+            }
+            int humo = 0;
+            for (int y = 245; y <= 272; y++)
+                for (int x = 100; x <= 190; x++)
+                    if (g.mat[CellGrid.Idx(x, y)] == MaterialId.Smoke) humo++;
+
+            long humAhora = 0;
+            for (int i = 0; i < g.humedad.Length; i++) humAhora += g.humedad[i];
+
+            return "| " + (_arcoTick / 1800) + " | " + plantas + " | " + anegadas + "/36 | "
+                + (sedTot > 0 ? aptas * 100 / sedTot : 0) + " % | " + (sedTot > 0 ? humSum / sedTot : 0)
+                + " | " + (sedTot > 0 ? luzSum / sedTot : 0) + " | " + humo + " | " + st.LabGoteos
+                + " | " + st.LabPlantasNacidas + " / " + st.LabPlantasMuertas
+                + " | " + st.LabCombustibleQuemado + " | " + st.LabCarbonizado + " |";
+        }
+
+        public static int ArcoTick => _arcoTick;
+        public static SimStepper ArcoStepper => _arcoStepper;
+        public static CellGrid ArcoGrid => _arcoGrid;
+        /// <summary>El residuo de la auditoría de conservación, descontando lo que la caldera inyecta a mano.</summary>
+        public static long ArcoHumedadInicial => _arcoHumedadInicial;
 
         /// <summary>Corre los ocho escenarios en orden.</summary>
         public static List<Resultado> CorrerTodos()
@@ -295,8 +474,8 @@ namespace Alkahest.Sim
               .Append(", defaults de `LabParams`. Los hashes son FNV-1a de `mat`, `temp` y `aux` al\n")
               .Append("terminar cada escenario: si un cambio de rendimiento los deja intactos, no tocó la física.\n\n");
 
-            sb.Append("| escenario | ticks | ms/tick | pico | ticks/s | chunks | celdas | hash mat | hash temp | hash aux |\n");
-            sb.Append("|---|---:|---:|---:|---:|---:|---:|---|---|---|\n");
+            sb.Append("| escenario | ticks | ms/tick | pico | ticks/s | chunks | celdas | mat | temp | aux | humedad | carga | reposo | luz |\n");
+            sb.Append("|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|---|\n");
             foreach (var r in rs)
                 sb.Append("| ").Append(r.Nombre).Append(" | ").Append(r.Ticks)
                   .Append(" | ").Append(r.MsMedia.ToString("F2"))
@@ -305,7 +484,11 @@ namespace Alkahest.Sim
                   .Append(" | ").Append(r.ChunksActivos).Append(" | ").Append(r.CeldasActivas)
                   .Append(" | `").Append(r.HashMat.ToString("x8"))
                   .Append("` | `").Append(r.HashTemp.ToString("x8"))
-                  .Append("` | `").Append(r.HashAux.ToString("x8")).Append("` |\n");
+                  .Append("` | `").Append(r.HashAux.ToString("x8"))
+                  .Append("` | `").Append(r.HashHumedad.ToString("x8"))
+                  .Append("` | `").Append(r.HashCarga.ToString("x8"))
+                  .Append("` | `").Append(r.HashReposo.ToString("x8"))
+                  .Append("` | `").Append(r.HashLuz.ToString("x8")).Append("` |\n");
 
             sb.Append("\n## Reparto por fase (ms/tick de media)\n\n");
             sb.Append("| escenario | difusión | barrido | campos | presión | luz | cuerpos |\n");
@@ -318,6 +501,16 @@ namespace Alkahest.Sim
                   .Append(" | ").Append(r.MsPresion.ToString("F2"))
                   .Append(" | ").Append(r.MsLuz.ToString("F2"))
                   .Append(" | ").Append(r.MsCuerpos.ToString("F2")).Append(" |\n");
+
+            // (R148, R24-9) El huerto, solo donde tiene sentido.
+            foreach (var r in rs)
+                if (r.Goteos >= 0)
+                {
+                    sb.Append("\n## El huerto en «").Append(r.Nombre).Append("»\n\n");
+                    sb.Append("| goteos | columnas anegadas | sustrato apto | humedad media |\n|---:|---:|---:|---:|\n");
+                    sb.Append("| ").Append(r.Goteos).Append(" | ").Append(r.ColumnasAnegadas).Append(" / 36 | ")
+                      .Append(r.SustratoPct).Append(" % | ").Append(r.HumedadMediaLecho).Append(" |\n");
+                }
 
             sb.Append("\n## Memoria\n\n| escenario | antes (MB) | después (MB) |\n|---|---:|---:|\n");
             foreach (var r in rs)

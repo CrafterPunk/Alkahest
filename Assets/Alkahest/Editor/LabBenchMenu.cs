@@ -42,7 +42,9 @@ namespace Alkahest.EditorTools
 
             string carpeta = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Laboratorio", "benchmarks"));
             Directory.CreateDirectory(carpeta);
-            string ruta = Path.Combine(carpeta, System.DateTime.Now.ToString("yyyy-MM-dd") + "_banco_h5.md");
+            // (R148, R24-11) Con la hora: dos corridas el mismo día se pisaban el informe, que es
+            // justo lo que se hace cuando se compara antes y después de un cambio.
+            string ruta = Path.Combine(carpeta, System.DateTime.Now.ToString("yyyy-MM-dd_HHmm") + "_banco.md");
             File.WriteAllText(ruta, LabBench.Informe(resultados, "Banco del laboratorio (H5) — "
                 + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm")));
             Debug.Log("[TenThousandYears] Banco terminado: " + resultados.Count + " escenarios → " + ruta);

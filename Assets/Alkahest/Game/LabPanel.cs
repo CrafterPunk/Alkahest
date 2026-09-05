@@ -548,6 +548,8 @@ namespace Alkahest.Game
             if (GUILayout.Button("+", _estiloBoton, GUILayout.Width(UiStyles.S(30f)))) _radio = Mathf.Min(8, _radio + 1);
             GUILayout.EndHorizontal();
             GUILayout.Label("Con el pincel armado el clic es SUYO: el cincel y el frasco ceden. Izquierdo pinta, derecho borra. Las teclas − y + cambian el radio sin abrir el panel.", _estiloAyuda);
+            // (R148, R23-12) Esto vivía en un comentario de C#, o sea invisible para quien juega.
+            GUILayout.Label("El CARBÓN es un polvo: cae y se apila como la arena, no se queda donde lo pintas. Y el VIDRIO es obra: se queda quieto y hace de pared, pero el frasco sí puede llevárselo.", _estiloAyuda);
 
             string grupoActual = null;
             int enGrupo = 0; // columnas contadas DENTRO del grupo: si se cuenta sobre el

@@ -571,51 +571,30 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-06, R145 — leer antes de nada.)** **HF5d hecho**;
-`Laboratorio/benchmarks/2026-09-06_r145_hf5d.md`. Los 27 hallazgos de la R23 de Fable, con las dos
-altas ciertas: **el banco medía otro universo** (faltaba `AplicarOverridesLaboratorio`: el vapor
-vivía 60 ticks y condensaba a 90 en vez de 180 y 65, así que el alambique del banco no destilaba)
-y **el vidrio en `EsSolidoDelMundo` rompía la campaña** (el frasco no puede aspirar lo que da true
-ahí, y esa tabla es global) — revertido.
+**(Opus, 2026-09-06, R148 — leer antes de nada.)** **HF5e-B y H7s hechos**;
+`Laboratorio/benchmarks/2026-09-06_r148_h7s_arco_largo.md`. Alcance vigente en
+`docs/LAB/ALCANCE.md`; H7 con jugador **deferido** (R25) y HF5e-A con él.
 
-Con el banco arreglado, la aceptación de HF5c que había cerrado mal sale entera: **902 goteos
-(el número exacto de Fable), 5/36 columnas anegadas y sustrato al 100 %**. Banco regenerado con
-**siete hashes** por escenario y defaults de fábrica; ninguno pasa de 3,08 ms/tick; `LabLuz`
-idéntica celda a celda en el universo correcto.
+**El arco largo autónomo responde las dos preguntas que no necesitaban jugador:**
+- **H4 no se cumple, y la causa está aislada por fin: es la LUZ, no el agua.** Con el alambique
+  de r141, sustrato al **100 %** y **0 de 36 columnas anegadas** desde el minuto 15 — el agua
+  está resuelta. Pero la luz del lecho es **0** los treinta minutos, y en el nivel limpio solo
+  **7 de 73 celdas** de cara pasan de `planta.luzMin`: las siete bajo la boca del cielo. El 93 %
+  del huerto está en sombra permanente. Escalado como **Q16** (geometría del nivel, no física).
+- **Criterio 4 del fuego: cadena cruzada SÍ, observada y medida**, aunque no la prevista. No es el
+  humo: es **la sombra del propio alambique**, cuyas 31 celdas en y272 tapan la boca del cielo y
+  hunden la luz de 245 a 0. Control: corrido a x140-170, la luz sube a 17 y germinan cinco veces
+  más plantas. En el informe: «observado en simulación autónoma: sí · con jugador: no evaluado».
 
-Diario corregido antes de que nadie juegue: línea base para los hitos (**«PRIMER FUEGO» saltaba
-en el segundo 1** por el rescoldo del nivel), ruta real con aviso —fallaba **en silencio**—,
-segundos en el nombre, snapshot en cada marca y teletransportes fuera de la distancia. Audio:
-`LabInit` solo en el laboratorio y goteos limitados a 6/s.
+HF5e-B: `Informe()` con los siete hashes, el banco midiendo goteos/anegadas/sustrato (para que la
+aceptación de R18 se repita desde el repo), hervidero con la barra fría encima del tiro,
+`RestaurarDefaults` con `VaporVidaCambiado` restaurado, hora en el informe y la ayuda del carbón
+visible en el panel.
 
-**Siguiente paso exacto: correr `ca_playtest145.cmd`, GENERAR LA BUILD y probar el diario en
-ella** (F9/F1/F2/F4 dejando archivo, PNG y snapshot en `Builds/…/Laboratorio/h7/`). Después: **el
-amigo primero** (medida de onboarding, una sesión), luego Cesar (profundidad, dos sesiones), y
-`OBSERVACIONES_H7.md`. Protocolo y reglas en `docs/LAB/GUIA_H7.md`.
-
-**(Fable, 2026-09-06, R146 — leer antes de nada.)** HF5d (b4d2413) **verificada**: las dos altas
-cerradas de verdad (banco con overrides y hashes reproducibles en doble corrida; campaña intacta),
-línea base de los hitos, `LabInit` gateado, limitador de goteos. Revisión adversaria contra los 27
-puntos de R23: 17 hallazgos, ninguno de física. **No está listo para el amigo todavía:** seis
-correcciones de una línea (`PREGUNTAS_A_FABLE.md` R24, HF5e-A): el «+200» del primer fuego esconde
-el primer fuego pequeño (medido: el nivel en reposo quema cero), `_posAnterior` sin reiniciar,
-snapshots de las marcas contaminando la pestaña de presets, boost del limitador de goteos (≈ 0,61
-en vez de 0,42), `InputLocked` ausente en el diario, `Cerrar` sin aviso y la guía con la ruta
-vieja. El banco (siete hashes en `Informe`, causas separadas, goteos en `Resultado`, hervidero,
-R23-17, R23-12) va después de H7 (HF5e-B). **Siguiente paso exacto:** HF5e-A (Opus) → build → la
-prueba del diario en la build (aceptación de R24) → mezcla (R22) → el amigo (R21) → Cesar →
-`OBSERVACIONES_H7.md`. Física congelada. Cesar: `ca_playtest146.cmd`.
-
-**(Fable, 2026-09-06, R147 — leer antes de nada, y después `ALCANCE.md`.)** Cesar cerró la pregunta
-del experimento: la función del laboratorio está demostrada y no se le pregunta más al sandbox si «es el
-juego». **H7 con jugador, deferido**: hoy mediría residuos del juego heredado, nombres a medias, plantas de
-un píxel y estado que solo se lee con F8. En su lugar, **H7s: el arco largo autónomo** en banco (R25:
-alambique + fuego con humo por la chimenea + carbonera, 40 min de mundo, muestras cada 5, aceptación de H4 y
-cadena cruzada por contadores). **H8 honesto** con «no evaluado — ni aprobado ni refutado» en todo lo que
-dependía de un jugador. Aclarado y asentado en `ALCANCE.md`: «campaña», «encargos», «trueque» y el objeto
-`Alambique` son del juego heredado que vive en el mismo ejecutable; no son objetivo; solo importan como
-código compartido que no debe regresar (el vidrio de R142-R145 fue exactamente eso). HF5e-A (diario y
-sonido) se difiere con H7. **Siguiente paso exacto: HF5e-B (Opus) → H7s → H8.** Cesar: `ca_playtest147.cmd`.
+**Siguiente paso exacto: correr `ca_playtest148.cmd` y escribir H8** —
+`docs/LAB/INFORME_FINAL.md`, secciones A-F, con «no evaluado — ni aprobado ni refutado» en todo lo
+que dependía de un jugador y «[FABLE]» en la valoración C y la estimación E. Después, revisión
+conjunta.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 
