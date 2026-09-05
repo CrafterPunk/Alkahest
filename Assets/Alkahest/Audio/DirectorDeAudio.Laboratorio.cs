@@ -45,8 +45,14 @@ namespace Alkahest.Audio
         /// <summary>Radio en celdas del sondeo alrededor del jugador. Media pantalla: se oye lo que casi se ve.</summary>
         private const int RadioLabSondeo = 46;
 
-        /// <summary>Cuántas gotas puede sonar como mucho en un mismo cuadro. Un alambique bueno hace cientos.</summary>
-        private const int MaxGotasPorCuadro = 2;
+        /// <summary>
+        /// (R145, R23-5) Gotas por SEGUNDO, no por cuadro. El tope de «2 por cuadro» dejaba pasar
+        /// hasta 120 por segundo a 60 fps, y junto a un alambique de treinta celdas eso no es un
+        /// goteo: es una ametralladora. Se usa el limitador que el director ya tenía para todo lo
+        /// demás, que además cuenta cuántas suprimió.
+        /// </summary>
+        private const float GotasPorSegundo = 6f;
+        private Limitador _limGoteo;
 
         private AudioSource _labFuenteAgua, _labFuenteVapor;
         private float _labIntAgua, _labIntAguaObjetivo;
@@ -54,6 +60,7 @@ namespace Alkahest.Audio
         private long _labGoteosAnterior = -1;
         private float _labProximoSondeo;
         private int[] _labSondaDx, _labSondaDy;
+        private float _proximoSondeoFuegoLab;
 
         /// <summary>Sondas relativas al jugador, calculadas UNA vez (el patrón de `ConstruirSondasFuego`).</summary>
         private const int NumSondasLab = 220;
@@ -125,9 +132,10 @@ namespace Alkahest.Audio
             long nuevas = ahora - _labGoteosAnterior;
             _labGoteosAnterior = ahora;
             if (nuevas <= 0) return;
-            if (nuevas > MaxGotasPorCuadro) nuevas = MaxGotasPorCuadro;
-            for (int i = 0; i < nuevas; i++)
-                ReproducirOneShot(SintetizadorSfx.Goteo, VolLabGoteo, Random.Range(0.88f, 1.14f));
+            // El limitador decide si suena; el pitch sale del `_rngVariacion` del director (System.Random
+            // local, la convención de esta capa) y no de UnityEngine.Random.
+            float pitch = 1f + ((float)_rngVariacion.NextDouble() * 2f - 1f) * 0.13f;
+            DispararLimitado(ref _limGoteo, SintetizadorSfx.Goteo, GotasPorSegundo, VolLabGoteo, pitch);
         }
 
         /// <summary>
@@ -142,6 +150,10 @@ namespace Alkahest.Audio
         {
             if (_sim == null || _sim.Stepper == null || !_sim.Stepper.LabActivo) return;
             if (_jugador == null || _labSondaDx == null) return;
+            // (R145) A 12 Hz como el resto de sondeos, no cada cuadro: son 220 muestras y el
+            // resultado no cambia entre dos cuadros consecutivos.
+            if (Time.time < _proximoSondeoFuegoLab) return;
+            _proximoSondeoFuegoLab = Time.time + IntervaloSondeo;
             int jx = Mathf.RoundToInt(_jugador.position.x / SimRenderer.CellWorldSize);
             int jy = Mathf.RoundToInt(_jugador.position.y / SimRenderer.CellWorldSize);
 

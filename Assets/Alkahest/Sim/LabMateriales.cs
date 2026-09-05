@@ -25,7 +25,14 @@ namespace Alkahest.Sim
                 case MaterialId.Sumidero:
                 case MaterialId.RocaSuelta:
                 case MaterialId.Arenisca:
-                case MaterialId.VidrioVerde: // (R142, R19-7) el producto del horno es OBRA: se pisa y hace pared. No es tallable.
+                    // (R145, R23-2) AQUÍ ESTUVO `VidrioVerde`, UNA RONDA, Y ROMPÍA LA CAMPAÑA.
+                    // La idea era que el producto del horno se pisara y valiera de pared. Pero
+                    // `Flask.EsAspirable`/`TickSuck` rechazan todo lo que dé true aquí, y esta
+                    // tabla no sabe en qué modo corre: el vidrio de botella es producto del horno
+                    // de la CAMPAÑA, así que los encargos y el trueque que lo piden se volvían
+                    // imposibles. Si algún día queremos que en el laboratorio haga pared, se gatea
+                    // por `ModoLaboratorio` en los dos consumidores del muñeco — nunca en una
+                    // tabla de materiales, que es global por definición. (R15: lo retirado, escrito.)
                     return true;
                 default:
                     return false;
@@ -177,14 +184,19 @@ namespace Alkahest.Sim
         private const int EncharcadoU = 230, EmpapadoU = 150, ApenasU = 20;
         private const int FertilU = 40, MuyFertilU = 128;
         private const int AireSaturadoU = 200, AireHumedoU = 120, AireAlgoU = 40;
+        private const int MuyTurbiaU = 128;
         private const int SaviaBastanteU = 120, SaviaPocaU = 40, RocioU = 150;
 
         public static string Estado(byte m, byte humedad, byte carga)
         {
             // La turbidez que el jugador ve como «turbia» es la que el manantial inyecta: si mueve
             // sed.turbidezFuente, el rótulo se mueve con él en vez de mentir.
+            // (R145, R23-11) «Muy turbia» vuelve a ser una constante: atada al doble del parámetro,
+            // con el slider a 0 TODA el agua era «muy turbia», y con el default (40) el umbral
+            // caía a 80 sin que nadie lo hubiera decidido. Solo «turbia» lee el parámetro, que es
+            // lo que tiene sentido: turbia es «como la que sale del manantial».
             if (m == MaterialId.Water)
-                return carga >= LabParams.TurbidezFuente * 2 ? "muy turbia"
+                return carga >= MuyTurbiaU ? "muy turbia"
                      : carga >= LabParams.TurbidezFuente ? "turbia" : "limpia";
             if (m == MaterialId.Empty || EsGasId(m))
                 return humedad >= AireSaturadoU ? "saturado de vapor" : humedad >= AireHumedoU ? "húmedo"

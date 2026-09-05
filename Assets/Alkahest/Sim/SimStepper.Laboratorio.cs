@@ -74,8 +74,10 @@ namespace Alkahest.Sim
         public long LabCalorNoSoltado;
         /// <summary>(R136, C3) La LLAMA en unidades NOMINALES: 40 por celda y tick, sin gastar reserva.
         /// Es un índice de cuánta llama hubo, no energía comparable con la del combustible — para eso
-        /// está `LabRawLlama`, y la diferencia es enorme: en una hoguera al aire, 622 040 nominales
-        /// entregan 105 579 raw (el 17 %), porque lo que ya está a 255 no admite más.</summary>
+        /// está `LabRawLlama`, y la diferencia es enorme: en una hoguera al aire la llama INTENTA
+        /// unos 2 488 160 raw (40 a cada uno de sus cuatro vecinos más el pin a 255, cada tick) y
+        /// entrega 105 579 — un 4 % —, porque lo que ya está a 255 no admite más. El «17 %» que
+        /// dijo R139 comparaba el índice nominal de 40 con esa entrega: peras con manzanas.</summary>
         public long LabCalorLlama;
 
         // ---- LIBRO DEL CALOR ENTREGADO: raw ESCRITOS de verdad en la grilla, tras el recorte ----

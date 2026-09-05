@@ -515,7 +515,9 @@ namespace Alkahest.Audio
             ConstruirVocesBucle();
             ConstruirVocesGrifo(dispensers);
             ConstruirSondasFuego();
-            LabInit(); // (R143) las voces del laboratorio: agua, goteo, vapor y el fuego de sus hogares.
+            // (R145, R23-4) Solo en el laboratorio: si no, el taller y la campaña se llevaban dos
+            // AudioSource en bucle y 220 sondas por nada.
+            if (sim != null && sim.Stepper != null && sim.Stepper.LabActivo) LabInit();
 
             // (playtest 43, MODO ESPEJO) Gate único: Stepper == null SOLO es
             // true en el invitado de la escena MULTI (Net/SimSync.cs ya lo

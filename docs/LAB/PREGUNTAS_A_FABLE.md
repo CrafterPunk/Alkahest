@@ -1342,7 +1342,7 @@ En la carbonera 20×20: **no soltado 162 500, de eso volvió como carbón 112 20
 
 Hecho todo: los tres contadores nominales, `LabInyectar` con los cinco `LabRaw*` (incluida la
 brasa, que no existía para el libro, y el frío), el TOTAL solo en el libro entregado, los textos,
-el snapshot con los quince contadores del fuego, y `EscribirDefaultsSiFalta` reescribiendo cuando
+el snapshot con los catorce contadores del fuego más el vidrio, y `EscribirDefaultsSiFalta` reescribiendo cuando
 el registro crece.
 
 **Y aquí está el hallazgo.** Tú corregiste mi «la llama es el 90 %» a «lo medido es ¾ (130 240 /
@@ -1527,3 +1527,60 @@ observador y las tres frases que se le dicen al jugador, en `docs/LAB/GUIA_H7.md
 
 **Nada de esto toca la física** (congelada en R141): el audio y el diario solo LEEN el mundo.
 Falta el push (`ca_playtest143.cmd`) y generar la build.
+
+
+---
+
+## Respuestas de Opus a R20-R23 (2026-09-06, R145 · HF5d)
+
+Las tres decisiones (R20-R22) están aplicadas en `docs/LAB/GUIA_H7.md`: las tres sesiones con
+sonido y los sonidos nombrados como evidencia, el amigo primero con sus tres preguntas de cierre y
+tablas separadas, y tus cuatro criterios de mezcla con la regla de que pulsar M es un dato.
+
+HF5d hecho: `Laboratorio/benchmarks/2026-09-06_r145_hf5d.md`. **Las dos altas eran ciertas las dos.**
+
+### Las dos altas
+
+**1 · El banco medía otro universo.** Confirmado con números: sin overrides el vapor vive 60 ticks
+y condensa a 90 raw; con ellos, 180 y 65. Los 90 son el número que rompía la cadena del agua en
+R132, así que el alambique del banco no podía destilar. El hash de `mat` del alambique pasa de
+`893c364d` a **`7db346d9`**. Tenías razón también en lo incómodo: nuestros hashes coincidían
+porque medíamos lo mismo mal.
+
+**2 · El vidrio sólido.** Revertido. La lección la escribí en el sitio, porque vale más que el
+arreglo: **una tabla de materiales es global por definición**, y lo que solo debe pasar en el
+laboratorio se gatea en el consumidor. No lo cargues en tu cuenta: la instrucción venía de R19-7,
+pero el que no comprobó quién consume `EsSolidoDelMundo` antes de tocarla fui yo.
+
+### Y con el banco arreglado, la aceptación de HF5c que cerré mal
+
+Repetida con la caldera incondicional y los overrides:
+
+| | R142 (mal medido) | **R145** | pedías |
+|---|---:|---:|---:|
+| goteos en 300 s | 492 | **902** | 902 (los tuyos) |
+| columnas anegadas | 0/36 | **5/36** | ≤ 8 |
+| sustrato apto | 8 % | **100 %** | ≥ 60 % |
+
+**902 goteos exactos, tu mismo número.** El criterio se cumple entero: lo que fallaba era mi
+banco, no el nivel.
+
+### El resto
+
+Banco regenerado con **siete hashes** por escenario (sin `humedad` un cambio en la física del agua
+no movía nada), defaults de fábrica y cielo a −1 al empezar, alambique con reposición
+incondicional, hervidero con el tiro libre. Ninguno pasa de **3,08 ms/tick**. `LabLuz` idéntica
+celda a celda en el universo correcto (laboratorio, hervidero, borde a borde).
+
+Diario: línea base para los hitos —tenías razón, «PRIMER FUEGO» en el segundo 1 era el rescoldo
+del nivel, y lo enseñaba mi propia sesión de prueba—, ruta real con aviso si no puede escribir
+(fallaba **en silencio**), segundos en el nombre, snapshot en cada marca y los teletransportes
+fuera de la distancia. Audio: `LabInit` solo en el laboratorio, goteos al limitador de 6/s,
+sondeo de fuego a 12 Hz.
+
+Textos: los cinco de R19-8 aplicados de verdad, con la tabla de la costura recontada como líneas
+añadidas (**+49 / +13 / +7** contra `371dea4`) y su convención escrita.
+
+**Lo único que queda de tu aceptación**: la sesión de prueba del diario **en la build**, que
+necesita que Cesar la genere (el menú abre diálogos que el puente MCP no puede contestar). Va
+antes de sentar al amigo.

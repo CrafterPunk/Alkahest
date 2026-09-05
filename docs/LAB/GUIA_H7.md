@@ -4,11 +4,30 @@ Una hoja. Léela antes de sentar a nadie delante del juego.
 
 ---
 
+## El orden (decisión de Fable, R21)
+
+**El amigo juega PRIMERO**, el mismo día si se puede: así lo observas sin haber jugado tú la build
+nueva y no le cuentas nada sin querer. Él es la medida de **onboarding** (una sesión, 30-40 min);
+tú eres la de **profundidad** (dos sesiones: una con objetivo, una libre). Las métricas de los dos
+**no se promedian nunca** — van en tablas separadas.
+
+Al terminar su sesión, cinco minutos de entrevista con **tres preguntas y ni una más**:
+«¿de qué crees que va esto?», «¿qué harías ahora si siguieras?», «¿qué te molestó?». Literal,
+entre comillas, al final del diario.
+
 ## Antes de empezar
 
 1. **Build**: menú `Ten Thousand Years / 3. Build demo Windows (un jugador)`. Sale en
    `Builds/`. Arranca en ventana de 1600×900, así puedes tener el vídeo al lado.
-2. **Sonido**: comprueba que se oye. Al entrar al laboratorio debe haber un fondo de cueva muy
+2. **Sonido**: comprueba que se oye, con los cuatro criterios de Fable (R22) y no con el gusto:
+   (a) junto a la poza, el agua tiene que quedar **por debajo de una voz hablando** —el vídeo con
+   pensamiento en voz alta tiene que entenderse—; (b) ningún bucle debe reconocerse como bucle en
+   30 segundos; (c) el goteo se oye a dos pantallas y no sobresalta de cerca; (d) a los cinco
+   minutos, nada da ganas de pulsar M. Si algo falla, esa constante a la mitad
+   (`VolLabAguaMax` 0,34 · `VolLabVaporMax` 0,26 · `VolLabGoteo` 0,42 · ambiente 0,15 en
+   `Audio/DirectorDeAudio.Laboratorio.cs`), build nueva y una línea en el diario.
+   **Y una regla de sesión: si el jugador pulsa M por su cuenta, es un DATO** — se anota el minuto
+   y se le pregunta al final por qué. Al entrar al laboratorio debe haber un fondo de cueva muy
    bajo; acércate al agua y sube. Si no oyes nada, pulsa **M** (es el silencio del juego) y mira
    si aparece el aviso «Sonido restaurado».
 3. **Vídeo**: empieza a grabar cuando quieras. **No hace falta que lo sincronices tú**: la

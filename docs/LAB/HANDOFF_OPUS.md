@@ -214,7 +214,7 @@ del frío al libro entregado; el panel dice qué incluye el TOTAL. (3) `LabReser
 extinción por agua. (4) `EscribirDefaultsSiFalta` compara claves, no cardinalidad. (5) `Estado()`
 lee `LabParams` donde exista el parámetro. (6) Lector sin allocs por frame (o texto corregido).
 (7) «vidrio» a `EsSolidoDelMundo`. (8) Textos: el 17 % de la llama es ≈ 4 %, catorce contadores
-más el vidrio, el rocío sin montaje, el `WakeChunk` redundante, y la tabla de la costura del §2
+más el vidrio, el rocío que se citaba sin decir con qué montaje (va el alambique de r141 §2: serpentín de 31 celdas y caldera repuesta cada 8 ticks), el `WakeChunk` redundante, y la tabla de la costura del §2
 con convención explícita (+49/+13/+7 contra 371dea4).
 **Aceptación:** nivel sin conducto ≤ 8 columnas anegadas a los 300 s con el alambique de r141 §2,
 sustrato ≥ 60 %, residuo 0; TOTAL entregado = cinco fuentes con pines; coste sin regresión;
@@ -268,11 +268,17 @@ calor industrial y el hogar como fuente doméstica. Excepción autorizada en `Si
 toda gateada por `LabActivo` y marcada `(R135)`/`(R136)`/`(R138)`. **Tamaño real medido en R139**
 (el «6 líneas» original se quedó corto tres rondas seguidas):
 
-| método | líneas del método | tocadas |
-|---|---|---:|
-| `ProcessCombustion` | 829-937 | 18 (16 de código, 2 de comentario) |
-| `ProcessBrasa` | 1003-1055 | 4 |
-| `ProcessFire` | 1643-1727 | 3 |
+**Convención**: LÍNEAS AÑADIDAS, comentarios incluidos, contadas con
+`git diff 371dea4 -- Assets/Alkahest/Sim/SimStepper.cs` (371dea4 es el último commit sin
+laboratorio). La tabla anterior contaba «líneas que mencionan algo del laboratorio», que es otra
+cosa y salía tres veces más pequeña.
+
+| método | líneas añadidas |
+|---|---:|
+| `ProcessCombustion` | +49 |
+| `ProcessBrasa` | +13 |
+| `ProcessFire` | +7 |
+| fuera de esos tres | +70 |
 
 Más seis líneas sueltas de R130/R132 (erosión al mover agua, condensado del gas, fibra mojada).
 `TryIgnite`, `AddTemp` e `InjectHeat` siguen **intactos**: fuera del laboratorio el diff es
@@ -362,7 +368,7 @@ Sale de la revisión adversaria de d711454 (28 hallazgos, ninguno de física) y 
   docblocks; contadores del fuego en el snapshot `_libro.json`; `_defaults.json` regenerable.
 - **Desagüe (R17 C).** Labio de roca entero; conducto que atraviesa la solera hasta (136,245) y
   (153,245) con salida al aire de la boca; comentario de `Grava` corregido. Medido con rocío a
-  10 celdas/s durante 300 s.
+  10 celdas/s durante 300 s (medida retirada en R145: el montaje que vale es el alambique de r141 §2).
 - **Textos del benchmark R137 (R17 D).** Tolva sin causa inventada; brasa en la tabla de C2 y en
   Q11; identidad 555 por celda y estadística.
 

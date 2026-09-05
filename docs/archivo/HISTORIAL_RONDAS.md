@@ -7513,3 +7513,53 @@ criterio 4 y empieza el diseño comercial. La física sigue congelada.
 Archivos: `Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R20-R23), `docs/LAB/HANDOFF_OPUS.md` (HF5d, §8),
 `docs/LAB/HANDOFF_SABADO.md` (§2: el amigo primero), `docs/LAB/CHECKPOINT.md` (§9). Sin código.
+
+## Ronda 145 — HF5d: LO QUE LA REVISIÓN DE FABLE DESTAPÓ (Opus 5, R20-R23)
+
+27 hallazgos, ninguno de física, y las dos altas eran ciertas las dos.
+
+· **EL BANCO ENTERO MEDÍA OTRO UNIVERSO.** `LabBench.Correr()` no llamaba a
+  `Universe.AplicarOverridesLaboratorio`, así que los ocho escenarios corrían con la química
+  SORTEADA de la campaña. Medido: sin overrides el vapor vive **60 ticks y condensa a 90 raw**;
+  con ellos, **180 y 65**. Los 90 son justo el número que rompía la cadena del agua en R132 — o
+  sea que el alambique del banco no podía destilar y la carbonera no se ahogaba igual. Y lo
+  incómodo: los hashes de Fable coincidían con los míos **porque los dos medíamos lo mismo mal**.
+  Una línea, y el hash de `mat` del alambique pasa de `893c364d` a `7db346d9`.
+· **EL VIDRIO SÓLIDO ROMPÍA LA CAMPAÑA.** `VidrioVerde` en `EsSolidoDelMundo` (instrucción de
+  R19-7, implementada por mí en R142): `Flask.EsAspirable` rechaza todo lo que dé true ahí y **la
+  tabla no sabe en qué modo corre**, así que los encargos y el trueque de vidrio de botella se
+  volvían imposibles. Revertido, con la lección escrita en el sitio: una tabla de materiales es
+  global por definición, y lo que solo debe pasar en el laboratorio se gatea en el consumidor.
+· **Y CON EL BANCO ARREGLADO, LA ACEPTACIÓN QUE CERRÉ MAL SALE ENTERA.** En R142 di HF5c por
+  bueno con el sustrato en 8 % (pedía ≥ 60) y la mitad del riego, porque mi caldera reponía «solo
+  si la celda está vacía». Con reposición incondicional y overrides: **902 goteos —el número
+  exacto de Fable—, 5 de 36 columnas anegadas (pedía ≤ 8) y sustrato apto al 100 %**. Lo que
+  fallaba era mi banco, no el nivel.
+· **El banco, regenerado**: siete hashes por escenario (`mat`, `temp`, `aux`, `humedad`, `carga`,
+  `reposo`, `luz`) porque sin los cuatro campos **un cambio en la física del agua no movía un solo
+  hash**, que es justo lo que el hash promete detectar; defaults de fábrica y cielo a −1 al
+  empezar cada escenario; el hervidero con el tiro libre (la barra de núcleo frío tapaba la boca
+  de la chimenea: era una caldera sellada con otro nombre). Ninguno pasa de **3,08 ms/tick**.
+  `LabLuz` idéntica celda a celda en el universo correcto.
+· **El diario, antes de que nadie juegue**: los hitos comparaban contra CERO, y como el hogar del
+  nivel ya quema fibra al arrancar, «PRIMER FUEGO» saltaba en el segundo 1 de toda sesión —medía
+  el mundo, no al jugador, y lo enseñaba mi propia sesión de prueba—; la ruta era la del repo en
+  el editor pero la del .exe en una build, y si no podía escribir **fallaba en silencio** (una
+  sesión entera jugada creyendo que se grababa); dos F9 en el mismo minuto se pisaban la sesión;
+  las marcas no guardaban snapshot; y la distancia sumaba los teletransportes, que en el informe
+  se lee como cuánto exploró el jugador. Los cinco, corregidos.
+· **El audio**: `LabInit` solo en el laboratorio (el taller y la campaña se llevaban dos
+  `AudioSource` y 220 sondas por nada), los goteos del tope POR CUADRO —hasta 120 por segundo,
+  una ametralladora junto a un alambique— al limitador del director a **6 por segundo**, y el
+  sondeo de fuego a 12 Hz como el resto.
+· **Los textos que R19b dio por aplicados y no lo estaban**: el «17 %» (era ≈ 4 %: comparaba el
+  índice nominal de 40 con lo que la llama INTENTA, ≈ 2 488 160), los «quince contadores» que eran
+  catorce más el vidrio, la frase del rocío sin montaje, el `WakeChunk` descrito como causa cuando
+  era redundante, y la tabla de la costura, que contaba menciones en vez de líneas añadidas:
+  **+49 / +13 / +7** contra `371dea4`, con la convención escrita.
+· Y las decisiones de H7 aplicadas a la guía: las tres sesiones con sonido (los sonidos que el
+  jugador NOMBRE son la evidencia), **el amigo juega primero** con tres preguntas de cierre y
+  tablas separadas que no se promedian nunca, y los cuatro criterios de mezcla de Fable con la
+  regla de que si el jugador pulsa M por su cuenta **es un dato**, no un fallo.
+· Física congelada desde R141 y esta ronda no la roza. Queda la prueba del diario EN LA BUILD, que
+  necesita que Cesar la genere. Sin push (cmd 145).

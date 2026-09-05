@@ -571,47 +571,27 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-04, R142 — leer antes de nada.)** **HF5c y H5 hechos**;
-`Laboratorio/benchmarks/2026-09-04_r142_hf5c_y_h5.md`. Los ocho flecos de R19 aplicados, el
-desagüe retirado (R18), y H5 con su banco y su luz. **La física está CONGELADA desde R141.**
+**(Opus, 2026-09-06, R145 — leer antes de nada.)** **HF5d hecho**;
+`Laboratorio/benchmarks/2026-09-06_r145_hf5d.md`. Los 27 hallazgos de la R23 de Fable, con las dos
+altas ciertas: **el banco medía otro universo** (faltaba `AplicarOverridesLaboratorio`: el vapor
+vivía 60 ticks y condensaba a 90 en vez de 180 y 65, así que el alambique del banco no destilaba)
+y **el vidrio en `EsSolidoDelMundo` rompía la campaña** (el frasco no puede aspirar lo que da true
+ahí, y esa tabla es global) — revertido.
 
-- **Desagüe fuera**: con el alambique de Fable, **0 de 36 columnas anegadas** a los 300 s (pedía
-  ≤ 8) y **residuo 0**. Mi medida de Q12 estaba mal planteada: anegué el lecho a mano en vez de
-  regarlo, y eso mide el vaciado, no el régimen.
-- **`LabLuz` de 2,86 a 0,50 ms** (pico 7,88 → 1,57), y comprobado **idéntica celda a celda** en
-  cuatro escenarios, incluido el peor caso de borde a borde. La ventana se deduce cada pasada del
-  bbox de fuentes + 255/dMin: un rango fijo habría estado MAL, y está medido.
-- **`Sim/LabBench.cs`**: ocho escenarios con hash FNV-1a de `mat`/`temp`/`aux`. Ninguno pasa de
-  12 ms/tick (el peor, 2,96). Menú «Ten Thousand Years/8». Multiplicador real **×13**.
-- El «17 %» de la llama era mío y estaba mal (comparaba nominal con entregado): el cociente
-  honesto es **≈ 4 %**. La conclusión de fondo no cambia.
+Con el banco arreglado, la aceptación de HF5c que había cerrado mal sale entera: **902 goteos
+(el número exacto de Fable), 5/36 columnas anegadas y sustrato al 100 %**. Banco regenerado con
+**siete hashes** por escenario y defaults de fábrica; ninguno pasa de 3,08 ms/tick; `LabLuz`
+idéntica celda a celda en el universo correcto.
 
-**(R143)** El laboratorio ya SUENA —faltaba una línea desde R130: `SpawnLaboratorio` nunca
-creaba el `DirectorDeAudio`, y las voces del taller estaban atadas a cosas que aquí no existen—
-y ya SE OBSERVA SOLO: `Game/LabDiario.cs` anota hitos, velocidad, panel, pincel y distancia con
-tick y reloj, con claqueta (F9) para alinear el vídeo y marcas F1/F2/F4 con captura. Abiertas para Fable a su vuelta: **Q13** (las tres sesiones con sonido, sin línea base),
-**Q14** (un segundo jugador novato, que su protocolo no contemplaba) y **Q15** (la mezcla del
-audio necesita oídos: yo puedo medir volúmenes, no juzgarlos). Guía de la
-sesión en `docs/LAB/GUIA_H7.md`.
+Diario corregido antes de que nadie juegue: línea base para los hitos (**«PRIMER FUEGO» saltaba
+en el segundo 1** por el rescoldo del nivel), ruta real con aviso —fallaba **en silencio**—,
+segundos en el nombre, snapshot en cada marca y teletransportes fuera de la distancia. Audio:
+`LabInit` solo en el laboratorio y goteos limitados a 6/s.
 
-**Siguiente paso exacto: correr `ca_playtest143.cmd`, generar la build y jugar H7** con el
-protocolo de `docs/LAB/HANDOFF_SABADO.md` §2 (tres sesiones de 30-40 min, registro en
-`Laboratorio/h7/sesion_NN.md`, capturas y snapshots en cada sorpresa y cada confusión, y las
-observaciones para el diseño comercial en §3). Luego H8. Fable vuelve el sábado.
-
-**(Fable, 2026-09-06, R144 — leer antes de nada.)** R142 (HF5c + H5) y R143 (sonido y diario)
-**revisados**: banco propio (`Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.md`:
-los hashes del banco se reproducen al bit; `LabLuz` acotada correcta por lectura) y revisión
-adversaria (27 hallazgos, ninguno de física). **Dos altas:** el banco H5 corre sin
-`AplicarOverridesLaboratorio` (mide la campaña: sus ocho hashes no valen como licencia hasta
-regenerarlos) y el vidrio verde en `EsSolidoDelMundo` rompe la campaña (instrucción mía de R19-7,
-revertida). Y cuatro fallos que darían métricas falsas en H7 (hitos «PRIMER X» absolutos, audio
-del laboratorio en todos los modos, goteos por cuadro, ruta y colisiones del diario en la build).
-Q13-Q15 cerradas (R20-R22): las tres sesiones con sonido como decidió Cesar, **el amigo juega
-PRIMERO** y son dos experimentos que no se promedian, la mezcla la juzga Cesar con cuatro criterios.
-**Siguiente paso exacto: HF5d** (R23, media ronda, Opus) → build → H7 (amigo, luego Cesar) →
-`OBSERVACIONES_H7.md` → Fable puntúa el criterio 4 y empieza el diseño comercial. La física sigue
-congelada. Cesar: `ca_playtest144.cmd`.
+**Siguiente paso exacto: correr `ca_playtest145.cmd`, GENERAR LA BUILD y probar el diario en
+ella** (F9/F1/F2/F4 dejando archivo, PNG y snapshot en `Builds/…/Laboratorio/h7/`). Después: **el
+amigo primero** (medida de onboarding, una sesión), luego Cesar (profundidad, dos sesiones), y
+`OBSERVACIONES_H7.md`. Protocolo y reglas en `docs/LAB/GUIA_H7.md`.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

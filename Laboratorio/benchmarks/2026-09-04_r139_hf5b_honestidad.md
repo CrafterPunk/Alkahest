@@ -9,8 +9,9 @@ headless, sin Play. Nada de esto reabre la física salvo una línea de ignición
 
 Fuera las cuatro llamadas a `TryIgnite` de `LabHogar` — la única línea por la que el hogar
 encendía con azar en vez de con temperatura. Y `WakeChunk` en `LabCalentarHasta` cuando la
-temperatura cambia, porque `AddTemp` no despierta a nadie y la yesca ahora depende de la
-autoignición de `ApplyPhase`.
+temperatura cambia. **(Precisado en R145: está bien tenerlo, pero era REDUNDANTE — `LabHogar` ya
+despierta su 3×3 —, así que no fue la causa de que nada funcionara. Se queda por robustez, no
+porque arreglara un fallo.)**
 
 | caso | criterio | medido |
 |---|---|---|
@@ -61,8 +62,7 @@ Yo escribí «la llama es el 90 % del calor»; Fable lo corrigió a «¾ (130 24
 cifras son del libro nominal, y las dos están mal.** En raw entregados la llama pone entre el 6 %
 y el 29 %, y la fuente que más escribe es siempre la **combustión**.
 
-La causa está en una línea: en la hoguera la llama suelta **622 040 nominales y entrega 105 579,
-el 17 %**, porque lo que ya está a 255 no admite más. Cuanto más caliente el sitio —o sea, cuanto
+La causa está en una línea: en la hoguera la llama suelta **622 040 nominales y entrega 105 579; sobre lo que intenta (≈ 2 488 160) es un 4 %**, porque lo que ya está a 255 no admite más. Cuanto más caliente el sitio —o sea, cuanto
 más se parece a un horno—, **menos** entrega la llama. Por eso el sellado da 6 % y el abierto 29 %.
 
 Esto es exactamente lo que el hallazgo B de R17 predecía sin saber la cifra: el libro nominal no
@@ -90,7 +90,7 @@ hay que decir con claridad:
 Idénticos. El lecho se vacía solo —por evaporación y reparto al aire de la cámara— mucho más
 deprisa de lo que el conducto puede conducir. Se ve al conducto trabajar (el fondo de (136,245)
 sube a 19 y luego a 45 mientras el lecho baja de 255 a 149) pero **nunca llega a 255**, así que
-no exuda agua líquida a la boca: la aceptación de R17 no se cumple. Y con el rocío a 10 celdas/s
+no exuda agua líquida a la boca: la aceptación de R17 no se cumple. Y con un rocío de 10 celdas/s repartido por el techo del lecho oeste (montaje que R145 sustituye por el alambique de r141 §2, que es el que reproduce el régimen real)
 durante 300 s el conducto se queda en humedad 12, porque a ese caudal el lecho ni se moja.
 
 **Conclusión: el conducto es correcto, inocuo y decorativo.** Escalado como **Q12**.
@@ -124,7 +124,7 @@ soltados, **112 200 volvieron como carbón y 50 300 se perdieron** como gas sin 
 
 ## Persistencia
 
-- `_libro.json` guarda ahora los quince contadores del fuego y el vidrio: un snapshot podía
+- `_libro.json` guarda ahora los catorce contadores del fuego más el vidrio: un snapshot podía
   guardarse sin la identidad de la carbonera ni el calor entregado.
 - `EscribirDefaultsSiFalta` reescribe cuando el registro tiene más claves que el archivo. Antes
   solo miraba si existía, así que un `_defaults.json` viejo seguía diciendo `vidaHumo` 400 y no
@@ -145,7 +145,12 @@ Sin regresión (R135: 1,90/1,95 · R137: 1,85/1,80). Regresión del agua: **resi
 
 Líneas de `SimStepper.cs` que tocan el laboratorio, contadas:
 
-| método | líneas del método | tocadas |
+**(Corregido en R145.)** Esta tabla contaba «líneas que MENCIONAN algo del laboratorio», que no
+es lo que se preguntaba. Contadas como líneas AÑADIDAS con `git diff 371dea4` (el último commit
+sin laboratorio), comentarios incluidos, salen **+49 en `ProcessCombustion`, +13 en `ProcessBrasa`
+y +7 en `ProcessFire`**, más 70 fuera de esos tres. La convención vive ahora en el HANDOFF §2.
+
+| método | líneas del método | menciones (la cuenta vieja) |
 |---|---|---:|
 | `ProcessCombustion` | 829-937 | 18 (16 de código, 2 de comentario) |
 | `ProcessBrasa` | 1003-1055 | 4 |

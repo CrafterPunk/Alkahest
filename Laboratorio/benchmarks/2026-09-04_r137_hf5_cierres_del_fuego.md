@@ -107,7 +107,9 @@ llama es la fuente dominante». Es falso, y Fable lo corrigió a «¾» con la m
 también lo es: **las dos son del libro NOMINAL**. Contando los raw que de verdad se escriben en
 la grilla, la llama pone entre el **6 %** (carbonera sellada) y el **29 %** (hoguera al aire), y
 la fuente que más escribe es siempre la combustión. La causa: en la hoguera la llama suelta
-622 040 nominales y entrega 105 579 —el 17 %—, porque lo que ya está a 255 no admite más. Cuanto
+622 040 nominales y entrega 105 579 —un 4 % de los ≈ 2 488 160 que intenta, ya que cada tick
+prueba 40 en cada uno de sus cuatro vecinos más el pin a 255—, porque lo que ya está a 255 no
+admite más. Cuanto
 más se parece el sitio a un horno, MENOS entrega la llama. La comparación fina/maciza sí se
 sostiene: es entre dos cifras nominales del mismo tipo.
 

@@ -292,6 +292,7 @@ namespace Alkahest.Game
             Num(sb, "calorCarbon", st.LabCalorCarbon, true);
             Num(sb, "calorLlamaNominal", st.LabCalorLlama, true);
             Num(sb, "calorNoSoltado", st.LabCalorNoSoltado, true);
+            Num(sb, "reservaApagada", st.LabReservaApagada, true); // (R145, R23-10) la spec decía «snapshot incluido» y faltaba.
             Num(sb, "carbonizado", st.LabCarbonizado, true);
             Num(sb, "energiaCarbon", st.LabEnergiaCarbon, true);
             Num(sb, "rawFuego", st.LabRawFuego, true);

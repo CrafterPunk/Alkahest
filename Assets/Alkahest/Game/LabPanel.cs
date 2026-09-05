@@ -56,6 +56,7 @@ namespace Alkahest.Game
         /// <summary>(R142, R19-6) Lo que el lector mostró la última vez. Si nada de esto cambió, no se reconstruye el texto.</summary>
         private int _lecturaIdx = -1;
         private byte _lecturaMat, _lecturaTemp, _lecturaHum, _lecturaCarga, _lecturaLuz, _lecturaReposo;
+        private int _lecturaUmbHum = -1, _lecturaUmbTurb = -1;
         private readonly GUIContent _lecturaTexto = new GUIContent("");
         private Vector2 _lecturaTam;
         private readonly HashSet<string> _ayudaAbierta = new HashSet<string>();
@@ -103,7 +104,7 @@ namespace Alkahest.Game
             new Pintable { Grupo = "VIDA",   Nombre = "fibra",       Mat = MaterialId.Fibra },
             new Pintable { Grupo = "VIDA",   Nombre = "semilla",     Mat = MaterialId.Semilla },
             new Pintable { Grupo = "VIDA",   Nombre = "ceniza",      Mat = MaterialId.Ash },
-            new Pintable { Grupo = "VIDA",   Nombre = "carbón",      Mat = MaterialId.Carbon },      // (R140) faltaba desde que nació en R135.
+            new Pintable { Grupo = "VIDA",   Nombre = "carbón",      Mat = MaterialId.Carbon },      // (R140) faltaba desde que nació en R135. Es POLVO: cae y se apila (ayuda del panel).
             new Pintable { Grupo = "LEYES",  Nombre = "hogar",       Mat = MaterialId.Hogar },
             new Pintable { Grupo = "LEYES",  Nombre = "núcleo frío", Mat = MaterialId.NucleoFrio },
             new Pintable { Grupo = "LEYES",  Nombre = "manantial",   Mat = MaterialId.Manantial },
@@ -655,9 +656,15 @@ namespace Alkahest.Game
 
             int i = CellGrid.Idx(cx, cy);
             byte mat = g.mat[i], temp = g.temp[i], hum = g.humedad[i], car = g.carga[i], luz = g.luz[i], rep = g.reposo[i];
+            // (R145, R23-11) Los dos parámetros que el rótulo LEE entran en la tupla: si no, mover
+            // el slider no repinta el texto y el lector contradice a la física hasta que el cursor
+            // se mueva de celda.
+            int umbHum = LabParams.PlantaHumedadMin, umbTurb = LabParams.TurbidezFuente;
             if (i != _lecturaIdx || mat != _lecturaMat || temp != _lecturaTemp || hum != _lecturaHum
-                || car != _lecturaCarga || luz != _lecturaLuz || rep != _lecturaReposo)
+                || car != _lecturaCarga || luz != _lecturaLuz || rep != _lecturaReposo
+                || umbHum != _lecturaUmbHum || umbTurb != _lecturaUmbTurb)
             {
+                _lecturaUmbHum = umbHum; _lecturaUmbTurb = umbTurb;
                 _lecturaIdx = i; _lecturaMat = mat; _lecturaTemp = temp; _lecturaHum = hum;
                 _lecturaCarga = car; _lecturaLuz = luz; _lecturaReposo = rep;
 

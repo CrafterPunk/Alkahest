@@ -34,6 +34,8 @@ namespace Alkahest.Sim
             public int ChunksActivos, CeldasActivas;
             public long MemoriaAntes, MemoriaDespues;
             public uint HashMat, HashTemp, HashAux;
+            /// <summary>(R145) Los cuatro campos del laboratorio: sin ellos el hash no ve el agua.</summary>
+            public uint HashHumedad, HashCarga, HashReposo, HashLuz;
             public double TicksPorSegundo => MsMedia > 0 ? 1000.0 / MsMedia : 0;
         }
 
@@ -164,8 +166,14 @@ namespace Alkahest.Sim
             Bloque(g, 99, 10, 99, 120, MaterialId.Stone);
             Bloque(g, 300, 10, 300, 120, MaterialId.Stone);
             Bloque(g, 100, 120, 299, 120, MaterialId.Stone);
-            Bloque(g, 190, 120, 209, 120, MaterialId.Empty);      // la chimenea
-            Bloque(g, 150, 121, 250, 121, MaterialId.NucleoFrio); // la cámara fría
+            // (R145, R23-16) La chimenea sube LIBRE y la cámara fría va ENCIMA, a los lados: antes
+            // la barra de núcleo frío cruzaba justo sobre la boca y la tapaba, así que el escenario
+            // era una caldera sellada con otro nombre.
+            Bloque(g, 190, 120, 209, 120, MaterialId.Empty);      // la boca de la chimenea
+            Bloque(g, 189, 121, 189, 150, MaterialId.Stone);      // el tiro
+            Bloque(g, 210, 121, 210, 150, MaterialId.Stone);
+            Bloque(g, 150, 121, 188, 121, MaterialId.NucleoFrio); // la cámara fría, a los lados del tiro
+            Bloque(g, 211, 121, 250, 121, MaterialId.NucleoFrio);
         }
 
         /// <summary>
@@ -198,7 +206,29 @@ namespace Alkahest.Sim
             var r = new Resultado { Nombre = nombre, Ticks = ticks };
             r.MemoriaAntes = GC.GetTotalMemory(true);
 
+            // (R145, R23-13) El banco parte SIEMPRE de fábrica. Si no, hereda los sliders de la
+            // última sesión de Play y la boca de cielo que dejó el escenario anterior, y entonces
+            // el hash deja de significar «esta física» para significar «esta física y lo que
+            // hubiera tocado alguien». Se restaura al terminar para no pisar un laboratorio abierto.
+            var guardados = new float[LabParams.Registro.Count];
+            for (int i = 0; i < guardados.Length; i++)
+            {
+                guardados[i] = LabParams.Registro[i].Leer();
+                LabParams.Registro[i].Escribir(LabParams.Registro[i].Def);
+            }
+            int cieloX0 = LabParams.LuzCieloX0, cieloX1 = LabParams.LuzCieloX1;
+            LabParams.LuzCieloX0 = -1; LabParams.LuzCieloX1 = -1;
+            try
+            {
+
             var u = Universe.Create(SeedLaboratorio);
+            // (R145, R23-1) LA LÍNEA QUE FALTABA, y sin ella el banco entero medía OTRO universo.
+            // `Universe.Create` deja la química SORTEADA de la campaña: agua con densidad y puntos
+            // de cambio de fase de la seed, vapor que vive 60 ticks y condensa a ~60 °C — el número
+            // que rompía la cadena del agua y que R133 promovió a parámetro. Con eso, el alambique
+            // del banco no destilaba y la carbonera no se ahogaba igual, y los hashes «cuadraban»
+            // entre Fable y yo porque los dos medíamos lo mismo mal. Misma línea que AlkahestSim.cs:222.
+            Universe.AplicarOverridesLaboratorio(u);
             var g = new CellGrid();
             montar(g);
             var st = new SimStepper(u, g) { LabActivo = true };
@@ -210,11 +240,14 @@ namespace Alkahest.Sim
             {
                 // La caldera del alambique: siete celdas de agua sobre el hogar cada 8 ticks.
                 // Es la ÚNICA intervención del banco, y va antes del paso para que sea reproducible.
+                // (R145, R23-15) Reposición INCONDICIONAL, como la caldera de r141 §2. Con la
+                // guarda de «solo si está vacío» el banco regaba la mitad (492 goteos contra 902):
+                // en cuanto la celda tenía algo, esa gota no se reponía nunca.
                 if (esAlambique && t % 8 == 0)
                     for (int x = 151; x <= 157; x++)
                     {
                         int i = CellGrid.Idx(x, 180);
-                        if (g.mat[i] == MaterialId.Empty) { g.SetCell(x, 180, MaterialId.Water); g.humedad[i] = 255; g.WakeChunk(x, 180, (uint)t); }
+                        g.SetCell(x, 180, MaterialId.Water); g.humedad[i] = 255; g.WakeChunk(x, 180, (uint)t);
                     }
 
                 var t0 = DateTime.UtcNow;
@@ -230,8 +263,19 @@ namespace Alkahest.Sim
             r.MsPresion = pre / ticks; r.MsLuz = luz / ticks; r.MsCuerpos = cue / ticks;
             r.ChunksActivos = st.ActiveChunks; r.CeldasActivas = st.ActiveCells;
             r.HashMat = Hash(g.mat); r.HashTemp = Hash(g.temp); r.HashAux = Hash(g.aux);
+            // (R145, R23-14) Los cuatro campos del laboratorio también entran al hash. Sin ellos un
+            // cambio en la física del AGUA —que vive entera en `humedad`— pasaba sin mover un solo
+            // hash, que es justo lo que el hash promete detectar.
+            r.HashHumedad = Hash(g.humedad); r.HashCarga = Hash(g.carga);
+            r.HashReposo = Hash(g.reposo); r.HashLuz = Hash(g.luz);
             r.MemoriaDespues = GC.GetTotalMemory(false);
             return r;
+            }
+            finally
+            {
+                for (int i = 0; i < guardados.Length; i++) LabParams.Registro[i].Escribir(guardados[i]);
+                LabParams.LuzCieloX0 = cieloX0; LabParams.LuzCieloX1 = cieloX1;
+            }
         }
 
         /// <summary>Corre los ocho escenarios en orden.</summary>
