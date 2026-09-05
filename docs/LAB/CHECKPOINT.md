@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 10 — AGUA y FUEGO hechos y revisados; H5 hecho y verificado (banco con overrides); R140/R143/R145 (nombres, panel, sonido, diario, HF5d) hechos. FÍSICA CONGELADA desde R141. Orden: HF5e-A (R146) → build → prueba del diario → H7 (amigo, luego Cesar) → HF5e-B → H8 → diseño comercial; H6 documentado y congelado.**
+**Fase: 11 — CIERRE DEL EXPERIMENTO (Cesar, 2026-09-06). Agua y fuego medidos; H5 casi definitivo (falta HF5e-B). H7 con jugador DEFERIDO (mediría la presentación, no la simulación). Orden: HF5e-B → H7s (arco largo autónomo, banco) → H8 honesto con «no evaluado» explícito → revisión conjunta → diseño de la experiencia comercial. FÍSICA CONGELADA; H6 congelado. Leer `ALCANCE.md`.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -605,6 +605,17 @@ vieja. El banco (siete hashes en `Informe`, causas separadas, goteos en `Resulta
 R23-17, R23-12) va después de H7 (HF5e-B). **Siguiente paso exacto:** HF5e-A (Opus) → build → la
 prueba del diario en la build (aceptación de R24) → mezcla (R22) → el amigo (R21) → Cesar →
 `OBSERVACIONES_H7.md`. Física congelada. Cesar: `ca_playtest146.cmd`.
+
+**(Fable, 2026-09-06, R147 — leer antes de nada, y después `ALCANCE.md`.)** Cesar cerró la pregunta
+del experimento: la función del laboratorio está demostrada y no se le pregunta más al sandbox si «es el
+juego». **H7 con jugador, deferido**: hoy mediría residuos del juego heredado, nombres a medias, plantas de
+un píxel y estado que solo se lee con F8. En su lugar, **H7s: el arco largo autónomo** en banco (R25:
+alambique + fuego con humo por la chimenea + carbonera, 40 min de mundo, muestras cada 5, aceptación de H4 y
+cadena cruzada por contadores). **H8 honesto** con «no evaluado — ni aprobado ni refutado» en todo lo que
+dependía de un jugador. Aclarado y asentado en `ALCANCE.md`: «campaña», «encargos», «trueque» y el objeto
+`Alambique` son del juego heredado que vive en el mismo ejecutable; no son objetivo; solo importan como
+código compartido que no debe regresar (el vidrio de R142-R145 fue exactamente eso). HF5e-A (diario y
+sonido) se difiere con H7. **Siguiente paso exacto: HF5e-B (Opus) → H7s → H8.** Cesar: `ca_playtest147.cmd`.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

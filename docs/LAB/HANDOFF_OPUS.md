@@ -5,6 +5,11 @@ nuevo retoma el trabajo sin la conversación original. Léelo entero antes de to
 
 ## 0. ORDEN DE LECTURA (30 minutos)
 
+**(R147) Antes de todo: `ALCANCE.md`.** Qué es esta fase, qué no es, qué sistemas heredados viven en
+el mismo ejecutable (campaña, encargos, trueque, bautizo, maestro, el objeto `Alambique`) y por qué
+solo importan como «código compartido que no debe regresar». H7 con jugador está deferido; sigue H7s
+(arco largo autónomo) y H8 honesto. Detalle: `PREGUNTAS_A_FABLE.md` R25.
+
 1. `docs/LAB/CHECKPOINT.md` — estado, decisiones, archivos, pruebas, problemas, siguiente paso.
 2. `docs/LAB/DISENO_LABORATORIO.md` — el diseño (por qué cada regla existe).
 3. Este documento — arquitectura entregada, hitos, interfaces, criterios, riesgos, escalado.
@@ -390,7 +395,9 @@ caldera incondicional, hervidero con cámara, informe con unidades y hora.
 **Aceptación:** la de R23. `ca_playtest145.cmd`. Después: build → el amigo (R21) → Cesar →
 `OBSERVACIONES_H7.md` → Fable.
 
-### HF5e · SEIS LÍNEAS ANTES DE LA BUILD, Y EL BANCO DESPUÉS DE H7 (R146 de Fable)
+### HF5e · (R147) LA PARTE A QUEDA DIFERIDA CON H7; LA PARTE B ES «H5 DEFINITIVO» Y VA AHORA
+(Las seis líneas de A son herramienta para la prueba de experiencia futura: se hacen entonces. B cierra
+las mediciones y va antes de H7s y H8.)
 **A · antes de la build (una hora):** «PRIMER FUEGO» con `> _baseQuemado` a secas (el nivel en
 reposo quema cero); `_posAnterior` reiniciada en `Abrir`; snapshots de las marcas fuera de la
 pestaña de presets (carpeta `h7/` o filtro) y solo en S y C; goteo sin el boost del limitador;
@@ -401,6 +408,18 @@ la ruta real de la build. Aceptación: la sesión de prueba del diario en la bui
 corrida; las dos causas del cambio de hash del alambique separadas; goteos/anegadas/sustrato en el
 `Resultado` del alambique; hervidero con el frío en el camino del vapor; R23-17 y R23-12 enteros;
 menores de R24-12. Detalle: `PREGUNTAS_A_FABLE.md` R24.
+
+### H7 · El arco largo con jugador — **DEFERIDO (Cesar, 2026-09-06, R147)**
+Mediría la presentación provisional, no si «hay juego». Se hará después de construir una primera
+experiencia coherente, con `LabDiario`, el sonido y `GUIA_H7.md` ya preparados. Lo que sigue es el
+protocolo tal como quedó, para entonces.
+
+### H7s · EL ARCO LARGO AUTÓNOMO (R147; Opus, en banco, tras HF5e-B)
+Especificación completa en `PREGUNTAS_A_FABLE.md` R25: nivel + alambique de r141 + fuego de fibra en
+la sala (humo por la chimenea) + carbonera; 72 000 ticks; muestras cada 9 000 con plantas vivas,
+anegadas, humedad y luz del lecho, humo en la cámara alta, libros, coste y snapshot. Aceptación
+honesta: H4 (plantas a 10/20/40 ≥ a 5; sustrato ≥ 60 %), una cadena cruzada vista por contadores o
+la evidencia de por qué no, residuo 0, coste sin regresión. Escenario en `LabBench` con su hash.
 
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
@@ -473,11 +492,15 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-**(Actualizado por Fable, 2026-09-06, R146.)**
+**(Actualizado por Fable, 2026-09-06, R147; decisión de Cesar en `ALCANCE.md` §5.)**
 
-1. **HF5e-A** (una hora, Opus): las seis líneas de R24 y `GUIA_H7.md` con la ruta real. `ca_playtest147.cmd`.
-2. **Build** de un jugador; **prueba del diario en la build** (aceptación de R24); mezcla (R22).
-3. **H7**: el amigo primero (R21), después Cesar; `OBSERVACIONES_H7.md` (Opus).
-4. **HF5e-B** (banco y textos, R24-7..12) antes de H8.
-5. Fable puntúa el criterio 4, revisa, y empieza el diseño de la experiencia comercial. **H8** informe.
-6. **Física CONGELADA** (§2); **H6** documentado y congelado.
+1. **HF5e-B** = H5 definitivo (Opus): siete hashes en `Informe`, causas del cambio de hash separadas,
+   goteos/anegadas/sustrato en `Resultado`, hervidero con el frío en el camino del vapor, R23-17, R23-12,
+   menores de R24-12. `ca_playtest148.cmd`.
+2. **H7s** el arco largo autónomo (Opus, banco): R25.
+3. **H8** borrador de `docs/LAB/INFORME_FINAL.md` (Opus) con «no evaluado» explícito donde dependía de
+   un jugador y «[FABLE]» en C y E.
+4. **Revisión conjunta** (Cesar, Fable, Opus) → diseño de la experiencia comercial (Fable).
+5. **H7 con jugador**, HF5e-A y `GUIA_H7.md`: después de la primera experiencia coherente.
+6. **Física CONGELADA** (§2); **H6** documentado y congelado. Nada de campaña/encargos/trueque como
+   objetivo (`ALCANCE.md` §4).

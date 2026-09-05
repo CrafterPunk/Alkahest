@@ -3,6 +3,8 @@
 Léelo después de `CHECKPOINT.md` §9. Es corto a propósito: dice qué puede hacer Opus sin Fable, cómo
 se juega H7, qué capturar para el diseño comercial que viene después, y qué se aparca.
 
+**(R147, 2026-09-06) H7 con jugador queda DEFERIDO por decisión de Cesar; §2 y §3 se conservan para la prueba de experiencia futura. Lo vigente: `ALCANCE.md` §5 y `HANDOFF_OPUS.md` §8 (HF5e-B → H7s autónomo → H8 → revisión conjunta → diseño comercial).**
+
 ## 0. Estado en tres líneas
 
 - **Física congelada desde R141** (decisión de Cesar). Fuego 4/5 medido y honesto; agua 5/5; la

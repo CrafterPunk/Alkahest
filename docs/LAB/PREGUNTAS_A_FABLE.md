@@ -8,6 +8,61 @@ CHECKPOINT.)*
 
 (ninguna)
 
+## Decisión de Cesar y Fable sobre el cierre del experimento (2026-09-06, R147)
+
+### R25 · H7 con jugador deferido; H7s autónomo; H8 honesto; y de dónde salían «campaña», «encargos» y «el alambique»
+
+**Contexto, para que Opus lo tenga igual que nosotros.** Cesar preguntó por qué en R142-R146
+aparecían «campaña», «encargos» y «trueque» si en el laboratorio no existe nada de eso. Respuesta
+comprobada en el repo y asentada en `docs/LAB/ALCANCE.md`: son modos y sistemas del juego heredado
+que viven en el **mismo ejecutable** (Semilla Cero, `OrderSystem`, `Trueque`, bautizo, maestro, el
+objeto `Alambique`). No están activos en el laboratorio y **no son objetivo de esta fase**. La
+única razón por la que importaron fue el código compartido: el laboratorio reutiliza el muñeco, el
+frasco y el cincel, que leen la tabla global `EsSolidoDelMundo`; meter ahí el vidrio cambiaba el
+frasco en el otro modo. Se revirtió para **no romper otro modo**, no para evaluar el laboratorio
+con criterios de campaña. A partir de ahora, esas palabras solo pueden aparecer con la fórmula
+«esto es compartido: compruebo que el otro modo no regresa». Y «el alambique del banco», el horno,
+la carbonera y la tolva son **geometrías** montadas con materiales del laboratorio, nunca objetos
+ni máquinas heredadas (`ALCANCE.md` §3).
+
+**La decisión sobre H7.** Una sesión larga con jugador hoy mediría la presentación provisional
+(residuos del juego anterior, nombres a medias, plantas de un píxel, estado que solo se lee con F8),
+no si «hay juego». Queda **deferida** a después de construir una primera experiencia coherente. El
+diario y el sonido de R143 son herramienta para entonces; **HF5e-A no se hace ahora** (queda en el
+HANDOFF como lista para la prueba de experiencia futura).
+
+**Lo único de H7 que no está contaminado: la simulación sola.** Dos preguntas de H7 eran de la
+simulación y no del jugador: si el huerto se mantiene bajo un riego sostenido (aceptación de H4) y
+si aparece una cadena cruzada sin guion (criterio 4 del fuego). Las dos se miden sin nadie delante:
+
+**H7s · el arco largo autónomo (Opus, en banco, tras HF5e-B).** Nivel de referencia + tres
+geometrías montadas por código: el alambique de r141 sobre el lecho oeste (serpentín de 31 celdas
+de núcleo frío en y272, caldera de siete celdas repuesta cada 8 ticks sobre el hogar), un fuego de
+fibra en la sala del hogar cuyo humo tiene la chimenea como única salida (la boca de la cámara alta
+x137-152), y una carbonera de 20×20 de fibra con boca 1 encendida por yesca desde el hogar.
+72 000 ticks (40 min de mundo; ~3 min de banco). Cada 9 000 ticks (5 min): plantas vivas, columnas
+anegadas, humedad y **luz** medias del lecho, celdas de humo en la cámara alta, libro de agua y de
+fuego, coste; snapshot en cada muestra. Aceptación honesta, salga lo que salga: (a) plantas vivas a
+10, 20 y 40 min ≥ plantas a 5 min y sustrato ≥ 60 % (H4); (b) al menos una cadena cruzada vista por
+contadores y snapshot —la esperable: el humo del fuego de la sala sube, oscurece el lecho por
+debajo de `planta.luzMin` y las plantas se marchitan mientras el alambique las riega— o la evidencia
+de por qué no; (c) residuo de agua 0 y coste sin regresión. Todo en `Sim/LabBench.cs` como
+escenario «arco largo», con su hash, y en `Laboratorio/benchmarks/`. En el informe, el criterio 4
+del fuego se puntúa como «observado en simulación autónoma: sí/no» y «con jugador: no evaluado».
+
+**H8 honesto (Opus borrador, Fable revisa).** `docs/LAB/INFORME_FINAL.md` con las secciones A-F
+del encargo. Cada afirmación que dependía de un jugador (descubrimiento sin ayuda, onboarding, tedio
+con jugador, diversión, «hay juego») se marca **«no evaluado — ni aprobado ni refutado»**, con la
+razón (presentación provisional) y con lo que sí se sabe de la simulación al lado. Lo que se
+afirma lleva su benchmark. Las secciones C (valoración) y E (estimación) llevan «[FABLE]» para la
+revisión conjunta.
+
+**Orden desde aquí:** HF5e-B (banco definitivo) → H7s (arco largo autónomo) → H8 (borrador) →
+revisión conjunta → diseño de la experiencia comercial (Fable, desde `HANDOFF_SABADO.md` §3 como
+lista de preguntas, sin observaciones de jugador todavía) → construir una primera experiencia →
+entonces la prueba de experiencia con jugador, con el diario y el sonido ya hechos. Física
+congelada; H6 congelado.
+
 ## Revisión de Fable de HF5d (2026-09-06, R146, con banco propio)
 
 ### R24 · Revisión de HF5d (b4d2413): las dos altas cerradas de verdad; seis correcciones de una línea antes de sentar al amigo, y el resto del banco después de H7

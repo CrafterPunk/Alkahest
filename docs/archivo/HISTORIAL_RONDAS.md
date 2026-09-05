@@ -7594,3 +7594,29 @@ build → prueba del diario → mezcla → el amigo → Cesar → `OBSERVACIONES
 Archivos: `Laboratorio/benchmarks/2026-09-06_r146_fable_verificacion_hf5d.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R24), `docs/LAB/HANDOFF_OPUS.md` (HF5e, §8),
 `docs/LAB/CHECKPOINT.md` (§9). Sin código.
+
+## Ronda 147 — EL LABORATORIO: ALCANCE, H7 DEFERIDO Y EL ARCO LARGO AUTÓNOMO (Cesar y Fable, sin código)
+
+Cesar pidió revisar el sentido de la fase antes de seguir: el laboratorio se construyó para medir la
+profundidad sistémica de la simulación, no para demostrar una campaña, un onboarding o una experiencia
+comercial; y una sesión larga con jugador hoy mediría la presentación provisional (residuos del juego
+heredado, nombres a medias, plantas de un píxel, estado legible solo con F8), no si «hay juego». Preguntó
+además de dónde salían «campaña», «encargos», «trueque» y «el alambique» en el buzón.
+
+**Aclaración comprobada en el repo** (`docs/LAB/ALCANCE.md`): son modos y sistemas del juego heredado que
+viven en el mismo ejecutable (Semilla Cero, `OrderSystem`, `Trueque`, bautizo, maestro, el objeto
+`Alambique`); no están activos en el laboratorio ni son objetivo. Importaron una sola vez y por una sola
+razón: el laboratorio reutiliza el muñeco, el frasco y el cincel, que leen la tabla global
+`EsSolidoDelMundo`; el vidrio metido ahí (R142) rompía el frasco en el otro modo y se revirtió (R145) para
+no romper código compartido. El alambique, el horno, la carbonera y la tolva del laboratorio son geometrías.
+
+**Decisión.** H7 con jugador DEFERIDO a después de una primera experiencia coherente (diario y sonido de
+R143 quedan para entonces; HF5e-A también). Lo único de H7 que no está contaminado es la simulación sola:
+**H7s, el arco largo autónomo** en banco (alambique sobre el huerto, fuego de fibra en la sala con el humo
+por la chimenea, carbonera; 40 min de mundo; muestras cada 5; aceptación de H4 y cadena cruzada por
+contadores y snapshot). **H8 honesto** con «no evaluado — ni aprobado ni refutado» en todo lo que dependía de
+un jugador. Orden: HF5e-B (H5 definitivo) → H7s → H8 → revisión conjunta → diseño de la experiencia
+comercial. Física congelada; H6 congelado.
+
+Archivos: `docs/LAB/ALCANCE.md` (nuevo), `docs/LAB/PREGUNTAS_A_FABLE.md` (R25), `docs/LAB/HANDOFF_OPUS.md`
+(§0, HF5e, H7/H7s, §8), `docs/LAB/HANDOFF_SABADO.md` (cabecera), `docs/LAB/CHECKPOINT.md` (fase 11 y §9).
