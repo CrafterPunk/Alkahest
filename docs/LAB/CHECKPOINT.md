@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 12 — LABORATORIO CERRADO (Fable, 2026-09-05, R150). `INFORME_FINAL.md` revisado y cerrado; física congelada; H6 congelado; H7 con jugador diferido; nivel de referencia intacto; Q16 cerrada (R26). Lo siguiente es un encargo aparte de Cesar: el diseño de la experiencia comercial.**
+**Fase: 13 — DISEÑO COMERCIAL, VEREDICTO ENTREGADO (Fable, 2026-09-05, R151). Laboratorio cerrado (R150). `docs/COMERCIAL/00-04`: seis experiencias, comparativa, mercado y veredicto: construir primero El Pozo tras la puerta G1-G8 (banco y papel, 4-6 semanas); La Ladera como reserva con condición medible. Sin código ni arquitectura; física congelada; única descongelación pedida: fibra recogible (G5), pendiente de Cesar.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -606,6 +606,8 @@ vive es diseño de nivel de la fase siguiente. Fechas 2026-09-06 corregidas a 20
 nombres de benchmarks. **Física congelada; H6 congelado; H7 con jugador diferido a después de la
 primera experiencia.** Lo siguiente no es del laboratorio: el encargo de diseño de la experiencia
 comercial lo da Cesar aparte. Cesar: `ca_playtest150.cmd`.
+
+**(Fable, 2026-09-05, R151 — DISEÑO COMERCIAL.)** Cesar cambió el rol: diseñar las experiencias comerciales, compararlas y juzgar, sin construir. Entregado en `docs/COMERCIAL/`: `00_EVIDENCIA_COMO_DISENO.md` (los cuatro comunes), `01_PROPUESTAS.md` (P1 El Pozo, P2 La Ladera, P3 Un Año Después, P4 Sin Manos, P5 Sordina, P6 Claraboya), `02_COMPARATIVA.md` (rúbrica: P1 179, P6 175, P2 173, P5 169, P3 164, P4 163 de 270), `03_MERCADO.md`, `04_VEREDICTO.md` (construir primero El Pozo con injertos; La Ladera de reserva; Claraboya = arte; Un Año Después = formato; Sin Manos y Sordina descartados). **Siguiente paso exacto:** Cesar elige o corrige; si aprueba, se corre la puerta G1-G8 de `04 §5` (G1-G5 en banco headless, las puede correr Opus con el protocolo del laboratorio, con la descongelación única de la fibra recogible en G5 bajo regresión de los siete hashes; G6-G8 con personas, las organiza Cesar). No implementar el juego ni su arquitectura hasta cruzar la puerta. Infografía: https://claude.ai/code/artifact/1c4438bb-9f96-4df2-aaa0-494bee30c30c
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

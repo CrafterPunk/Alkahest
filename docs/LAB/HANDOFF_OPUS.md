@@ -501,3 +501,15 @@ regenerada desde `Informe()` con el hash del arco largo, recuento +49/+50 de la 
 prueba del diario en la build esperan a la prueba de experiencia. **Física congelada; H6 congelado; el
 nivel de referencia no se toca.** Lo siguiente —la experiencia comercial— es un encargo aparte de Cesar
 y tendrá sus propios documentos; este HANDOFF queda como archivo del laboratorio.
+
+## 9. R151 — FASE COMERCIAL: LO QUE PUEDE TOCARTE (solo si Cesar lo autoriza)
+
+El diseño comercial está en `docs/COMERCIAL/00-04` (Fable, 2026-09-05). No hay nada que implementar
+del juego todavía. Lo único que puede llegarte es **la puerta** de `04_VEREDICTO.md §5`, experimentos
+en banco headless con el protocolo del laboratorio: G1 luz por una lumbrera recta de 300 y 600 celdas
+(rejilla 256×864), G2 humo y vapor cruzando dos estratos, G3 coste por tick con un cuerpo de agua de
+800 celdas de alto y tres zonas activas, G4 un huerto vivo 30 min en lecho de sedimento sobre grava con
+riego lateral y luz de lumbrera, G5 el ciclo huerto → fibra → tolva → alambique → huerto con **fibra
+recogible** (la única descongelación de física, solo con autorización explícita de Cesar y con
+regresión sobre los siete hashes del banco). Cada uno con su benchmark en `Laboratorio/benchmarks/` y
+su regla de decisión copiada de `04 §5`. Nada de arte, shaders, red ni arquitectura.

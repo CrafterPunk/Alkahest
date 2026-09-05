@@ -1,0 +1,206 @@
+# Ventas plausibles «si se ejecuta bien»: cinco arquetipos sobre la simulación de celdas (agua · fuego · calor · humedad · luz · plantas)
+
+Fecha de consulta de todas las fuentes: **5 de septiembre de 2026**. Mercado de referencia: **Steam/PC, 12 meses desde el lanzamiento (acceso anticipado o 1.0), sin consolas ni Game Pass**.
+
+Convenciones:
+- **[D]** = dato publicado por el desarrollador/editor o por prensa citando al desarrollador.
+- **[E]** = estimación de terceros (SteamSpy «owners», Raijin, GameSensor, calculadoras Boxleiter). Los rangos de SteamSpy incluyen bundles, regalos y claves; tómalos como techo, no como ventas.
+- **[Est. propia]** = mi estimación, con los anclajes indicados.
+- «Si se ejecuta bien» significa: juego terminado, ≥ 90 % de reseñas positivas, página de Steam competente, demo y ≥ 50 000 wishlists al lanzar. No significa «éxito»: el escenario pesimista es precisamente un buen juego que no se descubre.
+
+---
+
+## 0. Método y tasas base del mercado (lo que no depende del arquetipo)
+
+| Hecho | Valor | Tipo | Fuente |
+|---|---|---|---|
+| Juegos lanzados en Steam en 2025 | 20 282; solo 608 (2,99 %) llegaron a 1 000 reseñas | D | [howtomarketagame, 27-01-2026](https://howtomarketagame.com/2026/01/27/what-the-hell-happened-in-2025/) |
+| 1 000 reseñas ≈ ingresos | ≈ 150 000 $+ brutos | E | misma fuente |
+| Tasa de «hit» (≥ 1 000 reseñas) por género, 2025 | Open World Survival Craft 20,8 % · Farming 8,3 % · City Builder 6,4 % · Simulation 4,1 % · Roguelike Deckbuilder 5,1 % · Idle 2,88 % · Puzzle Platformer 1,47 % | D | [howtomarketagame 2026](https://howtomarketagame.com/2026/01/27/what-the-hell-happened-in-2025/), [leftover research 2025](https://howtomarketagame.com/2025/12/15/leftover-research-from-2025/) |
+| Géneros con mayor mediana de ingresos | survival-craft de mundo abierto, colony sims, 4X, city builders, management | E | [Gamalytic vía GameDev Reports, oct-2023](https://gamedevreports.substack.com/p/gamalytic-67-of-games-on-steam-earned) |
+| Géneros con menor mediana de ingresos | Puzzle, Arcade, Platformer, Top-Down | E | [Análisis 2024 (GameDiscoverCo + Gamalytic)](https://www.joshhardy.co.uk/post/indie-game-revenue-on-steam-key-insights-from-2024-data-analysis) |
+| Mediana de ingresos 2024 | 3 285 $ autoeditado · 16 222 $ con editor | E | misma fuente |
+| Distribución general | 67 % de los juegos < 5 000 $; solo 8,9 % > 200 000 $ | E | [Gamalytic 2023](https://gamedevreports.substack.com/p/gamalytic-67-of-games-on-steam-earned) |
+| Reseñas → ventas (Boxleiter) | ×30-40 para juegos recientes (VG Insights); «NB number» medio ≈ 63 (GameDiscoverCo, 2025) | E | [GameDeveloper](https://www.gamedeveloper.com/business/using-steam-reviews-to-estimate-sales), [otakukart/GameDiscoverCo](https://otakukart.com/steams-review-multiplier-still-shapes-game-revenue-metrics-in-2025/) |
+| Cooperativo en Steam | 4 100 M$ en H1-2025 (+11 % interanual); top-5 por copias de 2025 todos con co-op | D/E | [Alinea Analytics](https://alineaanalytics.substack.com/p/games-with-co-op-generated-over-4), [Kotaku](https://kotaku.com/steam-top-selling-2025-friendslop-rpgs-sales-2000654157) |
+| Co-op entre juegos > 100 k$ | del 3,2 % (2022) al 5,8 % (2023); Project Zomboid ×23 ventas al añadir co-op online | E | [GameDiscoverCo](https://newsletter.gamediscover.co/p/what-game-descriptions-tell-us-about) |
+| Streaming (Twitch patrocinado) | efecto «pequeño y de corta duración»; ayuda sobre todo a juegos poco conocidos de editores pequeños; «no vale la inversión en la mayoría de los casos» | D (estudio) | [Morozov & Huang, Marketing Science 2025](https://www.kellogg.northwestern.edu/academics-research/research/detail/2025/the-promotional-effects-of-live-streams-by-twitch-influencers/) |
+| Vídeos de YouTube | −0,6 % compras el día del vídeo; **simulación y multijugador suben**, narrativos e indies bajan | D (estudio) | [Li, Haviv & Lovett, Marketing Science 2025](https://studyfinds.com/youtube-gaming-influencers-negative-impact-video-game-purchases/) |
+| Un vídeo de YouTube grande | ≈ 1 000 ventas en 1-2 semanas (caso Tower Factory) | D | [howtomarketagame](https://howtomarketagame.com/2025/12/15/leftover-research-from-2025/) |
+
+**Cómo construyo los rangos.** Pesimista = comparables bien valorados (≥ 80 % positivas) que no se descubrieron. Base = mediana de comparables directos del arquetipo con editor o marketing competente. Optimista = percentil ~85 de los comparables (no el máximo histórico). Ingresos brutos ≈ copias × precio × 0,75 (descuentos y precios regionales).
+
+---
+
+## 1. Tabla maestra de comparables
+
+| Juego | Arquetipo | Precio | Ventas / propietarios | Tipo | Fuente |
+|---|---|---|---|---|---|
+| Noita (Nolla, 2019 EA / 1.0 oct-2020) | 1-2 (falling sand roguelite) | 19,99 $ | ≈ 2,2 M copias, ≈ 26,1 M$ brutos; SteamSpy 2-5 M | E | [Raijin](https://raijin.gg/app/881100/Noita), [SteamSpy](https://steamspy.com/app/881100) |
+| Sandustry (Lantto/Hooded Horse, EA 13-08-2026) | 3 (falling sand + automatización, un jugador) | 14,99 $ | **> 100 000 en 1 semana**; 2 775 reseñas, 97 %; pico 12 500 CCU | D | [GamingOnLinux](https://www.gamingonlinux.com/2026/08/the-impressive-sandustry-already-hit-100k-sales-with-an-early-multiplayer-mod-out-now/), [Steam](https://store.steampowered.com/app/2764460/Sandustry/), [DLCompare](https://www.dlcompare.com/gaming-news/sandustry-is-the-tiny-factory-game-blowing-up-on-steam), [PCGamesN](https://www.pcgamesn.com/sandustry/out-now-early-access) |
+| Oxygen Not Included (Klei, 1.0 jul-2019) | 3 (gases, líquidos, calor) | 24,99 $ | ≈ 2 M a ago-2019; SteamSpy 2-5 M | D/E | [Wikipedia](https://en.wikipedia.org/wiki/Oxygen_Not_Included), [SteamSpy](https://steamspy.com/app/457140) |
+| Timberborn (Mechanistry, EA sep-2021, 1.0 mar-2026) | 3 (agua simulada) | 24,99 $ | 130 k semana 1 · 750 k año 1 · 1 M a los 2 años | D | [Mechanistry](https://mechanistry.com/press/timberborn-early-access-sells-130-000-copies-in-the-launch-week), [750k](https://mechanistry.com/press/timberborn-mechanizes-beavers-sells-750000-copies-in-a-year), [1M](https://mechanistry.com/press/timberborn-celebrates-its-second-anniversary-and-1-000-000-copies-sold-with-a-new-trailer) |
+| Against the Storm (Eremite/Hooded Horse, EA nov-2022) | 3 | 29,99 $ | ≈ 1 M$ primer mes [E]; 500 k a jun-2023; 1 M Steam abr-2024; 2 M ago-2026 | D/E | [GameSensor](https://gamesensor.info/news/against_the_storm_early_access), [Games Press 500k](https://www.gamespress.com/en-US/Against-the-Storm-world-map-update), [VGChartz 1M](https://www.vgchartz.com/article/460494/against-the-storm-sales-top-1-million-units-on-steam/), [Worthplaying 2M](https://worthplaying.com/article/2026/8/12/news/150690-against-the-storm-surpasses-2-million-copies-sold-across-all-platforms/) |
+| Songs of Syx (1 persona, EA sep-2020) | 3 | 24,99 $ | 11 k en ~3 meses [D]; ≈ 226 k / 4,8 M$ vida [E] | D/E | [GamingOnLinux](https://www.gamingonlinux.com/2020/12/fantasy-rts-city-builder-songs-of-syx-has-sold-over-11-thousand-copies/), [Raijin](https://raijin.gg/app/1162750/Songs_of_Syx/sales-revenue) |
+| Clanfolk (MinMax/Hooded Horse, EA jul-2022) | 3 | ≈ 20-25 $ | ≈ 148 k [E]; 3 275 reseñas 91 % | E | [games-popularity](https://games-popularity.com/overview/299881/clanfolk), [SteamSpy](https://steamspy.com/app/1700870) |
+| Core Keeper (Pugstorm, EA mar-2022, 1.0 ago-2024) | 1 (sandbox co-op 1-8) | 19,99 $ | > 500 k en ~2 semanas; 1 M en < 4 meses; 2 M al 1.0; 3 M jugadores después | D | [GamesCreed](https://www.gamescreed.com/news/core-keeper-sell-over-500k-copies), [Fireshine](https://fireshinegames.co.uk/core-keeper-hits-one-million-sales/), [GWO](https://gameworldobserver.com/2024/08/28/core-keeper-31k-ccu-on-steam-2-million-copies-sold) |
+| Necesse (1 persona, EA dic-2019, 1.0 oct-2025) | 1 (sandbox co-op) | 9,99 $ | 1,5 M antes del 1.0; 2 M a nov-2025; 86,5 % de sus jugadores tienen Terraria (37,5 M en Steam) | D/E | [GameDiscoverCo](https://newsletter.gamediscover.co/p/why-the-low-profile-necesse-hit-a), [MassivelyOP](https://massivelyop.com/2025/11/09/sandbox-mmo-lite-necesse-has-sold-an-eye-popping-2-million-copies-so-far/) |
+| Abiotic Factor (Deep Field/Playstack, EA may-2024) | 1 (co-op survival-craft) | 24,99 $ | 250 k en 8 días · 600 k en 3 meses · 1,4 M ago-2025; 200 k wishlists al lanzar | D | [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-abiotic-factor-sold-600k-copies), [GAMES.GG](https://games.gg/news/abiotic-factor-million-sales/) |
+| Vintage Story (Anego, venta directa desde 2016) | 1 (sandbox sistémico) | ≈ 20 $ | 20 000 copias a nov-2020 (4 años) | D | [tuit de Tyron](https://x.com/tyronmm/status/1325552979932549127) |
+| Dome Keeper (Bippinbits/Raw Fury, sep-2022) | 2 (runs cortas) | 17,99 $ | 1 M$ el primer día; ≈ 100 k primer mes [E]; 500 k al año; 1 M jugadores a los 2 años; 189 k wishlists | D/E | [GWO](https://gameworldobserver.com/2022/10/17/dome-keeper-1-million-revenue-wishlists-success-raw-fury), [GameSensor](https://gamesensor.info/news/dome_keeper), [Games Press](https://www.gamespress.com/Celebrate-Dome-Keeper-s-One-Year-Anniversary-with-the-New-Double-Dome-), [GamingOnLinux](https://www.gamingonlinux.com/2024/09/dome-keeper-hits-1-million-players-multiplayer-and-modding-support-to-come/) |
+| Keep Driving (YCJY, feb-2025) | 2 (viaje con condición) | 17,99 $ | SteamSpy 100-200 k; ≈ 1,9 M$ y 5 373 reseñas [E] | E | [SteamSpy](https://steamspy.com/app/2756920), [games-stats](https://games-stats.com/steam/game/keep-driving/) |
+| Curious Expedition (Maschinen-Mensch, 2016) | 2 | 14,99 $ | > 300 k vida | D | [Maschinen-Mensch](https://maschinen-mensch.com/press/curious_expedition_2/index.html) |
+| UnReal World (1992/Steam 2016) | 2 (survival sistémico de culto) | 14,99 $ | SteamSpy 100-200 k | E | [SteamSpy](https://steamspy.com/app/351700) |
+| Rain World (Videocult/Akupara, 2017) | 2-5 (ecosistema simulado) | 19,99 $ | 280 k en mar-2022→feb-2023 (año 6); ≈ 2,4-2,5 M vida [E] | D/E | [GameDiscoverCo](https://newsletter.gamediscover.co/p/rain-world-how-ugc-headlined-a-big), [GameRevenueData](https://gamerevenuedata.com/games/rain-world/) |
+| Baba Is You (Hempuli, 2019) | 4 | 14,99 $ | SteamSpy 1-2 M; ≈ 6 M$ [E] | E | [SteamSpy](https://steamspy.com/app/736260) |
+| COCOON (Geometric/Annapurna, 2023) | 4 | 24,99 $ | SteamSpy 200-500 k | E | [SteamSpy](https://steamspy.com/app/1497440) |
+| Viewfinder (Sad Owl/Thunderful, 2023) | 4 (percepción) | 24,99 $ | SteamSpy 200-500 k | E | [SteamSpy](https://steamspy.com/app/1382070) |
+| Patrick's Parabox (2022) | 4 | 19,99 $ | SteamSpy 100-200 k | E | [SteamSpy](https://steamspy.com/app/1260520) |
+| Opus Magnum (Zachtronics, 2017) | 4 (mundos pequeños) | 19,99 $ | SteamSpy 200-500 k | E | [SteamSpy](https://steamspy.com/app/558990) |
+| Besiege (Spiderling, 1.0 2020) | 4 (física-juguete) | 14,99 $ | SteamSpy 1-2 M | E | [SteamSpy](https://steamspy.com/app/346010) |
+| Tiny Glade (Pounce Light, sep-2024) | 5 | 14,99 $ | **616 k en < 1 mes**; 1 375 441 wishlists al lanzar; mediana de juego 1 h 04 | D | [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-tiny-glade-built-its-way-to-600k) |
+| Terra Nil (Free Lives/Devolver, mar-2023) | 5 (terraformar) | 24,99 $ | > 50 k primer mes en Steam, ≈ 1 M$ [E]; 300 k jugadores en 1 semana incl. Netflix [D]; SteamSpy 200-500 k | D/E | [GameSensor](https://gamesensor.info/news/terra_nil_sales), [GWO](https://gameworldobserver.com/2023/04/06/terra-nil-300000-players-free-lives-tree-planting), [SteamSpy](https://steamspy.com/app/1593030) |
+| Cloud Gardens (Noio/Coatsink, 2021) | 5 | 17,99 $ | SteamDB 33,6-92,3 k; SteamSpy 100-200 k | E | [Wikipedia](https://en.wikipedia.org/wiki/Cloud_Gardens_(video_game)), [SteamSpy](https://steamspy.com/app/1372320) |
+| Summerhouse (1 persona/Future Friends, mar-2024) | 5 | 4,99 $ | 120 k en ~2 semanas, > 400 k$ brutos | D | [GWO](https://gameworldobserver.com/2024/03/29/summerhouse-sales-120k-copies-solo-dev-friedemann) |
+| Hozy (tinyBuild, 2026) | 5 | 14,99 $ | 100 k en 4 días, 175 k vida; 500 k wishlists | D | [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-hozy-went-cozy-to-sell-100k-on) |
+| The Wandering Village (Stray Fawn, EA sep-2022) | 3-5 | 24,99 $ | > 50 k lanzamiento; > 200 k a mar-2023 | D | [GamingOnLinux](https://www.gamingonlinux.com/2022/09/the-wandering-village-is-a-clear-hit-with-over-50k-copies-sold/), [GameDeveloper](https://www.gamedeveloper.com/business/stray-fawn-studio-announces-expansion-to-indie-game-publishing) |
+| Wildmender (Muse/Kwalee, sep-2023) | 5 (jardín desierto, co-op) | 24,99 $ | SteamSpy 50-100 k | E | [SteamSpy](https://steamspy.com/app/1599330) |
+| Preserve (Bitmap Galaxy, 1.0 may-2025) | 5 | ≈ 15-25 $ | SteamSpy 50-100 k; 684 reseñas 92 % | E | [SteamSpy](https://steamspy.com/app/2109270), [Steam](https://store.steampowered.com/app/2109270/Preserve/) |
+| Equilinox (ThinMatrix, 2018) | 5 (ecosistema) | 9,99 $ | SteamSpy 100-200 k; ≈ 925 k$ brutos [E] | E | [SteamSpy](https://steamspy.com/app/853550), [Steam Revenue Calculator](https://steam-revenue-calculator.com/app/853550/equilinox) |
+
+---
+
+## 2. Arquetipo 1 — Sandbox sistémico persistente cooperativo con construcción
+
+| Campo | Valor |
+|---|---|
+| **Nicho** | Survival-craft/sandbox 2D con física («Terraria con Noita dentro»), co-op de 2-8. Herencia directa de *Ten Thousand Years* (aprendiz con frasco, taller, encargos). |
+| **Tamaño del nicho** | El mayor de los cinco. Open World Survival Craft = 20,8 % de hit rate (el género con más probabilidad de superar 1 000 reseñas) [D, howtomarketagame]. Terraria ≈ 37,5 M en Steam y el 86,5 % de los jugadores de Necesse la tienen [E, GameDiscoverCo]. Co-op = 4 100 M$ en H1-2025 [Alinea]. Sub-nicho falling-sand: Noita ≈ 2,2 M [E] y Sandustry 100 k en una semana [D] demuestran apetito por «píxeles que obedecen leyes». |
+| **Precio típico** | 15-25 $ (Core Keeper 19,99; Abiotic 24,99; Noita 19,99; Sandustry 14,99; Necesse 9,99 como estrategia deliberada de «evergreen»). Recomendado: 19,99 $. |
+| **Copias en 12 meses [Est. propia]** | **Pesimista 15-40 k** (anclaje: Vintage Story 20 k en 4 años de venta directa [D]; Planet Nomads 100-200 k propietarios pero 65 % y abandono [E]; Starbase 200-500 k, 57 %, en pausa [E]). **Base 100-250 k** (anclaje: The Wandering Village 200 k en 6 meses [D]; Clanfolk ≈ 148 k [E]; Sandustry 100 k/semana como cota alta de la base). **Optimista 500 k-1 M** (Abiotic 600 k en 3 meses [D]; Core Keeper 1 M en < 4 meses [D]). |
+| **Ingresos brutos aprox.** | 0,2-0,6 M$ · 1,5-3,7 M$ · 7-15 M$ |
+| **Factor que más mueve el resultado** | **Multiplayer** (co-op real, no espejo): Project Zomboid ×23 [E], Abiotic y Core Keeper deben su curva al co-op y a los «group streams» coordinados [D]. Segundo: **arte** (Necesse solo despegó tras rehacer arte e iluminación en ago-2024 [D]). Streaming ayuda porque es simulación + multijugador (los dos tipos que YouTube sí empuja [estudio]). |
+| **Riesgo específico del laboratorio** | El co-op es también el punto más caro: hoy el espejo solo replica material; temperatura/humedad cuantizadas a 3-4 bits si el invitado debe verlas (ruta A 3-4 semanas); lockstep 6-10 semanas con determinismo cross-machine **no probado**. Nightingale (AA, co-op, 40 k CCU al lanzar) acabó en despidos: el co-op no salva un bucle flojo [PC Gamer](https://www.pcgamer.com/games/survival-crafting/despite-making-significant-changes-to-survival-game-nightingale-developer-inflexion-games-says-it-hasnt-been-commercially-successful-enough-to-avoid-dozens-of-layoffs/). |
+
+---
+
+## 3. Arquetipo 2 — Escenarios/expediciones de 1-3 h con condición fuerte
+
+| Campo | Valor |
+|---|---|
+| **Nicho** | Roguelite/expedición sistémica: mapa con semilla determinista, una condición (llevar agua al otro lado, mantener vivo un huerto 30 min, vidriar 18 celdas) y muerte por física. Parientes: Noita, Dome Keeper, Curious Expedition, UnReal World, Keep Driving. |
+| **Tamaño del nicho** | Medio-alto: Roguelike = 22 «hits» en 2025 (6.º género por número) [D]. Noita prueba que una expedición falling-sand vende millones [E]. Formato «run de 1-3 h» es el más apto para stream y para la demo (Dome Keeper: mediana de demo 1 h 30 frente a 25 min típicos; 40 k wishlists el mes tras la demo) [D]. |
+| **Precio típico** | 15-20 $ (Dome Keeper 17,99; Keep Driving 17,99; Noita 19,99; Curious Expedition 14,99). |
+| **Copias en 12 meses [Est. propia]** | **Pesimista 10-30 k** (anclaje: Wildfire, simulación de fuego excelente, 83 % positivas, solo 448 reseñas → ≈ 13-27 k por Boxleiter ×30-60 [E] [Steam](https://store.steampowered.com/app/431940/Wildfire/)). **Base 60-150 k** (Keep Driving 100-200 k propietarios en su primer año [E]; Curious Expedition 300 k en toda su vida [D]). **Optimista 300-600 k** (Dome Keeper 500 k al año con 189 k wishlists y editor [D]). |
+| **Ingresos brutos aprox.** | 0,15-0,4 M$ · 0,8-2 M$ · 4-8 M$ |
+| **Factor que más mueve el resultado** | **Legibilidad + streaming, juntos**: el run corto solo vende si el espectador entiende por qué murió el jugador (Noita añadió integración con Twitch en el 1.0 [Wikipedia](https://en.wikipedia.org/wiki/Noita_(video_game)); Dome Keeper creció por «olas» de streamers que activaron la cola de descubrimiento [D]). Arte: suficiente con píxel legible (Noita). Multiplayer: irrelevante. |
+| **Encaje con la evidencia** | Es el arquetipo que mejor aprovecha lo ya medido sin física nueva: alambique (90-900 goteos/5 min), carbonera con boca de 1, cadena hogar → yesca → llama → carbón, horno que vidria 18/18. Los cruces emergentes (el alambique ahoga y oscurece el huerto) son exactamente el tipo de «descubrimiento» que se streamea. La ausencia de tiro de chimenea no importa si la condición se diseña sobre recinto y contacto. |
+
+---
+
+## 4. Arquetipo 3 — Colonia/automatización de flujos sin avatar
+
+| Campo | Valor |
+|---|---|
+| **Nicho** | Colony sim / automation de fluidos y calor («Oxygen Not Included 2D con falling sand»; «Timberborn con evaporación y condensación»). |
+| **Tamaño del nicho** | Alto y estable: Simulation = 43 hits en 2025 (2.º género), City Builder 6,4 % de hit rate, Management 19 hits [D]; colony sims y city builders están entre los géneros con mayor mediana de ingresos [E, Gamalytic]. ONI ≈ 2 M a 2019 [D]; Timberborn 1 M en 2 años [D]; Against the Storm 2 M [D]; Sandustry (automatización sobre falling sand, un solo desarrollador) 100 k en una semana con Hooded Horse [D]. |
+| **Precio típico** | 20-30 $ (ONI 24,99; Timberborn 24,99; Against the Storm 29,99; Songs of Syx 24,99; Sandustry 14,99 en acceso anticipado). Recomendado: 19,99-24,99 $. |
+| **Copias en 12 meses [Est. propia]** | **Pesimista 15-40 k** (Songs of Syx 11 k en 3 meses sin editor [D]; Reus 2 50-100 k propietarios pero 27 CCU pico [E]; Kubifaktorium 100-200 k propietarios inflados por bundles, 80 % [E]). **Base 120-300 k** (Clanfolk ≈ 148 k [E]; Wandering Village 200 k en 6 meses [D]; Against the Storm 500 k en 7 meses como techo de la base [D]). **Optimista 500 k-1 M** (Timberborn 750 k en el año 1 [D]; Sandustry si mantiene la pendiente). |
+| **Ingresos brutos aprox.** | 0,3-0,75 M$ · 2,2-5,6 M$ · 9-19 M$ |
+| **Factor que más mueve el resultado** | **Legibilidad** por encima de todo: overlays de temperatura/humedad/carga/luz para el jugador (hoy solo F8), nombres definitivos, plantas visibles. ONI vende millones *a pesar* de que su comunidad describe «cientos de horas y seguir siendo novato» [foros Steam](https://steamcommunity.com/app/457140/discussions/0/1735463620084093038/); los que no lo resolvieron (Clockwork Empires, Maia) murieron con 43 % de reseñas. Segundo: **arte/tema** (castores, lluvia tóxica: Timberborn y Against the Storm venden por identidad). Streaming ayuda (YouTube sí empuja simulación [estudio]). Multiplayer: irrelevante. |
+| **Encaje con la evidencia** | Es el arquetipo más cercano al estado real del motor: sin avatar, ×10 de tiempo sostenido, 1,6-1,9 ms/tick, chunks dormidos, dos libros de energía que cuadran. Lo que falta («producir sin volver a tocar»: alimentación por manantial, recogida, ciclo huerto → fibra → tolva → alambique → huerto) es precisamente el bucle de colonia, y el laboratorio dice que no pide física nueva sino canales, pozos y recipientes. |
+
+---
+
+## 5. Arquetipo 4 — Rompecabezas de percepción con mundos pequeños
+
+| Campo | Valor |
+|---|---|
+| **Nicho** | Puzzle sistémico «zachlike»/de percepción: cámaras de 40×30 celdas donde hay que deducir una ley (el vapor condensa en el vecino condensable más frío; lo que no toca aire arde en sordina; el sifón). Parientes: Opus Magnum, Baba Is You, Patrick's Parabox, Viewfinder, COCOON. |
+| **Tamaño del nicho** | El menor: Puzzle es el género con menor mediana de ingresos [E, 2024]; Puzzle Platformer 1,47 % de hit rate [D]; YouTube *reduce* compras en juegos que se «consumen viendo» [estudio]. Techo real: Baba 1-2 M [E], zachlikes 200-500 k [E]; suelo: Islands of Insight (Behaviour, mundo compartido) con 100-200 k propietarios inflados por un regalo, equipo despedido y servidores cerrados [PC Gamer](https://www.pcgamer.com/games/puzzle/finally-an-online-game-shutting-down-the-right-way-islands-of-insights-will-close-servers-next-month-and-permanently-modify-the-game-to-be-offline-only-so-the-promising-puzzler-can-live-on/), [TechRaptor](https://techraptor.net/gaming/news/islands-of-insight-developer-looking-for-work-as-current-income-cannot-feed-the-whole-team). |
+| **Precio típico** | 10-20 $ (Baba 14,99; Parabox 19,99; Opus Magnum 19,99; COCOON/Viewfinder 24,99 con editor grande). Recomendado: 14,99 $. |
+| **Copias en 12 meses [Est. propia]** | **Pesimista 5-20 k**. **Base 30-80 k**. **Optimista 150-300 k** (Parabox/Opus Magnum). Baba (1-2 M) es un atípico con premios IGF y 97 %, no un anclaje. |
+| **Ingresos brutos aprox.** | 0,05-0,2 M$ · 0,3-0,9 M$ · 1,7-3,4 M$ |
+| **Factor que más mueve el resultado** | **Legibilidad del «ajá»** (que la ley se lea sin panel de desarrollador) y premios/festivales más que streamers. Arte: secundario (Baba). **Multiplayer: contraproducente** (Islands of Insight). |
+| **Encaje con la evidencia** | Es el arquetipo más barato de producir con lo medido (768×288 ya es un mundo pequeño; determinismo al bit por máquina garantiza soluciones reproducibles) y el de menor mercado. Vale como demo/«laboratorio jugable» o modo dentro de 2 o 3, no como producto principal. |
+
+---
+
+## 6. Arquetipo 5 — Jardín/ecosistema cozy de terraformar
+
+| Campo | Valor |
+|---|---|
+| **Nicho** | Cozy builder/terraformación: convertir roca seca en un valle verde con agua, luz y plantas que crecen de verdad. Parientes: Tiny Glade, Terra Nil, Cloud Gardens, Equilinox, Preserve, Summerhouse. |
+| **Tamaño del nicho** | Alto en techo, volátil en suelo. «Cozy» es la palabra clave dominante de Steam en 2026 (+675 % de uso) [Outlook Respawn](https://respawn.outlookindia.com/gaming/gaming-news/steam-vibe-shift-why-cozy-is-the-most-dominant-keyword-of-2026); público 65-75 % femenino, 25-45 años [Practical Media](https://practicalmedia.io/article/how-to-market-cozy-and-wholesome-games-to-the-right-audience). Tiny Glade: 616 k en un mes con 1,37 M de wishlists [D]. Pero la mitad inferior es pequeña: Preserve y Wildmender 50-100 k propietarios [E], Cloud Gardens 34-92 k [E], Terra Nil 50 k el primer mes pese a 82 de Metascore y Devolver [E/D]. |
+| **Precio típico** | 10-20 $, más bajo que colonia (Tiny Glade 14,99; Cloud Gardens 17,99; Equilinox 9,99; Summerhouse 4,99; Terra Nil 24,99 fue la excepción cara). Recomendado: 14,99 $. |
+| **Copias en 12 meses [Est. propia]** | **Pesimista 15-40 k** (Preserve, Ecosystem 20-50 k con 76 % [E]). **Base 60-150 k** (Cloud Gardens, Equilinox, Wildmender, Terra Nil año 1 [E]). **Optimista 300-700 k** (Tiny Glade 616 k/mes; Hozy 175 k; Summerhouse 120 k en 2 semanas a 5 $ [D]). |
+| **Ingresos brutos aprox.** | 0,15-0,45 M$ · 0,7-1,7 M$ · 3,4-8 M$ |
+| **Factor que más mueve el resultado** | **Arte y «captura de pantalla»** de forma abrumadora: Tiny Glade vendió por vídeos cortos y UGC (Helm's Deep hecho por jugadores) [D]; Hozy por campañas de vídeo corto al público femenino [D]. Legibilidad, segunda: la planta tiene que verse crecer. Multiplayer irrelevante (Wildmender lo tenía y no cambió su curva). Streaming clásico (Twitch) poco; TikTok/Shorts mucho. |
+| **Encaje con la evidencia** | Es el arquetipo con **mayor distancia** al estado actual: en el nivel de referencia el huerto **nunca vivió** (la luz no atraviesa sólidos, una boca de cielo ilumina 7 de 73 caras, el goteo moja columnas y no un lecho), las plantas son un píxel y el sonido no se ha juzgado. Un cozy de terraformar exige antes: luz difusa o cielo abierto por diseño, riego por lecho, plantas de varias celdas con estados visibles. Es la apuesta con más upside artístico y más trabajo previo. |
+
+---
+
+## 7. Resumen comparado
+
+| Arquetipo | Nicho (tamaño) | Precio | 12 meses: pesimista / base / optimista [Est. propia] | Factor dominante | Distancia al motor actual |
+|---|---|---|---|---|---|
+| 1 Sandbox co-op persistente | Muy grande | 19,99 $ | 15-40 k / 100-250 k / 500 k-1 M | Multiplayer (luego arte) | Media-alta (co-op de sim) |
+| 2 Expediciones 1-3 h | Medio-alto | 17,99 $ | 10-30 k / 60-150 k / 300-600 k | Legibilidad + streaming | Baja |
+| 3 Colonia/automatización | Alto, estable | 24,99 $ | 15-40 k / 120-300 k / 500 k-1 M | Legibilidad (luego arte) | Baja-media (faltan canales, pozos, recogida) |
+| 4 Puzzle de percepción | Pequeño | 14,99 $ | 5-20 k / 30-80 k / 150-300 k | Legibilidad del «ajá» | Muy baja |
+| 5 Jardín cozy | Grande pero volátil | 14,99 $ | 15-40 k / 60-150 k / 300-700 k | Arte / vídeo corto | Alta (el huerto no vive) |
+
+Lectura de valor esperado: **3 tiene el mejor suelo y la mejor mediana**; **2 es el más barato de alcanzar y el más «streameable»**; **1 tiene el techo más alto y el riesgo técnico más caro**; **5 depende de un arte que hoy no existe (plantas de un píxel)**; **4 es un modo, no un producto**. Una combinación coherente con la evidencia es 3 como producto y 2 como demo/festival, porque comparten motor, overlays y bucle de recursos, y el escenario corto es la demo que Dome Keeper demostró que convierte.
+
+---
+
+## 8. Indies sistémicos que fracasaron pese a buena simulación (y por qué)
+
+| Juego (año) | Simulación | Resultado | Por qué (evidencia) | Fuente |
+|---|---|---|---|---|
+| Clockwork Empires (Gaslamp, 2016) | Colonia con locura, canibalismo, cultos emergentes | 50-100 k propietarios [E], 43 %; estudio cerrado, juego retirado de la venta en 2019 | Simulación opaca e inestable; en acceso anticipado sin soporte; «para un equipo tan pequeño lograron una complejidad increíble» pero nadie la leía | [SteamSpy](https://steamspy.com/app/224740), [Game-Wisdom](https://game-wisdom.com/guest/clockwork-empires), [Wikipedia](https://en.wikipedia.org/wiki/Gaslamp_Games) |
+| Maia (Simon Roth, 2018) | Atmósfera, temperatura, criaturas, IA de colonos | 50-100 k [E], 43 %; > 1 M$ recaudado ya en 2014 (Kickstarter+EA), casi nada después | Cinco años de EA, objetivos poco legibles, interfaz que no explicaba la sim | [SteamSpy](https://steamspy.com/app/252250), [Engadget](https://www.engadget.com/2014-07-31-god-game-maia-pulls-in-1-million-while-in-early-access.html) |
+| Spacebase DF-9 (Double Fine, 2014) | Base espacial con oxígeno y estados | 18 % positivas [E] | Acceso anticipado cerrado de golpe; sim profunda pero juego inacabado | [SteamSpy](https://steamspy.com/app/246090) |
+| DwarfCorp (2019) | Colonia 3D | 0-20 k [E], 54 %, 2,99 $, liberado como open source | Sin identidad ni legibilidad frente a Rimworld/Dwarf Fortress | [SteamSpy](https://steamspy.com/app/252390), [Kickstarter postmortem](https://www.gamedeveloper.com/business/dwarfcorp-s-kickstarter-postmortem) |
+| Stonehearth (Radiant/Riot, 2018) | Colonia con construcción libre | 500 k-1 M [E] pero 75 %; desarrollo terminado sin cumplir metas | La ambición sistémica superó al equipo; muestra que **vender no basta si el bucle no cierra** | [SteamSpy](https://steamspy.com/app/253250), [PC Gamer](https://www.pcgamer.com/stonehearths-development-will-end-this-month-without-meeting-all-its-kickstarter-goals/) |
+| Wildfire (Sneaky Bastards, 2020) | Propagación de fuego inspirada en Far Cry 2, agua, hielo | 448 reseñas, 83 % → ≈ 13-27 k [E] | Buena sim al servicio de un género (sigilo 2D) sin público; la física era el medio, no el gancho | [Steam](https://store.steampowered.com/app/431940/Wildfire/), [Kotaku](https://kotaku.com/wildfire-is-2d-stealth-only-with-loads-of-fire-1697415664) |
+| Unexplored 2 (Ludomotion, 2022) | Generación sistémica de mundo y leyenda | 50-100 k [E], 76 %; «ventas modestas» | Exclusiva Epic, presentación gris, sistemas invisibles para el jugador | [SteamSpy](https://steamspy.com/app/1095040), [foro Steam](https://steamcommunity.com/app/1095040/discussions/0/3117032860248613041/) |
+| Islands of Insight (Lunarch/Behaviour, 2024) | Puzzle de mundo compartido | 100-200 k propietarios (regalo) [E], 71 %; equipo despedido; servidores cerrados en oct-2024 | Multijugador impuesto a un género que no lo pide | [PC Gamer](https://www.pcgamer.com/games/puzzle/finally-an-online-game-shutting-down-the-right-way-islands-of-insights-will-close-servers-next-month-and-permanently-modify-the-game-to-be-offline-only-so-the-promising-puzzler-can-live-on/) |
+| Ecosystem (Tom Johnson/Slug Disco, 1.0 nov-2024) | Evolución real de criaturas en océano físico | 20-50 k [E], 76-78 %, ≈ 220 k$ [E] | Simulación fascinante sin objetivos ni legibilidad: «no es un juego» | [SteamSpy](https://steamspy.com/app/1133120), [Steambase](https://steambase.io/games/ecosystem/info) |
+| Reus 2 (Abbey, 2024) | Ecosistemas y biomas por titanes | 50-100 k [E] con 95 % positivas; 27 CCU de pico a mediados de 2026 | Amado por pocos: calidad sin descubrimiento | [SteamSpy](https://steamspy.com/app/1875060) |
+| Starbase (Frozenbyte, EA 2021) | MMO vóxel con destrucción total | 200-500 k [E], 57 %; en pausa desde 2022 | Ambición de sim multijugador por encima de la capacidad; «las ventas no fueron fuertes» | [SteamSpy](https://steamspy.com/app/454120), [MMOs.com](https://mmos.com/news/starbase-slow-development-low-player-count) |
+| Planet Nomads (Craneballs, 2019) | Planetas vóxel con supervivencia | 100-200 k [E], 65 % | Salió inacabado; comunidad pidiendo reembolsos | [SteamSpy](https://steamspy.com/app/504050) |
+| Nightingale (Inflexion, 2024) | Survival-craft co-op AA | 40 k CCU de salida; «no suficientemente exitoso», despidos y cierre de la oficina UK | El co-op no compensa un bucle sin gancho | [PC Gamer](https://www.pcgamer.com/games/survival-crafting/despite-making-significant-changes-to-survival-game-nightingale-developer-inflexion-games-says-it-hasnt-been-commercially-successful-enough-to-avoid-dozens-of-layoffs/) |
+| Rain World (2017) — el «fracaso que se arregló» | Ecosistema de IA depredadora | Culto sin ventas fuertes al salir; 280 k copias en su año 6 gracias a UGC, mods empaquetados y vídeos de YouTube sobre su IA (1 M de vistas) | La simulación vendía **cuando alguien la explicaba**: la legibilidad llegó de fuera y cinco años tarde | [GameDiscoverCo](https://newsletter.gamediscover.co/p/rain-world-how-ugc-headlined-a-big) |
+
+**Patrón común (lectura mía, no dato):** ninguno fracasó por falta de simulación; fracasaron por (a) simulación invisible o ilegible, (b) bucle que no cierra (nada que producir, recoger o terminar), (c) género o multijugador que el público no pedía, (d) salir inacabados. Los tres primeros coinciden exactamente con los negativos del laboratorio: parámetros solo visibles con F8, «producir sin volver a tocar» sin resolver, y descubrimiento/diversión/tedio **sin evaluar con ningún jugador**. La cifra más barata y más determinante que falta no es de mercado: es la primera sesión de prueba con alguien ajeno.
+
+---
+
+## 9. Fuentes (todas consultadas el 05-09-2026)
+
+- howtomarketagame — [What the hell happened in 2025](https://howtomarketagame.com/2026/01/27/what-the-hell-happened-in-2025/) · [Leftover research from 2025](https://howtomarketagame.com/2025/12/15/leftover-research-from-2025/) · [How Dome Keeper achieved a million dollar launch](https://howtomarketagame.com/2022/10/17/how-dome-keeper-achieved-a-million-dollar-launch/)
+- GameDiscoverCo — [Tiny Glade > 600 k](https://newsletter.gamediscover.co/p/how-tiny-glade-built-its-way-to-600k) · [Necesse 2 M](https://newsletter.gamediscover.co/p/why-the-low-profile-necesse-hit-a) · [Abiotic Factor 600 k](https://newsletter.gamediscover.co/p/how-abiotic-factor-sold-600k-copies) · [Rain World UGC](https://newsletter.gamediscover.co/p/rain-world-how-ugc-headlined-a-big) · [Rise of co-op](https://newsletter.gamediscover.co/p/what-game-descriptions-tell-us-about) · [Hozy 100 k](https://newsletter.gamediscover.co/p/how-hozy-went-cozy-to-sell-100k-on)
+- Gamalytic vía GameDev Reports — [67 % < 5 k$](https://gamedevreports.substack.com/p/gamalytic-67-of-games-on-steam-earned); análisis 2024 — [joshhardy.co.uk](https://www.joshhardy.co.uk/post/indie-game-revenue-on-steam-key-insights-from-2024-data-analysis)
+- Boxleiter/NB — [GameDeveloper](https://www.gamedeveloper.com/business/using-steam-reviews-to-estimate-sales) · [NB ≈ 63](https://otakukart.com/steams-review-multiplier-still-shapes-game-revenue-metrics-in-2025/)
+- Co-op — [Alinea Analytics](https://alineaanalytics.substack.com/p/games-with-co-op-generated-over-4) · [Kotaku](https://kotaku.com/steam-top-selling-2025-friendslop-rpgs-sales-2000654157)
+- Streaming — [Kellogg/Marketing Science (Twitch)](https://www.kellogg.northwestern.edu/academics-research/research/detail/2025/the-promotional-effects-of-live-streams-by-twitch-influencers/) · [StudyFinds/Marketing Science (YouTube)](https://studyfinds.com/youtube-gaming-influencers-negative-impact-video-game-purchases/)
+- Sandustry — [GamingOnLinux](https://www.gamingonlinux.com/2026/08/the-impressive-sandustry-already-hit-100k-sales-with-an-early-multiplayer-mod-out-now/) · [Steam](https://store.steampowered.com/app/2764460/Sandustry/) · [PCGamesN](https://www.pcgamesn.com/sandustry/out-now-early-access) · [DLCompare](https://www.dlcompare.com/gaming-news/sandustry-is-the-tiny-factory-game-blowing-up-on-steam)
+- Noita — [Raijin](https://raijin.gg/app/881100/Noita) · [SteamSpy](https://steamspy.com/app/881100) · [Wikipedia](https://en.wikipedia.org/wiki/Noita_(video_game))
+- ONI — [Wikipedia](https://en.wikipedia.org/wiki/Oxygen_Not_Included) · [SteamSpy](https://steamspy.com/app/457140) · [foro «Learning curve»](https://steamcommunity.com/app/457140/discussions/0/1735463620084093038/)
+- Timberborn — [130 k](https://mechanistry.com/press/timberborn-early-access-sells-130-000-copies-in-the-launch-week) · [750 k](https://mechanistry.com/press/timberborn-mechanizes-beavers-sells-750000-copies-in-a-year) · [1 M](https://mechanistry.com/press/timberborn-celebrates-its-second-anniversary-and-1-000-000-copies-sold-with-a-new-trailer) · [1.0](https://mechanistry.com/press/lumberpunk-city-builder-timberborn-launches-into-1-0-with-new-features-bonus-content-more)
+- Against the Storm — [GameSensor](https://gamesensor.info/news/against_the_storm_early_access) · [500 k](https://www.gamespress.com/en-US/Against-the-Storm-world-map-update) · [1 M](https://www.vgchartz.com/article/460494/against-the-storm-sales-top-1-million-units-on-steam/) · [2 M](https://worthplaying.com/article/2026/8/12/news/150690-against-the-storm-surpasses-2-million-copies-sold-across-all-platforms/)
+- Songs of Syx — [GamingOnLinux](https://www.gamingonlinux.com/2020/12/fantasy-rts-city-builder-songs-of-syx-has-sold-over-11-thousand-copies/) · [Raijin](https://raijin.gg/app/1162750/Songs_of_Syx/sales-revenue)
+- Clanfolk — [games-popularity](https://games-popularity.com/overview/299881/clanfolk) · [SteamSpy](https://steamspy.com/app/1700870)
+- Core Keeper — [GamesCreed](https://www.gamescreed.com/news/core-keeper-sell-over-500k-copies) · [Fireshine](https://fireshinegames.co.uk/core-keeper-hits-one-million-sales/) · [GWO](https://gameworldobserver.com/2024/08/28/core-keeper-31k-ccu-on-steam-2-million-copies-sold)
+- Necesse — [MassivelyOP](https://massivelyop.com/2025/11/09/sandbox-mmo-lite-necesse-has-sold-an-eye-popping-2-million-copies-so-far/)
+- Abiotic Factor — [GAMES.GG 1,4 M](https://games.gg/news/abiotic-factor-million-sales/)
+- Vintage Story — [tuit 20 k](https://x.com/tyronmm/status/1325552979932549127)
+- Dome Keeper — [GWO](https://gameworldobserver.com/2022/10/17/dome-keeper-1-million-revenue-wishlists-success-raw-fury) · [GameSensor](https://gamesensor.info/news/dome_keeper) · [500 k](https://www.gamespress.com/Celebrate-Dome-Keeper-s-One-Year-Anniversary-with-the-New-Double-Dome-) · [1 M jugadores](https://www.gamingonlinux.com/2024/09/dome-keeper-hits-1-million-players-multiplayer-and-modding-support-to-come/)
+- Keep Driving — [SteamSpy](https://steamspy.com/app/2756920) · [games-stats](https://games-stats.com/steam/game/keep-driving/)
+- Curious Expedition — [Maschinen-Mensch](https://maschinen-mensch.com/press/curious_expedition_2/index.html) · [SteamSpy CE2](https://steamspy.com/app/1040230)
+- UnReal World — [SteamSpy](https://steamspy.com/app/351700)
+- Rain World — [GameRevenueData](https://gamerevenuedata.com/games/rain-world/)
+- Puzzles — [Baba](https://steamspy.com/app/736260) · [COCOON](https://steamspy.com/app/1497440) · [Viewfinder](https://steamspy.com/app/1382070) · [Parabox](https://steamspy.com/app/1260520) · [Opus Magnum](https://steamspy.com/app/558990) · [Besiege](https://steamspy.com/app/346010) · [Islands of Insight SteamSpy](https://steamspy.com/app/2071500) · [PC Gamer](https://www.pcgamer.com/games/puzzle/finally-an-online-game-shutting-down-the-right-way-islands-of-insights-will-close-servers-next-month-and-permanently-modify-the-game-to-be-offline-only-so-the-promising-puzzler-can-live-on/) · [TechRaptor](https://techraptor.net/gaming/news/islands-of-insight-developer-looking-for-work-as-current-income-cannot-feed-the-whole-team)
+- Cozy — [Terra Nil GameSensor](https://gamesensor.info/news/terra_nil_sales) · [Terra Nil 300 k jugadores](https://gameworldobserver.com/2023/04/06/terra-nil-300000-players-free-lives-tree-planting) · [Terra Nil SteamSpy](https://steamspy.com/app/1593030) · [Cloud Gardens Wikipedia](https://en.wikipedia.org/wiki/Cloud_Gardens_(video_game)) · [Cloud Gardens SteamSpy](https://steamspy.com/app/1372320) · [Summerhouse GWO](https://gameworldobserver.com/2024/03/29/summerhouse-sales-120k-copies-solo-dev-friedemann) · [Wandering Village 50 k](https://www.gamingonlinux.com/2022/09/the-wandering-village-is-a-clear-hit-with-over-50k-copies-sold/) · [Wandering Village 200 k](https://www.gamedeveloper.com/business/stray-fawn-studio-announces-expansion-to-indie-game-publishing) · [Wildmender SteamSpy](https://steamspy.com/app/1599330) · [Preserve SteamSpy](https://steamspy.com/app/2109270) · [Preserve Steam](https://store.steampowered.com/app/2109270/Preserve/) · [Equilinox SteamSpy](https://steamspy.com/app/853550) · [Equilinox calc](https://steam-revenue-calculator.com/app/853550/equilinox) · [Cozy keyword +675 %](https://respawn.outlookindia.com/gaming/gaming-news/steam-vibe-shift-why-cozy-is-the-most-dominant-keyword-of-2026) · [Público cozy](https://practicalmedia.io/article/how-to-market-cozy-and-wholesome-games-to-the-right-audience)
+- Fracasos — [Clockwork Empires SteamSpy](https://steamspy.com/app/224740) · [Game-Wisdom](https://game-wisdom.com/guest/clockwork-empires) · [Gaslamp Wikipedia](https://en.wikipedia.org/wiki/Gaslamp_Games) · [Maia SteamSpy](https://steamspy.com/app/252250) · [Maia Engadget](https://www.engadget.com/2014-07-31-god-game-maia-pulls-in-1-million-while-in-early-access.html) · [Spacebase DF-9](https://steamspy.com/app/246090) · [DwarfCorp](https://steamspy.com/app/252390) · [DwarfCorp postmortem](https://www.gamedeveloper.com/business/dwarfcorp-s-kickstarter-postmortem) · [Stonehearth SteamSpy](https://steamspy.com/app/253250) · [Stonehearth PC Gamer](https://www.pcgamer.com/stonehearths-development-will-end-this-month-without-meeting-all-its-kickstarter-goals/) · [Wildfire Steam](https://store.steampowered.com/app/431940/Wildfire/) · [Wildfire Kotaku](https://kotaku.com/wildfire-is-2d-stealth-only-with-loads-of-fire-1697415664) · [Unexplored 2 SteamSpy](https://steamspy.com/app/1095040) · [Ecosystem SteamSpy](https://steamspy.com/app/1133120) · [Ecosystem Steambase](https://steambase.io/games/ecosystem/info) · [Reus 2 SteamSpy](https://steamspy.com/app/1875060) · [Kubifaktorium SteamSpy](https://steamspy.com/app/898720) · [Starbase SteamSpy](https://steamspy.com/app/454120) · [Starbase MMOs.com](https://mmos.com/news/starbase-slow-development-low-player-count) · [Planet Nomads SteamSpy](https://steamspy.com/app/504050) · [Nightingale PC Gamer](https://www.pcgamer.com/games/survival-crafting/despite-making-significant-changes-to-survival-game-nightingale-developer-inflexion-games-says-it-hasnt-been-commercially-successful-enough-to-avoid-dozens-of-layoffs/)

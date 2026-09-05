@@ -7728,3 +7728,76 @@ licencia para optimizar. Lo siguiente —la experiencia comercial— es un encar
 
 Archivos: `docs/LAB/INFORME_FINAL.md` (cerrado), `PREGUNTAS_A_FABLE.md` (R26), `CHECKPOINT.md` (fase
 12), `HANDOFF_OPUS.md` (§8), benchmark r150. Sin código.
+
+
+## Ronda 151 — DISEÑO COMERCIAL: SEIS EXPERIENCIAS QUE COMPITEN Y VEREDICTO (Fable 5.1, sin código)
+
+Con el laboratorio cerrado (R150), Cesar cambió el rol de Fable: ya no buscar física sino diseñar las
+experiencias comerciales que mejor la exploten, varias y de verdad distintas, compararlas, preseleccionar
+y juzgar; sin construir nada ni convertir la ganadora en arquitectura. Todo vive en `docs/COMERCIAL/`.
+
+**Método.** `00_EVIDENCIA_COMO_DISENO.md` lee el informe final como diseñador: lo que el sustrato
+hace (conservación → economía honesta; causalidad lenta y espacial → colocar, esperar, observar;
+máquinas que son geometría; aparatos que chocan), lo que no hace y ningún concepto debe prometer (sin
+tiro; la luz es un recurso; nada produce sin tocarlo; estados invisibles; nada jugado; sin lockstep),
+y **los cuatro comunes** (luz, agua, calor, aire) que se reparten por geografía. Luego un panel por
+Workflow: siete lentes obligatorias (sandbox-conocimiento, expediciones, colonia de flujos,
+percepción, vertical-procedural, jardín-ecosistema, asimétrico-compartido), cada una generada dos veces y
+criticada por dos críticos (dirección creativa y producción); los agentes cayeron varias veces por
+límite de sesión y el run se reanudó tres veces (`resumeFromRunId`) hasta completar los 24 agentes; los tres
+investigadores de mercado llegaron al final y sus cifras con fuente están integradas en `03`. Quince
+conceptos (catorce del panel más El Pozo de Fable) se consolidaron en seis familias.
+
+**Las seis** (`01_PROPUESTAS.md`, cada una narrada con inicio, diez minutos, primera hora, deseos,
+dominio, multiplayer, 20/50/100 h, descubrimientos ligados a leyes medidas, fenómeno → decisión,
+observabilidad propia, onboarding, identidad, costo y riesgo por eje, evidencia a favor y en contra,
+incógnitas): **P1 El Pozo** (pozo vertical persistente de 256×864, tres estratos Boca/Vena/Fondo,
+tres verbos, cuaderno que dibuja, ruinas amables, estaciones, 1-3 apilados), **P2 La Ladera** (la
+intuición de Cesar: valle de tres terrazas y un curso de agua, aprendiz con cuerpo-instrumento,
+cuaderno quemado falsable, turnos de agua, asíncrono por fichero), **P3 Un Año Después** (cámaras
+selladas de dos horas que corren un año a ×10; el Patio), **P4 Sin Manos** (sin avatar; cavar,
+apilar, prender; SOLTAR y «DÍA 312 SIN MANOS»), **P5 Sordina** (una mano que solo actúa con luz, casa
+sin números, sondas de materia, seres como instrumentos, vigilia), **P6 Claraboya** (jardín cozy: cava
+para que entre el sol; censo de vida; bichos-sensor; semillas raras). Todas comparten una única
+descongelación de física necesaria: la planta muerta o cosechada debe dejar fibra recogible.
+
+**Comparativa** (`02_COMPARATIVA.md`): rúbrica de trece ejes ponderados (diversión, onboarding y
+observabilidad pesan 3). P1 179, P6 175, P2 173, P5 169, P3 164, P4 163 de 270: 16 puntos de margen,
+la rúbrica ordena y descarta pero no elige. Cuatro hechos que los dieciséis críticos dijeron igual:
+diversión minuto a minuto 4 en todas (el hueco entre la primera sorpresa y la primera máquina); el
+huerto nunca vivió y todos lo ponen en el centro; la observabilidad es un vocabulario sin política de
+prioridad y sin fallback; reutilización 9 en todas. Costo y riesgo por eje separando lo difícil por
+ingeniería (I) de lo que solo se sabe jugando (D); apuestas baratas-iterativas frente a caras-seguras;
+calendario por propuesta (4-7 meses hasta una experiencia coherente; P3 y P5 caras en contenido de autor).
+
+**Mercado** (`03_MERCADO.md`): comparables con fuente (Noita ~2,2 M; Sandustry >100 k en su primera
+semana, agosto de 2026; Timberborn 1 M en dos años; Core Keeper 2 M; Terra Nil ~50 k la primera semana;
+Opus Magnum ~85-90 k; Cloud Gardens 34-92 k; Dorfromantik 500 k al año); ventas en 12 meses «si se
+ejecuta bien» por arquetipo, del investigador del panel con ≥50 k wishlists (sandbox co-op base 100-250 k;
+colonia 120-300 k; expediciones y jardín 60-150 k; percepción 30-80 k; con 8-15 k wishlists, la mitad
+inferior); el mercado recomendaría colonia como producto y expediciones como demo, y el veredicto responde
+en `04 §2b`; lo que separa 50 k de 1 M es la frase y la cápsula, no la simulación; descripciones de curador exigente y entusiasta, clip de diez segundos, streamer e
+historias por propuesta.
+
+**Veredicto** (`04_VEREDICTO.md`): **construir primero El Pozo**, con injertos (la demo y el modo
+«sellar» de P3; SOLTAR de P4; sondas, gramática de vibración y vigilia de P5; censo y bichos de P6;
+cuaderno falsable, turnos de agua, Obras y asíncrono por fichero de P2; huellas y legado de Sima).
+**La Ladera** queda como geometría de reserva con condición de cambio medible: si en banco una lumbrera
+de 300-600 celdas no entrega luz ≥40, o el humo no cruza dos estratos en tiempo útil, o un cuerpo de
+agua alto rompe el presupuesto por tick, La Ladera gana ese día con todo lo demás igual. **Claraboya**
+= dirección de arte y cápsula alternativa. **Un Año Después** degradado a formato (demo de Next Fest y
+modo de estación). **Sin Manos** y **Sordina** descartados como producto. Las críticas tardías de la lente
+vertical (la condensación es local: «un pozo que respira» es hipótesis) se incorporan: el alambique
+repartido pasa a hipótesis de G2 y la culpa entre estratos se apoya en agua, luz y humo. Por qué la vertical: los flujos
+mejor medidos son verticales, la luz solo es drama si es escasa (en superficie sobra: Q16), la
+identidad en diez segundos es más nítida y la expresión tiene dirección (florecer hacia arriba, el
+huerto del Fondo). **Puerta G1-G8** (4-6 semanas, banco y papel, sin arte, sin shaders, sin red): G1
+luz por lumbrera, G2 humo entre estratos, G3 coste vertical, G4 huerto vivo en lecho canalizado, G5
+ciclo cerrado con fibra recogible (la única descongelación, pide autorización de Cesar), G6 lectura
+sin panel con láminas y cinco desconocidos (si falla, fallback diegético antes de seguir), G7 los
+diez primeros minutos con una persona y F8 apagado, G8 prueba de tres por fichero.
+
+Infografía: artefacto «¿Qué juego construimos?»
+(https://claude.ai/code/artifact/1c4438bb-9f96-4df2-aaa0-494bee30c30c). Sin código, sin
+arquitectura, física congelada. Pendiente de Cesar: `ca_playtest150.cmd` y `ca_playtest151.cmd`,
+elegir o corregir el veredicto, autorizar G5, decidir quién corre la puerta.
