@@ -46,6 +46,8 @@ observa por MCP (captura cada 3 minutos de mundo, libro y snapshot en cada «¿p
 y **no interviene ni explica** salvo que Cesar lo pida tras ≥ 5 minutos atascado; cada ayuda se
 anota como intervención (I).
 
+**(R144, R21) Si hay un segundo jugador que no ha visto nada, juega PRIMERO y es LA medida de onboarding (una sesión, tres frases, entrevista de tres preguntas al final); Cesar mide profundidad después. Nunca se promedian.**
+
 **Tres sesiones** de 30-40 minutos de mundo (o una larga partida en tres tramos):
 1. **Sin objetivo**: llegar, mirar, tocar. Cesar sabe demasiado; da igual: se anota igual.
 2. **Con un objetivo elegido por Cesar** entre: hacer vidrio · tener el huerto vivo 10 minutos con

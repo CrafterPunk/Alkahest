@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 10 — AGUA (H1-H4) y FUEGO (HF1-HF5b) hechos y revisados; R140 (nombres y panel) hecho. FÍSICA CONGELADA desde R141 (Cesar, 2026-09-04). Orden: HF5c + H5 (Opus, misma ronda) → H7 jugando → H8 informe; H6 documentado y congelado.**
+**Fase: 10 — AGUA (H1-H4) y FUEGO (HF1-HF5c) hechos y revisados; H5 hecho (banco por regenerar con overrides); R140/R143 (nombres, panel, sonido, diario) hechos. FÍSICA CONGELADA desde R141. Orden: HF5d (R144) → build → H7 (amigo, luego Cesar) → OBSERVACIONES_H7 → H8 → diseño comercial; H6 documentado y congelado.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -589,13 +589,29 @@ desagüe retirado (R18), y H5 con su banco y su luz. **La física está CONGELAD
 **(R143)** El laboratorio ya SUENA —faltaba una línea desde R130: `SpawnLaboratorio` nunca
 creaba el `DirectorDeAudio`, y las voces del taller estaban atadas a cosas que aquí no existen—
 y ya SE OBSERVA SOLO: `Game/LabDiario.cs` anota hitos, velocidad, panel, pincel y distancia con
-tick y reloj, con claqueta (F9) para alinear el vídeo y marcas F1/F2/F4 con captura. Guía de la
+tick y reloj, con claqueta (F9) para alinear el vídeo y marcas F1/F2/F4 con captura. Abiertas para Fable a su vuelta: **Q13** (las tres sesiones con sonido, sin línea base),
+**Q14** (un segundo jugador novato, que su protocolo no contemplaba) y **Q15** (la mezcla del
+audio necesita oídos: yo puedo medir volúmenes, no juzgarlos). Guía de la
 sesión en `docs/LAB/GUIA_H7.md`.
 
 **Siguiente paso exacto: correr `ca_playtest143.cmd`, generar la build y jugar H7** con el
 protocolo de `docs/LAB/HANDOFF_SABADO.md` §2 (tres sesiones de 30-40 min, registro en
 `Laboratorio/h7/sesion_NN.md`, capturas y snapshots en cada sorpresa y cada confusión, y las
 observaciones para el diseño comercial en §3). Luego H8. Fable vuelve el sábado.
+
+**(Fable, 2026-09-06, R144 — leer antes de nada.)** R142 (HF5c + H5) y R143 (sonido y diario)
+**revisados**: banco propio (`Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.md`:
+los hashes del banco se reproducen al bit; `LabLuz` acotada correcta por lectura) y revisión
+adversaria (27 hallazgos, ninguno de física). **Dos altas:** el banco H5 corre sin
+`AplicarOverridesLaboratorio` (mide la campaña: sus ocho hashes no valen como licencia hasta
+regenerarlos) y el vidrio verde en `EsSolidoDelMundo` rompe la campaña (instrucción mía de R19-7,
+revertida). Y cuatro fallos que darían métricas falsas en H7 (hitos «PRIMER X» absolutos, audio
+del laboratorio en todos los modos, goteos por cuadro, ruta y colisiones del diario en la build).
+Q13-Q15 cerradas (R20-R22): las tres sesiones con sonido como decidió Cesar, **el amigo juega
+PRIMERO** y son dos experimentos que no se promedian, la mezcla la juzga Cesar con cuatro criterios.
+**Siguiente paso exacto: HF5d** (R23, media ronda, Opus) → build → H7 (amigo, luego Cesar) →
+`OBSERVACIONES_H7.md` → Fable puntúa el criterio 4 y empieza el diseño comercial. La física sigue
+congelada. Cesar: `ca_playtest144.cmd`.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

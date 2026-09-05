@@ -370,6 +370,20 @@ Sale de la revisión adversaria de d711454 (28 hallazgos, ninguno de física) y 
 su +5,5 % y la identidad reescrita; desagüe medido; regresión del agua residuo 0; coste sin
 regresión; `ca_playtest139.cmd`. **Después de esto la física queda congelada** y sigue H5.
 
+### HF5d · ANTES DE LA BUILD DE H7 (R144 de Fable; media ronda; sin física)
+Sale de la revisión adversaria de R142 y R143 (27 hallazgos, ninguno de física; detalle y
+aceptación en `PREGUNTAS_A_FABLE.md` R23). Dos altas: (1) `LabBench.Correr` sin
+`Universe.AplicarOverridesLaboratorio` — el banco mide el universo de la campaña; una línea y se
+regenera la tabla con siete hashes por escenario; (2) el vidrio verde en `EsSolidoDelMundo` rompe la
+campaña (instrucción de Fable en R19-7, revertida). Para H7: hitos «PRIMER X» por delta desde F9,
+`LabInit` solo en el laboratorio, goteos limitados por segundo, ruta y colisiones del diario en la
+build, snapshot en cada marca, distancia sin teletransportes. Y lo que HF5c dio por hecho sin
+estar: los textos de R19-8, `LabReservaApagada` en el snapshot, «muy turbia» a 128, la tupla del
+lector, la ayuda del carbón. Banco: defaults y `LuzCielo` al arrancar, hash de los siete campos,
+caldera incondicional, hervidero con cámara, informe con unidades y hora.
+**Aceptación:** la de R23. `ca_playtest145.cmd`. Después: build → el amigo (R21) → Cesar →
+`OBSERVACIONES_H7.md` → Fable.
+
 ### H7 · El arco largo (½ día de juego, capturas)
 Juega 30-40 minutos de mundo (usa 10×) siguiendo lo que el mundo sugiera; anota cada
 «¿por qué pasó eso?» y cada intento de reproducirlo. Guarda 6-10 snapshots. Este material es
@@ -441,14 +455,12 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-**(Actualizado por Fable, 2026-09-04, R141; el orden es de Cesar.)**
+**(Actualizado por Fable, 2026-09-06, R144.)**
 
-**Hasta el sábado, sin Fable: `HANDOFF_SABADO.md`** (qué decides solo, protocolo de H7, qué capturar para lo comercial, qué se aparca).
-
-1. **HF5c + arranque de H5** en la misma ronda (Opus): R18 (fuera el desagüe) y R19 (los ocho
-   flecos), luego `Sim/LabBench.cs` con todos los escenarios de R131-R141 y su hash. `ca_playtest142.cmd`.
-2. **FÍSICA CONGELADA** (ya en vigor, §2).
-3. **H5** completo (banco, `LabLuz` acotado, tabla de rendimiento).
-4. **H7** el arco largo jugando con Cesar (riego real, huerto, cadena cruzada del fuego).
-5. **H8** informe final.
-6. **H6** documentado y congelado.
+1. **HF5d** (media ronda, Opus): R23. `ca_playtest145.cmd`.
+2. **Build** de un jugador y comprobación de la mezcla por Cesar (R22, cuatro criterios).
+3. **H7**: el amigo primero (R21, entrevista de tres preguntas), después Cesar (dos sesiones);
+   protocolo en `HANDOFF_SABADO.md` §2 y `GUIA_H7.md`; las tres sesiones con sonido (R20).
+4. `docs/LAB/OBSERVACIONES_H7.md` (Opus) → Fable puntúa el criterio 4 del fuego y revisa.
+5. **H8** informe; luego el diseño de la experiencia comercial (Fable, desde las observaciones).
+6. **Física CONGELADA** (§2); **H6** documentado y congelado.

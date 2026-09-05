@@ -7482,3 +7482,34 @@ sesión se registre igual, y el sonido que faltaba.
   empezar — lo que no descubra solo es exactamente lo que hay que arreglar.
 · Sin tocar física (congelada en R141): el audio y el diario solo LEEN el mundo. 0 errores de
   consola. Decisión de Cesar: las tres sesiones con sonido. Sin push (cmd 143).
+
+
+## Ronda 144 — EL LABORATORIO: REVISIÓN DE R142 Y R143, RESPUESTAS PARA H7 (Fable 5.1, sin código)
+
+Cesar volvió el sábado con R142 (HF5c y H5: desagüe fuera, dos libros con pines, banco `LabBench` con
+ocho escenarios y hash, `LabLuz` acotada de 2,86 a 0,50 ms por pasada) y R143 (el laboratorio suena
+—faltaba una línea desde R130— y se observa solo con `LabDiario`: claqueta F9, marcas F1/F2/F4 con
+captura, guía de sesión) subidas, H7 sin jugar, y tres preguntas de Opus sobre H7.
+
+**Verificación propia.** Los hashes del banco (`4d24ee8a`, `69e65c00`) se reproducen al bit sobre
+la R143: la simulación no cambió y el determinismo aguanta entre sesiones. La acotación de `LabLuz`
+es correcta por lectura. **Revisión adversaria** de los dos commits: 27 hallazgos, ninguno de física.
+Dos altas: `LabBench.Correr` no aplica `AplicarOverridesLaboratorio`, así que los ocho hashes miden el
+universo de la campaña (vapor a 60 °C, humo de 200) —los dos coincidíamos porque los dos medíamos lo
+mismo mal—; y el vidrio verde en `EsSolidoDelMundo` rompe la campaña (el frasco deja de aspirarlo):
+**instrucción de Fable en R19-7, error de arquitectura, revertida.** Cuatro fallos que darían
+métricas falsas en H7: hitos «PRIMER X» contra 0 absoluto, `LabInit` del audio en todos los modos,
+goteos limitados por cuadro (hasta 120 por segundo), ruta del diario junto al exe en la build y
+colisión por minuto. Y lo que HF5c dio por hecho sin estar: los textos de R19-8.
+
+**Decisiones.** R20 (Q13): las tres sesiones con sonido, como decidió Cesar; tramo mudo opcional
+solo en la sesión libre de Cesar. R21 (Q14): el amigo juega primero, es LA medida de onboarding,
+entrevista de tres preguntas al final; Cesar mide profundidad; nunca se promedian. R22 (Q15): la
+mezcla la juzga Cesar con cuatro criterios cinco minutos antes; si falla, la constante a la mitad.
+R23: HF5d (media ronda) antes de la build: las dos altas, los seis de H7, los cuatro de HF5c, los
+seis del banco. Orden: HF5d → build → amigo → Cesar → `OBSERVACIONES_H7.md` → Fable puntúa el
+criterio 4 y empieza el diseño comercial. La física sigue congelada.
+
+Archivos: `Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.md`,
+`docs/LAB/PREGUNTAS_A_FABLE.md` (R20-R23), `docs/LAB/HANDOFF_OPUS.md` (HF5d, §8),
+`docs/LAB/HANDOFF_SABADO.md` (§2: el amigo primero), `docs/LAB/CHECKPOINT.md` (§9). Sin código.
