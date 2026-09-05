@@ -7510,7 +7510,7 @@ R23: HF5d (media ronda) antes de la build: las dos altas, los seis de H7, los cu
 seis del banco. Orden: HF5d → build → amigo → Cesar → `OBSERVACIONES_H7.md` → Fable puntúa el
 criterio 4 y empieza el diseño comercial. La física sigue congelada.
 
-Archivos: `Laboratorio/benchmarks/2026-09-06_r144_fable_verificacion_r142_r143.md`,
+Archivos: `Laboratorio/benchmarks/2026-09-05_r144_fable_verificacion_r142_r143.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R20-R23), `docs/LAB/HANDOFF_OPUS.md` (HF5d, §8),
 `docs/LAB/HANDOFF_SABADO.md` (§2: el amigo primero), `docs/LAB/CHECKPOINT.md` (§9). Sin código.
 
@@ -7591,7 +7591,7 @@ camino del vapor, R23-17 y R23-12 sin aplicar.
 build como aceptación; HF5e-B: el banco y los textos después de H7 y antes de H8. Orden: HF5e-A →
 build → prueba del diario → mezcla → el amigo → Cesar → `OBSERVACIONES_H7.md`. Física congelada.
 
-Archivos: `Laboratorio/benchmarks/2026-09-06_r146_fable_verificacion_hf5d.md`,
+Archivos: `Laboratorio/benchmarks/2026-09-05_r146_fable_verificacion_hf5d.md`,
 `docs/LAB/PREGUNTAS_A_FABLE.md` (R24), `docs/LAB/HANDOFF_OPUS.md` (HF5e, §8),
 `docs/LAB/CHECKPOINT.md` (§9). Sin código.
 
@@ -7697,3 +7697,34 @@ de H7 que no necesitaban a nadie delante. Las dos tienen respuesta.
   presupuesto de 20 ms, no medido en Play, como señaló Fable en R24-11.
 · Lo único abierto es **Q16** (la luz del huerto: 7 de 73 celdas de cara pasan del mínimo, y es
   geometría del nivel, no física). Sin push (cmd 149).
+
+
+## Ronda 150 — EL LABORATORIO: REVISIÓN DEL INFORME FINAL Y CIERRE FORMAL (Fable 5.1, sin código)
+
+Opus entregó H8 (R149, `docs/LAB/INFORME_FINAL.md`, borrador con marcas [FABLE]) tras R148 (HF5e-B y
+el arco largo autónomo: el huerto no vive por luz, 7 de 73 caras iluminadas; la cadena cruzada que
+apareció fue la sombra del alambique, no el humo). Cesar pidió cerrar el laboratorio formalmente.
+
+**Q16 decidida en banco sin tocar el nivel** (`Laboratorio/benchmarks/2026-09-05_r150_fable_q16_huerto_iluminado.md`):
+con la boca de cielo ensanchada a 25 columnas y el serpentín fuera de su vertical, la cara del lecho
+pasa de luz 0 a 139-210 y germinan 9 plantas contra 2; mueren igual, porque con la luz resuelta la
+humedad de la cara bajo goteo oscila entre 50 y 99 con el mínimo en 60. H4 queda «no se cumple en el
+nivel de referencia, causa doble aislada (luz, y después reparto del riego)», las dos de nivel. El
+nivel de referencia no se toca; el huerto que vive es diseño de la fase comercial.
+
+**El informe, revisado como arquitecto** (verificación de hechos por revisión adversaria contra
+benchmarks y código): valoración C y estimación E resueltas; «nueve de diez no programadas» reescrito
+distinguiendo regla programada, aparato construido y cadena no guionizada; la tabla del fuego con sus
+medios puntos (criterio 3 reformulado, criterio 4 solo en simulación autónoma) y la nota 4 de 5
+explicada; definido qué falta para «producir sin volver a tocar» (alimentación no manual y recogida
+del producto: ninguna geometría medida encadena suministro perpetuo → proceso → producto); los hashes
+como prueba de determinismo en una máquina y una build, no cross-machine ni lockstep; sección G de
+cierre formal. Fechas 2026-09-06 corregidas a 2026-09-05 (hoy, Lima) en docs y en los nombres de los
+benchmarks r144-r148.
+
+**Cierre.** El laboratorio queda cerrado: física congelada desde R141, H6 congelado con su hipótesis,
+H7 con jugador diferido a después de la primera experiencia coherente, el banco con sus hashes como
+licencia para optimizar. Lo siguiente —la experiencia comercial— es un encargo aparte de Cesar.
+
+Archivos: `docs/LAB/INFORME_FINAL.md` (cerrado), `PREGUNTAS_A_FABLE.md` (R26), `CHECKPOINT.md` (fase
+12), `HANDOFF_OPUS.md` (§8), benchmark r150. Sin código.

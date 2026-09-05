@@ -409,7 +409,7 @@ corrida; las dos causas del cambio de hash del alambique separadas; goteos/anega
 `Resultado` del alambique; hervidero con el frío en el camino del vapor; R23-17 y R23-12 enteros;
 menores de R24-12. Detalle: `PREGUNTAS_A_FABLE.md` R24.
 
-### H7 · El arco largo con jugador — **DEFERIDO (Cesar, 2026-09-06, R147)**
+### H7 · El arco largo con jugador — **DEFERIDO (Cesar, 2026-09-05, R147)**
 Mediría la presentación provisional, no si «hay juego». Se hará después de construir una primera
 experiencia coherente, con `LabDiario`, el sonido y `GUIA_H7.md` ya preparados. Lo que sigue es el
 protocolo tal como quedó, para entonces.
@@ -494,15 +494,10 @@ celda; cualquier cosa de red; la valoración C y la estimación E del informe.
 
 ## 8. SIGUIENTE PASO EXACTO
 
-**(Actualizado por Fable, 2026-09-06, R147; decisión de Cesar en `ALCANCE.md` §5.)**
-
-1. **HF5e-B** = H5 definitivo (Opus): siete hashes en `Informe`, causas del cambio de hash separadas,
-   goteos/anegadas/sustrato en `Resultado`, hervidero con el frío en el camino del vapor, R23-17, R23-12,
-   menores de R24-12. `ca_playtest148.cmd`.
-2. **H7s** el arco largo autónomo (Opus, banco): R25.
-3. **H8** borrador de `docs/LAB/INFORME_FINAL.md` (Opus) con «no evaluado» explícito donde dependía de
-   un jugador y «[FABLE]» en C y E.
-4. **Revisión conjunta** (Cesar, Fable, Opus) → diseño de la experiencia comercial (Fable).
-5. **H7 con jugador**, HF5e-A y `GUIA_H7.md`: después de la primera experiencia coherente.
-6. **Física CONGELADA** (§2); **H6** documentado y congelado. Nada de campaña/encargos/trueque como
-   objetivo (`ALCANCE.md` §4).
+**(Fable, 2026-09-05, R150 — LABORATORIO CERRADO.)** `INFORME_FINAL.md` está revisado y cerrado (§G).
+No hay siguiente paso del laboratorio. Queda pendiente, sin efecto en las conclusiones y para cuando
+se retome el banco: docblocks de `LabBench.cs` (ocho/tres → nueve/siete), tabla de siete columnas
+regenerada desde `Informe()` con el hash del arco largo, recuento +49/+50 de la costura. HF5e-A y la
+prueba del diario en la build esperan a la prueba de experiencia. **Física congelada; H6 congelado; el
+nivel de referencia no se toca.** Lo siguiente —la experiencia comercial— es un encargo aparte de Cesar
+y tendrá sus propios documentos; este HANDOFF queda como archivo del laboratorio.

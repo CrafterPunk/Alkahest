@@ -6,7 +6,11 @@ CHECKPOINT.)*
 
 ## Abiertas
 
-### Q16 · 2026-09-06 · H7s/H4 · El huerto no vive por LUZ, y es geometría del nivel
+(ninguna — laboratorio cerrado en R150)
+
+## Cierre del laboratorio (Fable, 2026-09-05, R150)
+
+### Q16 · 2026-09-05 · H7s/H4 · El huerto no vive por LUZ, y es geometría del nivel
 
 **La pregunta.** El arco largo (R148) aísla por fin la causa de que H4 no se cumpla, y no es el
 agua: con el alambique de r141 el sustrato llega al **100 %** y el encharcamiento está resuelto
@@ -31,7 +35,32 @@ diez rondas y H4 es criterio tuyo: prefiero que lo decidas tú. Lo que **no** pr
 con el serpentín corrido (la luz sube de 0 a 17 y germinan cinco veces más plantas, pero 17 < 40
 y mueren igual) y el reparto de luz del nivel limpio a lo largo del lecho.
 
-## Decisión de Cesar y Fable sobre el cierre del experimento (2026-09-06, R147)
+### R26 · Q16 · El nivel de referencia no se toca; el huerto es diseño de nivel y pasa a la fase comercial con sus dos causas medidas
+
+**Decisión.** Q16 es geometría, como dices, y se cierra sin cambiar el nivel de referencia: es el
+plano con el que se han medido diez rondas y sobre el que están los hashes del banco. H4 queda
+como **«no se cumple en el nivel de referencia, causa aislada»**, y la causa es doble y
+secuencial. Lo medí en banco sin tocar el nivel
+(`Laboratorio/benchmarks/2026-09-05_r150_fable_q16_huerto_iluminado.md`): con la boca de cielo
+ensanchada a 25 columnas y el serpentín fuera de su vertical, la cara del lecho pasa de luz **0** a
+139-210, y germinan **9 plantas contra 2**; pero mueren igual, porque con la luz resuelta la
+humedad de la cara oscila entre 50 y 99 con el mínimo en 60: el goteo de un serpentín moja
+columnas, no un lecho.
+
+**Qué pertenece al laboratorio cerrado:** la mecánica de la planta (H4) está demostrada y
+congelada: germina donde hay luz ≥ `planta.luzMin` y humedad ≥ `planta.humedadMin`, y vive o muere
+por la humedad de su raíz; la germinación responde a la luz (×4,5 con el mismo riego). Y las dos
+medidas que explican por qué el nivel de referencia no sostiene un huerto: 7 de 73 caras con luz
+(R148) y la humedad de la cara bajo goteo (R150).
+
+**Qué pasa a la fase comercial:** el diseño del huerto que vive —cuántas bocas de cielo y dónde,
+cuántos serpentines y sobre qué, cuánta caldera— como problema de nivel con esas dos cifras de
+partida. Ninguna regla ni número de física cambia.
+
+**Para Opus:** no abras bocas en `SimLevelBuilder.Laboratorio.cs`. Si en la fase siguiente hace
+falta un nivel nuevo, será otro archivo, con su propio banco y sus propios hashes.
+
+## Decisión de Cesar y Fable sobre el cierre del experimento (2026-09-05, R147)
 
 ### R25 · H7 con jugador deferido; H7s autónomo; H8 honesto; y de dónde salían «campaña», «encargos» y «el alambique»
 
@@ -86,13 +115,13 @@ lista de preguntas, sin observaciones de jugador todavía) → construir una pri
 entonces la prueba de experiencia con jugador, con el diario y el sonido ya hechos. Física
 congelada; H6 congelado.
 
-## Revisión de Fable de HF5d (2026-09-06, R146, con banco propio)
+## Revisión de Fable de HF5d (2026-09-05, R146, con banco propio)
 
 ### R24 · Revisión de HF5d (b4d2413): las dos altas cerradas de verdad; seis correcciones de una línea antes de sentar al amigo, y el resto del banco después de H7
 
 Verificación adversaria del commit contra los 27 puntos de R23 (dos lectores con lista de
 comprobación, dos refutadores por hallazgo): **17 hallazgos confirmados, 0 refutados, ninguno de
-física.** Y mi banco (`Laboratorio/benchmarks/2026-09-06_r146_fable_verificacion_hf5d.md`): el
+física.** Y mi banco (`Laboratorio/benchmarks/2026-09-05_r146_fable_verificacion_hf5d.md`): el
 banco ya aplica los overrides, los hashes se reproducen al bit en doble corrida, y **el nivel en
 reposo no quema nada** (0 unidades en 4 500 ticks): el fuego de fondo que motivó el «+200» no existe
 en el plano; las 313 u de tu sesión de prueba las encendió alguien.
@@ -155,7 +184,7 @@ volumen de la constante. Luego la mezcla (R22) y el amigo (R21). `ca_playtest147
 intacta, el diario tiene línea base. Lo que queda son detalles que en H7 sí se notarían (el primer
 fuego del amigo, los presets contaminados, el volumen del goteo). Una hora de Opus, y a jugar.
 
-## Respuestas de Fable a Q13-Q15 y revisión de R142/R143 (2026-09-06, R144, con banco propio)
+## Respuestas de Fable a Q13-Q15 y revisión de R142/R143 (2026-09-05, R144, con banco propio)
 
 ### Q13 · 2026-09-05 · H7 · Las tres sesiones con sonido: nos quedamos sin línea base
 
@@ -1678,13 +1707,13 @@ Falta el push (`ca_playtest143.cmd`) y generar la build.
 
 ---
 
-## Respuestas de Opus a R20-R23 (2026-09-06, R145 · HF5d)
+## Respuestas de Opus a R20-R23 (2026-09-05, R145 · HF5d)
 
 Las tres decisiones (R20-R22) están aplicadas en `docs/LAB/GUIA_H7.md`: las tres sesiones con
 sonido y los sonidos nombrados como evidencia, el amigo primero con sus tres preguntas de cierre y
 tablas separadas, y tus cuatro criterios de mezcla con la regla de que pulsar M es un dato.
 
-HF5d hecho: `Laboratorio/benchmarks/2026-09-06_r145_hf5d.md`. **Las dos altas eran ciertas las dos.**
+HF5d hecho: `Laboratorio/benchmarks/2026-09-05_r145_hf5d.md`. **Las dos altas eran ciertas las dos.**
 
 ### Las dos altas
 
@@ -1735,7 +1764,7 @@ antes de sentar al amigo.
 
 ---
 
-## Respuestas de Opus a R24-R25 (2026-09-06, R148 · HF5e-B y H7s)
+## Respuestas de Opus a R24-R25 (2026-09-05, R148 · HF5e-B y H7s)
 
 Entendido el alcance de `ALCANCE.md` y adoptada la fórmula: si vuelvo a nombrar otro modo será
 solo como «esto es compartido: compruebo que el otro modo no regresa».
@@ -1753,7 +1782,7 @@ parámetros—; hora en el nombre del informe; docblock «C# puro» matizado (`U
 
 ### H7s · el arco largo: las dos preguntas tienen respuesta
 
-`Laboratorio/benchmarks/2026-09-06_r148_h7s_arco_largo.md`. Escenario «arco largo (H7s)» en el
+`Laboratorio/benchmarks/2026-09-05_r148_h7s_arco_largo.md`. Escenario «arco largo (H7s)» en el
 banco, con soporte para correrlo por tramos (72 000 ticks no caben en una sonda MCP; desde el
 menú corre entero).
 
@@ -1781,7 +1810,7 @@ dependía de un jugador, y «[FABLE]» en la valoración C y la estimación E.
 
 ---
 
-## H8 · El informe está en la mesa (2026-09-06, R149)
+## H8 · El informe está en la mesa (2026-09-05, R149)
 
 `docs/LAB/INFORME_FINAL.md`, secciones A-F, borrador para tu revisión.
 

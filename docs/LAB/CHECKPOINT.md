@@ -40,7 +40,7 @@ escala a Fable solo lo listado en `HANDOFF_OPUS.md` §7 (vía `docs/LAB/PREGUNTA
 
 ## 1. ESTADO ACTUAL
 
-**Fase: 11 — CIERRE DEL EXPERIMENTO (Cesar, 2026-09-06). Agua y fuego medidos; H5 casi definitivo (falta HF5e-B). H7 con jugador DEFERIDO (mediría la presentación, no la simulación). Orden: HF5e-B → H7s (arco largo autónomo, banco) → H8 honesto con «no evaluado» explícito → revisión conjunta → diseño de la experiencia comercial. FÍSICA CONGELADA; H6 congelado. Leer `ALCANCE.md`.**
+**Fase: 12 — LABORATORIO CERRADO (Fable, 2026-09-05, R150). `INFORME_FINAL.md` revisado y cerrado; física congelada; H6 congelado; H7 con jugador diferido; nivel de referencia intacto; Q16 cerrada (R26). Lo siguiente es un encargo aparte de Cesar: el diseño de la experiencia comercial.**
 el título, simula (2,08 ms/tick), la presión hidrostática está verificada (tubo en U) y ahora
 además es CONSERVATIVA, y **el circuito del agua se cierra**: manantial → arroyo → poza → aguas
 abajo → sumidero, con un hilo permanente hacia la cámara profunda por la arenisca y por la
@@ -571,7 +571,7 @@ solo hace falta para los miembros privados (`DayCycle.RestartRun`), con `Binding
 numéricos porque `using System.Reflection` está prohibido en RunCommand. Las capturas también
 salen sin Play: se dibuja la grilla a un `Texture2D` y se escribe el PNG.
 
-**(Opus, 2026-09-06, R149 — leer antes de nada.)** **H8 ESCRITO**:
+**(Opus, 2026-09-05, R149 — leer antes de nada.)** **H8 ESCRITO**:
 `docs/LAB/INFORME_FINAL.md`, secciones A-F, borrador para que Fable revise. Con eso quedan hechos
 **todos los hitos que no dependen de un jugador**: H1-H5, HF1-HF5e-B, H7s y H8. H6 congelado; H7
 con jugador y HF5e-A, deferidos (R25).
@@ -593,6 +593,19 @@ con una sección (A.4) dedicada a decirlo.
 **Siguiente paso exacto: correr `ca_playtest149.cmd`.** Después lo deciden Cesar y Fable: **Q16**
 (la luz del huerto, lo único abierto), la revisión conjunta del informe, y el diseño de la
 experiencia — a partir de `HANDOFF_SABADO.md` §3, ya sin observaciones de jugador.
+
+**(Fable, 2026-09-05, R150 — LABORATORIO CERRADO.)** `INFORME_FINAL.md` revisado como arquitecto
+y cerrado: marcas **[FABLE]** resueltas (valoración C, estimación E, Q16), conclusiones afinadas
+(reglas programadas frente a cadenas no guionizadas; el fuego en 4 de 5 con los medios puntos
+explicados; qué falta exactamente para «producir sin volver a tocar»; los hashes prueban
+determinismo en una máquina y una build, no cross-machine ni lockstep), y una sección G de cierre
+formal. Q16 cerrada en R26: el nivel de referencia no se toca; H4 «no se cumple, causa doble
+aislada» (luz: 7 de 73 caras; y con luz, la humedad de la cara bajo goteo —medido en banco
+`2026-09-05_r150_fable_q16_huerto_iluminado.md`: 9 plantas contra 2, todas mueren); el huerto que
+vive es diseño de nivel de la fase siguiente. Fechas 2026-09-06 corregidas a 2026-09-05 en docs y
+nombres de benchmarks. **Física congelada; H6 congelado; H7 con jugador diferido a después de la
+primera experiencia.** Lo siguiente no es del laboratorio: el encargo de diseño de la experiencia
+comercial lo da Cesar aparte. Cesar: `ca_playtest150.cmd`.
 
 ## 10. CÓMO RETOMAR SIN ESTA CONVERSACIÓN
 

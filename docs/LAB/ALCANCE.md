@@ -1,4 +1,4 @@
-# ALCANCE DEL LABORATORIO — qué es esta fase, qué no es, y qué hay alrededor (Cesar y Fable, 2026-09-06, R147)
+# ALCANCE DEL LABORATORIO — qué es esta fase, qué no es, y qué hay alrededor (Cesar y Fable, 2026-09-05, R147)
 
 Léelo antes que el HANDOFF. Existe porque en R142-R146 aparecieron en el buzón palabras como
 «campaña», «encargos», «trueque» y «el alambique», y hay que dejar claro de dónde vienen y qué
@@ -59,7 +59,7 @@ laboratorio se evalúe con criterios de campaña. Esa es la única forma legíti
   plantas de un píxel, estado que solo se lee con F8) **no se limpian ahora**: son presentación,
   y la presentación se diseña en la fase comercial sobre este sustrato.
 
-## 5. El cierre del experimento (decisión de Cesar, 2026-09-06)
+## 5. El cierre del experimento (decisión de Cesar, 2026-09-05)
 
 La función del laboratorio está demostrada en lo que era suya: la simulación tiene profundidad
 medible (agua 5/5, fuego 4/5 medido y honesto, plantas con mecánica completa). Ya no se le
