@@ -7801,3 +7801,98 @@ Infografía: artefacto «¿Qué juego construimos?»
 (https://claude.ai/code/artifact/1c4438bb-9f96-4df2-aaa0-494bee30c30c). Sin código, sin
 arquitectura, física congelada. Pendiente de Cesar: `ca_playtest150.cmd` y `ca_playtest151.cmd`,
 elegir o corregir el veredicto, autorizar G5, decidir quién corre la puerta.
+
+## Ronda 152 — SEGUNDA PASADA COMERCIAL: ROMPER LA FRONTERA (Fable 5.1, sin código)
+
+Cesar pidió una segunda pasada sobre la primera (R151) sin sobrescribirla, con la función objetivo
+cambiada: el juego sistémico también como **estrategia de producción** (pocas leyes que produzcan la
+profundidad, el contenido y las situaciones que normalmente exigen autoría, balance y testeo humano);
+preferir lo técnicamente difícil pero acotado y verificable en banco a lo fácil que exige meses de
+playtest; penalizar estaciones, eventos, geometrías a balancear y bibliotecas de contenido; física
+descongelada para explorar (leyes, campos, agentes, verbos con apalancamiento); onboarding por
+situaciones autoradas pequeñas; el tiempo como apuesta (SOLTAR); multiplayer sin roles fijos; reevaluar
+todo sin proteger El Pozo ni el veredicto anterior. Sin arquitectura ni plan para Opus: Cesar revisa a
+mano antes de autorizar construcción. Todo vive en `docs/COMERCIAL/2/` (2026-09-05 a 2026-09-12; la
+primera pasada en `docs/COMERCIAL/` no se tocó).
+
+**Método.** `00_ENCARGO_Y_CRITERIO.md` destila el encargo, fija la rúbrica v2 (trece ejes con
+apalancamiento, «las leyes ejecutan, revelan y juzgan» e iteración humana a peso 3; máx. 240; puertas:
+iteración humana < 5 o apalancamiento < 5 → no finalista) y lleva el registro de avance. Dos paneles
+por Workflow, ambos caídos varias veces por límite de uso y reanudados con `resumeFromRunId`; los agentes
+escribieron directo al repo para no perder nada. **Panel de leyes** (`panel/leyes/`, 73 agentes): ocho
+lentes (aire-viento, luz-óptica, agua-fases, cuerpo, organismos, materiales, instrumentos-rayos X,
+métricas y SOLTAR) × hasta cuatro candidatos × dos refutadores con el código delante (64 refutaciones)
++ un crítico de huecos que corrió aparte. **Panel de direcciones** (`panel/direcciones/`, 35 agentes):
+ocho ángulos (mutación de El Pozo, campaña de situaciones, SOLTAR como core, dirección nacida de una
+ley nueva, las leyes juzgan, el cuerpo, híbrido, libre) × tres críticos (iteración humana oculta, la
+simulación es el juego, ingeniería y prueba que la mata) + tres jueces (producción, diseño, comercial).
+Fable escribió sus hipótesis (`fable_hipotesis.md`) y su propia dirección (`fable_direccion.md`, «La
+Vigilia») antes de leer cada panel, para poder compararse.
+
+**Hechos del código que corrigen la primera pasada** (`01_LEYES.md §1`): la planta muerta YA deja fibra
+(`SimStepper.Laboratorio.cs:811`; la «única descongelación» de R151 no era tal: faltan cosecha, secado
+y transporte); el fuego ya escribe luz 255 y nadie la pinta; los 7/73 de Q16 midieron la celda de
+sedimento y no el aire de encima que leen las plantas (`luz[i+W]`), así que la luz del huerto está en
+cuarentena; el alambique probablemente graniza (`LabGotear` nace a 30 raw, `ApplyPhase` congela a 60);
+no existe fichero de partida; el aire no tiene masa ni tiro (`Conveccion` solo sesga la conducción); el
+calor no cruza un suelo de roca de más de 4-6 celdas y el humo solo mientras un fuego abierto tiene
+combustible (el acoplamiento vertical de El Pozo no está en el código); en la corrida de 30 días de
+R148 nada cambia después del día 10: el mundo es eterno porque hogar, manantial y núcleo frío son pins
+infinitos.
+
+**Leyes** (`01_LEYES.md`): catálogo de 32 candidatos con apalancamiento, tuning y semanas corregidos por
+los refutadores; ocho paquetes de sustrato con su prueba que los mata: **J Juicio** (sello con diario de
+intervenciones tick-estampadas, volcado y carga de grilla, `CorrerSello`, condición como dato con
+cláusulas de grilla, `LabBandas` como única fuente de umbrales, balanza con bit `entregable`; 5-6
+semanas, tuning 8-9), **L Luz** (quinta pasada descendente de un día + remedir Q16; haz y cuña con
+vidrio; vista Ojo), **A Aire** (el aire se gasta: consumible que fuego, llama, gas, agua y planta leen,
+plantas que reponen; B tiro por presión condicionado a dos días de banco), **D Dones** («el hogar come
+carbón», salido del crítico de huecos), **F Frío** (fusión con reserva, helada que mata, inercia
+térmica de la roca, contar `Freeze`), **V Vida** (siega, raíz que busca, arrastre, compost), **M Memoria**
+(huella, hollín, choque térmico), **C Cuerpo** (sensor: CuerpoSim, vista Piel, tizne y tos). Orden:
+J → L (un día) + vidrio + Ojo → A → D → F mínimo → V mínimo.
+
+**Direcciones** (`02_DIRECCIONES.md`): las nueve (ocho del panel más La Vigilia) convergen en una
+columna: **situación acotada → preparar tocando poco → SOLTAR → las leyes corren a ×10 → el recibo que
+la simulación escribe → comparar o seguir**, sobre el paquete J; se diferencian en cuatro ejes
+(contenedor, reversibilidad, juez, cuerpo). Siete riesgos con código: el examen; el vacío que no falla
+(forma canónica «montaje − solución»); el mundo eterno (D + A); las cláusulas que oscilan (humedad
+43-125 y 50-99 alrededor del umbral 60: semántica por tipo de cláusula); el registro del autor como
+coste humano oculto (soluciones en código + búsqueda exhaustiva de un toque); la economía de verbos; el
+lenguaje visual del aire. Finalistas: **F1 «Días sin manos»** (síntesis: campaña de situaciones que el
+banco envejece, muta, valida, firma y ordena; SOLTAR como medida y no como modo; velocidad como estado;
+cámara persistente; sandbox como situación sin horizonte); **F2 El Pozo Sellado** como contenedor
+condicionado a «dos tramos, honesto»; **F3 TIRO** como primera expansión de ley. Descartes con órganos:
+El Recibo, Sellado, Sin Manos (mismo build que F1: se funden), A que sí (no pasa la puerta: el prior de
+los monos es balance por proxy), Primera Piedra (el órgano sube al sustrato).
+
+**Comparativa y tiempos** (`03_COMPARATIVA_Y_TIEMPOS.md`): rúbrica v2 con tres fuentes (mi nota: F1
+180, La Vigilia 179, Sin Manos 178, Sellado 174, TIRO 171, El Pozo Sellado 167, El Recibo 163, Primera
+Piedra 158, A que sí 157 y fuera por puerta; autoevaluaciones de los generadores 172-189; medias de los
+críticos 128-160); críticas en cifras (iteración humana corregida 6 en todas, 5 en A que sí); tiempos
+recalibrados por lo que se automatiza, lo que es secuencial y lo que es iteración incomprimible:
+evidencia para matar F1 en **dos semanas de banco** (E1 relojes, E2 discriminación), prototipo feo en
+**seis a siete semanas**, iteración humana en tres sesiones binarias + G6 + una por paquete de física.
+**Los tres jueces** (§4) ponen primera a Días sin manos (167 / 163 / 169), a TIRO como segundo finalista
+con puerta de dos semanas, a El Pozo Sellado sexta y a A que sí fuera; los tres dicen que D y A son
+núcleo, que el verbo roto es REVELAR (todo se ve con F8) y que el multiplicador por madre es 2-4× y no
+10× («es Zachtronics, no Dwarf Fortress»).
+
+**Posición** (`04_POSICION.md`): **TRANSFORMAR** el veredicto anterior. La espina es la situación
+sellada que las leyes juzgan (F1), el sandbox persistente es la situación sin horizonte, El Pozo queda
+como contenedor condicionado a una prueba de un día, la primera ley nueva es el aire que se gasta con
+el hogar que come (sin ellas el mundo es eterno y no hay nada que soltar). Respuesta a la pregunta final
+(«¿pueden las propias leyes ejecutar, revelar y juzgar las decisiones del jugador de modo que la
+profundidad crezca más rápido que el coste de diseñarla y testearla?»): **sí, con tres condiciones que
+se miden antes de construir**: que el mundo tenga relojes (E1, una semana), que el recibo discrimine
+(E2, dos semanas) y que soltar sea jugar (tres sesiones de 40 minutos, binarias). Tabla mantener /
+transformar / reemplazar frente a R151 (Un Año Después pasa de formato a núcleo; Sin Manos de
+descartado a verbo; estaciones, roles por estrato y 40-60 ruinas fuera; la puerta G1-G8 sustituida por
+E1-E8). Datos que hay que tener antes de autorizar construcción (E1-E8, todos en banco, dos semanas de
+calendario para E1-E4) y dos decisiones de Cesar: economía de verbos («solo quitar y mover», alcance
+corto, sin vuelo en situaciones, presupuesto de toques) y el aprendiz como sensor y cara o el cursor.
+§8 registra lo que dijeron los jueces y la única corrección adoptada (TIRO segundo finalista, E8).
+
+Sin código, sin arquitectura, sin plan para Opus, sin Unity MCP (solo diseño). Pendiente de Cesar:
+correr `ca_playtest152.cmd`, leer `04` y elegir (mantener, transformar o reemplazar), tomar las dos
+decisiones de §5 y decidir si se corren E1-E4 en banco.
